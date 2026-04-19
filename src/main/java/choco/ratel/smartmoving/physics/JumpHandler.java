@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.physics;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.state.SmartMovingState;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
@@ -16,11 +17,10 @@ public final class JumpHandler {
     public static final int CLIMB_UP         = 5;
     public static final int WALL_UP          = 11;
 
-    // Phase 5 설정 시스템으로 이관 예정
-    static final float JUMP_CHARGE_MAX       = 20F;
-    static final float JUMP_CHARGE_FACTOR    = 1.3F;
-    static final float HEAD_JUMP_CHARGE_MAX  = 10F;
-    static final float MAX_FALL_DISTANCE     = 3.0F;
+    private static float jumpChargeMax()      { return ConfigManager.INSTANCE.jumpChargeMaximum; }
+    private static float jumpChargeFactor()   { return ConfigManager.INSTANCE.jumpChargeFactor; }
+    private static float headJumpChargeMax()  { return ConfigManager.INSTANCE.headJumpChargeMaximum; }
+    private static int doubleClickTicks()     { return ConfigManager.INSTANCE.angleJumpDoubleClickTicks; }
 
     // 바닐라 기본 수직 속도
     static final double VANILLA_JUMP_Y       = 0.41999998688697815D;
@@ -38,12 +38,11 @@ public final class JumpHandler {
                 && !state.isCrawling;
 
         if (chargingCondition) {
-            if (state.jumpCharge < JUMP_CHARGE_MAX) {
+            if (state.jumpCharge < jumpChargeMax()) {
                 state.jumpCharge++;
             }
             state.blockJumpTillButtonRelease = true;
         } else if (state.jumpCharge > 0 && player.isOnGround() && !state.jumpButton.pressed) {
-            // 충전 해제 → ChargeUp 발동
             tryJump(state, player, CHARGE_UP, null, null, null);
             state.jumpCharge = 0;
         } else if (!chargingCondition && !player.isOnGround()) {
@@ -56,7 +55,7 @@ public final class JumpHandler {
                 && state.jumpButton.pressed;
 
         if (headChargingCondition) {
-            if (state.headJumpCharge < HEAD_JUMP_CHARGE_MAX) {
+            if (state.headJumpCharge < headJumpChargeMax()) {
                 state.headJumpCharge++;
             }
             state.blockJumpTillButtonRelease = true;
@@ -67,7 +66,7 @@ public final class JumpHandler {
             state.headJumpCharge = 0;
         }
 
-        // 더블탭 각도 점프 카운터 감소
+        // 더블탭 각도 점프 카운터 감소 (angleJumpDoubleClickTicks 설정값 기반)
         if (state.leftJumpCount  > 0) state.leftJumpCount--;
         if (state.rightJumpCount > 0) state.rightJumpCount--;
         if (state.backJumpCount  > 0) state.backJumpCount--;
@@ -97,7 +96,7 @@ public final class JumpHandler {
      * 8방향 각도 점프 더블탭 감지 및 발동.
      */
     private static boolean handleAngleJump(SmartMovingState state, PlayerEntity player) {
-        int doubleClickTicks = 3;
+        int doubleClickTicks = doubleClickTicks();
 
         if (state.leftButton.startPressed) {
             if (state.leftJumpCount > 0) {
@@ -218,14 +217,16 @@ public final class JumpHandler {
 
     private static float getJumpChargeFactor(SmartMovingState state, int type) {
         if (type != CHARGE_UP || state.jumpCharge <= 0F) return 1F;
-        float charge = Math.min(state.jumpCharge, JUMP_CHARGE_MAX);
-        return 1F + (charge / JUMP_CHARGE_MAX) * (JUMP_CHARGE_FACTOR - 1F);
+        float max = jumpChargeMax();
+        float charge = Math.min(state.jumpCharge, max);
+        return 1F + (charge / max) * (jumpChargeFactor() - 1F);
     }
 
     private static float getHeadJumpFactor(SmartMovingState state, int type) {
         if (type != HEAD_UP || state.headJumpCharge <= 0F) return 0F;
-        float charge = Math.min(state.headJumpCharge, HEAD_JUMP_CHARGE_MAX);
-        return (charge - 1F) / (HEAD_JUMP_CHARGE_MAX - 1F);
+        float max = headJumpChargeMax();
+        float charge = Math.min(state.headJumpCharge, max);
+        return (charge - 1F) / (max - 1F);
     }
 
     private static float getVerticalFactor(PlayerEntity player, int type) {

@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.mixin;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.physics.CeilingClimbingHandler;
 import choco.ratel.smartmoving.physics.ClimbingHandler;
 import choco.ratel.smartmoving.physics.CrawlingHandler;
@@ -31,7 +32,7 @@ public abstract class LivingEntityTravelMixin {
         if (state == null) return movementInput;
 
         if (state.isCrawling) {
-            float f = CrawlingHandler.CRAWL_SPEED_FACTOR;
+            float f = ConfigManager.INSTANCE.crawlFactor;
             return movementInput.multiply(f, 1.0, f);
         }
         if (state.isCeilingClimbing) {

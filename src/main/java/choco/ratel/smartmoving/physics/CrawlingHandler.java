@@ -1,14 +1,17 @@
 package choco.ratel.smartmoving.physics;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.state.SmartMovingState;
 import choco.ratel.smartmoving.util.BlockUtil;
 import net.minecraft.entity.player.PlayerEntity;
 
 public final class CrawlingHandler {
 
-    // Phase 5 설정 시스템으로 이관 예정
-    public static final float CRAWL_SPEED_FACTOR = 0.35F;
-    static final float MAX_FALL_DISTANCE = 3.0F;
+    public static float CRAWL_SPEED_FACTOR = 0.35F;
+
+    static float getMaxFallDistance() {
+        return ConfigManager.INSTANCE.fallingDistanceMinimum;
+    }
 
     /**
      * 매 틱 기어가기 상태를 갱신한다.
@@ -48,7 +51,7 @@ public final class CrawlingHandler {
                 && !state.isSwimming
                 && !state.isDiving
                 && !state.isClimbing
-                && player.fallDistance < MAX_FALL_DISTANCE;
+                && player.fallDistance < getMaxFallDistance();
     }
 
     private static boolean wantCrawl(SmartMovingState state, PlayerEntity player) {
