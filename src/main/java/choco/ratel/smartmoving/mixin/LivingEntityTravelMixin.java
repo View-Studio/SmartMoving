@@ -51,7 +51,7 @@ public abstract class LivingEntityTravelMixin {
             method = "travel",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/Entity;move(Lnet/minecraft/entity/MovementType;Lnet/minecraft/util/math/Vec3d;)V"
+                    target = "Lnet/minecraft/entity/LivingEntity;move(Lnet/minecraft/entity/MovementType;Lnet/minecraft/util/math/Vec3d;)V"
             )
     )
     private void smartMoving_applyMovementOverride(Vec3d movementInput, CallbackInfo ci) {
