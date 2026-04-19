@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.network.SmartMovingServerNetworking;
 import choco.ratel.smartmoving.state.SmartMovingAttachments;
 import net.fabricmc.api.ModInitializer;
@@ -10,6 +11,7 @@ public class Smartmoving implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        ConfigManager.load();
         SmartMovingAttachments.register();
         SmartMovingServerNetworking.register();
     }

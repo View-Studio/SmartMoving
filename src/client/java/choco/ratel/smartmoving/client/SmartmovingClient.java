@@ -3,6 +3,7 @@ package choco.ratel.smartmoving.client;
 import choco.ratel.smartmoving.client.input.InputHandler;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.client.network.SmartMovingClientNetworking;
+import choco.ratel.smartmoving.client.render.SmartMovingHud;
 import choco.ratel.smartmoving.network.RemotePlayerManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -16,6 +17,7 @@ public class SmartmovingClient implements ClientModInitializer {
         SmartMovingKeys.register();
         InputHandler.register();
         SmartMovingClientNetworking.register();
+        SmartMovingHud.register();
 
         // 매 틱 로컬 플레이어 상태를 서버로 전송
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

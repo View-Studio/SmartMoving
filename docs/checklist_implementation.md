@@ -536,54 +536,48 @@
 ### 5-1. HUD 렌더링
 > 참고: `research_animation.md` — 섹션 G
 
-- [ ] **아이콘 텍스처 제작**
-  - [ ] `assets/smartmoving/textures/gui/icons.png` — 9×9 픽셀 아이콘 그리드
-  - [ ] 빈/반/꽉 하트 아이콘 (exhaustion 표시용)
-  - [ ] 차지/반차지 아이콘 (점프차지 표시용)
+- [ ] **아이콘 텍스처 제작** — Phase 5 후속 (현재 DrawContext fill로 대체)
 
-- [ ] **Exhaustion 바 구현**
-  - [ ] `HudRenderCallback` 또는 `@Mixin(InGameHud)` 사용
-  - [ ] 위치: 화면 우측 하단 (방어구 바 아래)
-  - [ ] 수중 시 10px 위로 이동
-  - [ ] `maxExhaustionForAction` 기준 하트 개수 계산 + 렌더
+- [x] **Exhaustion 바 구현** (SmartMovingHud)
+  - [x] `HudRenderCallback.EVENT` 사용
+  - [x] 위치: 화면 우측 하단
+  - [x] `maxExhaustionForAction` 기준 DrawContext.fill() 렌더
+  - [ ] 수중 Y 오프셋, 하트 아이콘 — Phase 5 후속
 
-- [ ] **점프 차지 바 구현**
-  - [ ] 위치: 화면 좌측 하단 (방어구 바 아래)
-  - [ ] `jumpCharge`, `headJumpCharge` 중 큰 값 표시
-  - [ ] `DrawContext` API 사용 (1.21.1)
+- [x] **점프 차지 바 구현** (SmartMovingHud)
+  - [x] 위치: 화면 좌측 하단
+  - [x] `jumpCharge` (하늘색), `headJumpCharge` (분홍색) 바 분리 표시
+  - [x] `DrawContext.fill()` + `RenderTickCounter` API 사용
 
 ---
 
 ### 5-2. 설정 시스템
 > 참고: `research_networking.md` — 섹션 E
 
-- [ ] **기능 ON/OFF 설정 정의**
-  - [ ] `crawlingEnabled`, `climbingEnabled`, `ceilingClimbingEnabled`
-  - [ ] `slidingEnabled`, `swimmingEnabled`, `divingEnabled`
-  - [ ] `jumpChargeEnabled`, `headJumpEnabled`
-  - [ ] `angleJumpSideEnabled`, `angleJumpBackEnabled`
-  - [ ] `wallJumpEnabled`
+- [x] **기능 ON/OFF 설정 정의** (`SmartMovingConfig`)
+  - [x] `crawlingEnabled`, `climbingEnabled`, `ceilingClimbingEnabled`
+  - [x] `slidingEnabled`, `swimmingEnabled`, `divingEnabled`
+  - [x] `jumpChargeEnabled`, `headJumpEnabled`
+  - [x] `angleJumpSideEnabled`, `angleJumpBackEnabled`
+  - [x] `wallJumpEnabled`
 
-- [ ] **물리 값 설정 정의**
-  - [ ] `crawlFactor` (기본 0.35)
-  - [ ] `swimSpeedFactor`, `diveSpeedFactor`
-  - [ ] `jumpChargeMaximum` (20), `jumpChargeFactor` (1.3)
-  - [ ] `headJumpChargeMaximum` (10)
-  - [ ] `angleJumpDoubleClickTicks` (3)
-  - [ ] `slideControlDegrees` (1.0), `slideSlipperinessFactor`
-  - [ ] `fallingDistanceMinimum`
-  - [ ] `freeClimbFallMaximumDistance`
+- [x] **물리 값 설정 정의** (`SmartMovingConfig`)
+  - [x] `crawlFactor` (기본 0.35F)
+  - [x] `swimSpeedFactor`, `diveSpeedFactor`
+  - [x] `jumpChargeMaximum` (20F), `jumpChargeFactor` (1.3F)
+  - [x] `headJumpChargeMaximum` (10F)
+  - [x] `angleJumpDoubleClickTicks` (3)
+  - [x] `slideControlDegrees`, `slideSlipperinessFactor`
+  - [x] `fallingDistanceMinimum`, `freeClimbFallMaximumDistance`
 
-- [ ] **탈진 관련 설정**
-  - [ ] `climbExhaustionEnabled`
-  - [ ] `climbExhaustionStart`, `climbExhaustionStop`
-  - [ ] `climbUpExhaustionGain`, `climbDownExhaustionGain`
-  - [ ] `ceilingClimbExhaustionEnabled`
-  - [ ] `ceilingClimbExhaustionStart`, `ceilingClimbExhaustionStop`, `ceilingClimbExhaustionGain`
+- [x] **탈진 관련 설정** (`SmartMovingConfig`)
+  - [x] `climbExhaustionEnabled`, `climbExhaustionStart/Stop`
+  - [x] `climbUpExhaustionGain`, `climbDownExhaustionGain`
+  - [x] `ceilingClimbExhaustionEnabled`, `ceilingClimb...`
 
-- [ ] **Cloth Config API 연동** (또는 자체 구현)
-  - [ ] 설정 GUI 화면 등록
-  - [ ] 설정 파일 저장/로드 (`config/smartmoving.json`)
+- [x] **설정 파일 저장/로드** (`ConfigManager`)
+  - [x] Gson 기반 JSON 파일 `config/smartmoving.json`
+  - [ ] Cloth Config API GUI — Phase 5 후속 (현재 JSON 직접 편집)
 
 ---
 
