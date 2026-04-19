@@ -8,77 +8,77 @@
 ## Phase 1 — 기반 시스템
 
 ### 1-1. 프로젝트 구조 세팅
-- [ ] `src/main/java/choco/ratel/smartmoving/` 하위 패키지 구조 생성
-  - [ ] `state/` — 상태 관리 클래스
-  - [ ] `input/` — 입력 처리 클래스
-  - [ ] `mixin/` — Mixin 클래스 (client/server 분리)
-  - [ ] `physics/` — 이동/충돌 물리 유틸
-  - [ ] `render/` — 렌더링/애니메이션
-  - [ ] `network/` — 패킷 시스템
-  - [ ] `config/` — 설정 시스템
-  - [ ] `util/` — 공용 유틸 (MathUtil 등)
-- [ ] `smartmoving.mixins.json` 에 서버 Mixin 목록 구성
-- [ ] `smartmoving.client.mixins.json` 에 클라이언트 Mixin 목록 구성
-- [ ] `fabric.mod.json` entrypoints 확인 (main, client)
-- [ ] `Smartmoving.java` (서버 초기화), `SmartmovingClient.java` (클라이언트 초기화) 뼈대 작성
+- [x] `src/main/java/choco/ratel/smartmoving/` 하위 패키지 구조 생성
+  - [x] `state/` — 상태 관리 클래스
+  - [x] `input/` — 입력 처리 클래스
+  - [x] `mixin/` — Mixin 클래스 (client/server 분리)
+  - [ ] `physics/` — 이동/충돌 물리 유틸 (Phase 2에서 생성)
+  - [ ] `render/` — 렌더링/애니메이션 (Phase 3에서 생성)
+  - [ ] `network/` — 패킷 시스템 (Phase 4에서 생성)
+  - [ ] `config/` — 설정 시스템 (Phase 5에서 생성)
+  - [ ] `util/` — 공용 유틸 (Phase 2에서 생성)
+- [x] `smartmoving.mixins.json` 에 서버 Mixin 목록 구성
+- [x] `smartmoving.client.mixins.json` 에 클라이언트 Mixin 목록 구성
+- [x] `fabric.mod.json` entrypoints 확인 (main, client)
+- [x] `Smartmoving.java` (서버 초기화), `SmartmovingClient.java` (클라이언트 초기화) 뼈대 작성
 
 ---
 
 ### 1-2. 플레이어 상태 시스템
 > 참고: `research_player_state.md` — 섹션 A, C
 
-- [ ] `SmartMovingState` 클래스 작성 (원본 `SmartMovingSelf` 필드 포팅)
+- [x] `SmartMovingState` 클래스 작성 (원본 `SmartMovingSelf` 필드 포팅)
 
   **Boolean 이동 출력 상태 (19개)**
-  - [ ] `isCrawling`, `wasCrawling`
-  - [ ] `isClimbing`, `wasClimbing`
-  - [ ] `isCrawlClimbing`, `isClimbCrawling`
-  - [ ] `isSwimming`, `isDiving`, `isDipping`
-  - [ ] `isSliding`, `isRopeSliding`
-  - [ ] `isCeilingClimbing`
-  - [ ] `isHeadJumping`, `isSprintJump`, `isWallJumping`
-  - [ ] `isHandsVineClimbing`, `isFeetVineClimbing`
-  - [ ] `isLevitating`, `isAerodynamic`
-  - [ ] `isFast`, `isSlow`
-  - [ ] `isGroundSprinting`
+  - [x] `isCrawling`, `wasCrawling`
+  - [x] `isClimbing`, `wasClimbing`
+  - [x] `isCrawlClimbing`, `isClimbCrawling`
+  - [x] `isSwimming`, `isDiving`, `isDipping`
+  - [x] `isSliding`, `isRopeSliding`
+  - [x] `isCeilingClimbing`
+  - [x] `isHeadJumping`, `isSprintJump`, `isWallJumping`
+  - [x] `isHandsVineClimbing`, `isFeetVineClimbing`
+  - [x] `isLevitating`, `isAerodynamic`
+  - [x] `isFast`, `isSlow`
+  - [x] `isGroundSprinting`
 
   **Boolean 내부 의도 상태 (10개)**
-  - [ ] `wantClimbUp`, `wantClimbDown`, `wantClimbCeiling`
-  - [ ] `wantCrawlNotClimb`, `wouldIsSneaking`
-  - [ ] `isClimbingStill`, `isClimbHolding`
-  - [ ] `crawlToggled`, `sneakToggled`
-  - [ ] `blockJumpTillButtonRelease`
+  - [x] `wantClimbUp`, `wantClimbDown`, `wantClimbCeiling`
+  - [x] `wantCrawlNotClimb`, `wouldIsSneaking`
+  - [x] `isClimbingStill`, `isClimbHolding`
+  - [x] `crawlToggled`, `sneakToggled`
+  - [x] `blockJumpTillButtonRelease`
 
   **Integer 카운터/타입 (8개)**
-  - [ ] `angleJumpType` (0-7)
-  - [ ] `handsEdgeMeta`, `feetEdgeMeta` (0-3)
-  - [ ] `leftJumpCount`, `rightJumpCount`, `backJumpCount`, `wallJumpCount` (-1~N)
-  - [ ] `collidedHorizontallyTickCount`, `updateCounter`
+  - [x] `angleJumpType` (0-7)
+  - [x] `handsEdgeMeta`, `feetEdgeMeta` (0-3)
+  - [x] `leftJumpCount`, `rightJumpCount`, `backJumpCount`, `wallJumpCount` (-1~N)
+  - [x] `collidedHorizontallyTickCount`, `updateCounter`
 
   **Float 물리 값 (9개)**
-  - [ ] `exhaustion`, `maxExhaustionForAction`, `maxExhaustionToStartAction`
-  - [ ] `jumpCharge`, `headJumpCharge`
-  - [ ] `dippingDepth`
-  - [ ] `horizontalCollisionAngle`
-  - [ ] `fadingPerspectiveFactor`
-  - [ ] `heightOffset`
+  - [x] `exhaustion`, `maxExhaustionForAction`, `maxExhaustionToStartAction`
+  - [x] `jumpCharge`, `headJumpCharge`
+  - [x] `dippingDepth`
+  - [x] `horizontalCollisionAngle`
+  - [x] `fadingPerspectiveFactor`
+  - [x] `heightOffset`
 
   **이전 프레임 추적**
-  - [ ] `prevMotionX`, `prevMotionY`, `prevMotionZ`
-  - [ ] `wasOnGround`
+  - [x] `prevMotionX`, `prevMotionY`, `prevMotionZ`
+  - [x] `wasOnGround`
 
-- [ ] `SmartMovingState` — `reset()` 메서드 (상태 전체 초기화)
-- [ ] `SmartMovingState` — `tick()` 메서드 뼈대 (updateEntityActionState 진입점)
-- [ ] `SmartMovingState` — `tickPre()` / `tickPost()` 구분 (before/after 패턴)
+- [x] `SmartMovingState` — `reset()` 메서드 (상태 전체 초기화)
+- [x] `SmartMovingState` — `tick()` 메서드 뼈대 (updateEntityActionState 진입점)
+- [ ] `SmartMovingState` — `tickPre()` / `tickPost()` 구분 (Phase 2에서 필요 시 추가)
 
-- [ ] Fabric `AttachmentType` 등록
-  - [ ] `Smartmoving.java` 에서 `AttachmentType<SmartMovingState>` 등록
-  - [ ] 기본값 팩토리: `() -> new SmartMovingState()`
-  - [ ] `player.getAttached(SmartMovingAttachments.STATE)` 유틸 메서드
+- [x] Fabric `AttachmentType` 등록
+  - [x] `Smartmoving.java` 에서 `AttachmentType<SmartMovingState>` 등록
+  - [x] 기본값 팩토리: `() -> new SmartMovingState()`
+  - [x] `player.getAttachedOrCreate(SmartMovingAttachments.STATE)` 사용
 
-- [ ] `PlayerEntity` Mixin — `tick()` `@Inject` → `state.tick()` 호출
-- [ ] `PlayerEntity` Mixin — 탑승/수면/크리에이티브 시 상태 비활성화 체크
-- [ ] 상태 우선순위 충돌 해소 로직 구현
+- [x] `PlayerEntity` Mixin — `tick()` `@Inject` → `state.tick()` 호출 (클라이언트 로컬 플레이어만)
+- [ ] `PlayerEntity` Mixin — 탑승/수면/크리에이티브 시 상태 비활성화 체크 (Phase 2에서 구현)
+- [ ] 상태 우선순위 충돌 해소 로직 구현 (Phase 2에서 구현)
   - [ ] `Flying > Climbing > Swimming > Crawling > Standing` 순서
   - [ ] Exhaustion 초과 시 상태 진입 차단 (해제는 하지 않음)
 
@@ -87,44 +87,44 @@
 ### 1-3. 입력 시스템
 > 참고: `research_input.md` — 섹션 A, B, C, D, E
 
-- [ ] `SmartMovingButton` 클래스 작성 (원본 `Button` 포팅)
-  - [ ] `boolean pressed` — 현재 프레임 상태
-  - [ ] `boolean wasPressed` — 이전 프레임 상태
-  - [ ] `boolean startPressed` — false→true 전환 (1프레임)
-  - [ ] `boolean stopPressed` — true→false 전환 (1프레임)
-  - [ ] `update(boolean pressed)` 메서드
-  - [ ] `update(KeyBinding binding)` 오버로드
-  - [ ] `inGameHasFocus` 체크 (포커스 없으면 입력 무시)
-  - [ ] UI 열려있을 때 `allowUserInput` 체크
+- [x] `SmartMovingButton` 클래스 작성 (원본 `Button` 포팅)
+  - [x] `boolean pressed` — 현재 프레임 상태
+  - [x] `boolean wasPressed` — 이전 프레임 상태
+  - [x] `boolean startPressed` — false→true 전환 (1프레임)
+  - [x] `boolean stopPressed` — true→false 전환 (1프레임)
+  - [x] `update(boolean pressed)` 메서드
+  - [ ] `update(KeyBinding binding)` 오버로드 (InputHandler에서 직접 처리)
+  - [ ] `inGameHasFocus` 체크 (Phase 2에서 필요 시 추가)
+  - [ ] UI 열려있을 때 `allowUserInput` 체크 (Phase 2에서 필요 시 추가)
 
-- [ ] KeyBinding 4개 등록 (Fabric `KeyBindingHelper`)
-  - [ ] `keyBindGrab` — 기본값: Left Ctrl (GLFW_KEY_LEFT_CONTROL)
-  - [ ] `keyBindConfigToggle` — 기본값: F9
-  - [ ] `keyBindSpeedIncrease` — 기본값: O
-  - [ ] `keyBindSpeedDecrease` — 기본값: I
-  - [ ] 카테고리: `"key.categories.smartmoving"` (번역 키 추가)
+- [x] KeyBinding 4개 등록 (Fabric `KeyBindingHelper`)
+  - [x] `keyBindGrab` — 기본값: Left Ctrl (GLFW_KEY_LEFT_CONTROL)
+  - [x] `keyBindConfigToggle` — 기본값: F9
+  - [x] `keyBindSpeedIncrease` — 기본값: O
+  - [x] `keyBindSpeedDecrease` — 기본값: I
+  - [x] 카테고리: `"key.categories.smartmoving"` (번역 키 추가)
 
-- [ ] `SmartMovingState` 에 Button 8개 필드 추가
-  - [ ] `forwardButton`, `backButton`, `leftButton`, `rightButton`
-  - [ ] `jumpButton`, `sprintButton`, `sneakButton`, `grabButton`
+- [x] `SmartMovingState` 에 Button 8개 필드 추가
+  - [x] `forwardButton`, `backButton`, `leftButton`, `rightButton`
+  - [x] `jumpButton`, `sprintButton`, `sneakButton`, `grabButton`
 
-- [ ] `ClientTickEvents.END_CLIENT_TICK` 에서 매 틱 폴링
-  - [ ] `forwardButton.update(client.options.forwardKey)`
-  - [ ] `backButton.update(client.options.backKey)`
-  - [ ] `leftButton.update(client.options.leftKey)`
-  - [ ] `rightButton.update(client.options.rightKey)`
-  - [ ] `jumpButton.update(client.options.jumpKey)`
-  - [ ] `sprintButton.update(client.options.sprintKey)`
-  - [ ] `sneakButton.update(client.options.sneakKey)`
-  - [ ] `grabButton.update(SmartMovingKeys.GRAB)`
+- [x] `ClientTickEvents.START_CLIENT_TICK` 에서 매 틱 폴링 (InputHandler)
+  - [x] `forwardButton.update(client.options.forwardKey.isPressed())`
+  - [x] `backButton.update(client.options.backKey.isPressed())`
+  - [x] `leftButton.update(client.options.leftKey.isPressed())`
+  - [x] `rightButton.update(client.options.rightKey.isPressed())`
+  - [x] `jumpButton.update(client.options.jumpKey.isPressed())`
+  - [x] `sprintButton.update(client.options.sprintKey.isPressed())`
+  - [x] `sneakButton.update(client.options.sneakKey.isPressed())`
+  - [x] `grabButton.update(SmartMovingKeys.GRAB.isPressed())`
 
-- [ ] 크롤 토글 로직 구현
+- [ ] 크롤 토글 로직 구현 (Phase 2-1에서 구현)
   - [ ] `willStartCrawl` 감지 → `crawlToggled = true`
   - [ ] `ignoreNextStopSneakButtonPressed` 플래그 처리
   - [ ] `willStopCrawl` 감지 → `crawlToggled = false`
   - [ ] `isCrawlToggleEnabled()` 설정 체크
 
-- [ ] 스니크 토글 로직 구현
+- [ ] 스니크 토글 로직 구현 (Phase 2-1에서 구현)
   - [ ] `sneakToggled` 플래그 관리
 
 ---
@@ -132,21 +132,20 @@
 ### 1-4. 히트박스 시스템
 > 참고: `research_movement.md` — 섹션 C, `research_player_state.md` — 섹션 D
 
-- [ ] `EntityDimensions` 동적 변경 Mixin 구현
-  - [ ] `@Mixin(LivingEntity.class)` — `getBaseDimensions(EntityPose pose)` `@Inject`
-  - [ ] 상태 기반 분기: `isCrawling || isSliding || isCeilingClimbing → height 0.8F`
-  - [ ] 기본 상태: `height 1.8F`
+- [x] `EntityDimensions` 동적 변경 Mixin 구현
+  - [x] `@Mixin(LivingEntity.class)` — `getBaseDimensions(EntityPose pose)` `@Inject`
+  - [x] 상태 기반 분기: `isCrawling || isSliding || isCeilingClimbing → height 0.8F`
+  - [x] 기본 상태: `height 1.8F` (기존 vanilla 동작 유지)
 
-- [ ] 눈 높이 보정
-  - [ ] `@Mixin(LivingEntity.class)` — `getEyeHeight(EntityPose, EntityDimensions)` `@Inject`
-  - [ ] 크롤/슬라이딩 시: `eyeHeight = 0.48F` (원본: 0.8 × 0.6)
-  - [ ] 기본 시: `eyeHeight = 1.62F`
+- [x] 눈 높이 보정
+  - [x] `EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.48F)` — 1.21.1 방식으로 통합 처리
+  - [x] 크롤/슬라이딩 시: `eyeHeight = 0.48F` (원본: 0.8 × 0.6)
 
-- [ ] 렌더 위치 오프셋 보정 (멀티플레이어 높이 보정)
+- [ ] 렌더 위치 오프셋 보정 (멀티플레이어 높이 보정) (Phase 3에서 구현)
   - [ ] `heightOffset` 값을 렌더 Y 좌표에 반영
   - [ ] `@Mixin(PlayerEntityRenderer.class)` — `render()` 에서 Y 보정 적용
 
-- [ ] 히트박스 변경이 서버에도 전파되는지 확인 (`ServerPlayerEntity`)
+- [ ] 히트박스 변경이 서버에도 전파되는지 확인 (`ServerPlayerEntity`) (Phase 4에서 검증)
   - [ ] 서버 측 `getDimensions()` Mixin 동일하게 적용
 
 ---

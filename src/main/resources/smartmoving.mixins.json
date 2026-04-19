@@ -4,6 +4,7 @@
   "package": "choco.ratel.smartmoving.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "LivingEntityDimensionsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
