@@ -1,6 +1,13 @@
 package choco.ratel.smartmoving.state;
 
 import choco.ratel.smartmoving.input.SmartMovingButton;
+import choco.ratel.smartmoving.physics.ClimbingHandler;
+import choco.ratel.smartmoving.physics.CrawlingHandler;
+import choco.ratel.smartmoving.physics.FeetClimbing;
+import choco.ratel.smartmoving.physics.HandsClimbing;
+import choco.ratel.smartmoving.physics.SlidingHandler;
+import choco.ratel.smartmoving.physics.JumpHandler;
+import choco.ratel.smartmoving.physics.SwimmingHandler;
 import net.minecraft.entity.player.PlayerEntity;
 
 public class SmartMovingState {
@@ -28,6 +35,9 @@ public class SmartMovingState {
     // ── Integer 카운터/타입 ──
     public int angleJumpType;
     public int handsEdgeMeta, feetEdgeMeta;
+    // FeetClimbing.value / HandsClimbing.value (64비트 패킷 인코딩용)
+    public int feetClimbingType  = FeetClimbing.None.value;
+    public int handsClimbingType = HandsClimbing.None.value;
     public int leftJumpCount, rightJumpCount, backJumpCount, wallJumpCount;
     public int collidedHorizontallyTickCount;
     public int updateCounter;
@@ -80,6 +90,8 @@ public class SmartMovingState {
         leftJumpCount = rightJumpCount = backJumpCount = wallJumpCount = 0;
         collidedHorizontallyTickCount = 0;
         updateCounter = 0;
+        feetClimbingType  = FeetClimbing.None.value;
+        handsClimbingType = HandsClimbing.None.value;
 
         exhaustion = maxExhaustionForAction = maxExhaustionToStartAction = 0F;
         jumpCharge = headJumpCharge = 0F;
@@ -105,8 +117,20 @@ public class SmartMovingState {
         return isCrawling || isSliding || isCeilingClimbing;
     }
 
-    // Phase 2+에서 기능별로 구현
     public void tick(PlayerEntity player) {
         updateCounter++;
+        // 매 틱 시작 시 플래그 초기화 (각 핸들러가 재설정)
+        isSlow = false;
+        isFast = false;
+
+        // 이전 프레임 추적
+        wasOnGround = player.isOnGround();
+        isGroundSprinting = player.isSprinting() && player.isOnGround();
+
+        SwimmingHandler.update(this, player);
+        CrawlingHandler.update(this, player);
+        ClimbingHandler.update(this, player);
+        SlidingHandler.update(this, player);
+        JumpHandler.update(this, player);
     }
 }

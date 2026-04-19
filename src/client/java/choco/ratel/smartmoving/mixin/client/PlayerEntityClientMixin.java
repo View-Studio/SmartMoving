@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(PlayerEntity.class)
 public abstract class PlayerEntityClientMixin {
 
-    @Inject(method = "tick", at = @At("TAIL"))
+    @Inject(method = "tick", at = @At("HEAD"))
     private void smartMoving_tick(CallbackInfo ci) {
         PlayerEntity self = (PlayerEntity) (Object) this;
         // 로컬 클라이언트 플레이어만 상태 기계 실행

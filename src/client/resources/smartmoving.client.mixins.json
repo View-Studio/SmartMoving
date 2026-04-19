@@ -4,7 +4,8 @@
   "package": "choco.ratel.smartmoving.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "PlayerEntityClientMixin"
+    "PlayerEntityClientMixin",
+    "PlayerEntityJumpMixin"
   ],
   "injectors": {
     "defaultRequire": 1

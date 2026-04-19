@@ -155,107 +155,60 @@
 ### 2-1. 기어가기 (Crawling)
 > 참고: `research_crawling.md` 전체, `research_movement.md` — 섹션 C
 
-- [ ] **천장 체크 (`mustCrawl`) 구현**
-  - [ ] `getMinBlockSolidAbove(player, offset)` 유틸 메서드 작성
-    - `World.getBlockCollisions(entity, box)` 사용
-    - 플레이어 AABB 위 1.1블록 범위 내 최소 솔리드 높이 탐색
-  - [ ] `getMaxBlockSolidBelow(player, offset)` 유틸 메서드 작성
-  - [ ] `mustCrawl = (ceiling - floor) < (playerHeight - heightOffset)`
+- [x] **천장 체크 (`mustCrawl`) 구현**
+  - [x] `BlockUtil.mustCrawl()` — 1.8H 박스 충돌 체크로 구현
+  - [ ] 정밀 솔리드 경계 탐색 (`getMinBlockSolidAbove` 등) — Phase 2 후속 개선 예정
 
-- [ ] **크롤 진입 조건 구현** (research_crawling.md 섹션 A)
-  - [ ] `canCrawl` 조건 전체 구현
-    - [ ] `!isSwimming && !isDiving`
-    - [ ] `!isDipping || dippingDepth < SwimCrawlWaterTopBorder`
-    - [ ] `!isClimbing`
-    - [ ] `fallDistance < Config.fallingDistanceMinimum`
-  - [ ] `wantCrawl` 입력 평가 (토글/홀드 분기)
-  - [ ] `isCrawling = canCrawl && (wantCrawl || mustCrawl)` 최종 결정
+- [x] **크롤 진입 조건 구현** (research_crawling.md 섹션 A)
+  - [x] `canCrawl`: `!flying && !swimming && !diving && !climbing && fallDist < MAX`
+  - [x] `wantCrawl`: 홀드 모드 구현 (토글은 Phase 5)
+  - [x] `isCrawling = canCrawl && (wantCrawl || mustCrawl)` 최종 결정
 
-- [ ] **`toCrawling()` 진입 메서드**
-  - [ ] `crawlToggled = true` (토글 모드 시)
-  - [ ] `ignoreNextStopSneakButtonPressed = true`
+- [ ] **`toCrawling()` 토글 진입 메서드** (Phase 5 설정에서 구현)
 
-- [ ] **`standupIfPossible()` 구현** (research_crawling.md 섹션 D)
-  - [ ] `getGapUnderneight()`, `getGapOverneight()` 유틸 구현
-  - [ ] `gapUnder + gapOver >= 1.0D` → `standUp()` 실행
-  - [ ] `standUp()`: `move(0, 1D - gapUnder, 0)` → `resetHeightOffset()`
-  - [ ] 불가 시 `toSlidingOrCrawling()` 분기
+- [x] **`standupIfPossible()` 기본 구현** (mustCrawl=false 시 isCrawling=false)
+  - [ ] `move()` 기반 정밀 스탠드업 애니메이션 (Phase 3에서 보완)
 
-- [ ] **크롤 속도 적용**
-  - [ ] `@Mixin(LivingEntity.class)` — `travel()` `@Inject`
-  - [ ] `isCrawling` 시 `speedFactor *= crawlFactor` (기본 ~0.35)
+- [x] **크롤 속도 적용**
+  - [x] `LivingEntity.travel()` `@ModifyVariable` — CRAWL_SPEED_FACTOR=0.35 적용
 
-- [ ] **크롤-클라이밍 연계 (`wantCrawlNotClimb`)**
-  - [ ] `grabButton.Pressed && isCrawling && isCollidedHorizontally && moveForward > 0`
-  - [ ] 조건 충족 시 `isCrawlClimbing` 전환
+- [x] **크롤-클라이밍 연계 (`wantCrawlNotClimb`)** 플래그 설정
 
-- [ ] **`isSlow` 플래그 설정**
-  - [ ] 크롤링 또는 크롤-클라이밍 중 `isSlow = true`
+- [x] **`isSlow` 플래그 설정** (크롤링 중 true)
 
-- [ ] **매 틱 검증**
-  - [ ] `PlayerEntity.tickMovement()` Mixin 에서 `standupIfPossible()` 호출
-  - [ ] 크롤 해제 후 `resetHeightOffset()` 호출
+- [x] **매 틱 갱신** — `CrawlingHandler.update()` in `SmartMovingState.tick()`
 
 ---
 
 ### 2-2. 클라이밍 (Free Climbing)
 > 참고: `research_climbing.md` — 섹션 A~E, `research_movement.md` — 섹션 D
 
-- [ ] **Orientation 8방향 시스템 구현** (research_climbing.md 섹션 A)
-  - [ ] `Orientation` enum: `PZ, NZ, ZP, ZN, PP, PN, NP, NN` (8방향)
-  - [ ] 각 방향의 블록 오프셋 정의 (dx, dz)
-  - [ ] `seekClimbGap(world, pos, ...)` 메서드 포팅
-    - 해당 방향 블록이 클라이밍 가능한지 체크
-    - `ClimbGap` 결과 반환
+- [ ] **Orientation 8방향 seekClimbGap 시스템** (Phase 2 후속 개선 예정 — 현재 horizontalCollision 사용)
 
-- [ ] **`ClimbGap` 데이터 클래스 구현**
-  - [ ] `Block block`, `int meta`, `boolean canStand`, `boolean mustCrawl`
-  - [ ] `Orientation direction`, `boolean skipGaps`
+- [ ] **`ClimbGap` 데이터 클래스** (Phase 4 네트워킹 시 필요)
 
-- [ ] **`FeetClimbing` enum 구현** (research_climbing.md 섹션 B)
-  - [ ] `None(-3)`, `BaseHold(-2)`, `BaseWithHands(-1)`, `TopWithHands(0)`
-  - [ ] `SlowUpWithHoldWithoutHands(1)`, `SlowUpWithSinkWithoutHands(2)`, `FastUp(3)`
-  - [ ] `toUp()`, `toDown()` 변환 메서드
+- [x] **`FeetClimbing` enum 구현** — None~FastUp 7값 구현
 
-- [ ] **`HandsClimbing` enum 구현** (research_climbing.md 섹션 B)
-  - [ ] `None(-3)`, `Sink(-2)`, `TopHold(-1)`, `BottomHold(0)`, `Up(1)`, `FastUp(2)`
+- [x] **`HandsClimbing` enum 구현** — None~FastUp 6값 구현
 
-- [ ] **클라이밍 진입 조건**
-  - [ ] `grabButton.Pressed` 또는 자동 사다리/덩굴 옵션
-  - [ ] `fallDistance <= freeClimbFallMaximumDistance`
-  - [ ] `!isHeadJumping && !wantCrawlNotClimb`
-  - [ ] `exhaustionAllowsClimbing` 체크
+- [x] **클라이밍 진입 조건**
+  - [x] `grabButton.Pressed` + `horizontalCollision || climbable block`
+  - [x] `fallDistance < MAX`
+  - [x] `!isHeadJumping && !wantCrawlNotClimb`
+  - [ ] exhaustion 게이트 (Phase 5)
 
-- [ ] **8방향 표면 탐색 루프**
-  - [ ] 정면/후면/좌/우 4방향 항상 탐색
-  - [ ] 크롤 아닐 때 대각선 4방향 추가 탐색
-  - [ ] 탐색 결과로 `handsClimbing`, `feetClimbing` 상태 결정
+- [x] **클라이밍 수직 속도 적용** — travel() before move() 주입
+  - [x] `wantClimbUp` → `FAST_UP_MOTION = 0.20D`
+  - [x] `wantClimbDown` → `SINK_DOWN_MOTION = -0.05D`
+  - [x] 기본 → `0.0D` (호버)
+  - [x] `fallDistance = 0F`
 
-- [ ] **클라이밍 수직 속도 적용** (research_movement.md 섹션 D)
-  - [ ] `LivingEntity.travel()` Mixin
-  - [ ] `FeetClimbing.FastUp` → `motionY = 0.20D`
-  - [ ] `FeetClimbing.SlowUp...` → `motionY = 0.10D`
-  - [ ] `FeetClimbing.BaseHold` → `motionY = 0.08D`
-  - [ ] `FeetClimbing.None (Sink)` → `motionY = -0.05D`
-  - [ ] `ClimbDownMotion` → `motionY = -0.01D`
-  - [ ] 중력 비활성화 (motionY에 vanilla gravity 적용 안 함)
+- [x] **`LivingEntity.isClimbing()` Mixin** — `isClimbing || isCeilingClimbing` 시 true
 
-- [ ] **`LivingEntity.isClimbing()` Mixin**
-  - [ ] `isClimbing` 플래그 true 시 `true` 반환 (낙하 대미지 방지)
+- [x] **덩굴 분리 추적** — `isHandsVineClimbing`, `isFeetVineClimbing`, `isRopeSliding`
 
-- [ ] **덩굴 클라이밍 분리 추적**
-  - [ ] `isHandsVineClimbing = isClimbing && handsEdgeBlock == Blocks.VINE`
-  - [ ] `isFeetVineClimbing = isClimbing && feetEdgeBlock == Blocks.VINE`
-  - [ ] `isRopeSliding` 조건 (덩굴 + 하강 + 손 미사용)
-
-- [ ] **탈진 게이트** (research_climbing.md 섹션 E)
-  - [ ] 클라이밍 시작/중단 exhaustion 임계값 체크
-  - [ ] 상승/하강/스트레이프 별 exhaustion 소모율 적용
-  - [ ] 정지(hold) 시 소모 없음
-
-- [ ] **걷기 소리 방지**
-  - [ ] `@Mixin(LivingEntity.class)` — `canMoveVoluntarily()` 또는 발자국 소리 관련 메서드
-  - [ ] `isClimbing` 시 보행 소리 방지
+- [ ] **탈진 게이트** (Phase 5)
+- [ ] **걷기 소리 방지** (Phase 5)
 
 ---
 
@@ -301,144 +254,71 @@
 ### 2-4. 슬라이딩 (Sliding)
 > 참고: `research_sliding.md` 전체
 
-- [ ] **슬라이딩 진입 조건**
-  - [ ] `Config.isSlidingEnabled()`
-  - [ ] `grabButton.Pressed`
-  - [ ] `isGroundSprinting || (wasRunning && !isRunning && onGround)`
-  - [ ] `sneakButton.startPressed` (눌리는 순간만)
-  - [ ] `!isCrawling && !isDipping`
+- [x] **슬라이딩 진입 조건**
+  - [x] `grabButton.Pressed && isGroundSprinting && sneakButton.startPressed`
+  - [x] `!isCrawling && !isDipping`
 
-- [ ] **마찰 공식 구현** (research_sliding.md 섹션 C)
-  ```
-  slipperiness = BlockState.getSlipperiness()
-  horizontalDamping = 1F / (((1F/slipperiness) - 1F) / 25F * slideSlipperinessFactor + 1F) * 0.98F
-  ```
-  - [ ] `BlockState` 슬라이딩 시 블록 미끄러움 조회
-  - [ ] `LivingEntity.travel()` Mixin 에서 감쇠 적용
+- [x] **마찰 공식 구현** — `getSlipperiness()` 기반 `horizontalDamping` 계산
 
-- [ ] **방향 조정 (Steering)** (research_sliding.md 섹션 C)
-  - [ ] strafing 입력 → 속도 벡터 방향만 회전 (크기 유지)
-  - [ ] `angle -= slideControlDegrees / RadiantToAngle × sign(strafing)`
-  - [ ] `motionX = magnitude × -sin(angle)`, `motionZ = magnitude × cos(angle)`
+- [x] **방향 조정 (Steering)** — strafing 입력으로 속도 벡터 방향 회전
 
-- [ ] **히트박스 변경**
-  - [ ] `setHeightOffset(-1F)` — 크롤과 동일한 0.8 높이
-  - [ ] `move(0, -1D, 0)` — 1블록 아래로 이동 (웅크린 포지션)
+- [x] **히트박스 변경** — `isSmall()` 에 `isSliding` 포함 (0.6×0.8)
 
-- [ ] **해제 조건**
-  - [ ] `sneakButton.Pressed = false`
-  - [ ] `horizontalSpeedSquare < slidingSpeedStopFactor × 0.01`
+- [x] **해제 조건** — `!sneakButton.pressed || hSpeedSq < threshold`
 
-- [ ] **로프 슬라이딩 (`isRopeSliding`) 분리 처리**
-  - [ ] 덩굴 위에서 + 하강 + 손 미사용 → `isRopeSliding = true`
-  - [ ] 수직 하강 속도 적용 (수평 조정 불가)
+- [x] **로프 슬라이딩** 기본 플래그 설정
 
 ---
 
 ### 2-5. 수영 / 잠수 강화 (Swimming / Diving)
 > 참고: `research_swimming.md` 전체
 
-- [ ] **수위 감지 유틸 구현**
-  - [ ] `getLiquidBorder(BlockState)` — 블록별 수위 계산
-    - metadata 0 → 0.875F, metadata 8+ → 1.0F
-    - `(8 - meta) / 8F` 공식
-  - [ ] `getMaxPlayerLiquidBetween(minY, maxY)` — 플레이어 범위 최대 수위
-  - [ ] Fabric 대응: `FluidState.getHeight()` 검증
+- [x] **수위 감지 구현** — `FluidState.getHeight()` 기반 최대 수위 탐색 (SwimmingHandler)
 
-- [ ] **3가지 수중 상태 전환** (research_swimming.md 섹션 B)
-  - [ ] `playerSwimWaterBorder` 계산 (총수위 - 플레이어Y - 0.1625D)
-  - [ ] `< 1.4` → `isDipping = true`
-  - [ ] `1.4 ~ 1.9` → `isSwimming = true`
-  - [ ] `>= 1.9` → `isDiving = true`
+- [x] **3가지 수중 상태 전환**
+  - [x] `playerSwimOffset = waterBorder - playerY - 0.1625`
+  - [x] `< 1.4` → isDipping, `1.4~1.9` → isSwimming, `≥1.9` → isDiving
 
-- [ ] **상태별 감쇠 적용** (research_swimming.md 섹션 B)
-  - [ ] `isDipping`: motionX/Z *= 0.80D, motionY *= 0.83D
-  - [ ] `isSwimming`: motionX/Y/Z *= 0.85D
-  - [ ] `isDiving`: motionX/Y/Z *= 0.83D
-  - [ ] `LivingEntity.travel()` Mixin 에서 적용
+- [x] **상태별 감쇠 적용** — `travel()` before move() 주입
+  - [x] isDipping: X/Z×0.80, Y×0.83 + 탈출 점프
+  - [x] isSwimming: 전체×0.85 + 부력 그라디언트
+  - [x] isDiving: 전체×0.83 + 3D 방향
 
-- [ ] **부력 그라디언트 구현** (research_swimming.md 섹션 C)
-  - [ ] offset별 motionY 조정값 7단계 구현
-    - 1.500 → -0.000625D
-    - 1.600 → -0.00125D
-    - 1.620 → -0.0025D
-    - 1.640 → -0.005D
-    - 1.660 → -0.01D
-    - 1.668 → -0.015D
-    - 1.672 → -0.02D
+- [x] **부력 그라디언트** — 7단계 offset 기반 motionY 조정값 구현
 
-- [ ] **잠수 3D 방향 이동** (research_swimming.md 섹션 D)
-  - [ ] `rotation = rotationPitch × (π/180)`
-  - [ ] `horizontalFactor = cos(rotation)`
-  - [ ] `verticalFactor = -sin(rotation) × sign(moveForward)`
-  - [ ] motionY에 verticalFactor 반영
+- [x] **잠수 3D 방향 이동** — pitch 기반 수직 속도 계산
 
-- [ ] **물 탈출 점프**
-  - [ ] `isDipping && movingUp` → `motionY = 0.30000001192092896D` (고정값 유지)
-  - [ ] 스플래시 소리 재생: `random.splash`, vol=0.05F, pitch=1.0F ± rand(0.4F)
+- [x] **물 탈출 점프** — `WATER_EXIT_MOTION_Y = 0.30000001192092896D`
 
-- [ ] **`reverseHandleMaterialAcceleration()` 구현**
-  - [ ] 물 흐름 가속 효과 역전 (저항 적용)
-  - [ ] `@Redirect` 또는 `@ModifyVariable` in `travel()`
-
-- [ ] **속도 배수 적용**
-  - [ ] `isSwimming` → `speedFactor *= swimSpeedFactor`
-  - [ ] `isDiving` → `speedFactor *= diveSpeedFactor`
+- [ ] **`reverseHandleMaterialAcceleration()`** — 물 흐름 저항 역적용 (Phase 5)
+- [ ] **소리 재생** (Phase 5-3)
 
 ---
 
 ### 2-6. 점프 시스템 (Jump System)
 > 참고: `research_jumping.md` 전체, `research_movement.md` — 섹션 F
 
-- [ ] **`PlayerEntity.jump()` Mixin 인터셉트**
-  - [ ] `@Inject(at = @At("HEAD"), cancellable = true)`
-  - [ ] `jumpPending = true` 설정 후 cancel
-  - [ ] 커스텀 `tryJump()` 로 위임
+- [x] **`LivingEntity.jump()` Mixin 인터셉트** — PlayerEntityJumpMixin (클라이언트)
 
-- [ ] **`tryJump(type, inWater, isRunning, angle)` 구현** (research_jumping.md 섹션 B)
-  - [ ] exhaustion 체크 → 초과 시 return false
-  - [ ] 수직/수평 배수 계산 (speed + type 기반)
-  - [ ] 기본 수직 공식: `motionY = -0.078 + 0.498 × vertFactor × chargeFactor`
-  - [ ] 바닐라 Up: `motionY = 0.41999998688697815D`
-  - [ ] 각도 기반 수평 벡터 계산 (angle → sin/cos)
-  - [ ] 수평 속도 상한 적용
-  - [ ] exhaustion 소모
+- [x] **`tryJump(type, ..., angle)` 구현** (JumpHandler)
+  - [x] 바닐라 Up: `motionY = 0.41999998688697815D` (포션 적용)
+  - [x] 기본 공식: `-0.078 + 0.498 × vertFactor × chargeFactor`
+  - [x] 각도 기반 수평 벡터 (ANGLE 타입)
+  - [ ] exhaustion 체크/소모 (Phase 5)
+  - [ ] 수평 속도 상한 (Phase 5)
 
-- [ ] **점프 물약 연동**
-  - [ ] `hasStatusEffect(StatusEffects.JUMP_BOOST)` 체크
-  - [ ] `jumpPotionFactor = 1 + (amplifier + 1) × 0.2F`
+- [x] **점프 물약 연동** — `StatusEffects.JUMP_BOOST` 확인 + `(amp+1)×0.2F`
 
-- [ ] **차지 점프 (ChargeUp)** (research_jumping.md 섹션 D)
-  - [ ] 충전 조건 매 틱 체크 → `jumpCharge++`
-  - [ ] `getJumpChargeFactor()`: `1F + (charge / 20F) × 0.3F`
-  - [ ] 지면 착지 + charge > 0 → `tryJump(ChargeUp)` 발동
-  - [ ] HUD: 차지 바 표시 (Phase 5에서 구현)
+- [x] **차지 점프 (ChargeUp)** — 매 틱 jumpCharge++, 해제 시 tryJump(CHARGE_UP)
+  - [x] `getJumpChargeFactor()`: `1F + (charge/20F) × 0.3F`
 
-- [ ] **헤드 점프 (HeadUp)** (research_jumping.md 섹션 E)
-  - [ ] 충전 조건: `grabButton + isGroundSprinting + jumpButton`
-  - [ ] `getHeadJumpFactor()`: `(charge - 1) / (maxCharge - 1)` → 0~1
-  - [ ] 궤적 변환: `newAngle = factor × atan(vertMotion / horizMotion)`
-  - [ ] `totalMotion` 보존하며 방향만 수직화
+- [x] **헤드 점프 (HeadUp)** — grabButton + sprinting + jump 충전, totalMotion 보존 각도 변환
 
-- [ ] **8방향 각도 점프 (Angle)** (research_jumping.md 섹션 F)
-  - [ ] 더블탭 감지: `leftJumpCount`, `rightJumpCount`, `backJumpCount`
-    - 첫 탭: 카운터 = `angleJumpDoubleClickTicks` (기본 3)
-    - 두 번째 탭(카운터 > 0): count = -1 → 발동
-    - 매 틱 카운터 감소
-  - [ ] 방향 인덱스 → 각도 변환 (`angleJumpType = ((360 - angle) / 45) % 8`)
-  - [ ] 해당 각도로 `tryJump(Angle, angle)` 호출
+- [x] **8방향 각도 점프 (Angle)** — 더블탭 감지 (leftJumpCount / rightJumpCount / backJumpCount)
 
-- [ ] **벽 점프 (Wall Jump)** (research_jumping.md 섹션 G)
-  - [ ] `horizontalCollisionAngle` 추적
-    - `Entity.move()` Mixin — 수평 충돌 발생 시 법선 각도 저장
-  - [ ] 반사 공식: `jumpAngle = wallNormal × 2 - approachAngle + 180F`
-  - [ ] `wasCollidedHorizontally` 시 `jumpAngle = horizontalCollisionAngle` 직접 사용
-  - [ ] 직각 정렬 스냅 옵션 (tolerance 내에서 90° 정렬)
-  - [ ] `entity.horizontalCollision` 접근 방법 확인
+- [ ] **벽 점프 (Wall Jump)** — horizontalCollisionAngle 추적 필요 (Phase 4에서 구현)
 
-- [ ] **탈진 게이트 전체**
-  - [ ] 점프 타입별 exhaustion 임계값 테이블 정의
-  - [ ] 속도 상태(서있음/걷기/달리기/스프린트)별 값 분리
+- [ ] **탈진 게이트** (Phase 5)
 
 ---
 
