@@ -468,56 +468,52 @@
 ### 4-1. 패킷 시스템
 > 참고: `research_networking.md` — 섹션 A, B
 
-- [ ] **커스텀 페이로드 등록** (Fabric 1.21.1 `PayloadTypeRegistry`)
-  - [ ] `SmartMovingStatePayload` — 64비트 상태 전송
-  - [ ] `SmartMovingConfigPayload` — 서버 설정 배포
+- [x] **커스텀 페이로드 등록** (Fabric 1.21.1 `PayloadTypeRegistry`)
+  - [x] `SmartMovingStatePayload` — 64비트 상태 전송 (`playC2S` + `playS2C`)
+  - [ ] `SmartMovingConfigPayload` — 서버 설정 배포 (Phase 5)
 
-- [ ] **`SmartMovingStatePayload` 구현**
-  - [ ] `Identifier id = Identifier.of("smartmoving", "state")`
-  - [ ] `PacketByteBuf` — `entityId (int)` + `state (long)`
-  - [ ] `PacketCodec` 등록
+- [x] **`SmartMovingStatePayload` 구현**
+  - [x] `CustomPayload.Id<SmartMovingStatePayload>` 등록
+  - [x] `PacketCodec.tuple(INTEGER + VAR_LONG)` — entityId + state
+  - [x] `PacketCodec` 등록
 
-- [ ] **64비트 인코딩 구현** (`addToSendQueue` 포팅)
-  - [ ] research_networking.md 섹션 B 비트 레이아웃 그대로 구현
-  - [ ] 비트 0-3: `actualFeetClimbType`
-  - [ ] 비트 4-7: `actualHandsClimbType`
-  - [ ] 비트 8-33: 나머지 boolean 플래그 순서대로
-  - [ ] `prevPacketState` 비교 → 변경 시에만 전송 (delta compression)
+- [x] **64비트 인코딩 구현** (`StateEncoder.encode()`)
+  - [x] 비트 0-3: `feetClimbingType`, 비트 4-7: `handsClimbingType`
+  - [x] 비트 8-33: boolean 플래그 순서대로 (research_networking.md 섹션 B)
+  - [x] `prevPacketState` 비교 → 변경 시에만 전송 (delta compression)
 
-- [ ] **64비트 디코딩 구현** (`processStatePacket` 포팅)
-  - [ ] 동일 비트 순서로 역방향 우시프트 (`>>>`) 추출
-  - [ ] `isClimbBackJumping` 전환 감지 → 콜백 트리거
-  - [ ] `isWallJumping` 전환 감지 → 콜백 트리거
+- [x] **64비트 디코딩 구현** (`StateEncoder.decode()`)
+  - [x] 동일 비트 순서로 우시프트 추출
+  - [ ] `isClimbBackJumping` / `isWallJumping` 전환 콜백 (Phase 4 후속)
 
-- [ ] **클라이언트 → 서버 전송**
-  - [ ] `ClientPlayNetworking.send()` — 상태 변경 시
-  - [ ] `ClientTickEvents` 에서 변경 감지
+- [x] **클라이언트 → 서버 전송**
+  - [x] `ClientPlayNetworking.send()` — 상태 변경 시 (`SmartMovingClientNetworking`)
+  - [x] `ClientTickEvents.END_CLIENT_TICK` 에서 변경 감지
 
-- [ ] **서버 수신 및 relay**
-  - [ ] `ServerPlayNetworking.registerGlobalReceiver()`
-  - [ ] 히트박스 동기화: `isSmall` 비트 → `ServerPlayerEntity` 높이 변경
-  - [ ] 낙하거리 리셋: `isClimbing || isCeilingClimbing || isWallJumping`
-  - [ ] `PlayerLookup.tracking(entity)` 로 주변 플레이어에게 relay
+- [x] **서버 수신 및 relay** (`SmartMovingServerNetworking`)
+  - [x] `ServerPlayNetworking.registerGlobalReceiver()`
+  - [x] 서버 측 상태 갱신 (`StateEncoder.decode`)
+  - [x] 낙하거리 리셋: `isClimbing || isCeilingClimbing || isWallJumping`
+  - [x] `PlayerLookup.tracking(sender)` 로 주변 플레이어에게 relay
+  - [ ] 히트박스 동기화 서버 측 Mixin (Phase 4-3에서 구현)
 
 ---
 
 ### 4-2. 원격 플레이어 관리
 > 참고: `research_networking.md` — 섹션 C
 
-- [ ] **`SmartMovingRemoteState` 클래스** (원본 `SmartMovingOther` 대응)
-  - [ ] 원격 플레이어 상태 필드 (애니메이션용)
-  - [ ] `processStatePacket(long state)` — 디코딩 + 플래그 적용
-  - [ ] `foundAlive` 플래그 (메모리 누수 방지용)
+- [x] **`RemotePlayerManager` 클래스** (원본 `SmartMovingOther` 대응)
+  - [x] `applyRemoteState(player, encodedState)` — StateEncoder.decode() 래퍼
+  - [x] `lastUpdateTick` Map으로 접속 해제 감지 지원
+  - [x] `onPlayerLeave(uuid)` — 정리 메서드
 
-- [ ] **원격 플레이어 인스턴스 관리**
-  - [ ] `Map<UUID, SmartMovingRemoteState>` (EntityId 대신 UUID)
-  - [ ] 패킷 수신 시 조회/생성 (on-demand)
-  - [ ] `ServerPlayConnectionEvents.DISCONNECT` — 접속 끊김 시 정리
-  - [ ] 매 틱 `foundAlive` 체크 → false 인스턴스 제거
+- [x] **원격 플레이어 인스턴스 관리**
+  - [x] AttachmentType으로 상태 직접 관리 (별도 Map 불필요)
+  - [x] `ClientPlayConnectionEvents.DISCONNECT` — prevPacketState 초기화
 
-- [ ] **원격 플레이어 애니메이션**
-  - [ ] `PlayerEntityRenderer` Mixin — 원격 플레이어도 상태 기반 애니메이션 적용
-  - [ ] `renderPlayerAt()` 높이 오프셋 원격 플레이어에도 적용
+- [x] **원격 플레이어 애니메이션**
+  - [x] `PlayerEntityModelMixin` — 원격 플레이어도 동일 Mixin 적용됨 (AttachmentType 공유)
+  - [x] `PlayerEntityRendererMixin.getPositionOffset()` — 원격 플레이어 Y 오프셋도 적용됨
 
 ---
 
