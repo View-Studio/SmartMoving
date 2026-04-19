@@ -19,10 +19,10 @@ Minecraft 1.7.10 SmartMoving(Forge/ASM) → 1.21.1 SmartMoving(Fabric/Mixin) 마
 | 순서 | 주제 | 파일 | 상태 |
 |------|------|------|------|
 | 1 | 전체 아키텍처 | `research_architecture.md` | ✅ 완료 |
-| 2 | 플레이어 상태 관리 | `research_player_state.md` | 대기 |
-| 3 | 입력 처리 | `research_input.md` | 대기 |
+| 2 | 플레이어 상태 관리 | `research_player_state.md` | ✅ 완료 |
+| 3 | 입력 처리 | `research_input.md` | ✅ 완료 |
 | 4 | 이동 로직 (충돌박스/속도) | `research_movement.md` | 대기 |
-| 5 | 렌더링/애니메이션 | `research_animation.md` | 대기 |
+| 5 | 렌더링/애니메이션 | `research_animation.md` | ✅ 완료 |
 | 6 | 기어가기 (Crawling) | `research_crawling.md` | 대기 |
 | 7 | 클라이밍 (Climbing) | `research_climbing.md` | 대기 |
 | 8 | 그랩 (Grab) | `research_grab.md` | 대기 |
