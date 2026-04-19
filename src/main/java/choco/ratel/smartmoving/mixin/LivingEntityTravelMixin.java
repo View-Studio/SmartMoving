@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.mixin;
 
+import choco.ratel.smartmoving.physics.CeilingClimbingHandler;
 import choco.ratel.smartmoving.physics.ClimbingHandler;
 import choco.ratel.smartmoving.physics.CrawlingHandler;
 import choco.ratel.smartmoving.physics.SlidingHandler;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class LivingEntityTravelMixin {
 
     /**
-     * 크롤링 중 수평 이동 입력을 CRAWL_SPEED_FACTOR 배로 감소.
+     * 크롤링/천장 클라이밍 중 수평 이동 입력을 배율 조정.
      */
     @ModifyVariable(method = "travel", at = @At("HEAD"), argsOnly = true)
     private Vec3d smartMoving_scaleCrawlSpeed(Vec3d movementInput) {
@@ -27,10 +28,17 @@ public abstract class LivingEntityTravelMixin {
         if (!(self instanceof PlayerEntity player)) return movementInput;
 
         SmartMovingState state = player.getAttached(SmartMovingAttachments.STATE);
-        if (state == null || !state.isCrawling) return movementInput;
+        if (state == null) return movementInput;
 
-        float f = CrawlingHandler.CRAWL_SPEED_FACTOR;
-        return movementInput.multiply(f, 1.0, f);
+        if (state.isCrawling) {
+            float f = CrawlingHandler.CRAWL_SPEED_FACTOR;
+            return movementInput.multiply(f, 1.0, f);
+        }
+        if (state.isCeilingClimbing) {
+            float f = CeilingClimbingHandler.CEILING_SPEED_FACTOR;
+            return movementInput.multiply(f, 1.0, f);
+        }
+        return movementInput;
     }
 
     /**
@@ -66,6 +74,12 @@ public abstract class LivingEntityTravelMixin {
             Vec3d vel = player.getVelocity();
             Vec3d newVel = SlidingHandler.applySlidePhysics(state, player, vel);
             player.setVelocity(newVel);
+            player.fallDistance = 0F;
+
+        } else if (state.isCeilingClimbing) {
+            double motionY = CeilingClimbingHandler.getCeilingMotionY(player);
+            Vec3d vel = player.getVelocity();
+            player.setVelocity(vel.x, motionY, vel.z);
             player.fallDistance = 0F;
 
         } else if (state.isSwimming || state.isDiving || state.isDipping) {

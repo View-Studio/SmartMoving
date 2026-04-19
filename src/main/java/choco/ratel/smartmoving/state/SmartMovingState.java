@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.state;
 
 import choco.ratel.smartmoving.input.SmartMovingButton;
+import choco.ratel.smartmoving.physics.CeilingClimbingHandler;
 import choco.ratel.smartmoving.physics.ClimbingHandler;
 import choco.ratel.smartmoving.physics.CrawlingHandler;
 import choco.ratel.smartmoving.physics.FeetClimbing;
@@ -130,6 +131,7 @@ public class SmartMovingState {
         SwimmingHandler.update(this, player);
         CrawlingHandler.update(this, player);
         ClimbingHandler.update(this, player);
+        CeilingClimbingHandler.update(this, player);
         SlidingHandler.update(this, player);
         JumpHandler.update(this, player);
     }

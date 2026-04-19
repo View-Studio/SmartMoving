@@ -215,39 +215,36 @@
 ### 2-3. 천장 클라이밍 (Ceiling Climbing)
 > 참고: `research_climbing.md` — 섹션 F, `research_movement.md` — 섹션 D
 
-- [ ] **`supportsCeilingClimbing()` 구현**
-  - [ ] 플레이어 머리 위 블록 확인
-  - [ ] 설정에 등록된 블록(`TagKey<Block>` 또는 딕셔너리) 매칭
-  - [ ] 기본 지원 블록: 사다리, 덩굴, 천장 클라이밍용 태그 블록
+- [x] **`supportsCeilingClimbing()` 구현**
+  - [x] 플레이어 머리 위 블록 확인 (`headPos = blockPos.up()`, `aboveHead = blockPos.up().up()`)
+  - [x] 기본 지원 블록: `BlockTags.CLIMBABLE` (사다리, 덩굴 포함) — Phase 5에서 커스텀 태그로 확장
 
-- [ ] **천장 감지 로직**
-  - [ ] `wantClimbCeiling = grabButton.Pressed && !wantCrawlNotClimb && !sneaking`
-  - [ ] `topBlock = supportsCeilingClimbing(pos.up())` 체크
-  - [ ] `bottomBlock = supportsCeilingClimbing(pos.up(2))` 체크
-  - [ ] `jgap = distance to ceiling block` 계산
-  - [ ] 조건: `jgap < 1.9 && !obstacle`
+- [x] **천장 감지 로직**
+  - [x] `wantClimbCeiling = grabButton.pressed && !wantCrawlNotClimb && !sneakButton.pressed`
+  - [x] `topBlock = supportsCeilingClimbing(pos.up())` 체크
+  - [x] `bottomBlock = supportsCeilingClimbing(pos.up(2))` 체크
+  - [x] `jgap = 1 - jd + (bottomSupport ? 1 : 0)` 계산
+  - [x] 조건: `jgap < 1.9 && solidHeight >= playerY + 0.5`
 
-- [ ] **천장 클라이밍 속도 적용**
-  - [ ] 갭 크기별 motionY 결정
+- [x] **천장 클라이밍 속도 적용**
+  - [x] 갭 크기별 motionY 결정
     - `jgap > 1.2` → `motionY = 0.12D`
     - `jgap > 1.115` → `motionY = 0.08D`
     - 그 이하 → `motionY = 0.04D`
-  - [ ] `fallDistance = 0F` (낙하 대미지 방지)
-  - [ ] 매 틱 motionY 양수 유지 (중력 상쇄)
-  - [ ] 수평 이동: `speedFactor *= ceilingClimbingSpeedFactor`
+  - [x] `fallDistance = 0F` (낙하 대미지 방지)
+  - [x] 수평 이동: `CEILING_SPEED_FACTOR = 0.4F` — `@ModifyVariable`로 적용
 
 - [ ] **히트박스 변경**
-  - [ ] 천장 클라이밍 진입 시 `heightOffset = -1F` 적용
+  - [ ] 천장 클라이밍 진입 시 `heightOffset = -1F` 적용 (Phase 3 렌더링 시 보완)
   - [ ] AABB 상단이 천장 블록에 닿도록 Y 오프셋 보정
 
-- [ ] **탈진 게이트**
-  - [ ] 이동 중에만 exhaustion 소모 (정지 시 없음)
+- [ ] **탈진 게이트** (Phase 5)
 
-- [ ] **해제 조건**
-  - [ ] `grabButton.Pressed = false`
-  - [ ] 천장 블록 없음
-  - [ ] 장애물 (`solidHeight >= pos.y + 0.5`)
-  - [ ] exhaustion 초과
+- [x] **해제 조건**
+  - [x] `grabButton.pressed = false`
+  - [x] 천장 블록 없음 (`topSupport && bottomSupport` 모두 false)
+  - [x] 장애물 (`solidHeight < playerY + 0.5`)
+  - [ ] exhaustion 초과 (Phase 5)
 
 ---
 
@@ -327,22 +324,22 @@
 ### 3-1. 애니메이션 인프라
 > 참고: `research_animation.md` — 섹션 B, C, D, E
 
-- [ ] **`AnimationUtil` 유틸 클래스**
-  - [ ] `factor(x, x0, x1)` 선형 보간 구현 (research_animation.md 섹션 B)
+- [x] **`AnimationUtil` 유틸 클래스**
+  - [x] `factor(x, x0, x1)` 선형 보간 구현 (research_animation.md 섹션 B)
     - `x0 > x1` (내림): `clamp((x0-x)/(x0-x1), 0, 1)`
     - `x0 <= x1` (오름): `clamp((x-x0)/(x1-x0), 0, 1)`
-  - [ ] 각도 상수 정의
+  - [x] 각도 상수 정의
     - `WHOLE = 2π`, `HALF = π`, `QUARTER = π/2`
     - `EIGHTH = π/4`, `SIXTEENTH = π/8`
     - `THIRTYTWOTH = π/16`, `SIXTYFOURTH = π/32`
 
-- [ ] **`PlayerEntityModel` Mixin 기반 구조**
-  - [ ] `@Mixin(PlayerEntityModel.class)`
-  - [ ] `@Inject(method = "setAngles", at = @At("TAIL"))`
-  - [ ] 상태 플래그 조회: `player.getAttached(STATE)`
-  - [ ] 상태 없으면 vanilla 애니메이션 그대로
+- [x] **`PlayerEntityModel` Mixin 기반 구조**
+  - [x] `@Mixin(PlayerEntityModel.class)`
+  - [x] `@Inject(method = "setAngles(LivingEntity;FFFFF)V", at = @At("TAIL"))` — LivingEntity 브릿지 타겟팅
+  - [x] 상태 플래그 조회: `player.getAttached(STATE)`
+  - [x] 상태 없으면 vanilla 애니메이션 그대로
 
-- [ ] **커스텀 ModelPart 확장** (research_animation.md 섹션 D)
+- [ ] **커스텀 ModelPart 확장** (research_animation.md 섹션 D) — Phase 3 후속
   - [ ] `bipedOuter` — 루트 본 (전체 Y 회전 + 페이드)
   - [ ] `bipedTorso` — 상체
   - [ ] `bipedBreast` — 가슴 레이어
@@ -350,21 +347,16 @@
   - [ ] `bipedPelvic` — 골반 (몸통/다리 분리)
   - [ ] `PlayerEntityModel`에 필드 주입 방법 결정 (Mixin accessor or duck interface)
 
-- [ ] **회전 순서 시스템**
+- [ ] **회전 순서 시스템** (Phase 3 후속)
   - [ ] `YZX`, `ZYX`, `XZY`, `YXZ` 적용 방법 구현
   - [ ] `MatrixStack` 수동 회전 순서 적용
 
-- [ ] **스케일링 시스템** (research_animation.md 섹션 E)
+- [ ] **스케일링 시스템** (Phase 3 후속)
   - [ ] `Scale (0)`: `MatrixStack.scale()` 직접 적용
-  - [ ] `NoScaleStart (1)`: 상단 오프셋 조정
-  - [ ] `NoScaleEnd (2)`: 하단 오프셋 조정
   - [ ] `setArmScales(rightScale, leftScale)` 구현
   - [ ] `setLegScales(rightScale, leftScale)` 구현
 
-- [ ] **3개 모델 동기화 구조**
-  - [ ] 메인 모델 (전체 스케일)
-  - [ ] 흉갑 갑옷 모델 (`NoScaleStart` 팔, `NoScaleEnd` 다리)
-  - [ ] 표준 갑옷 모델 (`NoScaleStart` 팔, `Scale` 다리)
+- [ ] **3개 모델 동기화 구조** (Phase 3 후속)
   - [ ] `PlayerEntityRenderer` Mixin 에서 상태 동기화
 
 ---
@@ -372,85 +364,72 @@
 ### 3-2. 기어가기 애니메이션
 > 참고: `research_animation.md` — 섹션 D-7
 
-- [ ] `isCrawling` 분기 구현
-  - [ ] `distance = totalHorizontalDistance × 1.3F`
-  - [ ] `walkFactor = factor(speed, 0F, 0.12951545F)`
-  - [ ] `standFactor = factor(speed, 0.12951545F, 0F)`
-  - [ ] 몸통: `rotateAngleX = QUARTER - THIRTYTWOTH`, `rotationPointY = 3F`
-  - [ ] 팔: `rotateAngleX = HALF + EIGHTH`, `rotateAngleY = ±QUARTER`
-  - [ ] 팔 Z진동: `cos(distance + HALF) × SIXTYFOURTH × walkFactor ± THIRTYTWOTH`
-  - [ ] 다리 X: `cos(distance ± QUARTER) × SIXTYFOURTH + THIRTYTWOTH` × factors
-  - [ ] 다리 Z: `(cos(distance - QUARTER) ± 1F) × 0.25F × walkFactor ± THIRTYTWOTH`
-  - [ ] 팔/다리 스케일 적용
+- [x] `isCrawling` 분기 구현 (PlayerEntityModelMixin.applyCrawlingAngles)
+  - [x] `walkFactor = factor(speed, 0F, 0.12951545F)`
+  - [x] `standFactor = factor(speed, 0.12951545F, 0F)`
+  - [x] 몸통: `pitch = QUARTER - THIRTYTWOTH`, `pivotY = 3F`
+  - [x] 팔: `pitch = HALF + EIGHTH`, `yaw = ±QUARTER`
+  - [x] 팔 Z진동: `cos(dist + HALF) × SIXTYFOURTH × walkFactor ± THIRTYTWOTH`
+  - [x] 다리 X: `cos(dist ± QUARTER) × SIXTYFOURTH × walkFactor ± THIRTYTWOTH`
+  - [x] 다리 Z: `(cos(dist - QUARTER) ± 1F) × 0.25F × walkFactor ± THIRTYTWOTH`
+  - [ ] 팔/다리 스케일 적용 (Phase 3 후속 — 커스텀 ModelPart 필요)
 
 ---
 
 ### 3-3. 클라이밍 애니메이션
 > 참고: `research_animation.md` — 섹션 D-2
 
-- [ ] `isClimbing` 분기 구현
-  - [ ] 손 클라이밍 타입별 파라미터 분기 (MiddleGrab/UpGrab/NoGrab)
-  - [ ] 팔 진동: `cos(vertDist × freq + HALF) × vSpeed × distFactor + offset`
-  - [ ] 팔 Y: `cos(horizDist × freqSide + QUARTER) × hSpeed × sideFactor + sideOffset`
-  - [ ] 다리 진동: 손 공식과 위상차(HALF) 적용
-  - [ ] 덩굴 클라이밍: `setArmScales(|cos(armAngleX)|, ...)`, `setLegScales(...)`
+- [x] `isClimbing` 기본 분기 구현 (PlayerEntityModelMixin.applyClimbingAngles)
+  - [x] 팔 진동: `cos(dist + HALF) × 0.52F × walkFactor - QUARTER` (좌우 위상 반전)
+  - [x] 다리 진동: 팔과 위상 반전 적용
+  - [ ] 손 클라이밍 타입별 파라미터 분기 (MiddleGrab/UpGrab/NoGrab) — Phase 3 후속
+  - [ ] 덩굴 클라이밍 스케일 보정 — Phase 3 후속 (커스텀 ModelPart 필요)
 
-- [ ] `isCrawlClimbing` 특수 케이스
-  - [ ] `height = smallOverGroundHeight + 0.25F`
-  - [ ] `bodyAngleX = acos(height / 0.7F)` (역삼각함수 기하학 계산)
-  - [ ] `legAngleX = QUARTER - bodyAngleX`
-  - [ ] 몸통/어깨/머리/다리 각도 적용
-
-- [ ] `isClimbJumping` 정적 포즈
-  - [ ] 팔: `rotateAngleX = HALF + SIXTEENTH`, Z: `±THIRTYTWOTH`
+- [ ] `isCrawlClimbing` 특수 케이스 — Phase 3 후속
+- [ ] `isClimbJumping` 정적 포즈 — Phase 3 후속
 
 ---
 
 ### 3-4. 천장 클라이밍 애니메이션
 > 참고: `research_animation.md` — 섹션 D-4
 
-- [ ] `isCeilingClimbing` 분기 구현
-  - [ ] `walkFactor = factor(speed, 0F, 0.12951545F)`
-  - [ ] `standFactor = factor(speed, 0.12951545F, 0F)`
-  - [ ] 팔 X: `(cos(dist) × 0.52F + HALF) × walkFactor + HALF × standFactor`
-  - [ ] 팔 X 우: `(cos(dist + HALF) × 0.52F - HALF) × walkFactor - HALF × standFactor`
-  - [ ] 다리 X 좌: `-cos(dist) × 0.12F × walkFactor`
-  - [ ] 다리 X 우: `-cos(dist + HALF) × 0.32F × walkFactor`
-  - [ ] Y 회전 진동: `rotateY = cos(dist) × 0.44F × walkFactor`
+- [x] `isCeilingClimbing` 분기 구현 (PlayerEntityModelMixin.applyCeilingClimbingAngles)
+  - [x] `walkFactor = factor(speed, 0F, 0.12951545F)`, `standFactor = ...`
+  - [x] 팔 X: `(cos(dist) × 0.52F + HALF) × walkFactor + HALF × standFactor`
+  - [x] 팔 X 우: `(cos(dist + HALF) × 0.52F - HALF) × walkFactor - HALF × standFactor`
+  - [x] 다리 X 좌: `-cos(dist) × 0.12F × walkFactor`
+  - [x] 다리 X 우: `-cos(dist + HALF) × 0.32F × walkFactor`
+  - [x] Y 회전 진동: `body.yaw = cos(dist) × 0.44F × walkFactor`
 
 ---
 
 ### 3-5. 슬라이딩 애니메이션
 > 참고: `research_animation.md` — 섹션 D-8
 
-- [ ] `isSliding` 분기 구현
-  - [ ] 몸통 외전: `rotateAngleX = QUARTER`, `rotationPointY = 5F`
-  - [ ] 바디 Y오프셋: `offsetY = -0.4F`, `rotationPointY = +6.5F`
-  - [ ] 팔: `rotateAngleX = cos(dist+QUARTER) × SIXTYFOURTH × walkFactor + HALF - SIXTYFOURTH`
-  - [ ] 팔 Y: `±QUARTER` 외전
-  - [ ] 다리: `rotateAngleZ = ±THIRTYTWOTH`
+- [x] `isSliding` 분기 구현 (PlayerEntityModelMixin.applySlidingAngles)
+  - [x] 몸통: `pitch = QUARTER`, `pivotY = 5F`
+  - [x] 팔: `pitch = cos(dist+QUARTER) × SIXTYFOURTH × walkFactor + HALF - SIXTYFOURTH`
+  - [x] 팔 Y: `±QUARTER` 외전
+  - [x] 다리: `roll = ±THIRTYTWOTH`
 
 ---
 
 ### 3-6. 수영 / 잠수 애니메이션
 > 참고: `research_animation.md` — 섹션 D-5, D-6
 
-- [ ] `isSwimming` 분기 구현
-  - [ ] 속도 구간 3개 (정지/느린수영/빠른수영) Factor 계산
-    - `walkFactor = factor(speed, 0.15679921F, 0.52264464F)`
-    - `sneakFactor = min(factor(speed, 0, 0.15679921F), factor(speed, 0.52264464F, 0.15679921F))`
-    - `standFactor = factor(speed, 0.15679921F, 0F)`
-  - [ ] 몸통: `rotateAngleX = QUARTER - SIXTEENTH × standSneakFactor`
-  - [ ] 머리: 회전 순서 YXZ, `rotateAngleY = cos(dist/2 - QUARTER) × walkFactor`
-  - [ ] 팔 Z: `±(QUARTER + EIGHTH) ± cos(totalTime × 0.1F) × standSneakFactor × 0.8F`
-  - [ ] 팔 X: `(dist × 0.5F) % WHOLE - HALF` 거리 기반
-  - [ ] 다리 X: `cos(dist + HALF) × 0.52264464F × walkFactor`
-  - [ ] 다리/팔 스케일: 시간 기반 진동
+- [x] `isSwimming` 기본 분기 구현 (PlayerEntityModelMixin.applySwimmingAngles)
+  - [x] `walkFactor = factor(speed, 0.15679921F, 0.52264464F)`, `standFactor = ...`
+  - [x] 몸통: `pitch = -QUARTER × walkFactor`
+  - [x] 팔 X: cos 진동 기반
+  - [x] 다리 X: `cos(dist ± HALF) × 0.3F × walkFactor`
+  - [ ] 팔 Z 진동 (totalTime 기반) — Phase 3 후속
+  - [ ] 다리/팔 스케일 시간 기반 진동 — Phase 3 후속
 
-- [ ] `isDiving` 분기 구현
-  - [ ] 몸통: `rotateAngleX = QUARTER - currentVerticalAngle`
-  - [ ] 다리 Z: `(cos(dist) + 1F) × 0.52264464F × walkFactor + SIXTEENTH × standFactor`
-  - [ ] 팔 Z: 진폭 2.5배 (`× 0.52264464F × 2.5F`)
+- [x] `isDiving` 기본 분기 구현 (PlayerEntityModelMixin.applyDivingAngles)
+  - [x] 몸통: `pitch = -HALF` (수직 잠수)
+  - [x] 팔: `pitch = HALF` (앞으로 완전히 뻗음)
+  - [x] 다리: cos 스트로크 동작
+  - [ ] 현재 수직 각도 기반 동적 몸통 각도 — Phase 3 후속
 
 ---
 
