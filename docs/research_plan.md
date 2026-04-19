@@ -21,14 +21,14 @@ Minecraft 1.7.10 SmartMoving(Forge/ASM) → 1.21.1 SmartMoving(Fabric/Mixin) 마
 | 1 | 전체 아키텍처 | `research_architecture.md` | ✅ 완료 |
 | 2 | 플레이어 상태 관리 | `research_player_state.md` | ✅ 완료 |
 | 3 | 입력 처리 | `research_input.md` | ✅ 완료 |
-| 4 | 이동 로직 (충돌박스/속도) | `research_movement.md` | 대기 |
+| 4 | 이동 로직 (충돌박스/속도) | `research_movement.md` | ✅ 완료 |
 | 5 | 렌더링/애니메이션 | `research_animation.md` | ✅ 완료 |
-| 6 | 기어가기 (Crawling) | `research_crawling.md` | 대기 |
-| 7 | 클라이밍 (Climbing) | `research_climbing.md` | 대기 |
-| 8 | 그랩 (Grab) | `research_grab.md` | 대기 |
-| 9 | 여우 무빙 (Slide/Prone) | `research_slide.md` | 대기 |
-| 10 | 수영 강화 | `research_swimming.md` | 대기 |
-| 11 | 점프 강화 | `research_jumping.md` | 대기 |
+| 6 | 네트워킹/멀티플레이어 | `research_networking.md` | ✅ 완료 |
+| 7 | 기어가기 (Crawling) | `research_crawling.md` | ✅ 완료 |
+| 8 | 클라이밍 + 천장 클라이밍 | `research_climbing.md` | ✅ 완료 |
+| 9 | 슬라이딩 (Sliding) | `research_sliding.md` | ✅ 완료 |
+| 10 | 수영/잠수 강화 | `research_swimming.md` | ✅ 완료 |
+| 11 | 점프 강화 | `research_jumping.md` | ✅ 완료 |
 
 ## 기능별 리서치 파일 템플릿
 
