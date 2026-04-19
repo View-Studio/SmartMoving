@@ -58,6 +58,8 @@ public abstract class PlayerEntityModelMixin {
             applySwimmingAngles(limbAngle, speed);
         } else if (state.isDiving) {
             applyDivingAngles(limbAngle, speed);
+        } else if (state.isHeadJumping) {
+            applyHeadJumpingAngles(headPitch);
         }
     }
 
@@ -179,16 +181,31 @@ public abstract class PlayerEntityModelMixin {
     // ── 잠수 ──────────────────────────────────────────────────────────────────
 
     private void applyDivingAngles(float dist, float speed) {
-        // 수직 방향으로 잠수: 몸통 완전히 앞으로
         body.pitch    = -HALF;
         head.pitch    =  QUARTER;
 
-        // 팔: 앞으로 완전히 뻗음
         leftArm.pitch  = HALF;
         rightArm.pitch = HALF;
 
-        // 다리: 스트로크 동작
         leftLeg.pitch  = (float)(Math.cos(dist)) * 0.2F;
         rightLeg.pitch = (float)(Math.cos(dist + HALF)) * 0.2F;
+    }
+
+    // ── 헤드 점프 ────────────────────────────────────────────────────────────
+
+    private void applyHeadJumpingAngles(float headPitch) {
+        // 수직 각도 (카메라 pitch → 라디안 변환)
+        float vAngle = (float) Math.toRadians(headPitch);
+        float bendFactor = Math.min(factor(vAngle, QUARTER, 0F), factor(vAngle, -QUARTER, 0F));
+
+        body.pitch  = vAngle;
+        head.pitch  = -vAngle * 0.5F;
+
+        // 팔: 머리 위 방향으로
+        float armZ = HALF - SIXTEENTH + factor(vAngle, QUARTER, -QUARTER) * EIGHTH;
+        leftArm.pitch  = -armZ;
+        rightArm.pitch = -armZ;
+        leftArm.roll   =  THIRTYTWOTH * bendFactor;
+        rightArm.roll  = -THIRTYTWOTH * bendFactor;
     }
 }

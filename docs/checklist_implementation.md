@@ -436,38 +436,30 @@
 ### 3-7. 점프 애니메이션
 > 참고: `research_animation.md` — 섹션 D-10, D-11
 
-- [ ] `isHeadJumping` 분기
-  - [ ] 몸통: `rotateAngleX = QUARTER - currentVerticalAngle`
-  - [ ] 머리: `-rotateAngleX / 2F`
-  - [ ] `bendFactor = min(factor(vAngle, QUARTER, 0), factor(vAngle, -QUARTER, 0))`
-  - [ ] 팔 Z: `HALF - SIXTEENTH + factor(vAngle, QUARTER, -QUARTER) × EIGHTH`
-  - [ ] 천장 높이로 팔 Z 제한 (`smallOverGroundHeight / 5F`)
+- [x] `isHeadJumping` 분기 (PlayerEntityModelMixin.applyHeadJumpingAngles)
+  - [x] 몸통: `pitch = vAngle`, 머리: `-vAngle × 0.5F`
+  - [x] `bendFactor = min(factor(vAngle, QUARTER, 0), factor(vAngle, -QUARTER, 0))`
+  - [x] 팔 pitch: `HALF - SIXTEENTH + factor(vAngle, QUARTER, -QUARTER) × EIGHTH`
+  - [ ] 천장 높이 기반 팔 제한 — Phase 3 후속
 
-- [ ] `isAerodynamic` (낙하) 분기
-  - [ ] 팔 Z: `cos(dist) × EIGHTH ± QUARTER`
-  - [ ] 팔 Y: `cos(dist + QUARTER) × EIGHTH`
-  - [ ] 다리 X: `cos(dist + HALF + QUARTER) × SIXTEENTH + THIRTYTWOTH`
-
-- [ ] `isWallJumping` 전환 애니메이션 처리
+- [ ] `isAerodynamic` (낙하) 분기 — Phase 3 후속
+- [ ] `isWallJumping` 전환 애니메이션 — Phase 4 (WallJump 구현 후)
 
 ---
 
 ### 3-8. 렌더 파이프라인 훅
 > 참고: `research_animation.md` — 섹션 F
 
-- [ ] **`PlayerEntityRenderer` Mixin**
-  - [ ] `render()` `@Inject` — 상태 플래그 모델에 동기화
-  - [ ] 3개 모델 변형 동기화 루프
+- [x] **`PlayerEntityRenderer` Mixin** (PlayerEntityRendererMixin)
+  - [x] `getPositionOffset()` RETURN 주입 — `heightOffset` Y 보정 적용
 
-- [ ] **높이 오프셋 보정** (`renderPlayerAt()` 대응)
-  - [ ] 크롤링/슬라이딩 플레이어 Y 오프셋 보정
-  - [ ] 원격 플레이어도 동일하게 적용 (멀티플레이어)
-
-- [ ] **몸통 회전 고정** (`rotatePlayer()` 대응)
+- [ ] **몸통 회전 고정** (`rotatePlayer()` 대응) — Phase 3 후속
   - [ ] 클라이밍/비행/수영/슬라이딩 시 `renderYawOffset = forwardRotation`
 
-- [ ] **`isSneaking()` 오버라이드**
-  - [ ] 크롤 중 or 차지점프 중 → `isSneaking() = true` (스니크 포즈 애니메이션)
+- [ ] **`isSneaking()` 오버라이드** — Phase 3 후속
+  - [ ] 크롤 중 or 차지점프 중 → `isSneaking() = true`
+
+- [ ] **원격 플레이어 높이 오프셋** — Phase 4 (네트워킹 이후)
 
 ---
 

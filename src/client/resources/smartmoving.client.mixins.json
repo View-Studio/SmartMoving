@@ -6,7 +6,8 @@
   "client": [
     "PlayerEntityClientMixin",
     "PlayerEntityJumpMixin",
-    "PlayerEntityModelMixin"
+    "PlayerEntityModelMixin",
+    "PlayerEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
