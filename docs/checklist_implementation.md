@@ -583,10 +583,11 @@
 
 ### 5-3. 소리 (Sound)
 
-- [ ] 클라이밍 소리 등록 및 재생
-- [ ] 슬라이딩 소리 등록 및 재생
-- [ ] 물 입수/탈출 소리 (`random.splash`)
-- [ ] `sounds.json` 정의
+- [x] 클라이밍 소리 등록 및 재생 (SmartMovingSounds.CLIMB, 14틱 주기)
+- [x] 천장 클라이밍 소리 등록 및 재생 (SmartMovingSounds.CEILING_CLIMB)
+- [x] 슬라이딩 소리 등록 및 재생 (SmartMovingSounds.SLIDE)
+- [x] `sounds.json` 정의 (ladder.step, player.swim 바닐라 이벤트 참조)
+- [ ] 물 입수/탈출 소리 — Phase 5 후속
 
 ---
 

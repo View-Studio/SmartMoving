@@ -3,5 +3,8 @@
   "key.smartmoving.grab": "Grab",
   "key.smartmoving.config_toggle": "Toggle Config",
   "key.smartmoving.speed_increase": "Speed Increase",
-  "key.smartmoving.speed_decrease": "Speed Decrease"
+  "key.smartmoving.speed_decrease": "Speed Decrease",
+  "subtitles.smartmoving.climb": "Climbing",
+  "subtitles.smartmoving.slide": "Sliding",
+  "subtitles.smartmoving.ceiling_climb": "Ceiling Climbing"
 }

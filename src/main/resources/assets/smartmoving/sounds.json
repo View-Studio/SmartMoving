@@ -1,0 +1,29 @@
+{
+  "climb": {
+    "sounds": [
+      {
+        "name": "minecraft:block.ladder.step",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.smartmoving.climb"
+  },
+  "slide": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.swim",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.smartmoving.slide"
+  },
+  "ceiling_climb": {
+    "sounds": [
+      {
+        "name": "minecraft:block.ladder.step",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.smartmoving.ceiling_climb"
+  }
+}
