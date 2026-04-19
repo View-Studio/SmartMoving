@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "smartmoving",
+  "version": "${version}",
+  "name": "SmartMoving",
+  "description": "Akashic records system mod",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/smartmoving/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "choco.ratel.smartmoving.client.SmartmovingDataGenerator"
+    ],
+    "client": [
+      "choco.ratel.smartmoving.client.SmartmovingClient"
+    ],
+    "main": [
+      "choco.ratel.smartmoving.Smartmoving"
+    ]
+  },
+  "mixins": [
+    "smartmoving.mixins.json",
+    {
+      "config": "smartmoving.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
