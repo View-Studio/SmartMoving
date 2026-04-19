@@ -134,5 +134,8 @@ public class SmartMovingState {
         CeilingClimbingHandler.update(this, player);
         SlidingHandler.update(this, player);
         JumpHandler.update(this, player);
+
+        // 히트박스 축소 시 렌더 Y 오프셋 보정
+        heightOffset = isSmall() ? -0.5F : 0F;
     }
 }

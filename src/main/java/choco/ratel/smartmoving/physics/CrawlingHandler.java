@@ -60,12 +60,21 @@ public final class CrawlingHandler {
         boolean startCrawl = state.grabButton.startPressed
                 && state.sneakButton.pressed
                 && player.isOnGround();
+
+        // 토글 진입: grab+sneak 시작 시 토글 상태 반전
+        if (startCrawl) {
+            state.crawlToggled = !state.isCrawling;
+        }
+
+        // 점프하면 토글 해제
+        if (state.jumpButton.startPressed) {
+            state.crawlToggled = false;
+        }
+
         return continueCrawl || startCrawl;
     }
 
     private static void onEnterCrawl(SmartMovingState state) {
-        // TODO Phase 5: isCrawlToggleEnabled() 조건 추가
-        // state.crawlToggled = true;
     }
 
     private CrawlingHandler() {}

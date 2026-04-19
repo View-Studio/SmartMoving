@@ -65,7 +65,7 @@ public abstract class LivingEntityTravelMixin {
             double motionY;
             if (state.wantClimbUp)        motionY = ClimbingHandler.FAST_UP_MOTION;
             else if (state.wantClimbDown) motionY = ClimbingHandler.SINK_DOWN_MOTION;
-            else                           motionY = 0.0D;
+            else                           motionY = ClimbingHandler.HOLD_MOTION;
 
             Vec3d vel = player.getVelocity();
             player.setVelocity(vel.x * 0.3, motionY, vel.z * 0.3);

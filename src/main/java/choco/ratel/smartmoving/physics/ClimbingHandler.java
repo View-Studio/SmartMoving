@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.physics;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.state.SmartMovingState;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
@@ -52,6 +53,16 @@ public final class ClimbingHandler {
             state.handsClimbingType = HandsClimbing.None.value;
         }
 
+        // 탈진 시스템 (탈진 과다 시 클라이밍 차단)
+        updateExhaustion(state, player);
+        if (state.isClimbing
+                && state.maxExhaustionForAction > 0F
+                && state.exhaustion >= state.maxExhaustionForAction) {
+            state.isClimbing = false;
+            state.feetClimbingType  = FeetClimbing.None.value;
+            state.handsClimbingType = HandsClimbing.None.value;
+        }
+
         // 덩굴 추적
         boolean onVine = isOnVine(player);
         state.isHandsVineClimbing = state.isClimbing && onVine;
@@ -69,6 +80,26 @@ public final class ClimbingHandler {
     private static boolean isOnVine(PlayerEntity player) {
         BlockState at = player.getWorld().getBlockState(player.getBlockPos());
         return at.isOf(net.minecraft.block.Blocks.VINE);
+    }
+
+    private static void updateExhaustion(SmartMovingState state, PlayerEntity player) {
+        if (!ConfigManager.INSTANCE.climbExhaustionEnabled) {
+            state.maxExhaustionForAction      = 0F;
+            state.maxExhaustionToStartAction  = 0F;
+            return;
+        }
+        state.maxExhaustionForAction     = ConfigManager.INSTANCE.climbExhaustionStop;
+        state.maxExhaustionToStartAction = ConfigManager.INSTANCE.climbExhaustionStart;
+
+        if (state.isClimbing) {
+            if (state.wantClimbUp)
+                state.exhaustion += ConfigManager.INSTANCE.climbUpExhaustionGain;
+            else if (state.wantClimbDown)
+                state.exhaustion += ConfigManager.INSTANCE.climbDownExhaustionGain;
+            state.exhaustion = Math.min(state.exhaustion, state.maxExhaustionForAction);
+        } else if (player.isOnGround()) {
+            state.exhaustion = Math.max(0F, state.exhaustion - 0.002F);
+        }
     }
 
     private ClimbingHandler() {}

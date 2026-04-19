@@ -66,7 +66,58 @@ public final class JumpHandler {
             state.headJumpCharge = 0;
         }
 
-        // 더블탭 각도 점프 카운터 감소 (angleJumpDoubleClickTicks 설정값 기반)
+        // 벽 점프: 공중 + 수평충돌 + grab + jump
+        if (!player.isOnGround()
+                && player.horizontalCollision
+                && state.grabButton.pressed
+                && state.jumpButton.startPressed
+                && ConfigManager.INSTANCE.wallJumpEnabled) {
+            Vec3d wVel = player.getVelocity();
+            float wJumpY = (float)(VANILLA_JUMP_Y * getJumpPotionFactor(player));
+            double hMag = Math.sqrt(wVel.x * wVel.x + wVel.z * wVel.z);
+            double kickX = 0, kickZ = 0;
+            if (hMag > 1e-6) {
+                // 벽 반대 방향으로 튕겨나옴
+                kickX = -wVel.x / hMag * 0.3;
+                kickZ = -wVel.z / hMag * 0.3;
+            }
+            player.setVelocity(kickX, wJumpY, kickZ);
+            player.fallDistance = 0F;
+            state.isWallJumping = true;
+            state.blockJumpTillButtonRelease = true;
+        }
+
+        // 클라이밍 점프: 클라이밍 중 점프 키 (wantClimbUp 제외)
+        if (state.isClimbing && state.jumpButton.startPressed && !state.wantClimbUp) {
+            state.isClimbing = false;
+            float jumpY = (float)(VANILLA_JUMP_Y * getJumpPotionFactor(player));
+            Vec3d vel = player.getVelocity();
+            if (state.backButton.pressed) {
+                // 뒤로 점프: 벽에서 반대 방향으로 튀어나옴
+                double rad = Math.toRadians(player.getYaw() + 180);
+                player.setVelocity(-Math.sin(rad) * 0.4, jumpY, Math.cos(rad) * 0.4);
+            } else {
+                player.setVelocity(vel.x, jumpY, vel.z);
+            }
+            player.fallDistance = 0F;
+            state.blockJumpTillButtonRelease = true;
+        }
+
+        // 각도 점프 더블탭 감지 (매 틱 startPressed 체크)
+        if (state.leftButton.startPressed && player.isOnGround()) {
+            if (state.leftJumpCount > 0) state.leftJumpCount = -1;
+            else state.leftJumpCount = doubleClickTicks();
+        }
+        if (state.rightButton.startPressed && player.isOnGround()) {
+            if (state.rightJumpCount > 0) state.rightJumpCount = -1;
+            else state.rightJumpCount = doubleClickTicks();
+        }
+        if (state.backButton.startPressed && player.isOnGround()) {
+            if (state.backJumpCount > 0) state.backJumpCount = -1;
+            else state.backJumpCount = doubleClickTicks();
+        }
+
+        // 카운터 감소
         if (state.leftJumpCount  > 0) state.leftJumpCount--;
         if (state.rightJumpCount > 0) state.rightJumpCount--;
         if (state.backJumpCount  > 0) state.backJumpCount--;
@@ -93,48 +144,22 @@ public final class JumpHandler {
     }
 
     /**
-     * 8방향 각도 점프 더블탭 감지 및 발동.
+     * 8방향 각도 점프 발동 (update()에서 더블탭 감지 완료 후 -1 신호 확인).
      */
     private static boolean handleAngleJump(SmartMovingState state, PlayerEntity player) {
-        int doubleClickTicks = doubleClickTicks();
-
-        if (state.leftButton.startPressed) {
-            if (state.leftJumpCount > 0) {
-                state.leftJumpCount = -1; // 발동 신호
-            } else {
-                state.leftJumpCount = doubleClickTicks;
-            }
-        }
-        if (state.rightButton.startPressed) {
-            if (state.rightJumpCount > 0) {
-                state.rightJumpCount = -1;
-            } else {
-                state.rightJumpCount = doubleClickTicks;
-            }
-        }
-        if (state.backButton.startPressed) {
-            if (state.backJumpCount > 0) {
-                state.backJumpCount = -1;
-            } else {
-                state.backJumpCount = doubleClickTicks;
-            }
-        }
-
         float yaw = player.getYaw();
-        if (state.leftJumpCount < 0) {
+
+        if (state.leftJumpCount < 0 && ConfigManager.INSTANCE.angleJumpSideEnabled) {
             state.leftJumpCount = 0;
-            float angle = (yaw + 270F) % 360F;
-            return tryJump(state, player, ANGLE, null, null, angle);
+            return tryJump(state, player, ANGLE, null, null, (yaw + 270F) % 360F);
         }
-        if (state.rightJumpCount < 0) {
+        if (state.rightJumpCount < 0 && ConfigManager.INSTANCE.angleJumpSideEnabled) {
             state.rightJumpCount = 0;
-            float angle = (yaw + 90F) % 360F;
-            return tryJump(state, player, ANGLE, null, null, angle);
+            return tryJump(state, player, ANGLE, null, null, (yaw + 90F) % 360F);
         }
-        if (state.backJumpCount < 0) {
+        if (state.backJumpCount < 0 && ConfigManager.INSTANCE.angleJumpBackEnabled) {
             state.backJumpCount = 0;
-            float angle = (yaw + 180F) % 360F;
-            return tryJump(state, player, ANGLE, null, null, angle);
+            return tryJump(state, player, ANGLE, null, null, (yaw + 180F) % 360F);
         }
 
         return false;
@@ -188,13 +213,14 @@ public final class JumpHandler {
             motionZ = moveZ * horizontalFactor;
         }
 
-        // HeadUp: 각도를 수직으로 재분배
-        if (type == HEAD_UP && headFactor > 0F) {
+        // HeadUp: 수평 속도를 수직 방향으로 재분배 (충전량에 비례해 더 수직으로)
+        if (type == HEAD_UP) {
             double hMag = Math.sqrt(motionX * motionX + motionZ * motionZ);
             double totalMotion = Math.sqrt(verticalMotion * verticalMotion + hMag * hMag);
-            if (hMag > 1e-6) {
-                double normalAngle = Math.atan(verticalMotion / hMag);
-                double newAngle = headFactor * normalAngle;
+            if (hMag > 1e-6 && headFactor > 0F) {
+                double normalAngle = Math.atan2(verticalMotion, hMag);
+                // 충전 0 → 기존 각도 유지, 충전 max → 90°(수직)에 가까워짐
+                double newAngle = normalAngle + headFactor * (Math.PI / 2 - normalAngle);
                 double newVertical   = totalMotion * Math.sin(newAngle);
                 double newHorizontal = totalMotion * Math.cos(newAngle);
                 double ratio = newHorizontal / hMag;

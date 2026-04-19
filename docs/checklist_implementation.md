@@ -591,15 +591,146 @@
 
 ---
 
-### 5-4. 마무리 검증
+---
+
+## Phase 6 — 버그 수정 및 누락 기능 구현
+> 참고: `docs/research_comparison.md` 전체
+
+---
+
+### 6-1. 클라이밍 홀드 추락 버그 수정 (B-2)
+> `LivingEntityTravelMixin.java`
+
+- [x] `wantClimbUp / wantClimbDown` 모두 false일 때 `motionY = 0.0D` → `HOLD_MOTION = 0.08D`로 수정
+  - `ClimbingHandler`에 `HOLD_MOTION = 0.08D` 상수 추가 (이미 주석에 있음, 실제 적용 안 됨)
+  - TravelMixin isClimbing 분기에서 else 케이스에 `ClimbingHandler.HOLD_MOTION` 사용
+
+---
+
+### 6-2. heightOffset 미설정 수정 (B-1)
+> `CrawlingHandler.java`, `SlidingHandler.java`, `CeilingClimbingHandler.java`, `SmartMovingState.java`
+
+- [x] `SmartMovingState.tick()` 마지막에 `heightOffset = isSmall() ? -0.5F : 0F` 한 줄 처리
+- [x] `PlayerEntityRendererMixin`에서 heightOffset 적용 확인
+
+---
+
+### 6-3. 각도 점프 더블탭 감지 연결 (B-3, M-3)
+> `JumpHandler.java`, `SmartMovingState.java`
+
+- [x] `JumpHandler.update()`에 더블탭 감지 로직 추가
+  - `state.leftButton.startPressed` → `leftJumpCount` 처리
+    - `leftJumpCount > 0` → 발동 (`leftJumpCount = -1`)
+    - `leftJumpCount == 0` → 카운터 시작 (`leftJumpCount = angleJumpDoubleClickTicks`)
+  - `state.rightButton.startPressed` → `rightJumpCount` 동일 처리
+  - `state.backButton.startPressed` → `backJumpCount` 동일 처리
+- [ ] 매 틱 카운터 감소 처리
+  - `if (leftJumpCount > 0) leftJumpCount--` 등
+- [ ] `leftJumpCount < 0` 시 실제 각도 점프 트리거
+  - `leftJumpCount = 0`으로 리셋 후 `tryAngleJump(LEFT)` 호출
+  - 마찬가지로 `rightJumpCount`, `backJumpCount`
+- [ ] `angleJumpSideEnabled`, `angleJumpBackEnabled` 설정 체크
+- [ ] 점프 중이거나 지상이 아닐 때 카운터 리셋
+
+---
+
+### 6-4. 각도 점프 물리 구현 (M-3 계속)
+> `JumpHandler.java`
+
+- [x] `tryAngleJump(direction)` 메서드 구현
+  - **LEFT**: `angle = (player.getYaw() + 270) % 360`
+  - **RIGHT**: `angle = (player.getYaw() + 90) % 360`
+  - **BACK**: `angle = (player.getYaw() + 180) % 360`
+- [ ] 각도 → 수평 벡터 변환
+  - `angleRad = Math.toRadians(angle)`
+  - `motionX = -Math.sin(angleRad) × horizontalFactor`
+  - `motionZ = Math.cos(angleRad) × horizontalFactor`
+- [ ] 수직 속도: 기본 Up 점프와 동일 (`vertFactor = 1.0F`)
+- [ ] `state.angleJumpType` 설정 (1=left, 2=right, 3=back 등 — StateEncoder 기준)
+- [ ] `state.isHeadJumping = false`, `blockJumpTillButtonRelease = true` 설정
+
+---
+
+### 6-5. 헤드점프 수평→수직 속도 재분배 (B-4)
+> `JumpHandler.java`
+
+- [x] `tryJump(HEAD_UP)` 내부에 속도 재분배 로직 수정 (`normalAngle + headFactor * (π/2 - normalAngle)`)
+  - `hMag = sqrt(player.getVelocity().x² + player.getVelocity().z²)`
+  - `totalMotion = sqrt(verticalMotion² + hMag²)`
+  - `if (hMag > 1e-6)`:
+    - `normalAngle = atan2(verticalMotion, hMag)`
+    - `headFactor` 계산 (headJumpCharge 기반, 충전 많을수록 더 수직)
+    - `newAngle = normalAngle + headFactor × (QUARTER - normalAngle)`
+    - `newVertical = totalMotion × sin(newAngle)`
+    - `newHorizontal = totalMotion × cos(newAngle)`
+    - `ratio = newHorizontal / hMag`
+    - `motionX × ratio`, `motionZ × ratio`로 수평 속도 조정
+
+---
+
+### 6-6. 벽 점프 구현 (M-1)
+> `JumpHandler.java`, `SmartMovingState.java`
+
+- [x] `tryWallJump()` 메서드 구현
+  - 조건: `!isOnGround && horizontalCollision && grabButton.pressed && jumpButton.startPressed`
+  - 수직 속도: 기본 점프와 동일
+  - 수평 속도: 현재 수평 속도 반대 방향으로 × 0.3
+  - `state.isWallJumping = true`
+  - `state.fallDistance = 0F`
+- [x] `wallJumpEnabled` 설정 체크
+
+---
+
+### 6-7. 클라이밍 점프 구현 (M-2)
+> `JumpHandler.java`, `ClimbingHandler.java`
+
+- [x] 클라이밍 중 점프 트리거 감지
+  - `isClimbing && jumpButton.startPressed && !wantClimbUp`
+- [x] 클라이밍 점프 구현
+  - `isClimbing = false` (클라이밍 해제)
+  - `motionY = VANILLA_JUMP_Y × jumpPotionFactor`
+  - `state.fallDistance = 0F`
+- [x] 클라이밍 뒤로 점프
+  - 조건: `isClimbing && backButton.pressed && jumpButton.startPressed`
+  - 뒤 방향(yaw+180) 수평 속도 × 0.4 추가
+
+---
+
+### 6-8. 크롤 토글 모드 구현 (M-5)
+> `CrawlingHandler.java`
+
+- [x] `crawlToggled` 플래그 처리 추가
+  - `grabButton.startPressed && sneakButton.pressed && isOnGround()` → `crawlToggled = !crawlToggled`
+  - `wantCrawl = wantCrawl || crawlToggled`
+- [x] 토글 해제 조건
+  - 점프하면 `crawlToggled = false`
+
+---
+
+### 6-9. 탈진 시스템 활성화 (M-4)
+> `ClimbingHandler.java`, `CeilingClimbingHandler.java`, `SmartMovingState.java`
+
+- [x] `ClimbingHandler.update()`에 탈진 증가 로직 추가
+  - `isClimbing && wantClimbUp` → `exhaustion += climbUpExhaustionGain`
+  - `isClimbing && wantClimbDown` → `exhaustion += climbDownExhaustionGain`
+  - 지상이면 → `exhaustion = max(0, exhaustion - 0.002)`
+- [x] `CeilingClimbingHandler.update()`에 탈진 증가 로직 추가
+  - `isCeilingClimbing` → `exhaustion += ceilingClimbExhaustionGain`
+- [x] `maxExhaustionForAction`, `maxExhaustionToStartAction` 갱신
+- [x] 탈진 초과 시 클라이밍 강제 해제
+
+---
+
+## Phase 7 — 마무리 검증
 
 - [ ] **기능별 단독 테스트**
-  - [ ] 기어가기 — 1블록 공간 이동, mustCrawl 강제 발동
-  - [ ] 클라이밍 — 8방향 표면 탐지, 덩굴/사다리 구분
-  - [ ] 천장 클라이밍 — 지지 블록 위에서 활성화
+  - [ ] 기어가기 — 1블록 공간 이동, mustCrawl 강제 발동, 토글 모드
+  - [ ] 클라이밍 — 벽/사다리/덩굴, 홀드, 위/아래, 클라이밍 점프
+  - [ ] 천장 클라이밍 — 지지 블록 위에서 활성화, heightOffset 보정
   - [ ] 슬라이딩 — 얼음 위 진입, 방향 조정
   - [ ] 수영/잠수 — 3가지 상태 전환, 3D 이동
-  - [ ] 점프 강화 — 차지/헤드/각도/벽 점프 각각 검증
+  - [ ] 점프 강화 — 차지/헤드(재분배)/각도(더블탭)/벽 점프 각각 검증
+  - [ ] 탈진 — 클라이밍 중 탈진 증가, 한계 도달 시 차단
 
 - [ ] **멀티플레이어 테스트**
   - [ ] 원격 플레이어 애니메이션 동기화

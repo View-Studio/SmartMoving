@@ -1,32 +1,27 @@
 package choco.ratel.smartmoving.mixin.client;
 
-import choco.ratel.smartmoving.client.render.AnimationUtil;
 import choco.ratel.smartmoving.state.SmartMovingAttachments;
 import choco.ratel.smartmoving.state.SmartMovingState;
-import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static choco.ratel.smartmoving.client.render.AnimationUtil.*;
 
+/**
+ * 핵심 설계 원칙:
+ * 원본 SmartMoving의 팔/다리 각도는 bipedOuter/bipedTorso를 부모로 하는 LOCAL 좌표계 값이었다.
+ * 1.21.1의 flat 모델에서는 모든 파트가 world 좌표계에서 독립적이므로,
+ * 각 파트의 월드 각도 = 부모 pitch(outerX) + 로컬 pitch 로 변환해야 한다.
+ */
 @Mixin(PlayerEntityModel.class)
 public abstract class PlayerEntityModelMixin {
 
-    @Shadow @Final public ModelPart head;
-    @Shadow @Final public ModelPart body;
-    @Shadow @Final public ModelPart rightArm;
-    @Shadow @Final public ModelPart leftArm;
-    @Shadow @Final public ModelPart rightLeg;
-    @Shadow @Final public ModelPart leftLeg;
-
-    // LivingEntity 브릿지 메서드를 타겟팅하여 리매핑 경고 방지
     @Inject(
             method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V",
             at = @At("TAIL")
@@ -44,168 +39,188 @@ public abstract class PlayerEntityModelMixin {
         SmartMovingState state = player.getAttached(SmartMovingAttachments.STATE);
         if (state == null) return;
 
+        @SuppressWarnings("unchecked")
+        BipedEntityModel<LivingEntity> model = (BipedEntityModel<LivingEntity>) (Object) this;
+
         float speed = limbDistance;
 
         if (state.isCrawling) {
-            applyCrawlingAngles(limbAngle, speed);
+            applyCrawlingAngles(model, limbAngle, speed);
         } else if (state.isCeilingClimbing) {
-            applyCeilingClimbingAngles(limbAngle, speed);
+            applyCeilingClimbingAngles(model, limbAngle, speed);
         } else if (state.isClimbing) {
-            applyClimbingAngles(limbAngle, speed);
+            applyClimbingAngles(model, limbAngle, speed);
         } else if (state.isSliding) {
-            applySlidingAngles(limbAngle, speed);
+            applySlidingAngles(model, limbAngle, speed);
         } else if (state.isSwimming) {
-            applySwimmingAngles(limbAngle, speed);
+            applySwimmingAngles(model, limbAngle, speed, animationProgress);
         } else if (state.isDiving) {
-            applyDivingAngles(limbAngle, speed);
+            applyDivingAngles(model, limbAngle, speed, headPitch);
         } else if (state.isHeadJumping) {
-            applyHeadJumpingAngles(headPitch);
+            applyHeadJumpingAngles(model, headPitch);
         }
     }
 
     // ── 기어가기 ──────────────────────────────────────────────────────────────
+    // 원본: bipedTorso가 팔/다리의 부모. bodyPitch = bipedTorso.X = QUARTER - THIRTYTWOTH
+    // 월드 공간 팔/다리 pitch = bodyPitch + local pitch
 
-    private void applyCrawlingAngles(float dist, float speed) {
+    private static void applyCrawlingAngles(BipedEntityModel<?> m, float dist, float speed) {
+        float d = dist * 1.3F;
         float walkFactor  = factor(speed, 0F, 0.12951545F);
         float standFactor = factor(speed, 0.12951545F, 0F);
 
-        // 몸통을 앞으로 숙임
-        body.pitch    = QUARTER - THIRTYTWOTH;
-        body.pivotY   = 3F;
+        float bodyPitch = QUARTER - THIRTYTWOTH;
+        m.body.pitch = bodyPitch;
+        m.body.roll  = (float) Math.cos(d + QUARTER) * SIXTYFOURTH * walkFactor;
+        // head는 flat 모델에서 독립적 → world pitch=0 (앞 방향)으로 고정
+        m.head.pitch = 0F;
 
-        // 머리는 몸통 기울기에 반하여 앞을 바라봄
-        head.pitch    = -(QUARTER - THIRTYTWOTH);
+        // 팔: world pitch = bodyPitch + local(HALF + EIGHTH)
+        m.rightArm.pitch = bodyPitch + HALF + EIGHTH;
+        m.rightArm.yaw   = -QUARTER;
+        m.rightArm.roll  = ((float) Math.cos(d + HALF) * SIXTYFOURTH + THIRTYTWOTH) * walkFactor + SIXTEENTH * standFactor;
 
-        // 왼팔: 앞으로 뻗음
-        leftArm.pitch  = HALF + EIGHTH;
-        leftArm.yaw    = -QUARTER;
-        leftArm.roll   = (float)(Math.cos(dist + HALF)) * SIXTYFOURTH * walkFactor - THIRTYTWOTH;
+        m.leftArm.pitch  = bodyPitch + HALF + EIGHTH;
+        m.leftArm.yaw    = QUARTER;
+        m.leftArm.roll   = ((float) Math.cos(d + HALF) * SIXTYFOURTH - THIRTYTWOTH) * walkFactor - SIXTEENTH * standFactor;
 
-        // 오른팔
-        rightArm.pitch = HALF + EIGHTH;
-        rightArm.yaw   = QUARTER;
-        rightArm.roll  = (float)(Math.cos(dist + HALF)) * SIXTYFOURTH * walkFactor + THIRTYTWOTH;
+        // 다리: world pitch = bodyPitch + local
+        m.rightLeg.pitch = bodyPitch + ((float) Math.cos(d - QUARTER) * SIXTYFOURTH + THIRTYTWOTH) * walkFactor + THIRTYTWOTH * standFactor;
+        m.rightLeg.roll  = ((float) Math.cos(d - QUARTER) + 1F) * 0.25F * walkFactor + THIRTYTWOTH * standFactor;
 
-        // 왼다리
-        leftLeg.pitch  = (float)(Math.cos(dist - QUARTER)) * SIXTYFOURTH * walkFactor + THIRTYTWOTH * standFactor;
-        leftLeg.roll   = ((float)(Math.cos(dist - QUARTER)) + 1F) * 0.25F * walkFactor + THIRTYTWOTH;
-
-        // 오른다리
-        rightLeg.pitch = (float)(Math.cos(dist + HALF - QUARTER)) * SIXTYFOURTH * walkFactor + THIRTYTWOTH * standFactor;
-        rightLeg.roll  = -((float)(Math.cos(dist - QUARTER)) + 1F) * 0.25F * walkFactor - THIRTYTWOTH;
+        m.leftLeg.pitch  = bodyPitch + ((float) Math.cos(d - HALF - QUARTER) * SIXTYFOURTH + THIRTYTWOTH) * walkFactor + THIRTYTWOTH * standFactor;
+        m.leftLeg.roll   = ((float) Math.cos(d - QUARTER) - 1F) * 0.25F * walkFactor - THIRTYTWOTH * standFactor;
     }
 
     // ── 클라이밍 ──────────────────────────────────────────────────────────────
+    // 원본: bipedOuter.X 없음. 팔/다리 값이 직접 월드 공간. 보정 불필요.
 
-    private void applyClimbingAngles(float dist, float speed) {
-        float walkFactor  = factor(speed, 0F, 0.3F);
+    private static void applyClimbingAngles(BipedEntityModel<?> m, float dist, float speed) {
+        float walkFactor = factor(speed, 0F, 0.3F);
 
-        // 왼팔 진동 (사다리 오르기 동작)
-        leftArm.pitch  = (float)(Math.cos(dist + HALF)) * 0.52F * walkFactor - QUARTER;
-        leftArm.yaw    = 0F;
+        m.leftArm.pitch  = (float) Math.cos(dist + HALF) * 0.52F * walkFactor - QUARTER;
+        m.leftArm.yaw    = 0F;
+        m.rightArm.pitch = (float) Math.cos(dist) * 0.52F * walkFactor - QUARTER;
+        m.rightArm.yaw   = 0F;
 
-        // 오른팔은 위상 반전
-        rightArm.pitch = (float)(Math.cos(dist)) * 0.52F * walkFactor - QUARTER;
-        rightArm.yaw   = 0F;
-
-        // 다리는 팔과 반대 위상
-        leftLeg.pitch  = (float)(Math.cos(dist)) * 0.52F * walkFactor;
-        rightLeg.pitch = (float)(Math.cos(dist + HALF)) * 0.52F * walkFactor;
+        m.leftLeg.pitch  = (float) Math.cos(dist) * 0.52F * walkFactor;
+        m.rightLeg.pitch = (float) Math.cos(dist + HALF) * 0.52F * walkFactor;
     }
 
     // ── 천장 클라이밍 ─────────────────────────────────────────────────────────
+    // 원본: bipedOuter.Y (yaw만). X 회전 없으므로 팔 pitch는 이미 월드 공간.
+    // 팔 yaw = -rotateY 로 bipedOuter.Y 상쇄 (부모-자식 관계 증거).
 
-    private void applyCeilingClimbingAngles(float dist, float speed) {
+    private static void applyCeilingClimbingAngles(BipedEntityModel<?> m, float dist, float speed) {
         float walkFactor  = factor(speed, 0F, 0.12951545F);
         float standFactor = factor(speed, 0.12951545F, 0F);
 
-        // 팔을 위로 들어 천장 잡기
-        leftArm.pitch  = ((float)(Math.cos(dist)) * 0.52F + HALF) * walkFactor + HALF * standFactor;
-        rightArm.pitch = ((float)(Math.cos(dist + HALF)) * 0.52F - HALF) * walkFactor - HALF * standFactor;
+        float rotateY = (float) Math.cos(dist) * 0.44F * walkFactor;
+        m.body.yaw = rotateY;
 
-        // 다리는 아래로 늘어짐
-        leftLeg.pitch  = -(float)(Math.cos(dist)) * 0.12F * walkFactor;
-        rightLeg.pitch = -(float)(Math.cos(dist + HALF)) * 0.32F * walkFactor;
+        m.leftArm.pitch  = ((float) Math.cos(dist) * 0.52F + HALF) * walkFactor + HALF * standFactor;
+        // 원본에서 -rotateY는 bipedOuter.Y(부모 yaw)를 상쇄하기 위한 LOCAL 값이었다.
+        // 1.21.1 flat 모델에서 팔은 body의 자식이 아니므로 world yaw = 0을 그냥 쓴다.
+        m.leftArm.yaw    = 0F;
+        m.rightArm.pitch = ((float) Math.cos(dist + HALF) * 0.52F - HALF) * walkFactor - HALF * standFactor;
+        m.rightArm.yaw   = 0F;
 
-        // 몸통 Y 회전 흔들림
-        body.yaw = (float)(Math.cos(dist)) * 0.44F * walkFactor;
+        m.leftLeg.pitch  = -(float) Math.cos(dist) * 0.12F * walkFactor;
+        m.rightLeg.pitch = -(float) Math.cos(dist + HALF) * 0.32F * walkFactor;
     }
 
     // ── 슬라이딩 ──────────────────────────────────────────────────────────────
+    // 원본: bipedOuter.X = QUARTER (부모). bodyPitch = QUARTER.
+    // 팔 world pitch = QUARTER + local pitch
 
-    private void applySlidingAngles(float dist, float speed) {
+    private static void applySlidingAngles(BipedEntityModel<?> m, float dist, float speed) {
         float walkFactor = factor(speed, 0F, 0.4F);
+        float bodyPitch  = QUARTER;
 
-        // 몸통을 앞으로 수평 눕힘
-        body.pitch    = QUARTER;
-        body.pivotY   = 5F;
+        m.body.pitch = bodyPitch;
+        // flat 모델 → head world pitch = 0 (앞 방향)
+        m.head.pitch = 0F;
 
-        // 머리
-        head.pitch    = -QUARTER;
+        m.rightArm.pitch = bodyPitch + (float) Math.cos(dist + QUARTER) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
+        m.rightArm.yaw   = -QUARTER;
+        m.leftArm.pitch  = bodyPitch + (float) Math.cos(dist - HALF) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
+        m.leftArm.yaw    = QUARTER;
 
-        // 팔: 옆으로 약간 들기
-        leftArm.pitch  = (float)(Math.cos(dist + QUARTER)) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
-        leftArm.yaw    = -QUARTER;
-        rightArm.pitch = (float)(Math.cos(dist + QUARTER)) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
-        rightArm.yaw   = QUARTER;
-
-        // 다리: 약간 벌림
-        leftLeg.roll   = THIRTYTWOTH;
-        rightLeg.roll  = -THIRTYTWOTH;
+        m.rightLeg.roll  =  THIRTYTWOTH;
+        m.leftLeg.roll   = -THIRTYTWOTH;
     }
 
     // ── 수영 ──────────────────────────────────────────────────────────────────
+    // 원본: bipedOuter.X = QUARTER - SIXTEENTH*combined (부모 pitch = outerX).
+    // 팔 world pitch: outerX + local. local에 SIXTEENTH*combined 항이 있어 outerX와 상쇄됨.
+    // → 팔 world pitch = QUARTER + cycling (단순화).
 
-    private void applySwimmingAngles(float dist, float speed) {
+    private static void applySwimmingAngles(BipedEntityModel<?> m, float dist, float speed, float time) {
         float walkFactor  = factor(speed, 0.15679921F, 0.52264464F);
+        float sneakFactor = Math.min(factor(speed, 0F, 0.15679921F), factor(speed, 0.52264464F, 0.15679921F));
         float standFactor = factor(speed, 0.15679921F, 0F);
+        float combined    = standFactor + sneakFactor;
+        float outerX      = QUARTER - SIXTEENTH * combined;
 
-        // 몸통을 앞으로 눕힘
-        body.pitch = -QUARTER * walkFactor;
+        m.body.pitch = outerX;
 
-        // 팔: 앞으로 뻗음
-        leftArm.pitch  = -EIGHTH + (float)(Math.cos(dist + HALF)) * SIXTYFOURTH * walkFactor;
-        rightArm.pitch = -EIGHTH + (float)(Math.cos(dist)) * SIXTYFOURTH * walkFactor;
+        // 팔 roll: elbow/arm spread (LOCAL 그대로, 근사치)
+        float timeCos = (float) Math.cos(time * 0.1F);
+        m.rightArm.roll  =  QUARTER + EIGHTH + timeCos * combined * 0.8F;
+        m.leftArm.roll   = -(QUARTER + EIGHTH) - timeCos * combined * 0.8F;
 
-        // 다리: 위아래로 파동
-        leftLeg.pitch  = (float)(Math.cos(dist)) * 0.3F * walkFactor;
-        rightLeg.pitch = (float)(Math.cos(dist + HALF)) * 0.3F * walkFactor;
+        // 팔 pitch: outerX + local → SIXTEENTH*combined 상쇄 → QUARTER + cycling
+        m.rightArm.pitch = QUARTER + (((dist * 0.5F) % WHOLE) - HALF) * walkFactor;
+        m.leftArm.pitch  = QUARTER + (((dist * 0.5F + HALF) % WHOLE) - HALF) * walkFactor;
 
-        // 정지 시: 양팔을 옆으로 약간 들기
-        if (standFactor > 0F) {
-            leftArm.yaw  = -EIGHTH * standFactor;
-            rightArm.yaw =  EIGHTH * standFactor;
-        }
+        // 다리: outerX + local pitch
+        m.rightLeg.pitch = outerX + (float) Math.cos(dist) * 0.52264464F * walkFactor;
+        m.leftLeg.pitch  = outerX + (float) Math.cos(dist + HALF) * 0.52264464F * walkFactor;
     }
 
     // ── 잠수 ──────────────────────────────────────────────────────────────────
+    // 원본: bipedOuter.X = QUARTER - vAngle (부모 pitch = outerX).
+    // 원본의 LOCAL Z(roll) 동작 → 플레이어가 수평일 때 world X(pitch)로 매핑됨.
+    // 팔/다리 world pitch = outerX + original_local_roll_formula
 
-    private void applyDivingAngles(float dist, float speed) {
-        body.pitch    = -HALF;
-        head.pitch    =  QUARTER;
+    private static void applyDivingAngles(BipedEntityModel<?> m, float dist, float speed, float headPitch) {
+        float vAngle      = (float) Math.toRadians(headPitch);
+        float walkFactor  = factor(speed, 0.15679921F, 0.52264464F);
+        float standFactor = factor(speed, 0.15679921F, 0F);
+        float outerX      = QUARTER - vAngle;
 
-        leftArm.pitch  = HALF;
-        rightArm.pitch = HALF;
+        m.body.pitch = outerX;
 
-        leftLeg.pitch  = (float)(Math.cos(dist)) * 0.2F;
-        rightLeg.pitch = (float)(Math.cos(dist + HALF)) * 0.2F;
+        // 팔: outerX + local Z(roll) → world X(pitch) 변환
+        m.rightArm.pitch = outerX + ((float) Math.cos(dist + HALF) * 0.52264464F * 2.5F + QUARTER) * walkFactor + (QUARTER + EIGHTH) * standFactor;
+        m.leftArm.pitch  = outerX + ((float) Math.cos(dist) * 0.52264464F * 2.5F - QUARTER) * walkFactor - (QUARTER + EIGHTH) * standFactor;
+
+        // 다리: outerX + local Z(roll) → world X(pitch) 변환
+        m.rightLeg.pitch = outerX + ((float) Math.cos(dist) + 1F) * 0.52264464F * walkFactor + SIXTEENTH * standFactor;
+        m.leftLeg.pitch  = outerX + ((float) Math.cos(dist + HALF) - 1F) * 0.52264464F * walkFactor - SIXTEENTH * standFactor;
     }
 
     // ── 헤드 점프 ────────────────────────────────────────────────────────────
+    // 원본: bipedOuter.X = QUARTER - vAngle (부모 pitch = outerX).
+    // 팔 world pitch = outerX + local(-bendFactor * EIGHTH).
 
-    private void applyHeadJumpingAngles(float headPitch) {
-        // 수직 각도 (카메라 pitch → 라디안 변환)
-        float vAngle = (float) Math.toRadians(headPitch);
+    private static void applyHeadJumpingAngles(BipedEntityModel<?> m, float headPitch) {
+        float vAngle     = (float) Math.toRadians(headPitch);
         float bendFactor = Math.min(factor(vAngle, QUARTER, 0F), factor(vAngle, -QUARTER, 0F));
+        float armFactorZ = factor(vAngle, QUARTER, -QUARTER);
+        float outerX     = QUARTER - vAngle;
 
-        body.pitch  = vAngle;
-        head.pitch  = -vAngle * 0.5F;
+        m.body.pitch = outerX;
+        // 원본: head child of bipedOuter → worldPitch = outerX + (-outerX/2) = outerX/2
+        // 1.21.1 flat: world pitch = local pitch 그대로 → outerX/2
+        m.head.pitch = outerX / 2F;
 
-        // 팔: 머리 위 방향으로
-        float armZ = HALF - SIXTEENTH + factor(vAngle, QUARTER, -QUARTER) * EIGHTH;
-        leftArm.pitch  = -armZ;
-        rightArm.pitch = -armZ;
-        leftArm.roll   =  THIRTYTWOTH * bendFactor;
-        rightArm.roll  = -THIRTYTWOTH * bendFactor;
+        // 팔 pitch: outerX + local(-bendFactor*EIGHTH)
+        m.rightArm.pitch = outerX - bendFactor * EIGHTH;
+        m.leftArm.pitch  = outerX - bendFactor * EIGHTH;
+        // 팔 roll: LOCAL Z 그대로 (팔 벌림 자세)
+        m.rightArm.roll  =  HALF - SIXTEENTH + armFactorZ * EIGHTH;
+        m.leftArm.roll   =  SIXTEENTH - HALF - armFactorZ * EIGHTH;
     }
 }

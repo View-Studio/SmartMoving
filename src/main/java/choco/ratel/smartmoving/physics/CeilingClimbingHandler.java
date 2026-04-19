@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.physics;
 
+import choco.ratel.smartmoving.config.ConfigManager;
 import choco.ratel.smartmoving.state.SmartMovingState;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
@@ -68,6 +69,15 @@ public final class CeilingClimbingHandler {
             state.isCeilingClimbing = true;
         } else {
             state.isCeilingClimbing = false;
+            return;
+        }
+
+        // 탈진 시스템
+        updateExhaustion(state, player);
+        if (state.isCeilingClimbing
+                && state.maxExhaustionForAction > 0F
+                && state.exhaustion >= state.maxExhaustionForAction) {
+            state.isCeilingClimbing = false;
         }
     }
 
@@ -115,6 +125,23 @@ public final class CeilingClimbingHandler {
             }
         }
         return Double.MAX_VALUE;
+    }
+
+    private static void updateExhaustion(SmartMovingState state, PlayerEntity player) {
+        if (!ConfigManager.INSTANCE.ceilingClimbExhaustionEnabled) {
+            state.maxExhaustionForAction     = 0F;
+            state.maxExhaustionToStartAction = 0F;
+            return;
+        }
+        state.maxExhaustionForAction     = ConfigManager.INSTANCE.ceilingClimbExhaustionStop;
+        state.maxExhaustionToStartAction = ConfigManager.INSTANCE.ceilingClimbExhaustionStart;
+
+        if (state.isCeilingClimbing) {
+            state.exhaustion += ConfigManager.INSTANCE.ceilingClimbExhaustionGain;
+            state.exhaustion = Math.min(state.exhaustion, state.maxExhaustionForAction);
+        } else if (player.isOnGround()) {
+            state.exhaustion = Math.max(0F, state.exhaustion - 0.002F);
+        }
     }
 
     private CeilingClimbingHandler() {}

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -version)",
+      "Bash(/c/Users/user/IdeaProjects/SmartMoving/gradlew.bat --version)",
+      "Bash(gradle --version)",
+      "Bash(chmod +x *)",
+      "Bash(./gradlew build *)",
+      "Bash(./gradlew genIdeaRuns)",
+      "Bash(./gradlew ideaSyncTask)",
+      "Bash(git init *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s \"https://api.github.com/repos/makamys/SmartMoving/contents/src/main/java/net/smart/moving\")",
+      "WebFetch(domain:api.github.com)",
+      "Read(//c/tmp/**)",
+      "Bash(curl -s https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/java/net/smart/moving/SmartMovingSelf.java -o SmartMovingSelf.java)",
+      "Bash(jar tf *)"
+    ]
+  }
+}

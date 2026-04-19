@@ -111,7 +111,7 @@ currentSpeed                 — 전체 속도
 totalHorizontalDistance      — 누적 수평 이동 거리 (진동 위상)
 totalDistance                — 누적 전체 이동 거리
 totalTime                    — 누적 틱 수 (시간 기반 진동)
-currentVerticalAngle         — 수직 바라보기 각도
+currentVerticalAngle         — 수직 바라보기 각도 (headPitch를 라디안으로)
 currentHorizontalAngle       — 수평 이동 방향 각도
 currentCameraAngle           — 카메라 방향 각도
 smallOverGroundHeight        — 머리 위 공간 높이
@@ -122,26 +122,28 @@ smallOverGroundHeight        — 머리 위 공간 높이
 ### 1. 기어가기 (isCrawl)
 
 ```java
-float distance = totalHorizontalDistance * 1.3F; // 느린 애니메이션
+float distance = totalHorizontalDistance * 1.3F; // 느린 애니메이션 (★1.3배 스케일!)
 float walkFactor  = Factor(speed, 0F, 0.12951545F);
 float standFactor = Factor(speed, 0.12951545F, 0F);
 
-// 몸통 — 수평으로 눕힘
+// 몸통 — 수평으로 눕힘 + Z축 진동 (★body.roll 있음)
 bipedTorso.rotateAngleX = Quarter - Thirtytwoth;   // ~79°
 bipedTorso.rotationPointY = 3F;
 bipedTorso.rotateAngleZ = cos(distance + Quarter) * Sixtyfourth * walkFactor;
 
-// 팔 — 앞으로 뻗음, Y축 외전
-bipedRightArm.rotateAngleX = Half + Eighth;  // ~270°
+// 팔 — 앞으로 뻗음, Y축 외전 (★rightArm.Y=-Quarter, leftArm.Y=+Quarter)
+bipedRightArm.rotateAngleX = Half + Eighth;
 bipedLeftArm.rotateAngleX  = Half + Eighth;
-bipedRightArm.rotateAngleY = -Quarter;
-bipedLeftArm.rotateAngleY  = Quarter;
+bipedRightArm.rotateAngleY = -Quarter;    // ★ right=-Quarter
+bipedLeftArm.rotateAngleY  =  Quarter;   // ★ left=+Quarter
+// ★ roll 공식: (cos*Sixtyfourth ± Thirtytwoth) * walkFactor + Sixteenth * standFactor
 bipedRightArm.rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Thirtytwoth) * walkFactor + Sixteenth * standFactor;
 bipedLeftArm.rotateAngleZ  = (cos(distance + Half) * Sixtyfourth - Thirtytwoth) * walkFactor - Sixteenth * standFactor;
 
-// 다리
+// 다리 (★ right=cos(d-Quarter), left=cos(d-Half-Quarter) — 위상 다름)
 bipedRightLeg.rotateAngleX = (cos(distance - Quarter) * Sixtyfourth + Thirtytwoth) * walkFactor + Thirtytwoth * standFactor;
 bipedLeftLeg.rotateAngleX  = (cos(distance - Half - Quarter) * Sixtyfourth + Thirtytwoth) * walkFactor + Thirtytwoth * standFactor;
+// ★ roll: right=(cos+1)*0.25*walkFactor+standFactor항, left=(cos-1)*0.25*walkFactor-standFactor항
 bipedRightLeg.rotateAngleZ = (cos(distance - Quarter) + 1F) * 0.25F * walkFactor + Thirtytwoth * standFactor;
 bipedLeftLeg.rotateAngleZ  = (cos(distance - Quarter) - 1F) * 0.25F * walkFactor - Thirtytwoth * standFactor;
 ```
@@ -193,29 +195,27 @@ bipedLeftLeg.rotateAngleX      = legAngleX;
 
 ### 3. 수영 (isSwim)
 
-**속도 구간 3개:** 정지 / 느린 수영 / 빠른 수영
+**속도 구간 3개:** 정지 / 느린 수영(sneakFactor) / 빠른 수영(walkFactor)
 
 ```java
 float walkFactor  = Factor(speed, 0.15679921F, 0.52264464F);
 float sneakFactor = min(Factor(speed, 0, 0.15679921F), Factor(speed, 0.52264464F, 0.15679921F));
 float standFactor = Factor(speed, 0.15679921F, 0F);
+float combined    = standFactor + sneakFactor;  // ★ 정지+느린수영 통합
 
-// 전체 몸통 앞으로 기울임
-bipedOuter.rotateAngleX = Quarter - Sixteenth * (standFactor + sneakFactor);
-bipedOuter.rotateAngleY = horizontalAngle;
+// 전체 몸통 앞으로 기울임 (★ 양수 값 — 앞으로 숙임)
+bipedOuter.rotateAngleX = Quarter - Sixteenth * combined;   // →  body.pitch = QUARTER - SIXTEENTH * combined
 
-// 머리 — 회전 순서 YXZ로 변경
-bipedHead.rotationOrder = ModelRotationRenderer.YXZ;
-bipedHead.rotateAngleY = cos(distance / 2F - Quarter) * walkFactor;
-bipedHead.rotateAngleX = -Eighth * (standFactor + sneakFactor);
+// 머리
+bipedHead.rotateAngleX = -Eighth * combined;
 
-// 팔 — 시간 기반 진동 + 거리 기반 전진
-bipedRightArm.rotateAngleZ = Quarter + Eighth + cos(totalTime * 0.1F) * (standFactor+sneakFactor) * 0.8F;
-bipedLeftArm.rotateAngleZ  = -(Quarter + Eighth) - cos(totalTime * 0.1F) * (standFactor+sneakFactor) * 0.8F;
-bipedRightArm.rotateAngleX = ((distance * 0.5F) % Whole - Half) * walkFactor + Sixteenth * (standFactor+sneakFactor);
-bipedLeftArm.rotateAngleX  = ((distance * 0.5F + Half) % Whole - Half) * walkFactor + Sixteenth * (standFactor+sneakFactor);
+// ★ 팔 — Z축(roll)으로 주 동작, X축(pitch)은 연속 순환 (모듈로)
+bipedRightArm.rotateAngleZ = Quarter + Eighth + cos(totalTime * 0.1F) * combined * 0.8F;
+bipedLeftArm.rotateAngleZ  = -(Quarter + Eighth) - cos(totalTime * 0.1F) * combined * 0.8F;
+bipedRightArm.rotateAngleX = ((distance * 0.5F) % Whole - Half) * walkFactor + Sixteenth * combined;
+bipedLeftArm.rotateAngleX  = ((distance * 0.5F + Half) % Whole - Half) * walkFactor + Sixteenth * combined;
 
-// 다리 — 반진동 (Half 위상차)
+// 다리 — X축 플러터킥 (★ 진폭 0.52264464F)
 bipedRightLeg.rotateAngleX = cos(distance) * 0.52264464F * walkFactor;
 bipedLeftLeg.rotateAngleX  = cos(distance + Half) * 0.52264464F * walkFactor;
 ```
@@ -224,17 +224,20 @@ bipedLeftLeg.rotateAngleX  = cos(distance + Half) * 0.52264464F * walkFactor;
 
 ### 4. 잠수 (isDive)
 
-```java
-// 몸통 기울기 — 수직 시선 방향 반영
-bipedOuter.rotateAngleX = isLevitate ? Quarter - Sixteenth
-                        : isJump     ? 0F
-                        :              Quarter - currentVerticalAngle;
+**★ 팔/다리 모두 Z축(roll) 사용**
 
-// 다리 — Z축 진동 (킥 동작)
+```java
+float walkFactor  = Factor(speed, 0.15679921F, 0.52264464F);
+float standFactor = Factor(speed, 0.15679921F, 0F);
+
+// 몸통 — 수직 시선 방향 반영 (★ QUARTER - vAngle)
+bipedOuter.rotateAngleX = Quarter - currentVerticalAngle;
+
+// 다리 — Z축 돌핀킥
 bipedRightLeg.rotateAngleZ = (cos(distance) + 1F) * 0.52264464F * walkFactor + Sixteenth * standFactor;
 bipedLeftLeg.rotateAngleZ  = (cos(distance + Half) - 1F) * 0.52264464F * walkFactor - Sixteenth * standFactor;
 
-// 팔 — Z축 진동 (스트로크), 진폭 2.5배
+// 팔 — Z축 스트로크 (★ 진폭 0.52264464F * 2.5F = 1.307)
 bipedRightArm.rotateAngleZ = (cos(distance + Half) * 0.52264464F * 2.5F + Quarter) * walkFactor + (Quarter + Eighth) * standFactor;
 bipedLeftArm.rotateAngleZ  = (cos(distance) * 0.52264464F * 2.5F - Quarter) * walkFactor - (Quarter + Eighth) * standFactor;
 ```
@@ -247,14 +250,13 @@ bipedLeftArm.rotateAngleZ  = (cos(distance) * 0.52264464F * 2.5F - Quarter) * wa
 // 몸통 옆으로 눕힘
 bipedOuter.rotateAngleX  = Quarter;
 bipedOuter.rotationPointY = 5F;
-bipedBody.offsetY        = -0.4F;  // Y 오프셋 (웅크린 위치)
-bipedBody.rotationPointY = +6.5F;
 
-// 팔 — 앞으로 뻗음
+// ★ 팔 — right=cos(d+Quarter), left=cos(d-Half) (위상 다름)
 bipedRightArm.rotateAngleX = cos(distance + Quarter) * Sixtyfourth * walkFactor + Half - Sixtyfourth;
 bipedLeftArm.rotateAngleX  = cos(distance - Half)    * Sixtyfourth * walkFactor + Half - Sixtyfourth;
+// ★ arm.Y: right=-Quarter, left=+Quarter
 bipedRightArm.rotateAngleY = -Quarter;
-bipedLeftArm.rotateAngleY  = Quarter;
+bipedLeftArm.rotateAngleY  =  Quarter;
 
 // 다리
 bipedRightLeg.rotateAngleZ = Thirtytwoth;
@@ -279,10 +281,10 @@ bipedRightArm.rotateAngleX = (cos(distance + Half) * 0.52F - Half) * walkFactor 
 bipedLeftLeg.rotateAngleX  = -cos(distance) * 0.12F * walkFactor;
 bipedRightLeg.rotateAngleX = -cos(distance + Half) * 0.32F * walkFactor;
 
-// 몸통 Y 회전 진동
+// 몸통 + 팔 Y 회전 진동 (★ 팔이 몸통 회전을 상쇄)
 float rotateY = cos(distance) * 0.44F * walkFactor;
 bipedOuter.rotateAngleY = rotateY + horizontalAngle;
-bipedRightArm.rotateAngleY = bipedLeftArm.rotateAngleY = -rotateY;
+bipedRightArm.rotateAngleY = bipedLeftArm.rotateAngleY = -rotateY;  // ★ 팔 yaw = -rotateY
 ```
 
 ---
@@ -307,22 +309,25 @@ bipedLeftArm.rotateAngleY  = cos(time) * Sixteenth * standFactor;
 
 ### 8. 헤드 점프 (isHeadJump)
 
+**★ 팔은 Z축(roll)이 주 축, X축(pitch)은 구부림**
+
 ```java
-// 몸통 수직 방향으로 기울임
+float vAngle = toRadians(currentVerticalAngle);
+
+// 몸통 — 시선 방향 (★ QUARTER - vAngle)
 bipedOuter.rotateAngleX = Quarter - currentVerticalAngle;
-bipedHead.rotateAngleX  = -bipedOuter.rotateAngleX / 2F;
+bipedHead.rotateAngleX  = -(Quarter - currentVerticalAngle) / 2F;  // ★ 머리 보상
 
 // 벤딩 팩터 — 수직 각도 ±90° 기준
 float bendFactor = min(Factor(vAngle, Quarter, 0), Factor(vAngle, -Quarter, 0));
-bipedRightArm.rotateAngleX = bendFactor * -Eighth;
-bipedLeftArm.rotateAngleX  = bendFactor * -Eighth;
+// ★ 팔 X축(pitch) = -bendFactor * Eighth
+bipedRightArm.rotateAngleX = -bendFactor * Eighth;
+bipedLeftArm.rotateAngleX  = -bendFactor * Eighth;
 
-// 팔 Z — 머리 위 고체 블록 있으면 제한
+// ★ 팔 Z축(roll) = 시선방향에 따른 팔 벌림 (right와 left 값 다름)
 float armFactorZ = Factor(vAngle, Quarter, -Quarter);
-if (overGroundBlock != null && overGroundBlock.getMaterial().isSolid())
-    armFactorZ = min(armFactorZ, smallOverGroundHeight / 5F);
-bipedRightArm.rotateAngleZ = Half - Sixteenth + armFactorZ * Eighth;
-bipedLeftArm.rotateAngleZ  = Sixteenth - Half - armFactorZ * Eighth;
+bipedRightArm.rotateAngleZ =  Half - Sixteenth + armFactorZ * Eighth;
+bipedLeftArm.rotateAngleZ  =  Sixteenth - Half - armFactorZ * Eighth;
 ```
 
 ---
@@ -451,26 +456,117 @@ if (moving.isClimbing || moving.isFlying || moving.isSwimming ||
 
 ---
 
-## 1.21.1 마이그레이션 포인트
+## H. 우리 코드 vs 원본 비교 — 확인된 버그 목록
+
+### [BUG-A] 기어가기 — 팔 Y축 방향 스왑 ★★★
+- **원본:** `bipedRightArm.Y = -Quarter`, `bipedLeftArm.Y = +Quarter`
+- **현재 오류:** `m.leftArm.yaw = -QUARTER`, `m.rightArm.yaw = +QUARTER` (좌우 반전)
+- **수정:** `m.rightArm.yaw = -QUARTER`, `m.leftArm.yaw = QUARTER`
+
+### [BUG-B] 기어가기 — body.roll 누락 ★★
+- **원본:** `bipedTorso.rotateAngleZ = cos(d + Quarter) * Sixtyfourth * walkFactor`
+- **현재 오류:** body.roll 미설정
+- **수정:** `m.body.roll = cos(d + QUARTER) * SIXTYFOURTH * walkFactor` 추가
+
+### [BUG-C] 기어가기 — 팔 roll 공식 오류 ★★★
+- **원본 rightArm:** `(cos(d+Half)*Sixtyfourth + Thirtytwoth) * walkFactor + Sixteenth * standFactor`
+- **원본 leftArm:** `(cos(d+Half)*Sixtyfourth - Thirtytwoth) * walkFactor - Sixteenth * standFactor`
+- **현재 오류:** 그룹핑 누락, standFactor 미사용
+- **수정:** 원본 공식 그대로 적용
+
+### [BUG-D] 기어가기 — 1.3x distance 스케일 누락 ★★
+- **원본:** `float d = totalHorizontalDistance * 1.3F` (느린 애니메이션)
+- **현재 오류:** `dist` 그대로 사용 (애니메이션이 너무 빠름)
+- **수정:** `float d = dist * 1.3F` 사용
+
+### [BUG-E] 기어가기 — 다리 pitch 위상 스왑 ★★★
+- **원본:** `rightLeg = cos(d-Quarter)`, `leftLeg = cos(d-Half-Quarter)`
+- **현재 오류:** `leftLeg = cos(d-Quarter)`, `rightLeg = cos(d+Half-Quarter)` (좌우 스왑)
+- **수정:** rightLeg와 leftLeg 위상 올바르게 할당
+
+### [BUG-F] 기어가기 — 다리 roll 공식 오류 ★★
+- **원본 rightLeg.roll:** `(cos(d-Quarter)+1)*0.25*walkFactor + Thirtytwoth*standFactor` (양수)
+- **원본 leftLeg.roll:** `(cos(d-Quarter)-1)*0.25*walkFactor - Thirtytwoth*standFactor` (음수)
+- **현재 오류:** 부호 반전, standFactor 미사용
+- **수정:** 부호 및 공식 수정
+
+### [BUG-G] 슬라이딩 — 팔 Y축 방향 스왑 ★★★
+- **원본:** `bipedRightArm.Y = -Quarter`, `bipedLeftArm.Y = +Quarter`
+- **현재 오류:** 좌우 반전 (기어가기와 동일한 버그)
+- **수정:** `m.rightArm.yaw = -QUARTER`, `m.leftArm.yaw = QUARTER`
+
+### [BUG-H] 슬라이딩 — leftArm pitch 위상 오류 ★★
+- **원본:** `leftArm = cos(d - Half)`
+- **현재 오류:** `leftArm = cos(d + Quarter)` (rightArm과 동일 위상)
+- **수정:** `m.leftArm.pitch = cos(dist - HALF) * ...`
+
+### [BUG-I] 천장 클라이밍 — 팔 yaw 누락 ★★
+- **원본:** `bipedRightArm.Y = bipedLeftArm.Y = -rotateY` (몸통 회전 상쇄)
+- **현재 오류:** 팔 yaw 미설정
+- **수정:** `m.rightArm.yaw = m.leftArm.yaw = -rotateY` 추가
+
+### [BUG-J] 수영 — 팔 주 축 오류 (pitch vs roll) ★★★
+- **원본:** 팔 주 동작이 Z축(roll), 보조가 X축(pitch) 연속 순환
+- **현재 오류:** 팔 pitch에 작은 cos 진동만 있음
+- **수정:** `m.rightArm.roll = QUARTER + EIGHTH + cos(time*0.1) * combined * 0.8F`
+
+### [BUG-K] 수영 — body pitch 부호 오류 ★★★
+- **원본:** `bipedOuter.X = Quarter - Sixteenth * combined` (양수, 앞으로 기울임)
+- **현재 오류:** `m.body.pitch = -QUARTER * walkFactor` (음수, 뒤로 기울임!)
+- **수정:** `m.body.pitch = QUARTER - SIXTEENTH * combined`
+
+### [BUG-L] 수영 — 다리 진폭 오류 ★★
+- **원본:** 진폭 `0.52264464F`
+- **현재 오류:** 진폭 `0.3F`
+- **수정:** `0.52264464F`로 수정
+
+### [BUG-M] 수영 — sneakFactor 누락 ★★
+- **원본:** 3단계 속도 (standFactor + sneakFactor + walkFactor)
+- **현재 오류:** 2단계 (standFactor + walkFactor)
+- **수정:** `sneakFactor = min(factor(speed, 0, 0.15679921F), factor(speed, 0.52264464F, 0.15679921F))` 추가
+
+### [BUG-N] 잠수 — 팔/다리 주 축 오류 (pitch vs roll) ★★★
+- **원본:** 팔/다리 모두 Z축(roll) 사용, 큰 진폭 (arms: 0.52264464*2.5, legs: 0.52264464)
+- **현재 오류:** 팔 pitch=Half(고정), 다리 pitch (작은 진폭 0.2F)
+- **수정:** 팔/다리 모두 roll로 변경, 진폭 수정
+
+### [BUG-O] 잠수 — body pitch 공식 오류 ★★★
+- **원본:** `bipedOuter.X = Quarter - vAngle` (시선 방향에 따라 동적)
+- **현재 오류:** `m.body.pitch = -Half` (고정값)
+- **수정:** `m.body.pitch = QUARTER - vAngle`
+
+### [BUG-P] 헤드점프 — body/head pitch 공식 오류 ★★★
+- **원본:** `body.X = Quarter - vAngle`, `head.X = -(Quarter - vAngle)/2`
+- **현재 오류:** `m.body.pitch = vAngle`, `m.head.pitch = -vAngle * 0.5F`
+- **수정:** `QUARTER - vAngle` 공식 적용
+
+### [BUG-Q] 헤드점프 — 팔 축 완전 오류 ★★★
+- **원본:** `rightArm.Z = Half - Sixteenth + armFactorZ * Eighth` (roll 사용)
+         `leftArm.Z  = Sixteenth - Half - armFactorZ * Eighth`
+         `rightArm.X = leftArm.X = -bendFactor * Eighth` (pitch는 구부림만)
+- **현재 오류:** pitch에 roll 값 대입, roll에 엉뚱한 값
+- **수정:** 축 올바르게 할당
+
+### [BUG-R] body.pivotY 초기화 누락 ★★
+- **원본:** 각 상태 전환 시 pivotY 복원
+- **현재 오류:** crawling(3F)/sliding(5F) 해제 후 pivotY가 초기화되지 않음
+- **수정:** inject 시작 시 `model.body.pivotY = 0F` 리셋
+
+---
+
+## I. 1.21.1 마이그레이션 포인트
 
 | 원본 | Fabric 1.21.1 대응 |
 |------|-------------------|
 | `SmartMovingModel.setRotationAngles()` | `@Mixin(PlayerEntityModel.class)` → `setAngles()` `@Inject(at = @At("TAIL"))` |
-| `bipedOuter`, `bipedTorso`, `bipedPelvic` 등 커스텀 파트 | `ModelPart` 직접 추가 (PlayerEntityModel 확장 또는 Mixin으로 필드 주입) |
-| `ModelRotationRenderer.YZX` 회전 순서 | `MatrixStack` 수동 회전 순서 적용 |
-| 3개 모델 동기화 | `FeatureRenderer` 또는 `@Mixin(PlayerEntityRenderer)` |
-| `renderGuiIngame()` (HUD) | `HudRenderCallback` (Fabric API) 또는 `@Mixin(InGameHud)` |
-| `setArmScales()` scaleY | `ModelPart` 에 직접 scale 없음 → `MatrixStack.scale()` 사용 |
-| `Factor()` 함수 | 그대로 유틸 클래스로 이식 (순수 Java 수학) |
-| `MathHelper.cos()` | `Math.cos()` (LWJGL 제거됨) |
-
----
-
-## 미확인 / 추가 조사 필요
-
-- [ ] `ModelRotationRenderer` 클래스 구현 — 회전 순서(YZX 등) 어떻게 구현되어 있는지
-- [ ] 1.21.1 `PlayerEntityModel`에서 커스텀 `ModelPart` 주입 방법 (Mixin accessor or duck interface)
-- [ ] `bipedOuter.fadeRotateAngleX/Y` — 페이드 기능이 무엇인지 (`SmartRenderContext` 확인 필요)
-- [ ] 갑옷 모델과 메인 모델 동기화를 Fabric에서 어떻게 할지 (FeatureRenderer vs Mixin)
-- [ ] `MatrixStack.scale()` 이 `NoScaleStart` / `NoScaleEnd` 전략을 대체할 수 있는지 검증
-- [ ] HUD 아이콘 텍스처 직접 그릴 경우 1.21.1의 `DrawContext` API 확인
+| `bipedOuter`, `bipedTorso`, `bipedPelvic` 등 커스텀 파트 | 없음. body/head로 근사 처리 |
+| `ModelRotationRenderer.YZX` 회전 순서 | `MatrixStack` 수동 회전 순서 적용 (미구현) |
+| `bipedOuter.rotateAngleX` | `model.body.pitch` 로 매핑 |
+| `rotateAngleX` | `ModelPart.pitch` |
+| `rotateAngleY` | `ModelPart.yaw` |
+| `rotateAngleZ` | `ModelPart.roll` |
+| `rotationPointY` | `ModelPart.pivotY` |
+| `totalTime` | `animationProgress` (setAngles 파라미터) |
+| `currentVerticalAngle` | `Math.toRadians(headPitch)` |
+| `Factor()` 함수 | `AnimationUtil.factor()` |
+| `MathHelper.cos()` | `Math.cos()` |
