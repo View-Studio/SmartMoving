@@ -136,7 +136,7 @@ world_roll =  localZ * cos(outerX)
   - `head.pitch += bodyPitch` (엔티티 회전 상쇄)
 - 수영/잠수/헤드점프: `pivotZ` 보정 추가 (`arm.pivotZ = 2*sin(outerX)` 등)
 
-**결과: ⬜ 게임 내 테스트 필요**
+**결과: ❌ 실패 (게임 내 테스트 완료)**
 
 **이론적 근거:**
 - 1.21.1 flat 모델에서 파트 연결의 핵심은 pivot 위치(X,Y,Z 모두)가 정확해야 함
