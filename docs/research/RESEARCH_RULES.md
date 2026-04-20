@@ -8,6 +8,11 @@
 ## 핵심 원칙
 
 **추정 금지. 확인만.**
+**예외 없음. 최소 기준 없음. 모든 파일, 모든 코드.**
+
+이 작업은 1:1 번역이다.
+원본의 모든 코드를 완전히 이해한 뒤, 그것을 1.21.1 Fabric으로 번역하는 것이다.
+"관련 없어 보이는 파일", "작은 파일", "유틸리티 파일" — 전부 읽는다. 예외 없다.
 
 "~일 것이다", "~인 것 같다", "~라고 생각한다"는 리서치 문서에 절대 쓰지 않는다.
 모든 내용은 실제 코드를 직접 읽고 확인한 것만 적는다.
@@ -16,72 +21,36 @@
 
 ## 규칙 1 — 원본 소스 리서치 (SmartMoving + SmartRender)
 
-### 1-0. 읽어야 하는 원본 소스 목록
+### 1-0. 읽어야 하는 원본 소스
 
-원본은 두 개의 별도 모드로 구성된다. **둘 다 전부 읽어야 한다.**
+원본은 두 개의 별도 모드로 구성된다. **둘 다 모든 파일을 전부 읽는다.**
 
-| 모드 | 소스 위치 | 역할 |
-|------|-----------|------|
-| SmartMoving | https://github.com/makamys/SmartMoving | 물리/상태머신/입력/네트워크 |
-| SmartRender | https://github.com/makamys/SmartRender | 렌더링/애니메이션 전담 |
+| 모드 | 소스 위치 |
+|------|-----------|
+| SmartMoving | https://github.com/makamys/SmartMoving |
+| SmartRender | https://github.com/makamys/SmartRender |
 
-SmartRender는 "단순 API"가 아니다. 애니메이션 실제 로직(`SmartRenderModel.java` 17KB 등)이 여기에 있다.
-SmartMoving만 읽고 SmartRender를 빠뜨리면 애니메이션 리서치는 불완전하다.
+읽어야 할 파일 목록은 `PROGRESS.md`에 전체가 나열되어 있다.
+그 목록이 전부다. 추가로 빠진 파일이 있으면 목록에 추가한 뒤 읽는다.
 
-### 1-1. 전체 소스를 읽는다
+### 1-1. 읽는 방법
 
-- SmartMoving과 SmartRender 각각의 **모든 패키지, 모든 클래스, 모든 메서드**를 읽는다.
-- "관련 없어 보이는" 클래스도 건너뛰지 않는다.
-- "대충 파악했다"는 완료가 아니다. 코드를 한 줄씩 읽고 이해한 것만 완료다.
-- 읽은 클래스는 아래 체크리스트 형식으로 반드시 표시한다.
+- 파일을 열어서 **첫 줄부터 마지막 줄까지** 읽는다.
+- 모든 메서드, 모든 필드, 모든 조건식을 읽는다.
+- "이 파일은 별로 중요하지 않겠지"라는 판단을 하지 않는다.
+- "대충 파악했다"는 완료가 아니다. 코드를 전부 읽고 이해한 것만 완료다.
+- 완료한 파일은 `PROGRESS.md`에서 체크하고 즉시 커밋한다.
 
-**SmartMoving 필수 체크리스트 (최소 기준):**
-```
-net.smart.moving/
-- [ ] SmartMovingSelf.java       (103KB — 상태머신 전체, 가장 중요)
-- [ ] SmartMovingBase.java       (물리 유틸리티)
-- [ ] SmartMoving.java           (상태 추적)
-- [ ] SmartMovingClient.java     (클라이언트 exhaustion/점프차지)
-- [ ] SmartMovingServer.java     (서버 사이드)
-- [ ] SmartMovingComm.java       (네트워크 패킷)
-- [ ] SmartMovingConfig.java     (설정값 전체)
-- [ ] SmartMovingMod.java        (진입점)
-- [ ] SmartMovingFactory.java    (플레이어 인스턴스 관리)
-- [ ] SmartMovingContext.java
-- [ ] (그 외 모든 클래스)
-```
+### 1-2. 모든 파일에서 추출할 항목
 
-**SmartRender 필수 체크리스트 (최소 기준):**
-```
-net.smart.render/
-- [ ] SmartRenderModel.java      (17KB — 애니메이션 핵심, 가장 중요)
-- [ ] SmartRenderRender.java     (렌더 파이프라인)
-- [ ] ModelRotationRenderer.java (고급 회전 처리)
-- [ ] ModelPlayer.java           (ModelBiped 래퍼)
-- [ ] RenderPlayer.java          (RenderPlayer 래퍼)
-- [ ] IModelPlayer.java          (모델 인터페이스)
-- [ ] IRenderPlayer.java         (렌더 인터페이스)
-- [ ] SmartRenderContext.java    (컨텍스트)
-- [ ] SmartRenderUtilities.java  (유틸리티)
-- [ ] SmartRenderInstall.java
-- [ ] SmartRenderInfo.java
-- [ ] SmartRenderMod.java
-- [ ] RendererData.java
-- [ ] ModelSpecialRenderer.java
-- [ ] ModelCapeRenderer.java
-- [ ] ModelEarsRenderer.java
-- [ ] (그 외 모든 클래스)
-```
-
-### 1-2. 다음 항목을 반드시 추출한다
-
-- **상태 전환 조건**: 어떤 입력 조합이 어떤 상태를 켜고 끄는지 (조건식 그대로)
-- **물리 수치**: 속도, 가속도, 감속, 점프력 등 모든 float/double 수치
-- **애니메이션 수치**: 모든 각도 값, 보간 공식, 팩터 계산식 (SmartRender에서 추출)
-- **계층 구조 의존성**: 어떤 연산이 부모-자식 관계(bipedOuter→bipedTorso→팔/다리)에 의존하는지
-- **서버/클라이언트 구분**: 어느 코드가 서버에서, 어느 코드가 클라이언트에서 실행되는지
-- **호출 순서**: 메서드가 매 틱 어느 순서로 호출되는지
-- **모드 간 의존성**: SmartMoving이 SmartRender의 어느 메서드/클래스를 어떻게 호출하는지
+- **역할**: 이 클래스/메서드가 하는 일
+- **실행 위치**: 서버 / 클라이언트 / 양쪽
+- **호출 시점**: 어디서, 어느 순서로 호출되는지
+- **모든 수치**: float/double 상수, 조건 임계값 전부
+- **모든 조건식**: 상태 전환 조건, if문 조건 전부 (코드 그대로)
+- **의존 관계**: 다른 클래스/메서드/필드에 무엇을 의존하는지
+- **계층 구조**: 1.7.10 모델의 부모-자식 관계 (bipedOuter→bipedTorso→팔/다리 등)
+- **모드 간 호출**: SmartMoving ↔ SmartRender 간 호출 관계
 
 ### 1-3. 기록 형식
 
@@ -90,7 +59,7 @@ net.smart.render/
 - 역할: (한 줄)
 - 실행 위치: 서버 / 클라이언트 / 양쪽
 - 호출 시점: (어디서 호출되는지)
-- 핵심 로직: (코드 스니펫 또는 정확한 설명)
+- 핵심 로직: (코드 스니펫 그대로)
 - 의존하는 것: (다른 상태, 필드, 메서드)
 ```
 
@@ -107,39 +76,27 @@ net.smart.render/
   - Mojmap 이름(`getEntityPose` 등)을 Yarn 이름으로 착각하는 실수 금지.
   - 확인 방법: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/mappings.jar` 안의 `mappings/mappings.tiny`에서 직접 검색.
 
-### 2-2. 추적 범위
+### 2-2. 추적 방법
 
 우리가 간섭하는 모든 vanilla 코드 경로를 **진입점부터 끝까지** 추적한다.
 중간에 "여기서부터는 알겠다"고 생략하지 않는다.
+추적 대상 목록은 `PROGRESS.md`에 있다.
 
-**필수 추적 대상:**
-- `LivingEntity.travel()` — 전체 흐름, 수영/크롤/일반 분기 모두
-- `LivingEntity.tick()` / `tickMovement()` — leaningPitch 갱신, 포즈 갱신 포함
-- `LivingEntity.updatePose()` → `trySetPose()` — 포즈 결정 로직 전체
-- `LivingEntity.isInSwimmingPose()` — 어디서 호출되고 무엇에 영향을 주는지 전수 추적
-- `PlayerEntityRenderer.setupTransforms()` — 전체, 수영 회전 포함
-- `PlayerEntityRenderer.getPositionOffset()` — heightOffset 적용 흐름
-- `LivingEntityRenderer.render()` — 렌더 파이프라인 순서 전체
-- `PlayerEntityModel.setAngles()` — vanilla가 각 파트에 무엇을 설정하는지 전체
-- `Entity.calculateDimensions()` — 호출 시점, BoundingBox 갱신 흐름 전체
-- `LivingEntity.jump()` — 점프 속도 설정 로직
-- `ServerPlayNetworkHandler` — 서버가 클라이언트 위치/속도를 보정하는 코드 경로
-
-### 2-3. 다음 항목을 반드시 추출한다
+### 2-3. 추출할 항목
 
 - **실제 메서드 시그니처** (Yarn 이름, 파라미터 타입 — mappings.tiny 확인 필수)
 - **실행 순서**: 한 틱 안에서 메서드들이 호출되는 정확한 순서
-- **조건 분기**: if문 조건식 그대로
-- **수치**: 하드코딩된 상수, lerp 계수 등
-- **서버/클라이언트 구분**: 어느 쪽에서 실행되는 코드인지
+- **모든 조건 분기**: if문 조건식 그대로
+- **모든 수치**: 하드코딩된 상수, lerp 계수 등
+- **서버/클라이언트 구분**
 
 ### 2-4. 기록 형식
 
 ```
-[클래스명.메서드명 (Yarn 확인됨)]
+[클래스명.메서드명 (Yarn명 확인됨)]
 - 실행 위치: 서버 / 클라이언트 / 양쪽
 - 호출 시점: (어디서, 어느 순서로)
-- 실제 코드: (핵심 부분 발췌, 추정 없이)
+- 실제 코드: (전체 또는 핵심 부분, 추정 없이)
 - 우리와의 충돌 가능성: (있으면 구체적으로 / 없으면 "없음")
 ```
 
@@ -147,59 +104,46 @@ net.smart.render/
 
 ## 규칙 3 — 교차 분석
 
-### 3-1. 원본(SmartMoving+SmartRender)과 1.21.1을 1:1로 대응시킨다
+원본의 **모든** 기능에 대해 1.21.1과 1:1로 대응시킨다.
 
-원본의 모든 기능에 대해:
 - 1.21.1에서 동일한 역할을 하는 vanilla 코드가 무엇인지
 - 우리가 어느 지점에 어떤 방식으로 끼어들어야 하는지
-- 끼어들 때 vanilla의 어떤 동작과 충돌할 수 있는지
+- 끼어들 때 vanilla의 어떤 동작과 충돌하는지 (충돌 가능성이 있으면 전부)
 
-를 명시한다.
-
-### 3-2. 충돌 가능성은 전부 기록한다
-
-"충돌할 것 같다"가 아니라,
+충돌은 "충돌할 것 같다"가 아니라,
 "이 vanilla 코드가 이 조건에서 이 값을 변경하는데, 우리 코드도 같은 값을 변경하므로 충돌"
-처럼 구체적으로.
+처럼 코드 기반으로 구체적으로.
 
-### 3-3. 미확인 항목은 반드시 표시한다
-
-확인이 안 된 부분은 `[미확인 — 이유]`로 명시한다.
-미확인 항목이 있는 채로 구현을 시작하지 않는다.
+미확인 항목은 `[미확인 — 이유]`로 표시한다. 미확인 항목이 있는 채로 구현 시작 금지.
 
 ---
 
-## 규칙 4 — 리서치 문서 작성
-
-### 4-1. 파일 구조
+## 규칙 4 — 리서치 문서 구조
 
 ```
 docs/research/
   RESEARCH_RULES.md           ← 이 파일
+  PROGRESS.md                 ← 전체 진행 체크리스트
   original/
     smartmoving/
-      <시스템명>.md            ← SmartMoving 원본 분석
+      <파일명 또는 시스템명>.md
     smartrender/
-      <시스템명>.md            ← SmartRender 원본 분석
+      <파일명 또는 시스템명>.md
   vanilla/
-    <시스템명>.md              ← vanilla 1.21.1 분석
+    <시스템명>.md
   mapping/
     <시스템명>.md              ← 원본↔1.21.1 교차 분석 + 구현 설계
 ```
 
-### 4-2. 하나의 리서치 파일이 "완료"되는 조건
-
-- 해당 시스템의 모든 클래스/메서드가 읽혔음 (체크리스트 전부 체크)
+하나의 리서치 파일이 "완료"되는 조건:
+- 해당 파일/시스템의 **모든 코드**가 읽혔음
 - 미확인 항목이 없음
-- 교차 분석에서 모든 충돌 지점이 식별됐음
-- 구현 방법이 추정이 아닌 근거 있는 방법으로 결정됐음
+- `PROGRESS.md` 체크 완료 + 커밋 완료
 
 이 조건을 충족하지 않으면 "완료"라고 쓰지 않는다.
 
-### 4-3. 이전 docs/ 파일과의 관계
-
 기존 `docs/research_*.md` 파일들은 이 규칙을 따르지 않은 불완전한 리서치다.
-새 리서치가 완료되기 전까지 참고는 할 수 있으나, 새 리서치 결과와 충돌하면 새 리서치를 우선한다.
+새 리서치 결과와 충돌하면 새 리서치를 우선한다.
 
 ---
 
@@ -207,24 +151,25 @@ docs/research/
 
 다음 조건이 모두 충족되어야 해당 시스템의 구현을 시작한다:
 
-- [ ] SmartMoving 원본 해당 시스템 리서치 완료
-- [ ] SmartRender 원본 해당 시스템 리서치 완료 (애니메이션/렌더 관련 시스템)
-- [ ] vanilla 1.21.1 해당 시스템 리서치 완료
+- [ ] SmartMoving 관련 파일 전체 리서치 완료
+- [ ] SmartRender 관련 파일 전체 리서치 완료
+- [ ] vanilla 1.21.1 관련 코드 경로 전체 리서치 완료
 - [ ] 교차 분석 + 충돌 지점 전부 식별 완료
 - [ ] 미확인 항목 없음
-- [ ] 구현 방법 확정 (추정 없이)
+- [ ] 구현 방법 확정 (코드 근거 있는 방법으로)
 
 위 조건 없이 "일단 구현하고 보자"는 금지.
 
 ---
 
-## 금지 사항 요약
+## 금지 사항
 
 | 금지 | 이유 |
 |------|------|
-| SmartRender 소스 생략 | 애니메이션 실제 로직이 SmartRender에 있음. 빠뜨리면 애니메이션 리서치 불완전 |
+| 파일 일부만 읽기 | 1:1 번역 작업이다. 모든 코드를 읽어야 한다 |
+| "이 파일은 중요하지 않겠지" | 그 판단 자체가 추정이다. 읽기 전까지 모른다 |
+| SmartRender 생략 | 애니메이션 실제 로직이 여기 있다 |
 | "~일 것이다" | 확인되지 않은 것을 사실처럼 쓰면 구현이 틀린다 |
-| Mojmap 이름 그대로 사용 | Yarn 이름과 다를 수 있음. 반드시 mappings.tiny에서 확인 |
-| 관련 코드만 부분적으로 읽기 | 인접 코드에 충돌 지점이 숨어 있다 |
-| 미확인 항목 있는 채로 구현 시작 | 구현 중에 발견하면 처음부터 다시 |
+| Mojmap 이름 사용 | Yarn과 다를 수 있다. mappings.tiny에서 확인 |
+| 미확인 항목 있는 채로 구현 | 구현 중 발견하면 처음부터 다시 |
 | 기존 research_*.md 재탕 | 이 규칙을 안 지킨 리서치는 신뢰하지 않는다 |
