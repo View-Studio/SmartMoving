@@ -16,7 +16,8 @@
       "WebFetch(domain:api.github.com)",
       "Read(//c/tmp/**)",
       "Bash(curl -s https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/java/net/smart/moving/SmartMovingSelf.java -o SmartMovingSelf.java)",
-      "Bash(jar tf *)"
+      "Bash(jar tf *)",
+      "Bash(xargs grep *)"
     ]
   }
 }

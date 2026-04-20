@@ -6,7 +6,8 @@
   "mixins": [
     "LivingEntityDimensionsMixin",
     "LivingEntityIsClimbingMixin",
-    "LivingEntityTravelMixin"
+    "LivingEntityTravelMixin",
+    "PlayerEntityPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

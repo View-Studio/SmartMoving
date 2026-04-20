@@ -18,6 +18,11 @@ public abstract class PlayerEntityClientMixin {
         if (self != MinecraftClient.getInstance().player) return;
 
         SmartMovingState state = self.getAttachedOrCreate(SmartMovingAttachments.STATE);
+        boolean wasSmall = state.isSmall();
         state.tick(self);
+        // 히트박스 크기 전환 시 실제 BoundingBox 갱신 (1블록 공간 통과 가능)
+        if (state.isSmall() != wasSmall) {
+            self.calculateDimensions();
+        }
     }
 }
