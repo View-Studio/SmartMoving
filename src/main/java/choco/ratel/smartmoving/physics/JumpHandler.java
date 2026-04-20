@@ -37,6 +37,12 @@ public final class JumpHandler {
             state.isSprintJump  = false;
         }
 
+        // blockJumpTillButtonRelease 해제 — 점프 버튼이 실제로 떼진 틱에 처리
+        // (interceptJump는 점프 키를 누른 순간에만 호출되므로 그 안에서는 해제 불가)
+        if (state.blockJumpTillButtonRelease && !state.jumpButton.pressed) {
+            state.blockJumpTillButtonRelease = false;
+        }
+
         // ChargeUp 충전
         boolean chargingCondition = state.grabButton.pressed
                 && state.jumpButton.pressed
@@ -135,11 +141,8 @@ public final class JumpHandler {
      * @return true이면 바닐라 jump() 취소
      */
     public static boolean interceptJump(SmartMovingState state, PlayerEntity player) {
-        // ChargeUp/HeadUp 충전 중이면 일반 점프 차단
+        // ChargeUp/HeadUp 충전 중이면 일반 점프 차단 (해제는 update()에서 처리)
         if (state.blockJumpTillButtonRelease) {
-            if (!state.jumpButton.pressed) {
-                state.blockJumpTillButtonRelease = false;
-            }
             return true;
         }
 
