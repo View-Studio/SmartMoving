@@ -7,72 +7,182 @@
 
 ## 작업 순서 원칙
 
-1. 한 세션에 **파일 하나 또는 시스템 하나**만 한다.
-2. 그 파일/시스템을 **완전히** 읽고 문서화한다. 절반만 하고 넘어가지 않는다.
-3. 완료 즉시 커밋한다. 커밋이 곧 진행 저장이다.
-4. 파일이 너무 크면 (SmartMovingSelf.java 등) 시스템 단위로 쪼개서 여러 세션에 나눠도 된다.
-   - 예: SmartMovingSelf — 크롤링/슬라이딩 부분만 → 완료 → 커밋 → 다음 세션에 수영 부분
+1. 한 세션에 **파일 하나**만 한다.
+2. 그 파일을 **처음부터 끝까지 모든 코드** 읽고 문서화한다. 절반만 하고 넘어가지 않는다.
+3. 완료 즉시 커밋 + 이 파일 체크 업데이트 + 커밋. 커밋이 곧 진행 저장이다.
+4. 파일이 매우 크면 (SmartMovingSelf.java 103KB 등) 시스템 단위로 쪼개도 된다.
+   단, 쪼갤 경우 어디까지 했는지 이 파일에 명시한다.
 
 ---
 
-## SmartRender 원본 리서치
+## SmartRender 원본 리서치 (31개 파일)
 
 저장 위치: `docs/research/original/smartrender/`
+소스: https://github.com/makamys/SmartRender
 
-- [ ] `SmartRenderModel.java` — 애니메이션 핵심 (17KB, 최우선)
-- [ ] `ModelRotationRenderer.java` — 고급 회전 처리
-- [ ] `SmartRenderRender.java` — 렌더 파이프라인
-- [ ] `ModelPlayer.java` — ModelBiped 래퍼
-- [ ] `RenderPlayer.java` — RenderPlayer 래퍼
-- [ ] `IModelPlayer.java` / `IRenderPlayer.java` — 인터페이스
-- [ ] `SmartRenderContext.java`, `SmartRenderUtilities.java`, 나머지 전체
+### net.smart.render
+- [ ] `SmartRenderModel.java`
+- [ ] `SmartRenderRender.java`
+- [ ] `ModelRotationRenderer.java`
+- [ ] `ModelPlayer.java`
+- [ ] `RenderPlayer.java`
+- [ ] `IModelPlayer.java`
+- [ ] `IRenderPlayer.java`
+- [ ] `SmartRenderContext.java`
+- [ ] `SmartRenderInfo.java`
+- [ ] `SmartRenderInstall.java`
+- [ ] `SmartRenderMod.java`
+- [ ] `SmartRenderUtilities.java`
+- [ ] `RendererData.java`
+- [ ] `ModelSpecialRenderer.java`
+- [ ] `ModelCapeRenderer.java`
+- [ ] `ModelEarsRenderer.java`
+
+### net.smart.render.playerapi
+- [ ] `SmartRender.java`
+- [ ] `SmartRenderModelPlayerBase.java`
+- [ ] `SmartRenderRenderPlayerBase.java`
+
+### net.smart.render.statistics
+- [ ] `IEntityPlayerSP.java`
+- [ ] `SmartStatistics.java`
+- [ ] `SmartStatisticsContext.java`
+- [ ] `SmartStatisticsData.java`
+- [ ] `SmartStatisticsDatas.java`
+- [ ] `SmartStatisticsFactory.java`
+- [ ] `SmartStatisticsOther.java`
+
+### net.smart.render.statistics.playerapi
+- [ ] `SmartStatistics.java`
+- [ ] `SmartStatisticsFactory.java`
+- [ ] `SmartStatisticsPlayerBase.java`
+
+### net.smart.utilities
+- [ ] `Name.java`
+- [ ] `Reflect.java`
 
 ---
 
-## SmartMoving 원본 리서치
+## SmartMoving 원본 리서치 (72개 파일)
 
 저장 위치: `docs/research/original/smartmoving/`
+소스: https://github.com/makamys/SmartMoving
 
-- [ ] `SmartMovingSelf.java` — 상태머신 전체 (103KB, 가장 큰 파일 — 시스템별로 쪼갤 것)
-  - [ ] 크롤링/슬라이딩
-  - [ ] 클라이밍/천장클라이밍
-  - [ ] 수영/잠수
-  - [ ] 점프 (여우무빙 포함)
-  - [ ] 입력 처리
-  - [ ] 탈진 시스템
-- [ ] `SmartMovingBase.java` — 물리 유틸리티
-- [ ] `SmartMovingConfig.java` — 설정값 전체
-- [ ] `SmartMovingComm.java` — 네트워크 패킷
-- [ ] `SmartMovingClient.java` / `SmartMovingServer.java`
-- [ ] 나머지 전체
+### net.smart.core
+- [ ] `SmartCoreClassVisitor.java`
+- [ ] `SmartCoreContainer.java`
+- [ ] `SmartCoreEventHandler.java`
+- [ ] `SmartCoreInfo.java`
+- [ ] `SmartCoreMethodVisitor.java`
+- [ ] `SmartCorePlugin.java`
+- [ ] `SmartCoreTransformation.java`
+- [ ] `SmartCoreTransformer.java`
+
+### net.smart.moving (핵심)
+- [ ] `SmartMovingSelf.java` ← 103KB, 최우선, 크면 시스템별로 쪼갤 것
+- [ ] `SmartMovingBase.java`
+- [ ] `SmartMoving.java`
+- [ ] `SmartMovingClient.java`
+- [ ] `SmartMovingServer.java`
+- [ ] `SmartMovingServerComm.java`
+- [ ] `SmartMovingComm.java`
+- [ ] `SmartMovingContext.java`
+- [ ] `SmartMovingCoreEventHandler.java`
+- [ ] `SmartMovingFactory.java`
+- [ ] `SmartMovingInfo.java`
+- [ ] `SmartMovingInstall.java`
+- [ ] `SmartMovingMod.java`
+- [ ] `SmartMovingOther.java`
+- [ ] `SmartMovingPacketStream.java`
+- [ ] `Button.java`
+- [ ] `ClimbGap.java`
+- [ ] `Compat.java`
+- [ ] `FeetClimbing.java`
+- [ ] `HandsClimbing.java`
+- [ ] `IEntityPlayerMP.java`
+- [ ] `IEntityPlayerSP.java`
+- [ ] `ILocalUserNameProvider.java`
+- [ ] `IPacketReceiver.java`
+- [ ] `IPacketSender.java`
+- [ ] `ISmartMovingClient.java`
+- [ ] `ISmartMovingSelf.java`
+- [ ] `LocalUserNameProvider.java`
+- [ ] `Orientation.java`
+
+### net.smart.moving.config
+- [ ] `SmartMovingClientConfig.java`
+- [ ] `SmartMovingConfig.java`
+- [ ] `SmartMovingOptions.java`
+- [ ] `SmartMovingProperties.java`
+- [ ] `SmartMovingServerConfig.java`
+- [ ] `SmartMovingServerOptions.java`
+
+### net.smart.moving.playerapi
+- [ ] `SmartMoving.java`
+- [ ] `SmartMovingFactory.java`
+- [ ] `SmartMovingPlayerBase.java`
+- [ ] `SmartMovingSelf.java`
+- [ ] `SmartMovingServerPlayerBase.java`
+
+### net.smart.moving.render
+- [ ] `SmartMovingModel.java`
+- [ ] `SmartMovingRender.java`
+- [ ] `SmartRenderContext.java`
+- [ ] `IModelPlayer.java`
+- [ ] `IRenderPlayer.java`
+- [ ] `ModelPlayer.java`
+- [ ] `RenderPlayer.java`
+
+### net.smart.moving.render.playerapi
+- [ ] `SmartMoving.java`
+- [ ] `SmartMovingModelPlayerBase.java`
+- [ ] `SmartMovingRenderPlayerBase.java`
+
+### net.smart.moving.test
+- [ ] `SmartMovingTestCommand.java`
+- [ ] `SmartMovingTestMod.java`
+
+### net.smart.properties
+- [ ] `Properties.java`
+- [ ] `Property.java`
+- [ ] `Value.java`
+
+### net.smart.utilities
+- [ ] `Name.java`
+- [ ] `Reflect.java`
 
 ---
 
 ## vanilla 1.21.1 리서치
 
 저장 위치: `docs/research/vanilla/`
+소스: `~/.gradle/caches/fabric-loom/1.21.1/minecraft-common.jar` (디컴파일)
+Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/mappings.jar` → `mappings/mappings.tiny`
 
-- [ ] `LivingEntity.travel()` — 전체 흐름
-- [ ] `LivingEntity.tick()` / `tickMovement()` — leaningPitch, 포즈 갱신
-- [ ] `LivingEntity.updatePose()` → `trySetPose()` — 포즈 결정 로직
-- [ ] `PlayerEntityRenderer.setupTransforms()` — 수영 회전 포함 전체
-- [ ] `PlayerEntityModel.setAngles()` — vanilla가 파트에 설정하는 것 전체
-- [ ] `LivingEntityRenderer.render()` — 렌더 파이프라인 순서
-- [ ] `Entity.calculateDimensions()` — BoundingBox 갱신 흐름
-- [ ] `LivingEntity.jump()` — 점프 속도 설정
-- [ ] 서버 위치/속도 보정 코드 경로
+- [ ] `LivingEntity.travel()`
+- [ ] `LivingEntity.tick()` / `tickMovement()`
+- [ ] `LivingEntity.updatePose()` → `trySetPose()`
+- [ ] `LivingEntity.isInSwimmingPose()` — 호출되는 모든 곳 추적
+- [ ] `LivingEntity.jump()`
+- [ ] `PlayerEntity.getEntityPose()` 해당 Yarn 메서드
+- [ ] `PlayerEntityRenderer.setupTransforms()`
+- [ ] `PlayerEntityRenderer.getPositionOffset()`
+- [ ] `PlayerEntityModel.setAngles()`
+- [ ] `LivingEntityRenderer.render()`
+- [ ] `Entity.calculateDimensions()`
+- [ ] 서버 위치/속도 보정 코드 경로 (`ServerPlayNetworkHandler` 등)
 
 ---
 
 ## 교차 분석
 
 저장 위치: `docs/research/mapping/`
+각 시스템의 원본 + vanilla 리서치가 **둘 다 완료된 후**에만 진행.
 
-각 시스템의 원본 리서치 + vanilla 리서치가 둘 다 완료된 후에 진행.
-
-- [ ] 애니메이션 시스템 교차 분석
-- [ ] 수영/잠수 교차 분석
-- [ ] 크롤링/슬라이딩 교차 분석
-- [ ] 클라이밍 교차 분석
-- [ ] 점프 교차 분석
-- [ ] 이동 속도/물리 교차 분석
+- [ ] 애니메이션 시스템
+- [ ] 수영/잠수
+- [ ] 크롤링/슬라이딩
+- [ ] 클라이밍/천장클라이밍
+- [ ] 점프 전체
+- [ ] 이동 속도/물리
+- [ ] 네트워크/서버 동기화
