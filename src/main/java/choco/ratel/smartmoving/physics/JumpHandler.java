@@ -30,6 +30,13 @@ public final class JumpHandler {
      * SmartMovingState.tick() 에서 호출.
      */
     public static void update(SmartMovingState state, PlayerEntity player) {
+        // 착지 시 공중 점프 상태 초기화
+        if (player.isOnGround()) {
+            state.isHeadJumping = false;
+            state.isWallJumping = false;
+            state.isSprintJump  = false;
+        }
+
         // ChargeUp 충전
         boolean chargingCondition = state.grabButton.pressed
                 && state.jumpButton.pressed

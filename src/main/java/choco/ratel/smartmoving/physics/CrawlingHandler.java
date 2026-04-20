@@ -55,16 +55,19 @@ public final class CrawlingHandler {
     }
 
     private static boolean wantCrawl(SmartMovingState state, PlayerEntity player) {
+        // grab 해제 시 항상 토글 초기화 (상태 잠금 방지)
+        if (!state.grabButton.pressed) {
+            state.crawlToggled = false;
+        }
+
+        // 홀드 모드: grab + sneak 동시 유지 필요
         boolean continueCrawl = state.isCrawling
-                && (state.sneakButton.pressed || state.crawlToggled);
+                && state.grabButton.pressed
+                && state.sneakButton.pressed;
+
         boolean startCrawl = state.grabButton.startPressed
                 && state.sneakButton.pressed
                 && player.isOnGround();
-
-        // 토글 진입: grab+sneak 시작 시 토글 상태 반전
-        if (startCrawl) {
-            state.crawlToggled = !state.isCrawling;
-        }
 
         // 점프하면 토글 해제
         if (state.jumpButton.startPressed) {

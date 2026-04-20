@@ -696,14 +696,24 @@
 
 ---
 
-### 6-8. 크롤 토글 모드 구현 (M-5)
+### 6-8. 크롤 홀드 모드 수정 (M-5)
 > `CrawlingHandler.java`
 
-- [x] `crawlToggled` 플래그 처리 추가
-  - `grabButton.startPressed && sneakButton.pressed && isOnGround()` → `crawlToggled = !crawlToggled`
-  - `wantCrawl = wantCrawl || crawlToggled`
-- [x] 토글 해제 조건
-  - 점프하면 `crawlToggled = false`
+- [x] ~~`crawlToggled` 토글 모드~~ → **홀드 모드로 변경** (2026-04-21 버그 수정)
+  - `continueCrawl = isCrawling && grabButton.pressed && sneakButton.pressed`
+  - grab 해제 시 `crawlToggled = false` (잠금 방지)
+  - `mustCrawl`(천장 낮은 공간)은 별도 경로로 유지되어 독립 동작
+- [ ] 토글 모드 (설정 기반) — 추후 `ConfigManager.crawlToggleEnabled` 추가 시 구현
+
+---
+
+### 6-10. 헤드점프/벽점프 상태 영구 활성 버그 수정 (B-5)
+> `JumpHandler.java`
+
+- [x] `isHeadJumping`, `isWallJumping`, `isSprintJump` 착지 시 초기화 추가
+  - `JumpHandler.update()` 첫 줄: `player.isOnGround()` 시 세 플래그 모두 false
+  - 원인: `tryJump(HEAD_UP)` 에서 true로만 설정하고 해제 로직 없었음
+  - 증상: 헤드점프 후 애니메이션 고착 + `!isHeadJumping` 조건인 클라이밍 영구 차단
 
 ---
 
@@ -724,12 +734,13 @@
 ## Phase 7 — 마무리 검증
 
 - [ ] **기능별 단독 테스트**
-  - [ ] 기어가기 — 1블록 공간 이동, mustCrawl 강제 발동, 토글 모드
+  - [ ] 기어가기 — grab+sneak 홀드로 진입, 한쪽 해제 시 즉시 해제, mustCrawl(천장 낮은 공간) 강제 유지
   - [ ] 클라이밍 — 벽/사다리/덩굴, 홀드, 위/아래, 클라이밍 점프
   - [ ] 천장 클라이밍 — 지지 블록 위에서 활성화, heightOffset 보정
   - [ ] 슬라이딩 — 얼음 위 진입, 방향 조정
   - [ ] 수영/잠수 — 3가지 상태 전환, 3D 이동
   - [ ] 점프 강화 — 차지/헤드(재분배)/각도(더블탭)/벽 점프 각각 검증
+  - [ ] **헤드점프 상태 해제 확인** — 점프 후 착지 시 애니메이션 정상 복귀, 이후 클라이밍 가능
   - [ ] 탈진 — 클라이밍 중 탈진 증가, 한계 도달 시 차단
 
 - [ ] **멀티플레이어 테스트**
