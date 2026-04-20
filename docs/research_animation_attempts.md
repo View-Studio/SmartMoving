@@ -147,6 +147,47 @@ world_roll =  localZ * cos(outerX)
 
 ---
 
+## 시도 7: pivotY 오버라이드 제거 + vanilla SWIMMING 회전 상쇄
+
+**커밋:** `a519d80`
+
+**근본 원인 재분석 (시도 6 실패 이유):**
+
+**크롤링/슬라이딩 실패 이유:**
+시도 6에서 엔티티 회전(Rx(-79°))을 적용하면서 동시에 pivotY를 수동 설정했음:
+```java
+m.head.pivotY = 3F;
+m.rightArm.pivotY = 5F;
+m.rightLeg.pivotY = 12F;
+```
+엔티티 회전이 적용된 후 pivotY를 바꾸면, 파트가 회전된 좌표계에서 추가로 이동해 연결 위치가 틀어짐.
+엔티티 회전 방식에서는 기본 pivotY(arm=2, leg=12)를 그대로 사용해야 한다.
+
+**수영/잠수 실패 이유:**
+SmartMoving isSwimming=true일 때 플레이어가 물 안에 있으면 vanilla도 SWIMMING EntityPose를 적용.
+Vanilla setupTransforms가 `-90° - entity.pitch` 각도로 엔티티를 이미 회전시킨 상태에서
+우리 코드가 `body.pitch = outerX(≈90°)`를 설정 → 이중 회전 → 뒤집힘.
+
+**방법:**
+
+크롤링/슬라이딩:
+- `applyCrawlingAngles`/`applySlidingAngles`에서 pivotY 수동 설정 제거
+- `resetPivots()` 호출로 vanilla sneaking pivotY(head=4.2, body=3.2, arm=5.2) 간섭 방지
+- 기본 pivotY(arm=2, leg=12) 유지, 엔티티 회전이 위치 결정
+
+수영/잠수/헤드점프:
+- `setupTransforms` @TAIL에서 `entity.getPose() == EntityPose.SWIMMING`이면 vanilla 회전 상쇄:
+  ```java
+  float vanillaAngleDeg = -90.0F - entity.getPitch();
+  matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-vanillaAngleDeg));
+  ```
+- pivotZ 보정 방식은 유지, 단 head.pitch를 world 값으로 올바르게 설정
+- 수영 arm.pitch에 누락됐던 `SIXTEENTH*combined` 항 추가
+
+**결과: 미확인 (게임 내 테스트 필요)**
+
+---
+
 ## 검증된 올바른 접근법 (Minecraft 1.21.1 ModelPart 회전 원칙)
 
 ### 1. pitch-first 내재적 회전
