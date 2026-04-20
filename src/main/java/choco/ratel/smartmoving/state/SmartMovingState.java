@@ -135,7 +135,8 @@ public class SmartMovingState {
         SlidingHandler.update(this, player);
         JumpHandler.update(this, player);
 
-        // 히트박스 축소 시 렌더 Y 오프셋 보정
-        heightOffset = isSmall() ? -0.5F : 0F;
+        // 엔티티 회전 방식(크롤링/슬라이딩)에서는 heightOffset이 필요 없음 (계산상 발이 지면에 위치)
+        // -0.5F를 주면 발이 땅 아래로 들어감
+        heightOffset = 0F;
     }
 }

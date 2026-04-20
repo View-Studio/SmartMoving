@@ -67,9 +67,8 @@ public abstract class PlayerEntityModelMixin {
         model.rightArm.roll = 0F;  model.leftArm.roll = 0F;
         model.rightLeg.yaw  = 0F;  model.leftLeg.yaw  = 0F;
         model.rightLeg.roll = 0F;  model.leftLeg.roll = 0F;
-        // pivotZ 잔류값 초기화
+        // arm pivotZ 잔류값 초기화 (leg.pivotZ는 vanilla 스니킹이 4.0F로 설정하므로 건드리지 않음)
         model.rightArm.pivotZ = 0F; model.leftArm.pivotZ = 0F;
-        model.rightLeg.pivotZ = 0F; model.leftLeg.pivotZ = 0F;
 
         float speed = limbDistance;
 

@@ -7,6 +7,7 @@ import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,13 +25,14 @@ public abstract class PlayerEntityRendererMixin {
      * SmartMoving 상태별 엔티티 회전 처리:
      *
      * [크롤링/슬라이딩]
-     *   엔티티 전체를 X축 회전. 모든 파트가 함께 회전하므로 연결됨 (vanilla 수영과 동일 원리).
+     *   엔티티 전체를 X축 회전. 모든 파트가 함께 회전하므로 연결됨.
+     *   heightOffset=0 (모델 발이 수학적으로 지면에 정확히 위치함).
      *
      * [수영/잠수/헤드점프]
      *   setAngles에서 pivotZ 보정 방식 사용 (setupTransforms 회전 없음).
-     *   단, vanilla가 SWIMMING EntityPose로 인해 이미 회전을 적용했다면 상쇄해야 함.
-     *   vanilla 수영 회전: RotationAxis.POSITIVE_X.rotationDegrees(-90 - entity.pitch)
-     *   상쇄: 역회전 적용.
+     *   PlayerEntityRenderer가 leaningPitch 기반으로 수영 회전을 적용하면 정확히 상쇄:
+     *     적용된 각도 = lerp(leaningPitch, 0, isTouchingWater ? -90-pitch : -90)
+     *     추가 translate(0,-1,0.3) if isInSwimmingPose → translate(0,+1,-0.3)으로 상쇄 후 역회전.
      */
     @Inject(
             method = "setupTransforms(Lnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/client/util/math/MatrixStack;FFFF)V",
@@ -57,12 +59,21 @@ public abstract class PlayerEntityRendererMixin {
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-QUARTER));
 
         } else if (state.isSwimming || state.isDiving || state.isHeadJumping) {
-            // pivotZ 보정 방식 사용 중 — vanilla SWIMMING 엔티티 회전이 있으면 상쇄
-            if (entity.getPose() == EntityPose.SWIMMING) {
-                // vanilla: RotationAxis.POSITIVE_X.rotationDegrees(-90 - entity.pitch)
-                // 상쇄: 반대 방향 회전
-                float vanillaAngleDeg = -90.0F - entity.getPitch();
-                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-vanillaAngleDeg));
+            // pivotZ 보정 방식 사용 중 — vanilla 수영 엔티티 회전이 있으면 정확히 상쇄
+            // PlayerEntityRenderer.setupTransforms이 적용하는 회전:
+            //   angle = lerp(leaningPitch, 0, isTouchingWater ? -90-pitch : -90)
+            // 추가 translate: isInSwimmingPose() → translate(0, -1, 0.3)
+            float leaningPitch = entity.getLeaningPitch(tickDelta);
+            if (leaningPitch > 0F) {
+                float baseAngle = entity.isTouchingWater()
+                        ? -90.0F - entity.getPitch(tickDelta)
+                        : -90.0F;
+                float appliedAngle = MathHelper.lerp(leaningPitch, 0F, baseAngle);
+                // 역순 상쇄: translate 먼저 → 그 다음 rotation
+                if (entity.isInSwimmingPose()) {
+                    matrices.translate(0F, 1.0F, -0.3F);
+                }
+                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-appliedAngle));
             }
         }
     }
