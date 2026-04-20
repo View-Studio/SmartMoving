@@ -112,13 +112,38 @@ world_roll =  localZ * cos(outerX)
 - **그 외 SmartMoving 상태**: `resetPivots()` 호출 → 스니킹 pivotY 간섭 방지
 - **`wasCrawling` cleanup 완전 제거**: 바닐라 setAngles가 매 프레임 자동 복원
 
-**결과: ⬜ 미확인 (게임 내 테스트 필요)**
+**결과: ❌ 실패 (팔 교차, 다리 땅밑)**
+
+**실패 이유:**
+- pivotY만 수정해도 pivotZ가 0이므로 파트가 올바른 3D 위치에 없음
+- body.pitch=79° 상태에서 arm.pivotZ=0이면 팔 pivot이 body 어깨와 다른 Z 위치에 있어 교차/분리 발생
+- 다리가 여전히 "1자로 서있는 것처럼" 보임 → pivotZ 문제
+
+---
+
+## 시도 6: setupTransforms 엔티티 회전 (현재)
+
+**커밋:** `ecf0e2c`
+
+**방법:**
+- 바닐라 수영(-90° 엔티티 회전)과 동일한 원리 적용
+- `PlayerEntityRendererMixin.setupTransforms`에서 엔티티 전체 회전:
+  - 크롤링: `RotationAxis.POSITIVE_X.rotation(-(Quarter-Thirtytwoth))` ≈ -79°
+  - 슬라이딩: `RotationAxis.POSITIVE_X.rotation(-Quarter)` = -90°
+- `PlayerEntityModelMixin.setAngles`에서 1.7.10 LOCAL 값 그대로 사용:
+  - `body.pitch = 0` (엔티티가 이미 회전)
+  - `arm.pitch = Half+Eighth` (원본 LOCAL X)
+  - `head.pitch += bodyPitch` (엔티티 회전 상쇄)
+- 수영/잠수/헤드점프: `pivotZ` 보정 추가 (`arm.pivotZ = 2*sin(outerX)` 등)
+
+**결과: ⬜ 게임 내 테스트 필요**
 
 **이론적 근거:**
-- 바닐라 `BipedEntityModel.setAngles()` 디컴파일 결과: 스니킹/비스니킹 모두 모든 파트의 pivotY를 명시적으로 설정함
-  - 비스니킹: head=0, body=0, arm=2, leg=12
-  - 스니킹: head=4.2, body=3.2, arm=5.2, leg=12.2
-- 1.7.10 원본의 `bipedTorso.rotationPointY = 3F`는 torso 그룹 전체(head+body+arm) 이동 → 1.21.1에서는 그룹이 없으므로 각 파트에 직접 설정해야 함
+- 1.21.1 flat 모델에서 파트 연결의 핵심은 pivot 위치(X,Y,Z 모두)가 정확해야 함
+- body.pitch만 변경하면 body만 기울고 arm pivot 위치는 고정됨 → 연결 불가능
+- 엔티티 레벨에서 전체 회전하면 모든 파트의 pivot이 함께 움직여 자연스럽게 연결됨
+- 수영/잠수/헤드점프는 가변 outerX이므로 pivotZ 수식으로 보정:
+  `arm.pivotZ = arm_local_Y * sin(outerX)`, `leg.pivotZ = leg_local_Y * sin(outerX)`
 
 ---
 
