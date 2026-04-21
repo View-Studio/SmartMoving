@@ -113,7 +113,7 @@
 
 ### net.smart.moving.config
 - [x] `SmartMovingClientConfig.java`
-- [ ] `SmartMovingConfig.java`
+- [x] `SmartMovingConfig.java`
 - [ ] `SmartMovingOptions.java`
 - [ ] `SmartMovingProperties.java`
 - [ ] `SmartMovingServerConfig.java`
