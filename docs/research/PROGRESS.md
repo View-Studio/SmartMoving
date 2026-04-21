@@ -115,7 +115,7 @@
 - [x] `SmartMovingClientConfig.java`
 - [x] `SmartMovingConfig.java`
 - [x] `SmartMovingOptions.java`
-- [ ] `SmartMovingProperties.java`
+- [x] `SmartMovingProperties.java`
 - [ ] `SmartMovingServerConfig.java`
 - [ ] `SmartMovingServerOptions.java`
 
