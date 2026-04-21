@@ -49,16 +49,18 @@
 
 ### 1-6. supportsCeilingClimbing 재설계
 
-- [ ] Block ID/Meta → BlockState + 설정 파싱 전면 재설계
+- [x] Block ID/Meta → BlockState + 설정 파싱 전면 재설계
   - `"tile.fenceIron"` → `Blocks.IRON_BARS` (`minecraft:iron_bars`)
-  - `"tile.trapdoor"` → `Blocks.OAK_TRAPDOOR` (`minecraft:oak_trapdoor`)
+  - `"tile.trapdoor"` → `TrapdoorBlock` (모든 목재/철 트랩도어, `OPEN=false` 조건)
   - 메타 정수 → `BlockState` 프로퍼티 (방향, 열림 여부 등)
-  - 설정 파일 파싱 로직 재구현 필요
+  - 구현: `CeilingClimbBlocks.supports(BlockState)` (Phase 7)
+  - 설정 파일 파싱 로직 재구현: TODO Phase 12
 
 ### 1-7. getOnLadderOrVine 로직
 
-- [ ] `LadderBlock.FACING` Direction 접근: `Direction.getOpposite()`
-- [ ] Vine 블록 방향 프로퍼티: `NORTH`, `SOUTH`, `EAST`, `WEST` boolean 접근
+- [x] `LadderBlock.FACING` Direction 접근: `Direction.getOpposite()`
+- [x] Vine 블록 방향 프로퍼티: `NORTH`, `SOUTH`, `EAST`, `WEST` boolean 접근
+  - 구현: `SmartMovingClimber.getOnLadderOrVine()` (Phase 7)
 
 ---
 
@@ -210,10 +212,9 @@
 
 - [x] `ServerPlayConnectionEvents.JOIN` 등록 (stub — 설정 전송 로직은 Phase 7에서 구현)
 - [x] `ServerPlayConnectionEvents.DISCONNECT` 등록 — `SmartMovingServer.remove(player)` 호출
-- [ ] 플레이어 접속 시 설정 내용 전송 (Phase 7에서 구현)
-  - `Options._globalConfig.value == true`: 전체 설정 전송
-  - `Options._serverConfig.value == true`: 개별 설정 전송
-  - `alwaysSendMessage == true`: `new String[0]` (활성) 또는 `null` (비활성)
+- [x] 플레이어 접속 시 설정 내용 전송 (Phase 7에서 구현)
+  - `SmartMovingServer.initialize(player, server)` → `ConfigContentPayload(new String[0], null)` 전송
+  - TODO Phase 12: SmartMovingConfig 기반 실제 설정 배열 전송
 
 ### 3-8. processConfigChangePacket 권한 확인 [서버]
 
@@ -284,7 +285,8 @@
     addMovementStat → handleExhaustion
     ```
   - **주의**: `@Overwrite` 사용 금지, 상태별 별도 Mixin 또는 cancellable `@Inject` 권장
-  - 구현: `MixinLivingEntity.sm_travel()` — TODO Phase 7/8 파이프라인 구현 후 ci.cancel() 활성화
+  - 서버 파이프라인: `MixinLivingEntity.sm_travel()` — TODO Phase 8 완전 구현
+  - 클라이언트 클라이밍: `MixinLivingEntityClient.sm_travel_client()` — 클라이밍 표면 감지 시 cancel + SM 물리 적용 (Phase 7 구현 완료)
 
 ### 5-2. [위험] jump() 인터셉트 [클라이언트] ★★★★☆
 
@@ -344,7 +346,10 @@
   - **at TAIL**: `heightOffset > 0` 시 `player.setPos()` 로 위치 수동 조정
   - **at TAIL**: 클라이밍 이동 거리 누적 (피로도 계산용: 지상 1.2 / 공중 0.9)
   - **at TAIL**: 수영 소리 누적 (`SwimSoundDistance > 1.0D` 시 재생)
-  - 구현: `MixinEntity.sm_beforeMove()` + `sm_afterMove()` — 로직은 TODO Phase 7
+  - 구현: `MixinEntity.sm_beforeMove()` + `sm_afterMove()` (Phase 7 서버 측 구현 완료)
+    - beforeMove: ServerPlayerEntity 크롤링/천장 클라이밍 시 STEP_HEIGHT=0 억제
+    - afterMove: STEP_HEIGHT 복원 + 클라이밍 이동 거리 누적 (SmartMovingServer.distanceClimbedModified)
+    - 클라이언트 측 STEP_HEIGHT 억제: TODO — 클라이언트 MixinEntityClient 추가 시 구현
 
 ### 5-9. 벽점프 — calculateSeparateCollisions() [클라이언트]
 
@@ -420,33 +425,40 @@
 
 ### 7-1. 클라이밍 속도 상수 정의
 
-- [ ] `FastUpMotion = 0.2D`
-- [ ] `CatchCrawlGapMotion = 0.17D`
-- [ ] `MediumUpMotion = 0.14D`
-- [ ] `SlowUpMotion = 0.1D`
-- [ ] `HoldMotion = 0.08D`
-- [ ] `SinkDownMotion = 0.05D`
-- [ ] `ClimbDownMotion = 0.01D`
+- [x] `FastUpMotion = 0.2D`
+- [x] `CatchCrawlGapMotion = 0.17D`
+- [x] `MediumUpMotion = 0.14D`
+- [x] `SlowUpMotion = 0.1D`
+- [x] `HoldMotion = 0.08D`
+- [x] `SinkDownMotion = 0.05D`
+- [x] `ClimbDownMotion = 0.01D`
+  - 구현: `SmartMovingClimber` 상수 (Phase 7)
 
 ### 7-2. handleClimbing() Free 모드 [클라이언트]
 
-- [ ] 8방향 탐색 로직 구현
-- [ ] exhaustion 체크
-- [ ] 속도 보간 (`setOnlyShouldClimbSpeed()`)
-  - `relevant = value < 0 || value > motionY` 조건 유지
-  - 상방: `motionY = (value - HoldMotion) × upSpeedFactor × combinedSpeedFactor + HoldMotion`
-  - 하방: `motionY = HoldMotion - (HoldMotion - value) × downSpeedFactor × combinedSpeedFactor`
+- [x] 4방향 탐색 로직 구현 (대각 4방향은 TODO)
+- [x] exhaustion 체크 (TODO stub — SM exhaustion 미구현)
+- [x] 속도 보간 (`setOnlyShouldClimbSpeed()`)
+  - `relevant = value < 0 || value > motionY` 조건 구현
+  - 상방: `motionY = (value - HoldMotion) × upFactor × combinedFactor + HoldMotion`
+  - 하방: `motionY = HoldMotion - (HoldMotion - value) × downFactor × combinedFactor`
+  - upFactor/downFactor: 1.0D 임시 (미확인 — TODO Phase 12)
+  - 구현: `SmartMovingClimber.handleClimbing()` (Phase 7)
 
 ### 7-3. handleCeilingClimbing() 속도 [클라이언트]
 
-- [ ] `jgap > 1.2` → 수평 속도 `0.12`
-- [ ] `jgap > 1.115` → 수평 속도 `0.08`
-- [ ] else → 수평 속도 `0.04`
-- [ ] `fallDistance = 0` 강제 초기화
+- [x] `jgap > 1.2` → 수평 속도 `0.12`
+- [x] `jgap > 1.115` → 수평 속도 `0.08`
+- [x] else → 수평 속도 `0.04`
+- [x] `fallDistance = 0` 강제 초기화
+  - jgap 계산: TODO stub (AABB 충돌 쿼리 미구현 — Phase 9)
+  - 구현: `SmartMovingClimber.handleCeilingClimbing()` (Phase 7)
 
 ### 7-4. [위험] floatingTicks 리셋 연동 [서버] ★★★★☆
 
-→ 3-2 항목 (floatingTicks Mixin)과 연동. 조건 확인 필수.
+- [x] 3-2 항목 (MixinServerPlayNetworkHandler floatingTicks 리셋)에서 이미 구현 완료
+  - 조건: `resetTicksForFloatKick == true` (isClimbing || isCrawlClimbing || isCeilingClimbing)
+  - 벽점프 제외 — 벽점프는 순간적이므로 kick 위험 없음
 
 ---
 

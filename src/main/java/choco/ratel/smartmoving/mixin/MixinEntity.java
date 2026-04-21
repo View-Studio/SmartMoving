@@ -1,11 +1,15 @@
 package choco.ratel.smartmoving.mixin;
 
+import choco.ratel.smartmoving.server.SmartMovingServer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MovementType;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,43 +33,54 @@ public abstract class MixinEntity {
     @Shadow public boolean velocityDirty;
 
     /**
-     * 5-8 before: beforeMoveEntity() 이식.
+     * 5-8: beforeMove에서 STEP_HEIGHT=0으로 설정했을 때 원래 값을 저장한다.
+     * -1.0 = 미설정 (beforeMove에서 STEP_HEIGHT를 변경하지 않았음).
+     */
+    @Unique
+    private double sm_savedStepHeight = -1.0;
+
+    /**
+     * 5-8 before: beforeMoveEntity() 이식 (서버 측).
      *
-     * move() 실행 전:
-     *   - STEP_HEIGHT 속성을 0으로 설정 (isSneaking/isCrawling 등 조건 시)
-     *     → 원본 ySize=0 (계단 오르기 억제)에 해당
-     *     → EntityAttributes.GENERIC_STEP_HEIGHT 속성으로 대응
+     * SM 크롤링/천장 클라이밍 중 STEP_HEIGHT=0으로 설정.
+     * 원본 ySize=0 (계단 오르기 억제)에 해당.
      *
-     * 플레이어 엔티티에만 적용. 비플레이어는 그대로 통과.
-     *
-     * TODO Phase 7: STEP_HEIGHT=0 설정 조건 구현
-     *   (5-11-5 STEP_HEIGHT 항목과 연동)
+     * 클라이언트 측 STEP_HEIGHT 억제: TODO — 클라이언트 Mixin 추가 시 구현.
      */
     @Inject(method = "move", at = @At("HEAD"))
     private void sm_beforeMove(MovementType type, Vec3d movement, CallbackInfo ci) {
-        if (!((Object) this instanceof PlayerEntity)) return;
-        // TODO Phase 7: SM 이동 상태(이건 스니킹/크롤링 등) 확인 후 STEP_HEIGHT=0 설정
-        // EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
-        // if (attr != null && smNeedsStepSuppression(player)) attr.setBaseValue(0.0);
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing) {
+            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
+            if (attr != null) {
+                sm_savedStepHeight = attr.getBaseValue();
+                attr.setBaseValue(0.0);
+            }
+        }
     }
 
     /**
-     * 5-8 after: afterMoveEntity() 이식.
+     * 5-8 after: afterMoveEntity() 이식 (서버 측).
      *
-     * move() 실행 후:
-     *   - STEP_HEIGHT 속성 복원 (원래 값으로 되돌림)
-     *   - heightOffset > 0 시 player.setPos()로 Y 위치 수동 보정
-     *   - 클라이밍 이동 거리 누적 (피로도 계산용: 지상 1.2×, 공중 0.9×)
-     *   - 수영 소리 누적 (SwimSoundDistance > 1.0D 시 재생)
+     * - STEP_HEIGHT 복원 (beforeMove에서 0으로 변경했던 경우)
+     * - 클라이밍 이동 거리 누적 (피로도 계산용)
+     *   isClimbing: 지면 접촉 중 → 1.2 배율
+     *   isCrawlClimbing / isCeilingClimbing: 공중 → 0.9 배율
      *
-     * TODO Phase 7: 각 항목 구현
+     * TODO Phase 9: heightOffset 위치 보정 (setPos)
      */
     @Inject(method = "move", at = @At("TAIL"))
     private void sm_afterMove(MovementType type, Vec3d movement, CallbackInfo ci) {
-        if (!((Object) this instanceof PlayerEntity)) return;
-        // TODO Phase 7: STEP_HEIGHT 복원
-        // TODO Phase 7: heightOffset 위치 보정 (setPos)
-        // TODO Phase 7: 클라이밍 이동 거리 누적
-        // TODO Phase 7: 수영 소리 누적
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        if (sm_savedStepHeight >= 0) {
+            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
+            if (attr != null) attr.setBaseValue(sm_savedStepHeight);
+            sm_savedStepHeight = -1.0;
+        }
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
+            sm.distanceClimbedModified += movement.length() * (sm.isClimbing ? 1.2 : 0.9);
+        }
     }
 }

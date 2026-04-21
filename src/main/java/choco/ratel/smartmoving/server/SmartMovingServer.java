@@ -1,5 +1,8 @@
 package choco.ratel.smartmoving.server;
 
+import choco.ratel.smartmoving.network.SmartMovingNetwork;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 import java.util.HashMap;
@@ -52,6 +55,9 @@ public final class SmartMovingServer {
 
     /** isSneaking() 강제 오버라이드. null=비강제, true/false=강제 반환값 */
     public Boolean forceIsSneaking;
+
+    /** 클라이밍 이동 거리 누적 (피로도 계산용). 원본 distanceClimbedModified 이식. */
+    public double distanceClimbedModified;
 
     // ── 패킷에서 디코딩된 이동 상태 ──────────────────────────────
 
@@ -136,6 +142,26 @@ public final class SmartMovingServer {
     public void afterAddMovingHungerBatch() {
         disableAddExhaustionDepth--;
         disableAddExhaustion = disableAddExhaustionDepth > 0;
+    }
+
+    // ── 3-7: 플레이어 접속 초기화 ────────────────────────────────
+
+    /**
+     * 플레이어 접속 시 서버→클라이언트 초기화 패킷 전송.
+     * 원본: SmartMovingServer.initialize(player)
+     *
+     * ConfigContent 패킷으로 서버 설정 내용을 전달한다.
+     *   lines = new String[0]: 빈 설정 (서버 독립 설정 없음)
+     *   username = null: 설정 편집 권한 없음
+     *
+     * TODO: SmartMovingConfig 기반 실제 설정 배열 전송 구현 (Phase 12)
+     */
+    public static void initialize(ServerPlayerEntity player, MinecraftServer server) {
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.initialized) return;
+        sm.initialized = true;
+        ServerPlayNetworking.send(player,
+                new SmartMovingNetwork.ConfigContentPayload(new String[0], null));
     }
 
     // ── 3-8: 권한 확인 ───────────────────────────────────────────

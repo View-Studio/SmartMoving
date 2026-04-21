@@ -1,11 +1,16 @@
 package choco.ratel.smartmoving.mixin.client;
 
+import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.climbing.ClimbGap;
+import choco.ratel.smartmoving.climbing.FeetClimbing;
+import choco.ratel.smartmoving.climbing.HandsClimbing;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,6 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
+ * 5-1 (클라이언트): travel() 인터셉트 — SM 클라이밍 시 vanilla 취소 + SM 물리 적용
  * 5-2: jump() 인터셉트 — jumpAvoided/jumpPending 세팅 + vanilla 취소
  * 5-3: jumpingCooldown 우회 — jump() 취소로 10틱 쿨다운 발동 자체 차단
  * 5-4: jumping 필드 @Shadow — SM 조건 필터 적용 시 참조 (tickEssential 내부)
@@ -24,6 +30,46 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LivingEntity.class)
 @Environment(EnvType.CLIENT)
 public abstract class MixinLivingEntityClient {
+
+    /**
+     * 5-1 (클라이언트): travel() 인터셉트 — SM 클라이밍 물리 파이프라인.
+     *
+     * 클라이밍 가능 표면(사다리/넝쿨) 탐지 시 vanilla travel()을 취소하고
+     * SM 클라이밍 물리를 직접 적용한다.
+     *
+     * 적용 물리:
+     *   - handleClimbing(): Y 속도 설정 + fallDistance 리셋
+     *   - handleCeilingClimbing(): 천장 클라이밍 조건 처리
+     *   - x/z 감속: 0.91F 배율 (공기 저항)
+     *   - motionY 하한: max(motionY, -0.15D) (과도한 낙하 방지)
+     *
+     * TODO: wantClimbUp / wantClimbDown 키 입력 기반 조건 추가 (Phase 10)
+     * TODO: SM 파이프라인 전체 구현 (handleSwimming, handleLand 등)
+     * TODO: 서버 측 travel() 파이프라인 — MixinLivingEntity.sm_travel() 참고
+     */
+    @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
+    private void sm_travel_client(Vec3d movementInput, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        World world = player.getWorld();
+        boolean isSmall = sm.isSmall || sm.isCrawling;
+
+        HandsClimbing[] hands = {HandsClimbing.NONE};
+        FeetClimbing[]  feet  = {FeetClimbing.NONE};
+        ClimbGap[] handsGap   = {new ClimbGap()};
+        ClimbGap[] feetGap    = {new ClimbGap()};
+        SmartMovingClimber.getOnLadderOrVine(player, world, isSmall, false, hands, feet, handsGap, feetGap);
+
+        boolean onClimbable = hands[0].isRelevant() || feet[0].isRelevant();
+        if (!onClimbable && !sm.isCeilingClimbing) return;
+
+        if (onClimbable) SmartMovingClimber.handleClimbing(player, sm);
+        SmartMovingClimber.handleCeilingClimbing(player, sm);
+
+        Vec3d vel = player.getVelocity();
+        player.setVelocity(vel.x * 0.91F, Math.max(vel.y, -0.15D), vel.z * 0.91F);
+        ci.cancel();
+    }
 
     /**
      * 5-4: LivingEntity.jumping (field_6282).

@@ -38,7 +38,8 @@
       "Bash(javap *)",
       "Bash(grep \"EntityRenderer.class$\")",
       "Bash(grep \"net/minecraft/client/render/entity/EntityRenderer$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
-      "Bash(grep \"net/minecraft/client/render/entity/EntityRenderDispatcher$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)"
+      "Bash(grep \"net/minecraft/client/render/entity/EntityRenderDispatcher$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(./gradlew compileJava)"
     ]
   }
 }

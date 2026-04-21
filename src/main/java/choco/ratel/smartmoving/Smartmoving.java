@@ -22,10 +22,9 @@ public class SmartMoving implements ModInitializer {
     }
 
     private static void registerConnectionEvents() {
-        // 3-7 stub: 플레이어 접속 — 향후 설정 전송 등 초기화에 활용
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            // TODO Phase 7: SmartMovingServer 초기화 및 설정 패킷 전송
-        });
+        // 3-7: 플레이어 접속 — SM 초기화 및 ConfigContent 패킷 전송
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+                SmartMovingServer.initialize(handler.player, server));
 
         // 플레이어 접속 해제 — 인스턴스 정리
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
