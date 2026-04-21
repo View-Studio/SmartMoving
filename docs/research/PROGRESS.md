@@ -33,7 +33,7 @@
 - [x] `SmartRenderContext.java`
 - [x] `SmartRenderInfo.java`
 - [x] `SmartRenderInstall.java`
-- [ ] `SmartRenderMod.java`
+- [x] `SmartRenderMod.java`
 - [ ] `SmartRenderUtilities.java`
 - [ ] `RendererData.java`
 - [ ] `ModelSpecialRenderer.java`
