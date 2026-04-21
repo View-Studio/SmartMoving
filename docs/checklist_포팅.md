@@ -66,7 +66,7 @@
 
 ### 2-1. 채널 등록 순서 [서버 + 클라이언트]
 
-- [ ] **서버 채널 수신 핸들러 등록** (ModInitializer 또는 ServerLifecycleEvents.SERVER_STARTING)
+- [x] **서버 채널 수신 핸들러 등록** (ModInitializer 또는 ServerLifecycleEvents.SERVER_STARTING)
   ```
   ServerPlayNetworking.registerGlobalReceiver(
       new Identifier("smartmoving", "state"), handler)
@@ -83,7 +83,7 @@
   ```
   - 총 6개 (Config Content는 서버→클라이언트 방향이므로 서버 수신 불필요)
 
-- [ ] **클라이언트 채널 수신 핸들러 등록** (ClientModInitializer)
+- [x] **클라이언트 채널 수신 핸들러 등록** (ClientModInitializer)
   ```
   ClientPlayNetworking.registerGlobalReceiver(
       new Identifier("smartmoving", "config_content"), handler)
@@ -95,23 +95,23 @@
       new Identifier("smartmoving", "state"), handler)  // 다른 플레이어 상태 수신
   ```
 
-- [ ] **LocalUserNameProvider 주입 시점**: `ServerLifecycleEvents.SERVER_STARTING`에서 설정
+- [x] **LocalUserNameProvider 주입 시점**: `ServerLifecycleEvents.SERVER_STARTING`에서 설정
   - `MinecraftClient.getInstance().getSession().getUsername()` 으로 대체
 
 ### 2-2. 패킷 직렬화 — ObjectOutputStream → PacketByteBuf [클라이언트 + 서버]
 
-- [ ] State 패킷 (ID=0): `int(entityId) + long(state)` → `buf.writeInt() + buf.writeLong()`
-- [ ] ConfigInfo 패킷 (ID=1): `Object(String)` → `buf.writeString(str, 32767)`
-- [ ] ConfigContent 패킷 (ID=2): `Object(String[]) + Object(String)` → `buf.writeByte(len) + loop buf.writeString() + buf.writeString()`
-- [ ] ConfigChange 패킷 (ID=3): 페이로드 없음 (1바이트 ID만)
-- [ ] SpeedChange 패킷 (ID=4): `int + Object(String)` → `buf.writeInt() + buf.writeString()`
-- [ ] HungerChange 패킷 (ID=5): `float` → `buf.writeFloat()`
-- [ ] Sound 패킷 (ID=6): `Object(String) + float + float` → `buf.writeString() + buf.writeFloat() + buf.writeFloat()`
+- [x] State 패킷 (ID=0): `int(entityId) + long(state)` → `buf.writeInt() + buf.writeLong()`
+- [x] ConfigInfo 패킷 (ID=1): `Object(String)` → `buf.writeString(str, 32767)`
+- [x] ConfigContent 패킷 (ID=2): `Object(String[]) + Object(String)` → `buf.writeByte(len) + loop buf.writeString() + buf.writeString()`
+- [x] ConfigChange 패킷 (ID=3): 페이로드 없음 (1바이트 ID만)
+- [x] SpeedChange 패킷 (ID=4): `int + Object(String)` → `buf.writeInt() + buf.writeString()`
+- [x] HungerChange 패킷 (ID=5): `float` → `buf.writeFloat()`
+- [x] Sound 패킷 (ID=6): `Object(String) + float + float` → `buf.writeString() + buf.writeFloat() + buf.writeFloat()`
   - ⚠️ 원본 IPacketReceiver 파라미터명은 `distance`이나 실제는 `volume` 직렬화됨 — 포팅 시 `volume`으로 통일
 
 ### 2-3. State 패킷 비트 레이아웃 [클라이언트→서버]
 
-- [ ] 33비트 long 비트맵 구현
+- [x] 34비트 long 비트맵 구현
   - bit 0: `isClimbing`
   - bit 1: `isHandsVineClimbing`
   - bit 2: `isFeetVineClimbing`
@@ -137,7 +137,7 @@
 
 ### 2-4. 서버 수신 후 릴레이 [서버]
 
-- [ ] `SmartMovingServer.processStatePacket()` 에서 State 패킷을 추적 플레이어에게 릴레이
+- [x] `SmartMovingServer.processStatePacket()` 에서 State 패킷을 추적 플레이어에게 릴레이
   - `PlayerLookup.tracking(serverPlayer)` 반환 컬렉션 순회
   - 각 플레이어에게 `ServerPlayNetworking.send(player, packet)` 전송
   - [미확인 — `PlayerLookup.tracking()` 정확한 API 서명 확인 필요]
@@ -403,6 +403,8 @@
 ---
 
 ## 7. 클라이밍 시스템 구현
+
+> **참고**: 1-6(supportsCeilingClimbing 재설계)과 1-7(getOnLadderOrVine 로직)은 이 단계에서 구현한다.
 
 ### 7-1. 클라이밍 속도 상수 정의
 
@@ -720,7 +722,7 @@
 - [ ] `ModelPart xScale/yScale/zScale` 존재 여부 — swim_dive.md에 [미확인]으로 기재
 - [ ] `reverseHandleMaterialAcceleration` 1.21.1 travel() 완전 대체 시 불필요 여부
 - [ ] `getLeaningPitch()` 증가/감소 속도 (수치 미확인)
-- [ ] State 패킷 33비트 정확한 전체 비트 배치 — SmartMovingOther.md 재확인 필요
+- [x] State 패킷 34비트 전체 비트 배치 — SmartMovingOther.md로 확인 완료 (bits 0-33)
 - [ ] SM 전용 커스텀 EntityPose 등록 가능 여부
 - [ ] `isEntityInsideOpaqueBlock()` 해당 1.21.1 Yarn 메서드명
 - [ ] `GENERIC_GRAVITY` 속성 기본값 0.08D 여부
