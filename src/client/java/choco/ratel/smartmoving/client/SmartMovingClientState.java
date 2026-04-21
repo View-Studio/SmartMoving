@@ -72,6 +72,13 @@ public final class SmartMovingClientState {
     /** 작은 크기 상태 (크롤링/슬라이딩) */
     public boolean isSmall;
 
+    /** 클라이밍 점프 상태 */
+    public boolean isClimbJumping;
+
+    // ── 12-7: 위 블록까지의 거리 (isCrawlClimbing || isHeadJumping 시 사용) ─
+    /** 머리 위 블록까지의 거리. 최대 5.0F. */
+    public float smallOverGroundHeight;
+
     // ── 9-5: 슬라이딩 파티클 타이머 ──────────────────────────────────────
     // 원본 필드명 오타(Slinding) 그대로 보존
     /** 슬라이딩 파티클 누적 타이머. _slideParticlePeriodFactor × 0.1F 초과 시 파티클 생성. */
@@ -115,6 +122,15 @@ public final class SmartMovingClientState {
 
     public static void remove(ClientPlayerEntity player) {
         INSTANCES.remove(player.getUuid());
+    }
+
+    // ── 12-2: isAngleJumping() ───────────────────────────────────────────
+    /**
+     * 방향 점프 중인지 여부.
+     * 원본: SmartMoving.isAngleJumping() → angleJumpType > 1 && angleJumpType < 7
+     */
+    public boolean isAngleJumping() {
+        return angleJumpType > 1 && angleJumpType < 7;
     }
 
     // ── 4-2: tickEssential() ─────────────────────────────────────────

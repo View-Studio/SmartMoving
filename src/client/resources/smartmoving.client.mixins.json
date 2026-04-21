@@ -8,6 +8,7 @@
     "MixinEntityClient",
     "MixinLivingEntityClient",
     "MixinPlayerEntityClient",
+    "MixinPlayerEntityModelClient",
     "MixinPlayerEntityRenderer"
   ],
   "injectors": {

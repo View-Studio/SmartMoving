@@ -225,7 +225,10 @@ public abstract class MixinLivingEntityClient {
     private void sm_isInSwimmingPose_client(CallbackInfoReturnable<Boolean> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isCrawling || sm.isCrawlClimbing) {
+        // [6-2][8-3] 크롤링/수영/잠수/크롤클라이밍 중 setupTransforms Branch 2 진입 차단.
+        // isCrawling/isCrawlClimbing: SWIMMING 포즈 사용하되 vanilla -90° 자동 회전 방지
+        // isSwimming_sm/isDiving: SM 자체 body X 기울기 애니메이션과 충돌 방지
+        if (sm.isCrawling || sm.isCrawlClimbing || sm.isSwimming_sm || sm.isDiving) {
             cir.setReturnValue(false);
         }
     }

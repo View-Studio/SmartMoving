@@ -398,10 +398,10 @@
 
 ### 6-4. updateLeaningPitch 간섭 대응 [클라이언트]
 
-- [ ] SWIMMING 포즈 사용 시 `leaningPitch += 0.09F/틱` 자동 증가 (11틱에 1.0 도달)
+- [x] SWIMMING 포즈 사용 시 `leaningPitch += 0.09F/틱` 자동 증가 (11틱에 1.0 도달)
   - 6-2에서 `isInSwimmingPose()=false` → `updateLeaningPitch()` 감소 경로 진입 → leaningPitch 0으로 수렴
   - SM 수영/잠수에서: leaningPitch 자동 회전이 SM 자체 각도와 충돌 → **억제 필요**
-  - 억제 방법: `model.leaningPitch = 0` 강제 세팅 (Phase 12 setAngles Mixin에서)
+  - 억제 방법: `model.leaningPitch = 0` 강제 세팅 → `MixinPlayerEntityModelClient.sm_setAngles()` TAIL에서 구현 (Phase 12)
 
 ### 6-5. recalculateDimensions 없음 처리 [클라이언트]
 
@@ -480,16 +480,17 @@
 
 ### 8-3. SWIMMING 포즈 leaningPitch 충돌 대응 [클라이언트]
 
-- [ ] SM 수영 상태에서 `model.leaningPitch = 0` 강제 (setAngles Mixin에서)
+- [x] SM 수영 상태에서 `model.leaningPitch = 0` 강제 (setAngles Mixin에서)
   - leaningPitch 억제로 vanilla -90° 자동 회전 차단
   - SM setAngles에서 자체 45° 기울기 애니메이션 구현
-  - → **Phase 12 (렌더/애니메이션) 로 이관**
+  - 구현: `MixinPlayerEntityModelClient.sm_setAngles()` anySmState 분기 (Phase 12)
 
 ### 8-4. heightOffset(-1F) SWIMMING 포즈 이중 적용 방지 [클라이언트]
 
-- [ ] SWIMMING 포즈 히트박스 0.6H + SM heightOffset(-1F) 이중 적용 방지 설계
-  - `getPositionOffset()`에서 SWIMMING 포즈 오프셋 vs SM 헤드점프 오프셋 누적 계산
-  - → **Phase 12 (렌더/히트박스) 로 이관**
+- [x] SWIMMING 포즈 히트박스 0.6H + SM heightOffset(-1F) 이중 적용 방지 설계
+  - `getPositionOffset()`에서 isHeadJumping 우선 → heightOffset 반환, isCrawling은 -scale×0.125 반환
+  - 두 오프셋 누적 없이 조건 분리로 해결
+  - 구현: `MixinPlayerEntityRenderer.sm_getPositionOffset()` (Phase 12)
 
 ### 8-5. isJumpingOutOfWater [클라이언트]
 
@@ -642,38 +643,39 @@
 
 ### 12-1. [위험] setAngles() Mixin — 11가지 이동 상태 [클라이언트] ★★★★☆
 
-- [ ] **Mixin 대상**: `PlayerEntityModel.setAngles()` (method_17087)
+- [x] **Mixin 대상**: `BipedEntityModel.setAngles()` (PlayerEntityModel 아닌 부모 클래스 타겟)
   - **at**: `@At("TAIL")` — vanilla 공식 완료 후 SM이 덮어쓰기
   - SM 상태 활성 시 `model.leaningPitch = 0` 강제 (수영 팔 Step 13 차단)
-  - **11가지 상태별 파트 각도 적용**:
-    - `isRopeSliding`: [미확인 — 원본 애니메이션 로직 확인 필요]
-    - `isClimbing` / `isCrawlClimbing`: [미확인 — 원본 animation_system.md 재확인 필요]
-    - `isClimbJumping`: rightArm.pitch=Half+Sixteenth, leftArm.pitch=Half+Sixteenth, rightArm.roll=-Thirtytwoth, leftArm.roll=Thirtytwoth
-    - `isCeilingClimbing`: [미확인]
-    - `isSwimming`: SM 45° 기울기 자체 구현
-    - `isDiving`: [미확인]
-    - `isCrawling`: [미확인]
-    - `isSliding`: [미확인]
-    - `isFlying`: body(=outer).pitch=(Quarter-verticalAngle)*walkFactor, body.yaw=horizontalAngle, head.pitch=-body.pitch/2
-    - `isHeadJumping`: body.pitch=Quarter-currentVerticalAngle, body.yaw=currentHorizontalAngle, head.pitch=-body.pitch/2; 팔/다리 Z 각도 + smallOverGroundHeight 클램프
-    - `isFalling`: arm/leg cos 진동 애니메이션 (fallDistance 기반)
+  - **11가지 상태별 파트 각도 적용** (구현 완료):
+    - `isClimbing` / `isCrawlClimbing`: 사다리/넝쿨 UpGrab 팔 각도 + isCrawlClimbing 몸통 기울기
+    - `isClimbJumping`: rightArm.pitch=Half+Sixteenth, leftArm.pitch=Half+Sixteenth, roll=±Thirtytwoth
+    - `isCeilingClimbing`: 천장 매달리기 팔/다리 역방향 각도
+    - `isSwimming_sm`: SM 수면 수영 팔/다리 젓기 + leaningPitch=0
+    - `isDiving`: 완전 잠수 팔/다리 발차기
+    - `isCrawling`: 포복 자세 몸통 78° 기울기 + 팔 앞으로 뻗기
+    - `isSliding`: 슬라이딩 자세 미세 흔들림
+    - `isFlying` (creative): 창작 비행 날개짓 근사
+    - `isHeadJumping`: 팔/다리 Z + smallOverGroundHeight 클램프
+    - `isFalling`: arm/leg cos 진동 애니메이션
   - **상수 대응**: `Quarter=π/2`, `Half=π`, `Eighth=π/4`, `Sixteenth=π/8`, `Thirtytwoth=π/16`, `Sixtyfourth=π/32`
-  - **sneaking 간섭 처리**: `model.sneaking = entity.isInSneakingPose()` 자동 세팅 → SM CROUCHING 미사용 시에도 발동 → 필요 시 Mixin으로 억제
+  - 구현: `MixinPlayerEntityModelClient.sm_setAngles()` (Phase 12)
 
 ### 12-2. animateAngleJumping() [클라이언트]
 
-- [ ] `setAngles()` Mixin 내부, `isAngleJumping() = angleJumpType > 1 && angleJumpType < 7` 시 실행
+- [x] `setAngles()` Mixin 내부, `isAngleJumping() = angleJumpType > 1 && angleJumpType < 7` 시 실행
   - `angle = angleJumpType * Eighth`
   - `backness = 1F - |angle - Half| / Quarter`
-  - `leftness = -min(angle - Half, 0F) / Quarter`
-  - `rightness = max(angle - Half, 0F) / Quarter`
-  - body.yaw 재설정 + 다리/팔 방향 각도 조정
+  - `leftness/rightness` 기반 다리/팔 방향 각도 조정
+  - 구현: `MixinPlayerEntityModelClient.sm_animateAngleJumping()` (Phase 12)
 
 ### 12-3. setupTransforms() Mixin — bodyYaw 제어 [클라이언트]
 
-- [ ] **Mixin 대상**: `PlayerEntityRenderer.setupTransforms()`
-  - **@ModifyArg(index=3)**: bodyYaw 파라미터를 SM forwardRotation으로 교체
-  - 적용 상태: `isHeadJumping || isFlying || isSwimming || ...`
+- [x] **Mixin 대상**: `PlayerEntityRenderer.setupTransforms()` TAIL
+  - SM 수영: POSITIVE_X.rotation(Quarter - Sixteenth)
+  - SM 잠수: POSITIVE_X.rotation(Quarter)
+  - SM 슬라이딩: POSITIVE_X.rotation(Quarter) + translate(0, 5/16, 0)
+  - 구현: `MixinPlayerEntityRenderer.sm_setupTransforms()` (Phase 12)
+- [ ] **@ModifyArg(index=3)**: bodyYaw 파라미터를 SM forwardRotation으로 교체 → **Phase 13으로 이관**
 
 ### 12-4. ModelRotationRenderer 대체 — MatrixStack [클라이언트]
 
@@ -693,16 +695,18 @@
 
 ### 12-6. getPositionOffset() Mixin — heightOffset [클라이언트]
 
-- [ ] **Mixin 대상**: `PlayerEntityRenderer.getPositionOffset()` (method_23206)
-  - **at**: `@At("TAIL")` 또는 `@ModifyReturnValue`
-  - SM 헤드점프 상태 시 Y 오프셋 추가
-  - ⚠️ SWIMMING 포즈 사용 시 `setupTransforms()` Branch 2에서 `translate(0, -1, 0.3)` 추가 적용됨 → 두 오프셋 누적 계산 필요
+- [x] **Mixin 대상**: `PlayerEntityRenderer.getPositionOffset()` (HEAD, cancellable)
+  - SM 헤드점프: `Vec3d(0, sm.heightOffset, 0)` 반환 (우선)
+  - SM 크롤링: `Vec3d(0, -scale*0.125, 0)` 반환
+  - SWIMMING 포즈 Branch 2 자체는 isInSwimmingPose=false로 차단되므로 누적 없음
+  - 구현: `MixinPlayerEntityRenderer.sm_getPositionOffset()` (Phase 12)
 
 ### 12-7. smallOverGroundHeight 계산 [클라이언트]
 
-- [ ] `isCrawlClimbing || isHeadJumping` 시: `world.getBlockState(BlockPos)` 으로 위 5블록 범위 탐색
-  - 블록까지의 거리 반환
-  - 헤드점프 팔 Z 각도 클램프에 사용: `armFactorZ = min(armFactorZ, smallOverGroundHeight / 5F)`
+- [x] `SmartMovingClientState.smallOverGroundHeight: float` 필드 추가 (Phase 12)
+  - `sm_animateClimbing()` 내 isCrawlClimbing 분기에서 smallOverGroundHeight 기반 bodyAngleX/legAngleX 계산
+  - 헤드점프 팔 Z 각도 클램프: `armFactorZ = min(armFactorZ, smallOverGroundHeight / 5F)`
+  - ⚠️ 실제 블록 탐색 계산은 Phase 13 — 현재 0F 기본값 사용
 
 ---
 
