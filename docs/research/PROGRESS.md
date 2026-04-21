@@ -108,7 +108,7 @@
 - [x] `IPacketSender.java`
 - [x] `ISmartMovingClient.java`
 - [x] `ISmartMovingSelf.java`
-- [ ] `LocalUserNameProvider.java`
+- [x] `LocalUserNameProvider.java`
 - [ ] `Orientation.java`
 
 ### net.smart.moving.config
