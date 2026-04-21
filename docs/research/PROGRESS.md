@@ -71,7 +71,7 @@
 소스: https://github.com/makamys/SmartMoving
 
 ### net.smart.core
-- [ ] `SmartCoreClassVisitor.java`
+- [x] `SmartCoreClassVisitor.java`
 - [ ] `SmartCoreContainer.java`
 - [ ] `SmartCoreEventHandler.java`
 - [ ] `SmartCoreInfo.java`
