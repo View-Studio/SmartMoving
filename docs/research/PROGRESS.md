@@ -130,7 +130,7 @@
 - [x] `SmartMovingModel.java`
 - [x] `SmartMovingRender.java`
 - [x] `SmartRenderContext.java`
-- [ ] `IModelPlayer.java`
+- [x] `IModelPlayer.java`
 - [ ] `IRenderPlayer.java`
 - [ ] `ModelPlayer.java`
 - [ ] `RenderPlayer.java`
