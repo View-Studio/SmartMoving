@@ -49,7 +49,7 @@
 - [x] `IEntityPlayerSP.java`
 - [x] `SmartStatistics.java`
 - [x] `SmartStatisticsContext.java`
-- [ ] `SmartStatisticsData.java`
+- [x] `SmartStatisticsData.java`
 - [ ] `SmartStatisticsDatas.java`
 - [ ] `SmartStatisticsFactory.java`
 - [ ] `SmartStatisticsOther.java`
