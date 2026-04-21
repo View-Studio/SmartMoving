@@ -161,7 +161,7 @@
 소스: `~/.gradle/caches/fabric-loom/1.21.1/minecraft-common.jar` (디컴파일)
 Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/mappings.jar` → `mappings/mappings.tiny`
 
-- [ ] `LivingEntity.travel()`
+- [x] `LivingEntity.travel()`
 - [ ] `LivingEntity.tick()` / `tickMovement()`
 - [ ] `LivingEntity.updatePose()` → `trySetPose()`
 - [ ] `LivingEntity.isInSwimmingPose()` — 호출되는 모든 곳 추적
