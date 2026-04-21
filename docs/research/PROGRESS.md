@@ -82,7 +82,7 @@
 
 ### net.smart.moving (핵심)
 - [x] `SmartMovingSelf.java` ← 103KB, 최우선, 크면 시스템별로 쪼갤 것
-- [ ] `SmartMovingBase.java`
+- [x] `SmartMovingBase.java`
 - [ ] `SmartMoving.java`
 - [ ] `SmartMovingClient.java`
 - [ ] `SmartMovingServer.java`
