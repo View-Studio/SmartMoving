@@ -112,7 +112,7 @@
 - [x] `Orientation.java`
 
 ### net.smart.moving.config
-- [ ] `SmartMovingClientConfig.java`
+- [x] `SmartMovingClientConfig.java`
 - [ ] `SmartMovingConfig.java`
 - [ ] `SmartMovingOptions.java`
 - [ ] `SmartMovingProperties.java`
