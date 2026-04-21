@@ -146,7 +146,7 @@
 
 ### net.smart.properties
 - [x] `Properties.java`
-- [ ] `Property.java`
+- [x] `Property.java`
 - [ ] `Value.java`
 
 ### net.smart.utilities
