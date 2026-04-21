@@ -55,7 +55,7 @@
 - [x] `SmartStatisticsOther.java`
 
 ### net.smart.render.statistics.playerapi
-- [ ] `SmartStatistics.java`
+- [x] `SmartStatistics.java`
 - [ ] `SmartStatisticsFactory.java`
 - [ ] `SmartStatisticsPlayerBase.java`
 
