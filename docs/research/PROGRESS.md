@@ -34,7 +34,7 @@
 - [x] `SmartRenderInfo.java`
 - [x] `SmartRenderInstall.java`
 - [x] `SmartRenderMod.java`
-- [ ] `SmartRenderUtilities.java`
+- [x] `SmartRenderUtilities.java`
 - [ ] `RendererData.java`
 - [ ] `ModelSpecialRenderer.java`
 - [ ] `ModelCapeRenderer.java`
