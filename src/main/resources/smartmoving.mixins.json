@@ -3,7 +3,10 @@
   "minVersion": "0.8",
   "package": "choco.ratel.smartmoving.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "server.MixinServerPlayNetworkHandler",
+    "server.MixinServerPlayerEntity"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

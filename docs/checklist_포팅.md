@@ -150,42 +150,38 @@
 
 다음 필드를 `ServerPlayerEntity`에 주입하거나 별도 컴포넌트 클래스로 관리:
 
-- [ ] `resetFallDistance: boolean` — afterOnUpdate에서 낙하 거리 리셋 여부
-- [ ] `resetTicksForFloatKick: boolean` — afterOnUpdate에서 floatKick 틱 리셋 여부
-- [ ] `initialized: boolean` — initialize() 완료 여부
-- [ ] `withinOnLivingUpdate: boolean` — onLivingUpdate 진행 중 여부
-- [ ] `crawlingCooldown: int` — 크롤링 종료 후 쿨다운 (10틱)
-- [ ] `isCrawling: boolean` — 서버 측 크롤링 상태
-- [ ] `isSmall: boolean` — 서버 측 작은 크기 상태
-- [ ] `hunger: float` — 클라이언트 소진값 (-1=억제 해제, 0=소진 없음)
-- [ ] `disableAddExhaustionDepth: int` — 소진 억제 중첩 깊이
-- [ ] `disableAddExhaustion: boolean` — 소진 추가 비활성화 여부
-- [ ] `isSneakButtonPressed: boolean` — 클라이언트 sneaking 버튼 상태
-- [ ] `forceIsSneaking: Boolean` — isSneaking() 강제 오버라이드 (null=비강제)
+- [x] `resetFallDistance: boolean` — afterOnUpdate에서 낙하 거리 리셋 여부
+- [x] `resetTicksForFloatKick: boolean` — afterOnUpdate에서 floatKick 틱 리셋 여부
+- [x] `initialized: boolean` — initialize() 완료 여부
+- [x] `withinOnLivingUpdate: boolean` — onLivingUpdate 진행 중 여부
+- [x] `crawlingCooldown: int` — 크롤링 종료 후 쿨다운 (10틱)
+- [x] `isCrawling: boolean` — 서버 측 크롤링 상태
+- [x] `isSmall: boolean` — 서버 측 작은 크기 상태
+- [x] `hunger: float` — 클라이언트 소진값 (-1=억제 해제, 0=소진 없음)
+- [x] `disableAddExhaustionDepth: int` — 소진 억제 중첩 깊이
+- [x] `disableAddExhaustion: boolean` — 소진 추가 비활성화 여부
+- [x] `isSneakButtonPressed: boolean` — 클라이언트 sneaking 버튼 상태
+- [x] `forceIsSneaking: Boolean` — isSneaking() 강제 오버라이드 (null=비강제)
+  - Map<UUID, SmartMovingServer> 방식으로 구현 (@Unique 필드 주입 대신)
 
 ### 3-2. [위험] floatingTicks 리셋 Mixin [서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `ServerPlayNetworkHandler`
-- [ ] **@Accessor**: `floatingTicks` (Yarn: `field_14138`, 타입 `int`)
-  ```java
-  @Accessor("floatingTicks")
-  void setFloatingTicks(int value);
-  ```
-- [ ] **리셋 조건**: `isClimbing || isCrawlClimbing || isCeilingClimbing` (벽점프 제외)
-- [ ] **리셋 타이밍**: 서버 매 틱 `afterOnUpdate()` 해당 Mixin에서 실행
-  - **Mixin 대상**: `ServerPlayerEntity.tick()` 또는 `ServerPlayNetworkHandler.tick()`
-  - **at**: `@At("TAIL")`
-- [ ] **임계값 확인**: 80틱 초과 시 kick (vanilla 1.21.1 확인 완료)
+- [x] **Mixin 대상**: `ServerPlayNetworkHandler`
+- [x] **@Shadow**: `floatingTicks` (Yarn: `field_14138`, 타입 `int`) — @Accessor 대신 @Shadow 직접 접근
+- [x] **리셋 조건**: `isClimbing || isCrawlClimbing || isCeilingClimbing` (벽점프 제외)
+- [x] **리셋 타이밍**: `ServerPlayNetworkHandler.tick()` HEAD Inject
+- [x] **임계값 확인**: 80틱 초과 시 kick (vanilla 1.21.1 확인 완료)
 
 ### 3-3. [위험] 소진 인터셉트 구조 [서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `ServerPlayerEntity.addExhaustion(float)` (또는 `PlayerEntity`)
+- [x] **Mixin 대상**: `ServerPlayerEntity` → `addExhaustion(float)`
   - **at**: `@At("HEAD")`, `cancellable = true`
   - `disableAddExhaustion == true` 시 `ci.cancel()` 호출
 - [ ] **Mixin 대상**: `ServerPlayerEntity.addMovementStat(double, double, double)` (또는 `LivingEntity`)
   - **at**: `@At("HEAD")` + `@At("TAIL")`
   - HEAD에서 `beforeAddMovingHungerBatch()` (disableAddExhaustion=true 설정)
   - TAIL에서 SM hunger 값 적용 + `afterAddMovingHungerBatch()` (disableAddExhaustion=false)
+  - [미확인 — 1.21.1 Yarn 메서드명 확인 필요, TODO Phase 3 후속]
 - [ ] **의도적 역전 처리**: `beforeUpdatePotionEffects()` → `afterAddMovingHungerBatch()`, `afterUpdatePotionEffects()` → `beforeAddMovingHungerBatch()`
   - **Mixin 대상**: `LivingEntity.updatePotionEffects()` (또는 동등 메서드)
   - **at**: `@At("HEAD")` + `@At("TAIL")`
@@ -193,39 +189,41 @@
 
 ### 3-4. isSneaking() 오버라이드 [서버]
 
-- [ ] **Mixin 대상**: `ServerPlayerEntity.isSneaking()` (또는 `PlayerEntity`)
+- [x] **Mixin 대상**: `ServerPlayerEntity` → `isSneaking()`
   - **at**: `@At("HEAD")`, `cancellable = true`
-  - `forceIsSneaking != null` 시 `ci.cancel()` + 강제 값 반환
+  - `forceIsSneaking != null` 시 `cir.setReturnValue(forceIsSneaking)` 호출
 
 ### 3-5. isEntityInsideOpaqueBlock() 크롤링 쿨다운 억제 [서버]
 
-- [ ] **Mixin 대상**: `Entity.isInsideWall()` (1.21.1 Yarn 메서드명 확인 필요)
+- [x] **Mixin 대상**: `ServerPlayerEntity` → `isInsideWall()` (Yarn 1.21.1 확인 완료)
   - **at**: `@At("HEAD")`, `cancellable = true`
-  - `crawlingCooldown > 0` 시 `ci.cancel()` + `false` 반환
-  - [미확인 — 1.21.1에서 해당 메서드 Yarn 이름 확인 필요]
+  - `crawlingCooldown > 0` 시 `cir.setReturnValue(false)` 호출
 
 ### 3-6. setSmall() 크기 변경 [서버]
 
 - [ ] `isSmall == true`: `player.setHeight(0.8F)` 해당하는 1.21.1 EntityDimensions 수정
   - `isSmall == false`: `player.setHeight(1.8F)` 복원
   - [미확인 — 1.21.1에서 서버 플레이어 히트박스 런타임 변경 방법 확인 필요]
+  - **defer Phase 6**
 
 ### 3-7. SmartMovingServer.initialize() — 접속 시 설정 전송 [서버]
 
-- [ ] 플레이어 접속 시 설정 내용 전송 (`ServerPlayConnectionEvents.JOIN`)
+- [x] `ServerPlayConnectionEvents.JOIN` 등록 (stub — 설정 전송 로직은 Phase 7에서 구현)
+- [x] `ServerPlayConnectionEvents.DISCONNECT` 등록 — `SmartMovingServer.remove(player)` 호출
+- [ ] 플레이어 접속 시 설정 내용 전송 (Phase 7에서 구현)
   - `Options._globalConfig.value == true`: 전체 설정 전송
   - `Options._serverConfig.value == true`: 개별 설정 전송
   - `alwaysSendMessage == true`: `new String[0]` (활성) 또는 `null` (비활성)
 
 ### 3-8. processConfigChangePacket 권한 확인 [서버]
 
-- [ ] `localUserName == username` 비교: 원본은 `==` 참조 비교 — **`equals()`로 교체 필수** (1.21.1에서 문자열 인터닝 보장 없음)
+- [x] `localUserName == username` 비교: 원본 `==` → `equals()`로 교체 완료 (SmartMovingServer.hasPermission())
 
 ### 3-9. resetFallDistance() [서버]
 
-- [ ] `player.fallDistance = 0`
-- [ ] `player.setVelocity(vel.x, 0.08, vel.z)` (원본: `motionY = 0.08` — 중력 상쇄)
-- [ ] 조건: `isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping`
+- [x] `player.fallDistance = 0`
+- [x] `player.setVelocity(vel.x, 0.08, vel.z)` (원본: `motionY = 0.08` — 중력 상쇄)
+- [x] 조건: `isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping`
 
 ---
 
