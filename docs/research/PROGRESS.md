@@ -101,7 +101,7 @@
 - [x] `Compat.java`
 - [x] `FeetClimbing.java`
 - [x] `HandsClimbing.java`
-- [ ] `IEntityPlayerMP.java`
+- [x] `IEntityPlayerMP.java`
 - [ ] `IEntityPlayerSP.java`
 - [ ] `ILocalUserNameProvider.java`
 - [ ] `IPacketReceiver.java`
