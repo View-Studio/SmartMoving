@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving;
 
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.ModInitializer;
 
 public class SmartMoving implements ModInitializer {
@@ -8,5 +9,6 @@ public class SmartMoving implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        SmartMovingConfig.load();
     }
 }

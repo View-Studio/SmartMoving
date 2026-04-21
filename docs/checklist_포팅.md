@@ -12,23 +12,23 @@
 
 ### 1-1. Java enum 변환
 
-- [ ] `HandsClimbing` Typesafe Enum → Java enum
+- [x] `HandsClimbing` Typesafe Enum → Java enum
   - 값: `None, Sink, TopHold, BottomHold, Up, FastUp`
   - 필수 메서드: `max()`, `IsRelevant()`, `IsUp()`, `ToUp()`, `ToDown()`
-- [ ] `FeetClimbing` Typesafe Enum → Java enum
+- [x] `FeetClimbing` Typesafe Enum → Java enum
   - 값: `None, BaseHold, BaseWithHands, TopWithHands, SlowUpWithHoldWithoutHands, SlowUpWithSinkWithoutHands, FastUp`
-- [ ] `ClimbGap` 타입 변환
+- [x] `ClimbGap` 타입 변환
   - 원본: Block+Meta int 쌍 → 대상: `BlockState` 단일 객체 (null=미설정)
 
 ### 1-2. SmartStatistics 이동 데이터 구현
 
-- [ ] `totalVerticalDistance`, `currentVerticalSpeed` 등 SmartStatistics 이동 데이터 직접 구현
+- [x] `totalVerticalDistance`, `currentVerticalSpeed` 등 SmartStatistics 이동 데이터 직접 구현
   - 원본은 SmartRender의 SmartStatistics에 의존 → 1.21.1에서 직접 구현 필요
-  - [미확인 — 필요한 전체 필드 목록 SmartStatistics 원본 재확인 필요]
+  - animation_system.md 기반으로 전체 필드 목록 확인 후 구현 완료
 
 ### 1-3. moveFlying 비표준 공식 구현
 
-- [ ] `moveFlying(speed, strafe, upward, forward)` 독립 메서드 구현
+- [x] `moveFlying(speed, strafe, upward, forward)` 독립 메서드 구현
   - 공식: `sqrt(sqrt(x²+z²) + y²)` — 표준 3D 유클리드 거리와 **다름**
   - 원본 코드: `MathHelper.sqrt_float(MathHelper.sqrt_float(x*x + z*z) + y*y)`
   - vanilla `applyMovementInput()` 사용 금지 (공식 불일치)
@@ -36,13 +36,13 @@
 
 ### 1-4. Factor() 유틸 메서드
 
-- [ ] `Factor(x, x0, x1)` 선형 보간 유틸 구현
+- [x] `Factor(x, x0, x1)` 선형 보간 유틸 구현
   - 공식: `(x - x0) / (x1 - x0)` — 0~1 클램프
   - 애니메이션 시스템 전반에서 사용
 
 ### 1-5. Button / 키입력 에지 감지
 
-- [ ] SM 전용 키바인딩 Fabric `KeyBinding` 등록
+- [x] SM 전용 키바인딩 Fabric `KeyBinding` 등록
   - Grab 키 (`grabButton`): 헤드점프 차지, 클라이밍 제어
   - `WasPressed` (rising edge) / `Pressed` (홀드 상태) 직접 구현
   - [미확인 — SM이 사용하는 전체 커스텀 키 목록 Button.md 재확인 필요]
@@ -694,7 +694,7 @@
 
 ### 13-1. SmartMovingConfig → 1.21.1 설정 이식
 
-- [ ] Config 파일 로드/저장 로직 재구현 (`Properties` 기반)
+- [x] Config 파일 로드/저장 로직 재구현 (`Properties` 기반) — Phase 1 완료 (java.util.Properties 단순화)
 - [ ] 서버 설정(`ServerConfig`) vs 클라이언트 설정(`Options`) 분리 유지
 - [ ] `Config = ServerConfig` / `Config = Options` 전환 상태 관리
 
