@@ -50,7 +50,7 @@
 - [x] `SmartStatistics.java`
 - [x] `SmartStatisticsContext.java`
 - [x] `SmartStatisticsData.java`
-- [ ] `SmartStatisticsDatas.java`
+- [x] `SmartStatisticsDatas.java`
 - [ ] `SmartStatisticsFactory.java`
 - [ ] `SmartStatisticsOther.java`
 
