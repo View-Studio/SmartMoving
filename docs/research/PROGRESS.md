@@ -73,7 +73,7 @@
 ### net.smart.core
 - [x] `SmartCoreClassVisitor.java`
 - [x] `SmartCoreContainer.java`
-- [ ] `SmartCoreEventHandler.java`
+- [x] `SmartCoreEventHandler.java`
 - [ ] `SmartCoreInfo.java`
 - [ ] `SmartCoreMethodVisitor.java`
 - [ ] `SmartCorePlugin.java`
