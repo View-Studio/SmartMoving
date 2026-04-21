@@ -540,11 +540,137 @@ if(moving.heightOffset == -1) {
 
 ---
 
-## 6. 미확인 항목
+## 6. 확인 완료 항목 (구 미확인)
 
-- `jumpMotionX`, `jumpMotionZ` 스냅샷이 저장되는 정확한 타이밍 (handleJumping 시작 시점 추정)
-- `Config.getJumpExhaustionGain()` 내부 공식 세부값 (config 파일에서 확인 필요)
-- `leftJumpCount`, `rightJumpCount`, `backJumpCount` 더블클릭 카운터의 정확한 임계값 (방향 점프 트리거 조건)
-- `wallJumpCount` 최대값 및 continueWallJumping 전환 조건 세부 로직
-- `getLeaningPitch()` 증가/감소 속도 (수치 미확인 — LivingEntity.tickMovement에서 계산)
-- `getPoses()` 반환값이 실제로 사용되는 코드 경로
+### jumpMotionX/Z 저장 타이밍 (A-07 확인 완료)
+
+`handleJumping()` 메서드 최상단에서 `tryJump()` 호출 전에 무조건 저장.
+
+```java
+// SmartMovingSelf.handleJumping() 내부
+jumpMotionX = sp.motionX;  // tryJump() 호출 전, 단 한 곳에서만 저장
+jumpMotionZ = sp.motionZ;
+```
+
+`tryJump()` 내부에서는 저장하지 않고 읽기만 함.
+`handleWallJumping()`에서 벽 반사 각도 계산에 사용:
+```java
+float movementAngle = getAngle(jumpMotionZ, -jumpMotionX);
+jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
+```
+
+---
+
+### 더블클릭 카운터 임계값 (A-05 확인 완료)
+
+`Options.angleJumpDoubleClickTicks()` = `(int)Math.ceil(_angleJumpDoubleClickTicks.value)`
+`_angleJumpDoubleClickTicks.up(3F, 2F)` → 기본값 **3틱**, 최솟값 2틱
+
+카운터 동작:
+```java
+if(leftButton.StartPressed) {
+    if(leftJumpCount == 0)
+        leftJumpCount = Options.angleJumpDoubleClickTicks(); // 첫 클릭: 타이머 세팅
+    else
+        leftJumpCount = -1; // 두 번째 클릭: 발동 예약
+} else if(leftJumpCount > 0)
+    leftJumpCount--;  // 매 틱 감소
+// rightJumpCount, backJumpCount 동일 패턴
+```
+
+발동 조건 (`handleJumping()` 내):
+```java
+int left = 0, back = 0;
+if(leftJumpCount == -1)  left++;
+if(rightJumpCount == -1) left--;
+if(backJumpCount == -1)  back++;
+
+if(left != 0 || back != 0) {
+    int angle;
+    if(left > 0)      angle = back == 0 ? 270 : 225;
+    else if(left < 0) angle = back == 0 ? 90  : 135;
+    else              angle = 180;
+    if(tryJump(Config.Angle, null, null, sp.rotationYaw + angle))
+        angleJumpType = ((360 - angle) / 45) % 8;
+    leftJumpCount = 0; rightJumpCount = 0; backJumpCount = 0;
+}
+```
+
+대각선 우선순위 처리 (좌/우와 뒤가 동시 -1 → -2 대기):
+```java
+if(rightJumpCount == -2 && backJumpCount <= 0) rightJumpCount = -1;
+if(leftJumpCount  == -2 && backJumpCount <= 0) leftJumpCount  = -1;
+if(backJumpCount  == -2 && (leftJumpCount <= 0 || rightJumpCount <= 0)) backJumpCount = -1;
+
+if(rightJumpCount == -1 && backJumpCount > 0) rightJumpCount = -2;
+if(leftJumpCount  == -1 && backJumpCount > 0) leftJumpCount  = -2;
+if(backJumpCount  == -1 && (leftJumpCount > 0 || rightJumpCount > 0)) backJumpCount = -2;
+```
+
+각도 점프 가능 조건:
+```java
+boolean canAngleJump = !isSleeping && sp.onGround && !isCrawling && !isClimbing
+                       && !isClimbCrawling && !isSwimming && !isDiving;
+boolean canSideJump  = Config.isSideJumpEnabled() && canAngleJump;
+boolean canLeftJump  = canSideJump && !rightButton.Pressed;
+boolean canRightJump = canSideJump && !leftButton.Pressed;
+boolean canBackJump  = Config.isBackJumpEnabled() && canAngleJump
+                       && !forwardButton.Pressed && !isStandupSprintingOrRunning();
+```
+
+---
+
+### wallJumpCount + continueWallJumping (A-06 확인 완료)
+
+`Options._wallJumpDoubleClickTicks.up(3F, 2F)` → 기본값 **3틱**, 최솟값 2틱 (카운트다운 타이머)
+
+```java
+// 더블클릭 모드
+if(Options._wallJumpDoubleClick.value) {
+    if(canWallJumping) {
+        if(jumpButton.StartPressed) {
+            if(wallJumpCount == 0)
+                wallJumpCount = Options.wallJumpDoubleClickTicks(); // 첫 클릭: 타이머
+            else {
+                triggerWallJumping = true; // 두 번째 클릭: 발동
+                wallJumpCount = 0;
+            }
+        } else if(wallJumpCount > 0)
+            wallJumpCount--;
+    } else
+        wallJumpCount = 0;
+} else
+    triggerWallJumping = jumpButton.StartPressed; // 싱글클릭 모드
+```
+
+`canWallJumping` 조건:
+```java
+boolean canWallJumping = Config.isWallJumpEnabled() && !isHeadJumping
+                         && !sp.onGround && !isClimbing && !isSwimming
+                         && !isDiving && !isLevitating && !isFlying;
+```
+
+`wantWallJumping` 유지 조건:
+```java
+wantWallJumping = canWallJumping &&
+    (triggerWallJumping || continueWallJumping ||
+    (wantWallJumping && jumpButton.Pressed && !sp.isCollidedHorizontally));
+```
+
+`continueWallJumping` true 설정 (handleWallJumping() 내 tryJump 성공 시):
+```java
+continueWallJumping = !isHeadJumping;
+```
+
+`continueWallJumping` false 설정:
+```java
+if(continueWallJumping && (sp.onGround || isClimbing || !jumpButton.Pressed))
+    continueWallJumping = false;
+```
+
+---
+
+### 미확인 (이 파일 범위 외)
+
+- `getLeaningPitch()` 증가/감소 속도 → vanilla `LivingEntity.java` 리서치 (B-05, R-08)
+- `getPoses()` 반환값 경로 → A-11, R-04

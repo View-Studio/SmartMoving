@@ -214,6 +214,27 @@ Minecraft 1.7.10의 마우스 버튼 keyCode 인코딩: 마우스 버튼 인덱�
 
 ---
 
+## SM 커스텀 키 전체 목록 (A-08 확인 완료)
+
+SmartMovingOptions.java에 선언된 KeyBinding은 4개. MC 기본 키(앞/뒤/좌/우/점프/스니크)는 SM이 새로 추가하지 않고 기존 바인딩을 Button으로 래핑하여 사용.
+
+| 필드명 | 기본 키 | 역할 |
+|--------|---------|------|
+| `keyBindGrab` | LCONTROL (왼쪽 Ctrl) | 잡기(Grab) — 클라이밍 표면 잡기, 헤드점프 등에 사용 |
+| `keyBindConfigToggle` | F9 | 인게임 SmartMoving 기능 전체 on/off 토글 |
+| `keyBindSpeedIncrease` | O | 이동 속도 증가 |
+| `keyBindSpeedDecrease` | I | 이동 속도 감소 |
+
+SmartMovingContext.initialize()에서 4개 모두 `ClientRegistry.registerKeyBinding()` 호출.
+
+SM 내부 Button 인스턴스 (SmartMovingSelf에서 사용):
+- `forwardButton`, `backButton`, `leftButton`, `rightButton` → MC 이동 키 래핑
+- `jumpButton` → MC 점프 키 래핑
+- `sneakButton` → MC 스니크 키 래핑
+- `grabButton` → `keyBindGrab` 래핑
+
+---
+
 ## 주요 관찰 사항
 
 1. **에지 감지 패턴**: `StartPressed`/`StopPressed`로 rising/falling edge를 매 틱 계산. SmartMoving에서 특정 동작(점프 시작, 클라이밍 시작 등)을 "버튼을 새로 눌렀을 때" 트리거하는 데 사용.

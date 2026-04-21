@@ -28,10 +28,10 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | A-02 | `playerSwimWaterBorder` 정확한 상수값 | SmartMovingContext.java | [x] → `original/smartmoving/moving/SmartMovingContext.md` (런타임 변수, 공식 추가) |
 | A-03 | `SwimSoundDistance` 정확한 상수값 | SmartMovingContext.java | [x] → `original/smartmoving/moving/SmartMovingContext.md` |
 | A-04 | `Config.getJumpExhaustionGain()` 내부 공식 전체 | SmartMovingConfig.java / SmartMovingOptions.java | [x] → `original/smartmoving/config/SmartMovingClientConfig.md` |
-| A-05 | `leftJumpCount`, `rightJumpCount`, `backJumpCount` 더블클릭 카운터 임계값 | SmartMovingSelf.java (jump 섹션) | [ ] |
-| A-06 | `wallJumpCount` 최대값 및 `continueWallJumping` 전환 조건 전체 | SmartMovingSelf.java (wallJump 섹션) | [ ] |
-| A-07 | `jumpMotionX`, `jumpMotionZ` 저장 타이밍 — handleJumping 어느 지점에서 저장하는지 | SmartMovingSelf.java | [ ] |
-| A-08 | SM이 사용하는 전체 커스텀 키 목록 + 각 키의 역할 | Button.java | [ ] |
+| A-05 | `leftJumpCount`, `rightJumpCount`, `backJumpCount` 더블클릭 카운터 임계값 | SmartMovingSelf.java (jump 섹션) | [x] → `mapping/jump.md` |
+| A-06 | `wallJumpCount` 최대값 및 `continueWallJumping` 전환 조건 전체 | SmartMovingSelf.java (wallJump 섹션) | [x] → `mapping/jump.md` |
+| A-07 | `jumpMotionX`, `jumpMotionZ` 저장 타이밍 — handleJumping 어느 지점에서 저장하는지 | SmartMovingSelf.java | [x] → `mapping/jump.md` |
+| A-08 | SM이 사용하는 전체 커스텀 키 목록 + 각 키의 역할 | Button.java | [x] → `original/smartmoving/moving/Button.md` |
 | A-09 | `SmartMovingClient.processBlockCode()` 원본 구현 전체 — 채팅 파싱 방식, 마커 포맷, 12개 기능 배열 구조 | SmartMovingClient.java | [ ] |
 | A-10 | `SmartMovingSelf.updateEntityActionState()` — processBlockCode 결과가 어느 필드에 어떻게 반영되는지 | SmartMovingSelf.java | [ ] |
 | A-11 | `getPoses()` 반환값이 사용되는 경로 전체 (어디서 호출, 어떻게 사용) | SmartMovingSelf.java 또는 SmartMovingPlayerBase.java | [ ] |
@@ -135,7 +135,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/original/smartmoving/moving/Button.md` (추가) / `docs/research/mapping/jump.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] — A-05~A-08 전체 확인. 기본값 3틱/최솟값 2틱 더블클릭 타이머, jumpMotionX/Z는 handleJumping() 최상단 단일 저장, 커스텀 키 4개 확인.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01
-- 다음 진행: **R-02** (Button + Jump 카운터 + wallJump 조건 확인)
+- 완료된 청크: R-01, R-02
+- 다음 진행: **R-03** (processBlockCode + updateEntityActionState 확인)
