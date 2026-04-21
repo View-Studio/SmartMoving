@@ -187,4 +187,4 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 - [x] 클라이밍/천장클라이밍
 - [x] 점프 전체
 - [x] 이동 속도/물리
-- [ ] 네트워크/서버 동기화
+- [x] 네트워크/서버 동기화
