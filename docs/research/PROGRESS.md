@@ -77,7 +77,7 @@
 - [x] `SmartCoreInfo.java`
 - [x] `SmartCoreMethodVisitor.java`
 - [x] `SmartCorePlugin.java`
-- [ ] `SmartCoreTransformation.java`
+- [x] `SmartCoreTransformation.java`
 - [ ] `SmartCoreTransformer.java`
 
 ### net.smart.moving (핵심)
