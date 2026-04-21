@@ -19,6 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 5-4: jumping 필드 @Shadow — SM 조건 필터 적용 시 참조 (tickEssential 내부)
  * 5-5 (클라이언트): isClimbing() 오버라이드 — SM 클라이밍 중 false 반환
  * 5-6: applyClimbingSpeed() 취소 — SM 클라이밍 중 x/z ±0.15F 클램프 이중 차단
+ * 6-2 (클라이언트): isInSwimmingPose() 오버라이드 — SM 크롤링 중 false 반환
  */
 @Mixin(LivingEntity.class)
 @Environment(EnvType.CLIENT)
@@ -91,6 +92,27 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(velocity);
+        }
+    }
+
+    /**
+     * 6-2 (클라이언트): SM 크롤링 중 isInSwimmingPose() = false 강제.
+     *
+     * SM 크롤링은 SWIMMING 포즈를 사용하지만, vanilla isInSwimmingPose()=true가 되면:
+     *   - setupTransforms Branch 2: X-90° 회전 + translate(0,-1,0.3) → 렌더 깨짐
+     *   - updateLeaningPitch(): leaningPitch가 1.0까지 상승 → 자동 회전 발생
+     *   - animateModel(): model.leaningPitch 반영 → setAngles 전 pitch 왜곡
+     *
+     * 클라이언트 측: ClientPlayerEntity 인스턴스 확인.
+     * 서버 측 → MixinLivingEntity.sm_isInSwimmingPose_server()
+     * Yarn: isInSwimmingPose (intermediary: method_20232 확인 완료)
+     */
+    @Inject(method = "isInSwimmingPose", at = @At("HEAD"), cancellable = true)
+    private void sm_isInSwimmingPose_client(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isCrawlClimbing) {
+            cir.setReturnValue(false);
         }
     }
 }

@@ -374,25 +374,27 @@
 
 ### 6-1. [위험] getBaseDimensions() Mixin [클라이언트 + 서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `LivingEntity.getBaseDimensions(EntityPose)` (method_55694)
+- [x] **Mixin 대상**: `PlayerEntity.getBaseDimensions(EntityPose)` (method_55694)
   - **at**: `@At("HEAD")`, `cancellable = true`
-  - SM 크롤링 상태: 커스텀 `EntityDimensions` 반환 (높이 1블록, 원본과 동일)
-    - vanilla SWIMMING 포즈 기본 히트박스 0.6H와 다르므로 반드시 커스텀 반환 필요
-  - SM 헤드점프 상태: 헤드점프용 `EntityDimensions` 반환
+  - 서버: `MixinPlayerEntity.sm_getBaseDimensions_server()` — `isCrawling && SWIMMING` → `0.6W × 1.0H, eyeHeight 0.4F`
+  - 클라이언트: `MixinPlayerEntityClient.sm_getBaseDimensions_client()` — 동일 로직
   - `LivingEntity.getDimensions(EntityPose)` 는 **final** → `getBaseDimensions()` 우회가 유일한 진입점
+  - `MixinPlayerEntity` → `smartmoving.mixins.json`, `MixinPlayerEntityClient` → `smartmoving.client.mixins.json` 등록 완료
+  - SM 헤드점프 상태: 헤드점프용 `EntityDimensions` 반환 — TODO Phase 10
 
 ### 6-2. [위험] isInSwimmingPose() 오버라이드 [클라이언트 + 서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `LivingEntity.isInSwimmingPose()` (또는 PlayerEntity)
+- [x] **Mixin 대상**: `LivingEntity.isInSwimmingPose()` (method_20232)
   - **at**: `@At("HEAD")`, `cancellable = true`
-  - **SM 크롤링 상태** 시: `ci.cancel()` + `false` 반환
+  - 서버: `MixinLivingEntity.sm_isInSwimmingPose_server()` — `isCrawling || isCrawlClimbing` → `false`
+  - 클라이언트: `MixinLivingEntityClient.sm_isInSwimmingPose_client()` — 동일 로직
   - **목적**: `setupTransforms()` Branch 2 (몸 90° 눕힘 + `translate(0, -1, 0.3)`) 자동 발동 방지
-  - **목적**: `model.sneaking` 자동 적용 방지
-  - ⚠️ SWIMMING 포즈를 크롤링에 쓰되 `isInSwimmingPose()` 만 false 반환하는 방식
+  - **목적**: `updateLeaningPitch()` 자동 1.0 상승 차단 → Phase 12 setAngles Mixin에서 직접 제어
+  - ⚠️ SWIMMING 포즈를 크롤링에 쓰되 `isInSwimmingPose()` 만 false 반환하는 방식 확정
 
 ### 6-3. EntityPose 전략 결정 [클라이언트 + 서버]
 
-- [ ] SM 크롤링: `EntityPose.SWIMMING` 사용 + `isInSwimmingPose()` 억제
+- [x] SM 크롤링: `EntityPose.SWIMMING` 사용 + `isInSwimmingPose()` 억제 — 확정
 - [ ] SM 헤드점프: `EntityPose.SWIMMING` 또는 SM 전용 포즈 (SM 전용 enum 등록 방법 확인 필요)
   - [미확인 — 1.21.1에서 커스텀 EntityPose 추가 방법 확인 필요]
 - [ ] SM 슬라이딩: 적절한 포즈 결정 필요 — [미확인 — 추가 리서치 필요]
@@ -400,14 +402,14 @@
 ### 6-4. updateLeaningPitch 간섭 대응 [클라이언트]
 
 - [ ] SWIMMING 포즈 사용 시 `leaningPitch += 0.09F/틱` 자동 증가 (11틱에 1.0 도달)
-  - SM 크롤링에서 SWIMMING 포즈 사용 시: leaningPitch 증가가 납작한 자세를 만들어 **의도한 동작일 수 있음**
-  - SM 수영/잠수에서: leaningPitch=-90° 자동 회전이 SM 자체 각도와 충돌 → **억제 필요**
-  - 억제 방법: `model.leaningPitch = 0` 강제 세팅 (setAngles Mixin에서)
+  - 6-2에서 `isInSwimmingPose()=false` → `updateLeaningPitch()` 감소 경로 진입 → leaningPitch 0으로 수렴
+  - SM 수영/잠수에서: leaningPitch 자동 회전이 SM 자체 각도와 충돌 → **억제 필요**
+  - 억제 방법: `model.leaningPitch = 0` 강제 세팅 (Phase 12 setAngles Mixin에서)
 
 ### 6-5. recalculateDimensions 없음 처리 [클라이언트]
 
 - [ ] `PlayerEntity`에서 `recalculateDimensions()`가 **자동 호출되지 않음**
-  - 헤드점프 착지 시 포즈 전환 + 공간 체크를 SM이 직접 수행
+  - 헤드점프 착지 시 포즈 전환 + 공간 체크를 SM이 직접 수행 — Phase 10에서 구현
   - 1블록 공간에서 스탠딩으로 전환 시도 시: 위 블록 블록 체크 → 불가능하면 SWIMMING 포즈 유지
 
 ---
