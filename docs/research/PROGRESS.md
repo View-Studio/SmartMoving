@@ -141,7 +141,7 @@
 - [x] `SmartMovingRenderPlayerBase.java`
 
 ### net.smart.moving.test
-- [ ] `SmartMovingTestCommand.java`
+- [x] `SmartMovingTestCommand.java`
 - [ ] `SmartMovingTestMod.java`
 
 ### net.smart.properties
