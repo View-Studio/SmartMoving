@@ -117,7 +117,7 @@
 - [x] `SmartMovingOptions.java`
 - [x] `SmartMovingProperties.java`
 - [x] `SmartMovingServerConfig.java`
-- [ ] `SmartMovingServerOptions.java`
+- [x] `SmartMovingServerOptions.java`
 
 ### net.smart.moving.playerapi
 - [ ] `SmartMoving.java`
