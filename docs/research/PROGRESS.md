@@ -98,7 +98,7 @@
 - [x] `SmartMovingPacketStream.java`
 - [x] `Button.java`
 - [x] `ClimbGap.java`
-- [ ] `Compat.java`
+- [x] `Compat.java`
 - [ ] `FeetClimbing.java`
 - [ ] `HandsClimbing.java`
 - [ ] `IEntityPlayerMP.java`
