@@ -103,7 +103,7 @@
 - [x] `HandsClimbing.java`
 - [x] `IEntityPlayerMP.java`
 - [x] `IEntityPlayerSP.java`
-- [ ] `ILocalUserNameProvider.java`
+- [x] `ILocalUserNameProvider.java`
 - [ ] `IPacketReceiver.java`
 - [ ] `IPacketSender.java`
 - [ ] `ISmartMovingClient.java`
