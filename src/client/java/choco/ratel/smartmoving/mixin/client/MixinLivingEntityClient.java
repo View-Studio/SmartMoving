@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingSwimmer;
 import choco.ratel.smartmoving.climbing.ClimbGap;
 import choco.ratel.smartmoving.climbing.FeetClimbing;
 import choco.ratel.smartmoving.climbing.HandsClimbing;
@@ -51,6 +52,17 @@ public abstract class MixinLivingEntityClient {
     private void sm_travel_client(Vec3d movementInput, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
+
+        // [8-1] 매 틱 수영 상태 3분류 갱신
+        SmartMovingSwimmer.updateSwimState(player, sm);
+
+        // [8-2] 수중 이동 처리 — SM이 처리하면 vanilla travel() 취소
+        if (SmartMovingSwimmer.handleSwimming(player, sm, movementInput, this.jumping)) {
+            ci.cancel();
+            return;
+        }
+
+        // [5-1] 클라이밍 처리
         World world = player.getWorld();
         boolean isSmall = sm.isSmall || sm.isCrawling;
 

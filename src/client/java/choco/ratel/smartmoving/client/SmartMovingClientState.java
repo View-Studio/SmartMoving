@@ -72,6 +72,34 @@ public final class SmartMovingClientState {
     /** 작은 크기 상태 (크롤링/슬라이딩) */
     public boolean isSmall;
 
+    // ── 5-8: 클라이밍 이동 거리 누적 (클라이언트 측) ──────────────────────
+    /** 클라이밍 이동 거리 누적 (피로도 계산용). */
+    public double distanceClimbedModified;
+
+    // ── 8-1: 수중 상태 3분류 (SM 고유, vanilla isSwimming()과 별개) ─────────
+    // 원본: SmartMoving.isDipping / isSwimming / isDiving 필드
+    // offset = playerSwimWaterBorder + 0.1625D 기준:
+    //   isDipping: offset < 1.4 (발만 물속)
+    //   isSwimming_sm: 1.4 ≤ offset < 1.9 (수면 수영)
+    //   isDiving: offset ≥ 1.9 (완전 잠수)
+
+    /** 수면에 발만 잠긴 상태. offset < 1.4 */
+    public boolean isDipping;
+
+    /** 수면 수영 상태. 1.4 ≤ offset < 1.9. vanilla isSwimming()과 이름 충돌 방지를 위해 _sm 접미사 사용. */
+    public boolean isSwimming_sm;
+
+    /** 완전 잠수 상태. offset ≥ 1.9 */
+    public boolean isDiving;
+
+    // ── 8-2: 수중 이동 카운터 ─────────────────────────────────────────
+    /** 물속 틱 카운터. isJumpingOutOfWater 조건(>10)에 사용. */
+    public int waterMovementTicks;
+
+    // ── 8-6: 수영 소리 거리 누적 ──────────────────────────────────────
+    /** 수영 소리 누적 거리. SwimSoundDistance(≈1.4286F) 초과 시 소리 재생. */
+    public double distanceSwom;
+
     // ── 인스턴스 관리 ─────────────────────────────────────────────────
 
     private static final Map<UUID, SmartMovingClientState> INSTANCES = new HashMap<>();

@@ -349,7 +349,7 @@
   - 구현: `MixinEntity.sm_beforeMove()` + `sm_afterMove()` (Phase 7 서버 측 구현 완료)
     - beforeMove: ServerPlayerEntity 크롤링/천장 클라이밍 시 STEP_HEIGHT=0 억제
     - afterMove: STEP_HEIGHT 복원 + 클라이밍 이동 거리 누적 (SmartMovingServer.distanceClimbedModified)
-    - 클라이언트 측 STEP_HEIGHT 억제: TODO — 클라이언트 MixinEntityClient 추가 시 구현
+    - 클라이언트 측 STEP_HEIGHT 억제: 구현 완료 — `MixinEntityClient` (Phase 8)
 
 ### 5-9. 벽점프 — calculateSeparateCollisions() [클라이언트]
 
@@ -466,42 +466,48 @@
 
 ### 8-1. 수영 상태 3분류 [클라이언트]
 
-- [ ] `FluidState.getHeight(ShapeContext.absent())` 기반 직접 구현
-  - `isDipping`: 수면 경계 미만
-  - `isSwimming`: 1.4 ~ 1.9 범위
-  - `isDiving`: 1.9 이상 (완전 수중)
-  - [미확인 — SmartMovingContext의 정확한 경계 상수값 확인 필요]
+- [x] `getFluidHeight(FluidTags.WATER) + 0.1625D` = offset 기반 직접 구현
+  - `isDipping`: offset < 1.4
+  - `isSwimming_sm`: 1.4 ≤ offset < 1.9
+  - `isDiving`: offset ≥ 1.9
+  - 구현: `SmartMovingSwimmer.updateSwimState()` (Phase 8)
+  - `waterMovementTicks`: 물속 틱마다 ++, 물 밖이면 0 리셋
 
 ### 8-2. handleSwimming() — travel() Mixin 내부 [클라이언트]
 
-- [ ] SM 수영 상태 시 vanilla `travel()` 수영 분기 skip (`ci.cancel()` 적용)
-- [ ] 감쇠 재현:
-  - dipping: 0.85D
-  - swimming: 0.83D
-  - diving: 수평 0.80D / 수직 0.83D
-- [ ] 물 탈출 점프: `player.setVelocity(vx, 0.3, vz)`
-- [ ] 잠수 상승 (`diveUp`): `jumping` 필드 기반
-- [ ] 수영 속도: `moveFlying(speedFactor × _swimSpeedFactor, ...)` 호출
+- [x] SM 수영 상태 시 vanilla `travel()` 수영 분기 skip (`ci.cancel()` 적용)
+- [x] 감쇠 재현 (swim_dive.md 기준):
+  - dipping: x/z=0.80D, y=0.83D
+  - swimming: 0.85D
+  - diving: 0.83D
+  - [미확인 — speed_physics.md와 값 불일치. swim_dive.md 기준 선택]
+- [x] 물 탈출 점프 ([8-5] 통합): `motionY = 0.30000001192092896D`
+- [x] 잠수 상승 (`diveUp`): `jumping` 필드 기반 (MixinLivingEntityClient @Shadow 경유)
+- [x] 수영 속도: `SmartMovingSwimmer.moveFlying()` — SM 비표준 sqrt(sqrt) 공식 유지
+- [x] 구현: `SmartMovingSwimmer.handleSwimming()` (Phase 8)
 
 ### 8-3. SWIMMING 포즈 leaningPitch 충돌 대응 [클라이언트]
 
 - [ ] SM 수영 상태에서 `model.leaningPitch = 0` 강제 (setAngles Mixin에서)
   - leaningPitch 억제로 vanilla -90° 자동 회전 차단
   - SM setAngles에서 자체 45° 기울기 애니메이션 구현
+  - → **Phase 12 (렌더/애니메이션) 로 이관**
 
 ### 8-4. heightOffset(-1F) SWIMMING 포즈 이중 적용 방지 [클라이언트]
 
 - [ ] SWIMMING 포즈 히트박스 0.6H + SM heightOffset(-1F) 이중 적용 방지 설계
   - `getPositionOffset()`에서 SWIMMING 포즈 오프셋 vs SM 헤드점프 오프셋 누적 계산
+  - → **Phase 12 (렌더/히트박스) 로 이관**
 
 ### 8-5. isJumpingOutOfWater [클라이언트]
 
-- [ ] `player.horizontalCollision` 감지 + `player.setVelocity(vx, 0.3, vz)` 적용
+- [x] `player.horizontalCollision` + `waterMovementTicks > 10` + `diveUp` → `motionY = 0.30000001192092896D`
+  - 구현: `SmartMovingSwimmer.handleSwimming()` 내부 (Phase 8)
 
 ### 8-6. 수영 소리 [클라이언트]
 
-- [ ] `SwimSoundDistance` 누적 후 임계값 도달 시 재생
-  - [미확인 — vanilla 자동 수영 소리 재생 여부와 SM 소리 중복 여부 확인 필요]
+- [x] `distanceSwom` 누적 → `SwimSoundDistance(1/0.7F)` 초과 시 `ENTITY_PLAYER_SWIM` 재생
+  - 구현: `MixinEntityClient.sm_afterMove_client()` (Phase 8)
 
 ---
 
