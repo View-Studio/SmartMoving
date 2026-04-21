@@ -78,7 +78,7 @@
 - [x] `SmartCoreMethodVisitor.java`
 - [x] `SmartCorePlugin.java`
 - [x] `SmartCoreTransformation.java`
-- [ ] `SmartCoreTransformer.java`
+- [x] `SmartCoreTransformer.java`
 
 ### net.smart.moving (핵심)
 - [ ] `SmartMovingSelf.java` ← 103KB, 최우선, 크면 시스템별로 쪼갤 것
