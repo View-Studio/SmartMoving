@@ -104,7 +104,7 @@
 - [x] `IEntityPlayerMP.java`
 - [x] `IEntityPlayerSP.java`
 - [x] `ILocalUserNameProvider.java`
-- [ ] `IPacketReceiver.java`
+- [x] `IPacketReceiver.java`
 - [ ] `IPacketSender.java`
 - [ ] `ISmartMovingClient.java`
 - [ ] `ISmartMovingSelf.java`
