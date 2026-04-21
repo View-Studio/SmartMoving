@@ -136,7 +136,7 @@
 - [x] `RenderPlayer.java`
 
 ### net.smart.moving.render.playerapi
-- [ ] `SmartMoving.java`
+- [x] `SmartMoving.java`
 - [ ] `SmartMovingModelPlayerBase.java`
 - [ ] `SmartMovingRenderPlayerBase.java`
 
