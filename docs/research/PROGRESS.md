@@ -181,7 +181,7 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 저장 위치: `docs/research/mapping/`
 각 시스템의 원본 + vanilla 리서치가 **둘 다 완료된 후**에만 진행.
 
-- [ ] 애니메이션 시스템
+- [x] 애니메이션 시스템
 - [ ] 수영/잠수
 - [ ] 크롤링/슬라이딩
 - [ ] 클라이밍/천장클라이밍
