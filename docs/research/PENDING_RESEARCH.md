@@ -24,10 +24,10 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 | ID | 미확인 내용 | 원본 소스 위치 | 상태 |
 |----|------------|--------------|------|
-| A-01 | `SwimCrawlWaterBorder` 정확한 상수값 | SmartMovingContext.java | [ ] |
-| A-02 | `playerSwimWaterBorder` 정확한 상수값 | SmartMovingContext.java | [ ] |
-| A-03 | `SwimSoundDistance` 정확한 상수값 | SmartMovingContext.java | [ ] |
-| A-04 | `Config.getJumpExhaustionGain()` 내부 공식 전체 | SmartMovingConfig.java / SmartMovingOptions.java | [ ] |
+| A-01 | `SwimCrawlWaterBorder` 정확한 상수값 | SmartMovingContext.java | [x] → `original/smartmoving/moving/SmartMovingContext.md` |
+| A-02 | `playerSwimWaterBorder` 정확한 상수값 | SmartMovingContext.java | [x] → `original/smartmoving/moving/SmartMovingContext.md` (런타임 변수, 공식 추가) |
+| A-03 | `SwimSoundDistance` 정확한 상수값 | SmartMovingContext.java | [x] → `original/smartmoving/moving/SmartMovingContext.md` |
+| A-04 | `Config.getJumpExhaustionGain()` 내부 공식 전체 | SmartMovingConfig.java / SmartMovingOptions.java | [x] → `original/smartmoving/config/SmartMovingClientConfig.md` |
 | A-05 | `leftJumpCount`, `rightJumpCount`, `backJumpCount` 더블클릭 카운터 임계값 | SmartMovingSelf.java (jump 섹션) | [ ] |
 | A-06 | `wallJumpCount` 최대값 및 `continueWallJumping` 전환 조건 전체 | SmartMovingSelf.java (wallJump 섹션) | [ ] |
 | A-07 | `jumpMotionX`, `jumpMotionZ` 저장 타이밍 — handleJumping 어느 지점에서 저장하는지 | SmartMovingSelf.java | [ ] |
@@ -113,7 +113,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/original/smartmoving/moving/SmartMovingContext.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] — A-01/A-02/A-03은 기존 파일에 이미 기록됨. A-02 런타임 공식 SmartMovingContext.md에 추가. A-04는 SmartMovingClientConfig.md에 이미 기록됨.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: 없음
-- 다음 진행: **R-01** (SmartMovingContext 상수 확인)
+- 완료된 청크: R-01
+- 다음 진행: **R-02** (Button + Jump 카운터 + wallJump 조건 확인)

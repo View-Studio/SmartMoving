@@ -195,6 +195,26 @@ import net.smart.render.*;              // SmartRenderContext (간접 — 상속
 
 ---
 
+## playerSwimWaterBorder — 런타임 계산값 (상수 아님)
+
+`SmartMovingSelf.handleSwimming()` 내 지역 변수. 매 틱 계산.
+
+```java
+// SmartMovingSelf.handleSwimming() 내부
+double playerSwimWaterBorder = totalSwimWaterBorder - j - j_offset;
+// totalSwimWaterBorder = getMaxPlayerLiquidBetween(sp.boundingBox.maxY - 1.8, sp.boundingBox.maxY + 1.2)
+// j           = MathHelper.floor_double(sp.boundingBox.minY)  (발 밑 블록 Y좌표)
+// j_offset    = sp.boundingBox.minY - j                       (블록 내 소수점 오프셋)
+```
+
+사용 위치 (SmartMovingSelf.java):
+- `if(isCrawling && playerSwimWaterBorder > SwimCrawlWaterTopBorder)`
+- `dippingDepth = (float)playerSwimWaterBorder`
+- `float playerCrawlWaterBorder = dippingDepth + wasHeightOffset`
+- `else if(playerSwimWaterBorder >= 0 && playerSwimWaterBorder <= 2)`
+
+---
+
 ## 전역 싱글톤 객체
 
 ```java
