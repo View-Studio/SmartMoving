@@ -231,31 +231,35 @@
 
 ### 4-1. SmartMovingClient @Unique 필드 [클라이언트]
 
-- [ ] `jumpPending: boolean` — 다음 처리 틱에 점프 실행
-- [ ] `jumpAvoided: boolean` — vanilla jump() 회피 여부
-- [ ] `jumpCharge: float` — 차지 점프 누적 (0.0~Config.MaxJumpCharge)
-- [ ] `headJumpCharge: float` — 헤드점프 차지 누적
-- [ ] `blockJumpTillButtonRelease: boolean` — 버튼 릴리즈까지 점프 차단
-- [ ] `isSprintJump: boolean` — 스프린트 점프 상태
-- [ ] `isHeadJumping: boolean` — 헤드점프 상태
-- [ ] `isWallJumping: boolean` — 벽점프 상태
-- [ ] `angleJumpType: int` — 방향 점프 타입 (0~7)
-- [ ] `continueWallJumping: boolean` — 벽점프 연속 여부
-- [ ] `heightOffset: float` — 히트박스 오프셋 (헤드점프 시 -1F)
-- [ ] `isCrawling: boolean` — 크롤링 상태
-- [ ] `isSliding: boolean` — 슬라이딩 상태
-- [ ] 기타 이동 상태 플래그 (isClimbing, isCeilingClimbing 등)
+- [x] `jumpPending: boolean` — 다음 처리 틱에 점프 실행
+- [x] `jumpAvoided: boolean` — vanilla jump() 회피 여부
+- [x] `jumpCharge: float` — 차지 점프 누적 (0.0~Config.MaxJumpCharge)
+- [x] `headJumpCharge: float` — 헤드점프 차지 누적
+- [x] `blockJumpTillButtonRelease: boolean` — 버튼 릴리즈까지 점프 차단
+- [x] `isSprintJump: boolean` — 스프린트 점프 상태
+- [x] `isHeadJumping: boolean` — 헤드점프 상태
+- [x] `isWallJumping: boolean` — 벽점프 상태
+- [x] `angleJumpType: int` — 방향 점프 타입 (0~7)
+- [x] `continueWallJumping: boolean` — 벽점프 연속 여부
+- [x] `heightOffset: float` — 히트박스 오프셋 (헤드점프 시 -1F)
+- [x] `isCrawling: boolean` — 크롤링 상태
+- [x] `isSliding: boolean` — 슬라이딩 상태
+- [x] 기타 이동 상태 플래그 (`isClimbing`, `isCrawlClimbing`, `isCeilingClimbing`, `isSmall`)
+  - Map<UUID, SmartMovingClientState> 방식으로 구현 (SmartMovingClientState.java)
 
 ### 4-2. tickEssential() 무조건 호출 [클라이언트]
 
-- [ ] **Mixin 대상**: `ClientPlayerEntity.tickMovement()`
+- [x] **Mixin 대상**: `ClientPlayerEntity.tickMovement()`
   - **at**: `@At("HEAD")`
-  - SM isActive 여부 무관하게 `moving.tickEssential()` 항상 호출
+  - SM isActive 여부 무관하게 `sm.tickEssential()` 항상 호출
+  - `tickEssential()` 내부는 TODO Phase 5 (상태 패킷 전송, 키 입력 처리)
 
 ### 4-3. isConnectedToRemoteServer() [클라이언트]
 
-- [ ] `MinecraftClient.getInstance().getServer() == null` 기준으로 구현
-  - [미확인 — 1.21.1 싱글플레이어 판별 정확한 API 확인 필요]
+- [x] `MinecraftClient.getInstance().getServer() == null` 기준으로 구현
+  - `getServer()`는 IntegratedServer 반환 — 싱글/LAN: non-null, 원격: null
+  - 원본 3중 조건 → 1.21.1 단일 조건으로 단순화 (network_sync.md 6절 확인)
+  - `SmartMovingClientState.isConnectedToRemoteServer()` 정적 메서드로 구현
 
 ### 4-4. processBlockCode — 채팅 코드 설정 [클라이언트]
 
@@ -263,6 +267,7 @@
   - 채팅 텍스트 `"§0§1...§f§f"` 앞 4자·뒤 4자 마커 감지
   - 12개 기능 on/off 파싱
   - [미확인 — 1.21.1 Text 시스템에서 `§` 코드 접근 방법 확인 필요]
+  - stub 메서드만 작성 (SmartMovingClient.processBlockCode), 실제 구현은 Phase 7/13
 
 ---
 
