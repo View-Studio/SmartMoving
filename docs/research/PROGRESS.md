@@ -47,7 +47,7 @@
 
 ### net.smart.render.statistics
 - [x] `IEntityPlayerSP.java`
-- [ ] `SmartStatistics.java`
+- [x] `SmartStatistics.java`
 - [ ] `SmartStatisticsContext.java`
 - [ ] `SmartStatisticsData.java`
 - [ ] `SmartStatisticsDatas.java`
