@@ -41,7 +41,7 @@
 - [x] `ModelEarsRenderer.java`
 
 ### net.smart.render.playerapi
-- [ ] `SmartRender.java`
+- [x] `SmartRender.java`
 - [ ] `SmartRenderModelPlayerBase.java`
 - [ ] `SmartRenderRenderPlayerBase.java`
 
