@@ -275,7 +275,7 @@
 
 ### 5-1. [위험] travel() Mixin — 이동 진입점 [클라이언트 + 서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `LivingEntity.travel(Vec3d movementInput)` (method 확인 필요)
+- [x] **Mixin 대상**: `LivingEntity.travel(Vec3d movementInput)` (method 확인 필요)
   - **at**: `@At("HEAD")` — SM 상태 시 vanilla 수영/용암 분기 skip을 위해
   - SM 상태 활성 시 `ci.cancel()` 후 SM 자체 파이프라인 실행:
     ```
@@ -284,10 +284,11 @@
     addMovementStat → handleExhaustion
     ```
   - **주의**: `@Overwrite` 사용 금지, 상태별 별도 Mixin 또는 cancellable `@Inject` 권장
+  - 구현: `MixinLivingEntity.sm_travel()` — TODO Phase 7/8 파이프라인 구현 후 ci.cancel() 활성화
 
 ### 5-2. [위험] jump() 인터셉트 [클라이언트] ★★★★☆
 
-- [ ] **Mixin 대상**: `LivingEntity.jump()` (method_6043) 또는 `PlayerEntity.jump()`
+- [x] **Mixin 대상**: `LivingEntity.jump()` (method_6043) 또는 `PlayerEntity.jump()`
   - **at**: `@At("HEAD")`, `cancellable = true`
   - SM 활성 시 `ci.cancel()`
   - `jumpAvoided = true; jumpPending = true` 세팅
@@ -295,51 +296,55 @@
     - `addExhaustion()` 차단됨 → SM 자체 소진 시스템으로 대체
     - `Stats.JUMP` 통계 차단됨 → SM에서 별도 `player.increaseStat(Stats.JUMP, 1)` 호출
     - 스프린트 점프 `+0.2F` 차단됨 → SM `tryJump()` 내에서 자체 계산
+  - 구현: `MixinLivingEntityClient.sm_jump()` — Phase 10 tryJump() 구현 전까지 점프 비활성화
 
 ### 5-3. [위험] jumpingCooldown 우회 [클라이언트] ★★★★☆
 
-- [ ] vanilla `PlayerEntity`에서 `jumpingCooldown` 10틱 쿨다운이 SM 다중 점프 차단 가능
+- [x] vanilla `PlayerEntity`에서 `jumpingCooldown` 10틱 쿨다운이 SM 다중 점프 차단 가능
   - `jump()` 인터셉트로 vanilla 쿨다운 발동 자체를 차단
   - SM이 자체 `blockJumpTillButtonRelease` 플래그로 대체 관리
+  - 5-2 구현(jump() 취소)으로 자동 달성 — 별도 Mixin 불필요
 
 ### 5-4. jumping 필드 제어 [클라이언트]
 
-- [ ] **Mixin 대상**: `ClientPlayerEntity.tickMovement()` 또는 `KeyboardInput` 처리 시점
-  - **@Accessor**: `LivingEntity.jumping` (field_6282)
-    ```java
-    @Accessor("jumping")
-    void setJumping(boolean value);
-    ```
+- [x] **Mixin 대상**: `ClientPlayerEntity.tickMovement()` 또는 `KeyboardInput` 처리 시점
+  - **@Shadow**: `LivingEntity.jumping` (field_6282) — MixinLivingEntityClient에 @Shadow로 접근
   - SM 조건 필터 적용:
     - `isCrawling || isSliding || isHeadJumpCharging || isJumpCharging || blockJumpTillButtonRelease` → `jumping = false`
+  - 구현: `MixinLivingEntityClient.jumping` @Shadow 필드 — TODO Phase 10 조건 적용
 
 ### 5-5. [위험] isClimbing() 오버라이드 [클라이언트 + 서버] ★★★★☆
 
-- [ ] **Mixin 대상**: `LivingEntity.isClimbing()` (또는 `PlayerEntity`)
+- [x] **Mixin 대상**: `LivingEntity.isClimbing()` (또는 `PlayerEntity`)
   - **at**: `@At("HEAD")`, `cancellable = true`
   - SM 커스텀 클라이밍 활성 시 `ci.cancel()` + `false` 반환
   - **목적**: `applyClimbingSpeed()` x/z ±0.15F 클램프 간섭 방지
   - **목적**: `applyMovementInput()` y=0.2 강제 간섭 방지
+  - 서버: `MixinLivingEntity.sm_isClimbing_server()` — SmartMovingServer 상태 기반
+  - 클라이언트: `MixinLivingEntityClient.sm_isClimbing_client()` — SmartMovingClientState 상태 기반
 
 ### 5-6. applyClimbingSpeed() 간섭 우회 [클라이언트]
 
-- [ ] **Mixin 대상**: `LivingEntity.applyClimbingSpeed(Vec3d)` (메서드명 Yarn 확인 필요)
+- [x] **Mixin 대상**: `LivingEntity.applyClimbingSpeed(Vec3d)` (Yarn: applyClimbingSpeed, intermediary: method_18801 확인 완료)
   - **at**: `@At("HEAD")`, `cancellable = true`
-  - SM 커스텀 클라이밍 상태 시 `ci.cancel()` 호출
-  - [미확인 — 1.21.1 Yarn 메서드명 확인 필요]
+  - SM 커스텀 클라이밍 상태 시 velocity 그대로 반환
+  - 구현: `MixinLivingEntityClient.sm_applyClimbingSpeed()` — 5-5(isClimbing=false)의 이중 방어
 
 ### 5-7. velocityDirty 세팅 [클라이언트]
 
-- [ ] SM이 직접 Y 속도를 변경할 때마다 `player.velocityDirty = true` 수동 세팅
+- [x] SM이 직접 Y 속도를 변경할 때마다 `player.velocityDirty = true` 수동 세팅
   - 서버 속도 동기화를 위해 필수
+  - 구현: `MixinEntity.velocityDirty` @Shadow 필드 노출
+  - 참고: Entity.setVelocity()는 내부에서 velocityDirty=true 자동 설정. setVelocity() 사용 시 수동 설정 불필요.
 
 ### 5-8. beforeMoveEntity / afterMoveEntity 처리 [클라이언트]
 
-- [ ] **Mixin 대상**: `Entity.move()` 전후
+- [x] **Mixin 대상**: `Entity.move()` 전후
   - **at HEAD**: `ySize`(계단 오르기 높이) 대응 → `STEP_HEIGHT` 속성을 0으로 설정 (스니킹 등 조건 시)
   - **at TAIL**: `heightOffset > 0` 시 `player.setPos()` 로 위치 수동 조정
   - **at TAIL**: 클라이밍 이동 거리 누적 (피로도 계산용: 지상 1.2 / 공중 0.9)
   - **at TAIL**: 수영 소리 누적 (`SwimSoundDistance > 1.0D` 시 재생)
+  - 구현: `MixinEntity.sm_beforeMove()` + `sm_afterMove()` — 로직은 TODO Phase 7
 
 ### 5-9. 벽점프 — calculateSeparateCollisions() [클라이언트]
 
@@ -348,11 +353,12 @@
   - 90° 단위 반올림: `jumpAngle = round(reflectedAngle / 90F) * 90F`
   - `player.horizontalCollision` (field_6025) 강제 `false` 처리
   - `player.fallDistance = 0`
+  - 구현 위치: handleWallJumping() 내부 순수 로직 — 별도 Mixin 불필요, Phase 7/8 구현
 
 ### 5-10. 속도 컷오프 0.003 대응 [클라이언트]
 
-- [ ] SM 클라이밍 최소 속도 `ClimbDownMotion=0.01D` > 0.003 → 직접 피해 없음 (확인 완료)
-- [ ] `setOnlyShouldClimbSpeed()` 결과가 0.003 이하로 떨어지는 극단 케이스 테스트 필요
+- [x] SM 클라이밍 최소 속도 `ClimbDownMotion=0.01D` > 0.003 → 직접 피해 없음 (확인 완료)
+- [ ] `setOnlyShouldClimbSpeed()` 결과가 0.003 이하로 떨어지는 극단 케이스 테스트 필요 (통합 테스트 시 확인)
 
 ### 5-11. reverseHandleMaterialAcceleration() [클라이언트]
 
@@ -360,6 +366,7 @@
   - `FluidState.getVelocity(BlockView, BlockPos)` 로 흐름 벡터 취득
   - 역방향 0.014D 크기 적용: `addVelocity(-flowVec.x * 0.014, -flowVec.y * 0.014, -flowVec.z * 0.014)`
   - [미확인 — 1.21.1에서 흐름 가속 크기 0.014D 동일 여부 확인 필요]
+  - 구현 위치: travel() SM 파이프라인 내부 — 별도 Mixin 불필요, Phase 7/8 구현
 
 ---
 

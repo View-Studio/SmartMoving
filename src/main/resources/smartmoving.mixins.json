@@ -4,6 +4,8 @@
   "package": "choco.ratel.smartmoving.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MixinEntity",
+    "MixinLivingEntity",
     "server.MixinServerPlayNetworkHandler",
     "server.MixinServerPlayerEntity"
   ],
