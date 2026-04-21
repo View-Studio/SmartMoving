@@ -123,7 +123,7 @@
 - [x] `SmartMoving.java`
 - [x] `SmartMovingFactory.java`
 - [x] `SmartMovingPlayerBase.java`
-- [ ] `SmartMovingSelf.java`
+- [x] `SmartMovingSelf.java`
 - [ ] `SmartMovingServerPlayerBase.java`
 
 ### net.smart.moving.render
