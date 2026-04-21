@@ -107,7 +107,7 @@
 - [x] `IPacketReceiver.java`
 - [x] `IPacketSender.java`
 - [x] `ISmartMovingClient.java`
-- [ ] `ISmartMovingSelf.java`
+- [x] `ISmartMovingSelf.java`
 - [ ] `LocalUserNameProvider.java`
 - [ ] `Orientation.java`
 
