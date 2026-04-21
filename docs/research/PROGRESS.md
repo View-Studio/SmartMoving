@@ -24,7 +24,7 @@
 
 ### net.smart.render
 - [x] `SmartRenderModel.java`
-- [ ] `SmartRenderRender.java`
+- [x] `SmartRenderRender.java`
 - [ ] `ModelRotationRenderer.java`
 - [ ] `ModelPlayer.java`
 - [ ] `RenderPlayer.java`
