@@ -100,7 +100,7 @@
 - [x] `ClimbGap.java`
 - [x] `Compat.java`
 - [x] `FeetClimbing.java`
-- [ ] `HandsClimbing.java`
+- [x] `HandsClimbing.java`
 - [ ] `IEntityPlayerMP.java`
 - [ ] `IEntityPlayerSP.java`
 - [ ] `ILocalUserNameProvider.java`
