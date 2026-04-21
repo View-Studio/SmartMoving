@@ -145,7 +145,7 @@
 - [x] `SmartMovingTestMod.java`
 
 ### net.smart.properties
-- [ ] `Properties.java`
+- [x] `Properties.java`
 - [ ] `Property.java`
 - [ ] `Value.java`
 
