@@ -151,7 +151,7 @@
 
 ### net.smart.utilities
 - [x] `Name.java`
-- [ ] `Reflect.java`
+- [x] `Reflect.java`
 
 ---
 
