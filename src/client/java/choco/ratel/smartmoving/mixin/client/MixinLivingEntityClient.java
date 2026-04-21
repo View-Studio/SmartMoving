@@ -8,6 +8,7 @@ import choco.ratel.smartmoving.client.SmartMovingSwimmer;
 import choco.ratel.smartmoving.climbing.ClimbGap;
 import choco.ratel.smartmoving.climbing.FeetClimbing;
 import choco.ratel.smartmoving.climbing.HandsClimbing;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -54,6 +55,14 @@ public abstract class MixinLivingEntityClient {
     private void sm_travel_client(Vec3d movementInput, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
+        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+
+        // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
+        // [미확인 — jumpMovementFactor(offGroundSpeed) 0.05F 제어 방법 TODO Phase 12]
+        if (player.getAbilities().flying && !cfg.fly) {
+            Vec3d vel = player.getVelocity();
+            player.setVelocity(vel.x, vel.y * 0.5999755859375D, vel.z);
+        }
 
         // [10-1] 점프 판정 — 수영 체크 전 매 틱 실행
         SmartMovingJumper.handleJumping(player, sm);

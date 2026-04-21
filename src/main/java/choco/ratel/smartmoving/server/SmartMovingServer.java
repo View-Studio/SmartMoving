@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.server;
 
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -125,7 +126,7 @@ public final class SmartMovingServer {
         player.fallDistance = 0;
         double vx = player.getVelocity().x;
         double vz = player.getVelocity().z;
-        player.setVelocity(vx, 0.08, vz);
+        player.setVelocity(vx, player.getAttributeValue(EntityAttributes.GENERIC_GRAVITY), vz);
     }
 
     // ── 3-3: 소진 배치 시스템 ────────────────────────────────────
@@ -147,6 +148,18 @@ public final class SmartMovingServer {
     public void afterAddMovingHungerBatch() {
         disableAddExhaustionDepth--;
         disableAddExhaustion = disableAddExhaustionDepth > 0;
+    }
+
+    // ── 3-6: 서버 히트박스 동적 변경 ─────────────────────────────
+
+    /**
+     * 서버 측 isSmall 히트박스 갱신.
+     * calculateDimensions()가 getBaseDimensions()(MixinPlayerEntity)를 호출하여
+     * 서버 bounding box 갱신 + 클라이언트 동기화가 자동으로 이루어진다.
+     */
+    public void setSmall(ServerPlayerEntity player, boolean small) {
+        this.isSmall = small;
+        player.calculateDimensions();
     }
 
     // ── 3-7: 플레이어 접속 초기화 ────────────────────────────────

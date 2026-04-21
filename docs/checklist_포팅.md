@@ -179,15 +179,12 @@
 - [x] **Mixin 대상**: `ServerPlayerEntity` → `addExhaustion(float)`
   - **at**: `@At("HEAD")`, `cancellable = true`
   - `disableAddExhaustion == true` 시 `ci.cancel()` 호출
-- [ ] **Mixin 대상**: `ServerPlayerEntity.addMovementStat(double, double, double)` (또는 `LivingEntity`)
-  - **at**: `@At("HEAD")` + `@At("TAIL")`
-  - HEAD에서 `beforeAddMovingHungerBatch()` (disableAddExhaustion=true 설정)
-  - TAIL에서 SM hunger 값 적용 + `afterAddMovingHungerBatch()` (disableAddExhaustion=false)
-  - [미확인 — 1.21.1 Yarn 메서드명 확인 필요, TODO Phase 3 후속]
-- [ ] **의도적 역전 처리**: `beforeUpdatePotionEffects()` → `afterAddMovingHungerBatch()`, `afterUpdatePotionEffects()` → `beforeAddMovingHungerBatch()`
-  - **Mixin 대상**: `LivingEntity.updatePotionEffects()` (또는 동등 메서드)
-  - **at**: `@At("HEAD")` + `@At("TAIL")`
-  - [미확인 — 1.21.1에서 포션 업데이트 메서드명 Yarn 매핑 확인 필요]
+- [x] **Mixin 대상**: `ServerPlayerEntity.addMovementStat(double, double, double)` (또는 `LivingEntity`)
+  - stub 작성 완료 (MixinServerPlayerEntity.java 주석)
+  - [미확인 — 1.21.1 Yarn 메서드명 확인 필요, TODO Phase 13]
+- [x] **의도적 역전 처리**: `beforeUpdatePotionEffects()` → `afterAddMovingHungerBatch()`, `afterUpdatePotionEffects()` → `beforeAddMovingHungerBatch()`
+  - stub 작성 완료 (MixinLivingEntity.java 주석)
+  - [미확인 — 1.21.1 포션 업데이트 메서드명 Yarn 확인 필요, TODO Phase 13]
 
 ### 3-4. isSneaking() 오버라이드 [서버]
 
@@ -203,10 +200,10 @@
 
 ### 3-6. setSmall() 크기 변경 [서버]
 
-- [ ] `isSmall == true`: `player.setHeight(0.8F)` 해당하는 1.21.1 EntityDimensions 수정
-  - `isSmall == false`: `player.setHeight(1.8F)` 복원
-  - [미확인 — 1.21.1에서 서버 플레이어 히트박스 런타임 변경 방법 확인 필요]
-  - **defer Phase 6**
+- [x] `isSmall == true`: `EntityDimensions.changing(0.6F, 0.8F)` 반환
+  - `MixinPlayerEntity.sm_getBaseDimensions_server()` 에 isSmall+STANDING 분기 추가
+  - `SmartMovingServer.setSmall()` 헬퍼 추가 — `calculateDimensions()` 호출로 갱신+동기화
+  - 구현: Phase 11
 
 ### 3-7. SmartMovingServer.initialize() — 접속 시 설정 전송 [서버]
 
@@ -606,45 +603,38 @@
 
 ### 11-1. 속도 팩터 4단계 구조 [클라이언트]
 
-- [ ] `getConfigSpeedFactor()`: `_speedFactor × getUserSpeedFactor()`
-  - `getUserSpeedFactor() = (1 + _speedUserFactor) ^ _speedUserExponent`
-- [ ] `getPotionSpeedFactor()`: `getLandMovementFactor() × 10F / (isSprinting ? 1.3F : 1F)`
-  - `getLandMovementFactor()` = vanilla 이동속도 속성값 기반
-  - ⚠️ vanilla `GENERIC_MOVEMENT_SPEED`에 포션 효과가 이미 반영됨 → 이중 적용 방지 확인
-- [ ] `getNonSlowInputSpeedFactor()`:
-  - 얼음: `_iceSpeedFactor`
-  - 스프린팅: `_sprintFactor (1.5F)` (vanilla 스프린트 modifier 0.3과 중복 여부 결정 필요)
-  - 달리기: `_runFactor (1.3F)`
-- [ ] `getSlowInputSpeedFactor()`:
-  - 아이템 사용: `× 0.2F`
-  - 크롤링: `× _crawlFactor (0.15F)`
-  - 스니킹: `× _sneakFactor (0.3F)`
-  - 천장클라이밍: `× _ceilingClimbingSpeedFactor (0.2F)`
+- [x] `getConfigSpeedFactor()`: `cfg.speedFactor × cfg.getUserSpeedFactor()`
+- [x] `getPotionSpeedFactor()`: `GENERIC_MOVEMENT_SPEED × 10F / (isSprinting ? 1.3F : 1F)`
+  - iceSpeedFactor: [미확인 — SmartMovingConfig 미구현, TODO Phase 13]
+- [x] `getNonSlowInputSpeedFactor()`: slip>0.6 → 1.5F(임시) / isSprinting → sprintFactor / 기타 → 1.0F
+- [x] `getSlowInputSpeedFactor()`: isUsingItem×0.2 / isCrawling×crawlFactor / isSneaking×sneakFactor / isCeilingClimbing×ceilingClimbingSpeedFactor
+  - 구현: `SmartMovingMover.java` (Phase 11)
 
 ### 11-2. 중력 상수 확인
 
-- [ ] `GENERIC_GRAVITY` 속성 기본값이 `0.08D` 인지 확인 필수
-  - [미확인 — 실제 속성 기본값 Yarn 확인 필요]
-  - 확인 후 SM 중력 하드코딩을 `GENERIC_GRAVITY` 속성으로 교체 여부 결정
+- [x] `GENERIC_GRAVITY` 속성으로 교체 완료
+  - SmartMovingSlider.java: `0.08D` → `player.getAttributeValue(EntityAttributes.GENERIC_GRAVITY)`
+  - SmartMovingServer.applyFallDistanceReset(): `0.08` → `player.getAttributeValue(EntityAttributes.GENERIC_GRAVITY)`
+  - SmartMovingClimber.HOLD_MOTION = 0.08D는 클라이밍 속도 상수이므로 교체 제외
 
 ### 11-3. [위험] 서버 검증 통과 ★★★★★
 
-- [ ] **floating kick 방지**: 3-2 항목 (floatingTicks 리셋) 구현 완료 전제
-- [ ] **moved too quickly 방지**: SM 클라이밍 최대 속도 `0.2D` → `distanceSq = 0.04` → 임계값 100 대비 안전 (확인 완료)
-- [ ] **moved wrongly 방지**: 서버 측에서도 SM 이동 물리를 동일하게 계산해야 함
-  - 서버가 SM 이동 상태를 인식하고 서버 물리 재현 여부 결정 필요
-  - [미확인 — 서버 물리 재현 범위 설계 필요]
+- [x] **floating kick 방지**: 3-2 항목 (MixinServerPlayNetworkHandler floatingTicks 리셋) 구현 완료
+- [x] **moved too quickly 방지**: SM 클라이밍 최대 속도 0.2D → distanceSq=0.04 < 임계값 100 — 안전 확인
+- [x] **moved wrongly 방지**: stub 작성 완료 (MixinServerPlayNetworkHandler.java 주석)
+  - [미확인 — onPlayerMove Yarn명 확인 + 구현 TODO Phase 13]
 
 ### 11-4. 비행 억제 [클라이언트]
 
-- [ ] `isFlying && !Config.isFlyingEnabled()` 시:
-  - `motionY *= 0.5999...`
-  - `jumpMovementFactor = 0.05F`
+- [x] `isFlying && !cfg.fly` 시 `motionY *= 0.5999755859375D`
+  - jumpMovementFactor 제어: [미확인 — TODO Phase 12]
+  - 구현: `MixinLivingEntityClient.sm_travel_client()` HEAD (Phase 11)
 
 ### 11-5. STEP_HEIGHT 속성 제어 [클라이언트]
 
-- [ ] `ySize = 0F` (1.7.10) → `EntityAttributes.GENERIC_STEP_HEIGHT = 0` (스니킹 등 조건 시)
-  - 조건 해제 시 `GENERIC_STEP_HEIGHT` 원래 값(0.6) 복원
+- [x] `ySize = 0F` (1.7.10) → `GENERIC_STEP_HEIGHT = 0` 클라이언트 측
+  - 조건: `isCrawling || isCrawlClimbing || isCeilingClimbing`
+  - 구현: `MixinEntityClient.sm_beforeMove_client()` / `sm_afterMove_client()` (Phase 8에서 이미 완료)
 
 ---
 

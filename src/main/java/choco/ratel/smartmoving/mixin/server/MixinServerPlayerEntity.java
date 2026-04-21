@@ -62,14 +62,6 @@ public abstract class MixinServerPlayerEntity {
      * disableAddExhaustion이 true인 동안 vanilla 소진 추가를 전부 차단한다.
      * SM이 beforeAddMovingHungerBatch()를 호출하여 이 플래그를 세우면,
      * SM 자체 허기 계산이 완료될 때까지 vanilla 소진이 적용되지 않는다.
-     *
-     * 원본: SmartMovingServerPlayerBase.addExhaustion(exhaustion)
-     *       → moving.addExhaustion(exhaustion)
-     *       → disableAddExhaustion이면 return (localAddExhaustion 호출 안 함)
-     *
-     * TODO Phase 3 (미완): addMovementStat HEAD+TAIL에서 배치 처리 및 포션 효과 메서드 역전 처리.
-     *   addMovementStat → 1.21.1 Yarn 메서드명 확인 후 구현
-     *   tickStatusEffects HEAD/TAIL → beforeAddMovingHungerBatch/afterAddMovingHungerBatch 역전 처리
      */
     @Inject(method = "addExhaustion", at = @At("HEAD"), cancellable = true)
     private void sm_addExhaustion(float exhaustion, CallbackInfo ci) {
@@ -78,4 +70,28 @@ public abstract class MixinServerPlayerEntity {
             ci.cancel();
         }
     }
+
+    // ── 3-3-B: addMovementStat HEAD+TAIL stub ────────────────────────────────
+    // [미확인 — 1.21.1 PlayerEntity/LivingEntity 이동 통계+소진 처리 메서드 Yarn명 확인 필요]
+    // 후보: "addMovementStat", "addTravelExhaustion", travel() 내 inline 처리 가능성도 있음
+    // HEAD: beforeAddMovingHungerBatch (disableAddExhaustion=true)
+    // TAIL: SM hunger 값 직접 적용 + afterAddMovingHungerBatch (disableAddExhaustion=false)
+    // TODO Phase 13: Yarn 소스 확인 후 <methodName> 교체 후 아래 두 메서드 활성화
+    //
+    // @Inject(method = "<methodName>", at = @At("HEAD"))
+    // private void sm_beforeMovementStat(CallbackInfo ci) {
+    //     SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
+    //     sm.beforeAddMovingHungerBatch();
+    // }
+    //
+    // @Inject(method = "<methodName>", at = @At("TAIL"))
+    // private void sm_afterMovementStat(CallbackInfo ci) {
+    //     SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
+    //     if (sm.hunger > 0F) {
+    //         sm.disableAddExhaustion = false;
+    //         ((PlayerEntity)(Object)this).addExhaustion(sm.hunger);
+    //         sm.hunger = 0F;
+    //     }
+    //     sm.afterAddMovingHungerBatch();
+    // }
 }

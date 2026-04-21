@@ -6,6 +6,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.MovementType;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.math.Vec3d;
@@ -60,7 +61,7 @@ public final class SmartMovingSlider {
         double newVx = vel.x * damping;
         double newVz = vel.z * damping;
         // 수직: 중력 적용 (슬라이딩 중 공중에 있으면 낙하)
-        double newVy = vel.y - 0.08D; // 중력
+        double newVy = vel.y - player.getAttributeValue(EntityAttributes.GENERIC_GRAVITY);
         newVy *= 0.98D;
 
         player.setVelocity(newVx, newVy, newVz);

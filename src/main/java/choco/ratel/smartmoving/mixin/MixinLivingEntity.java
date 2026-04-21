@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 5-1: travel() HEAD 캔설러블 Mixin — SM 이동 파이프라인 진입점.
  * 5-5 (서버): isClimbing() 오버라이드 — SM 커스텀 클라이밍 중 false 반환.
  * 6-2 (서버): isInSwimmingPose() 오버라이드 — SM 크롤링 중 false 반환.
+ * 3-3-C: tickStatusEffects HEAD/TAIL — 소진 배치 역전 처리 stub (미확인).
  *
  * 클라이언트 전용 항목(jump, applyClimbingSpeed, isClimbing 클라이언트) → MixinLivingEntityClient
  */
@@ -75,4 +76,23 @@ public abstract class MixinLivingEntity {
             cir.setReturnValue(false);
         }
     }
+
+    // ── 3-3-C: 포션 업데이트 사이클 역전 처리 stub ──────────────────────────
+    // [미확인 — 1.21.1 Yarn에서 LivingEntity 포션 업데이트 메서드명 확인 필요]
+    // 후보: "tickStatusEffects", "updateStatusEffects", "updatePotionEffects"
+    // HEAD: afterAddMovingHungerBatch (disableAddExhaustion depth 감소)
+    // TAIL: beforeAddMovingHungerBatch (disableAddExhaustion depth 증가)
+    // TODO Phase 13: Yarn 소스 확인 후 <methodName> 교체 후 아래 두 메서드 활성화
+    //
+    // @Inject(method = "<methodName>", at = @At("HEAD"))
+    // private void sm_beforeTickStatusEffects(CallbackInfo ci) {
+    //     if (!((Object) this instanceof ServerPlayerEntity player)) return;
+    //     SmartMovingServer.get(player).afterAddMovingHungerBatch();
+    // }
+    //
+    // @Inject(method = "<methodName>", at = @At("TAIL"))
+    // private void sm_afterTickStatusEffects(CallbackInfo ci) {
+    //     if (!((Object) this instanceof ServerPlayerEntity player)) return;
+    //     SmartMovingServer.get(player).beforeAddMovingHungerBatch();
+    // }
 }

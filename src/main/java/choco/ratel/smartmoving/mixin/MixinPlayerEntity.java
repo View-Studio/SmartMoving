@@ -37,7 +37,11 @@ public abstract class MixinPlayerEntity {
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.isCrawling && pose == EntityPose.SWIMMING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 1.0F).withEyeHeight(0.4F));
+            return;
         }
-        // 헤드점프: sm.isSmall 또는 별도 필드 — TODO Phase 10
+        // 3-6: isSmall (천장 클라이밍 등 특수 이동 시 0.8F 히트박스)
+        if (sm.isSmall && pose == EntityPose.STANDING) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.4F));
+        }
     }
 }
