@@ -76,7 +76,7 @@
 - [x] `SmartCoreEventHandler.java`
 - [x] `SmartCoreInfo.java`
 - [x] `SmartCoreMethodVisitor.java`
-- [ ] `SmartCorePlugin.java`
+- [x] `SmartCorePlugin.java`
 - [ ] `SmartCoreTransformation.java`
 - [ ] `SmartCoreTransformer.java`
 
