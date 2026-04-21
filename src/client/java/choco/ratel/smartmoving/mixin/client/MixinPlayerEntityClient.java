@@ -37,9 +37,12 @@ public abstract class MixinPlayerEntityClient {
     private void sm_getBaseDimensions_client(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isCrawling && pose == EntityPose.SWIMMING) {
+        if (sm.isHeadJumping && pose == EntityPose.SWIMMING) {
+            // 원본: height += 1F (boundingBox 직접 조작 → 1.7.10)
+            // [미확인 — 정확한 헤드점프 치수 추가 리서치 필요. 현재 1.5H 사용]
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 1.5F).withEyeHeight(0.4F));
+        } else if (sm.isCrawling && pose == EntityPose.SWIMMING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 1.0F).withEyeHeight(0.4F));
         }
-        // 헤드점프: sm.isSmall 또는 별도 필드 — TODO Phase 10
     }
 }

@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingJumper;
 import choco.ratel.smartmoving.client.SmartMovingSlider;
 import choco.ratel.smartmoving.client.SmartMovingSwimmer;
 import choco.ratel.smartmoving.climbing.ClimbGap;
@@ -54,6 +55,9 @@ public abstract class MixinLivingEntityClient {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
+        // [10-1] 점프 판정 — 수영 체크 전 매 틱 실행
+        SmartMovingJumper.handleJumping(player, sm);
+
         // [8-1] 매 틱 수영 상태 3분류 갱신
         SmartMovingSwimmer.updateSwimState(player, sm);
 
@@ -68,6 +72,14 @@ public abstract class MixinLivingEntityClient {
             ci.cancel();
             return;
         }
+
+        // [10-4] 헤드점프 착지 감지 — 포즈 복원
+        if (player.isOnGround() && sm.isHeadJumping) {
+            SmartMovingJumper.resetHeightOffset(player, sm);
+        }
+
+        // [10-5] 벽점프 처리 (클라이밍 전)
+        SmartMovingJumper.handleWallJumping(player, sm);
 
         // [5-1] 클라이밍 처리
         World world = player.getWorld();
@@ -93,14 +105,28 @@ public abstract class MixinLivingEntityClient {
     /**
      * 5-4: LivingEntity.jumping (field_6282).
      * SM 조건 필터가 적용될 때 이 필드를 false로 강제 설정한다.
-     *
-     * 필터 조건 (tickEssential 내에서 적용):
-     *   isCrawling || isSliding || isHeadJumpCharging || isJumpCharging
-     *   || blockJumpTillButtonRelease
-     *
-     * TODO Phase 10: tickEssential()에서 조건 체크 후 this.jumping = false 호출
+     * sm_jumpingFilter()에서 조건 체크 후 false 설정.
      */
     @Shadow protected boolean jumping;
+
+    /**
+     * 5-4: jumping 필드 억제 — SM 상태 조건 필터.
+     * 원본: SmartMovingSelf.updateEntityActionState() isp.setIsJumpingField() 로직.
+     *
+     * 억제 조건:
+     *   isCrawling || isSliding || isHeadJumping || jumpCharge>0 || blockJumpTillButtonRelease
+     *
+     * LivingEntity.tickMovement() HEAD에서 실행 → travel() 내 jump() 호출 전에 확실히 세팅됨.
+     */
+    @Inject(method = "tickMovement", at = @At("HEAD"))
+    private void sm_jumpingFilter(CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isSliding || sm.isHeadJumping
+                || sm.jumpCharge > 0 || sm.blockJumpTillButtonRelease) {
+            this.jumping = false;
+        }
+    }
 
     /**
      * 5-2 + 5-3: jump() 인터셉트.

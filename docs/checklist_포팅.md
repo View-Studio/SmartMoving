@@ -309,11 +309,9 @@
 
 ### 5-4. jumping 필드 제어 [클라이언트]
 
-- [x] **Mixin 대상**: `ClientPlayerEntity.tickMovement()` 또는 `KeyboardInput` 처리 시점
-  - **@Shadow**: `LivingEntity.jumping` (field_6282) — MixinLivingEntityClient에 @Shadow로 접근
-  - SM 조건 필터 적용:
-    - `isCrawling || isSliding || isHeadJumpCharging || isJumpCharging || blockJumpTillButtonRelease` → `jumping = false`
-  - 구현: `MixinLivingEntityClient.jumping` @Shadow 필드 — TODO Phase 10 조건 적용
+- [x] **Mixin 대상**: `LivingEntity.tickMovement()` HEAD, @Shadow jumping 사용
+  - 억제 조건: `isCrawling || isSliding || isHeadJumping || jumpCharge>0 || blockJumpTillButtonRelease`
+  - 구현: `MixinLivingEntityClient.sm_jumpingFilter()` (Phase 10)
 
 ### 5-5. [위험] isClimbing() 오버라이드 [클라이언트 + 서버] ★★★★☆
 
@@ -353,12 +351,9 @@
 
 ### 5-9. 벽점프 — calculateSeparateCollisions() [클라이언트]
 
-- [ ] `Entity.move()` + `VoxelShapes.calculateMaxOffset()` 기반으로 재구현
-  - 벽 반사 각도: `reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180F`
-  - 90° 단위 반올림: `jumpAngle = round(reflectedAngle / 90F) * 90F`
-  - `player.horizontalCollision` (field_6025) 강제 `false` 처리
-  - `player.fallDistance = 0`
-  - 구현 위치: handleWallJumping() 내부 순수 로직 — 별도 Mixin 불필요, Phase 7/8 구현
+- [x] 반사 각도 공식 + 90° 반올림 + horizontalCollision=false + fallDistance=0 구현 완료
+  - 구현: `SmartMovingJumper.handleWallJumping()` (Phase 10)
+  - [미확인 — horizontalCollisionAngle 정확한 계산 (Orientation 이식) 미완료]
 
 ### 5-10. 속도 컷오프 0.003 대응 [클라이언트]
 
@@ -554,59 +549,56 @@
 
 ### 10-1. handleJumping() — 점프 판정 진입점 [클라이언트]
 
-- [ ] **Mixin 대상**: `ClientPlayerEntity.tickMovement()`
-  - **at**: `@At("HEAD")` 이후 SM 파이프라인 내 삽입
-  - 차지 점프: Sneak 키 홀드 → `jumpCharge` 누적 → 릴리즈 시 `tryJump(ChargeUp, ...)`
-  - 헤드점프 차지: Grab 키 홀드 → `headJumpCharge` 누적 → 릴리즈 시 `tryJump(HeadUp, ...)`
-  - 수면 점프 (`isDipping`): `posY - floor(posY) > (isSlow ? 0.37 : 0.6)` 체크
-  - 일반 점프: `jumpPending == true` 시 `tryJump(Up, ...)`
-  - 방향 점프: `angleJumpType = ((360 - movementAngle) / 45) % 8`, `> 1 && < 7` 시 각도 점프
+- [x] `sm_travel_client()` HEAD(수영 체크 전)에서 매 틱 호출
+  - 차지 점프: Sneak 홀드 → `jumpCharge` 누적 → 릴리즈 시 `tryJump(CHARGE_UP, ...)`
+  - 헤드점프 차지: Grab 홀드 → `headJumpCharge` 누적 → 릴리즈 시 `tryJump(HEAD_UP, ...)`
+  - 수면 점프: `isDipping && jumpPending && frac > 0.6` → `tryJump(UP, ...)` [미확인 — isSlow 생략]
+  - 일반 점프: `jumpPending && !isClimbing && !isCrawlClimbing` → `tryJump(UP, ...)`
+  - 방향 점프: `angleJumpType = ((360 - movementAngle) / 45) % 8`
+  - 구현: `SmartMovingJumper.handleJumping()` (Phase 10)
 
 ### 10-2. tryJump() — 실제 속도 계산 [클라이언트]
 
-- [ ] 일반 Up 점프 수직 속도: `0.41999998688697815D + potionJump * 0.1F`
-  - `potionJump` = `JUMP_BOOST` 포션 amplifier (없으면 0)
-  - SM이 직접 `getStatusEffect(StatusEffects.JUMP_BOOST)` 읽어야 함
-- [ ] 기타 타입 수직 속도: `-0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor`
-- [ ] 스프린트 점프 수평 보정:
-  - `motionX -= Math.sin(Math.toRadians(yaw)) * 0.2F`
-  - `motionZ += Math.cos(Math.toRadians(yaw)) * 0.2F`
-- [ ] 헤드점프 각도 재계산:
-  - `normalAngle = atan(verticalMotion / horizontalSpeed)`
-  - `newAngle = Config.getHeadJumpFactor() * normalAngle`
-  - 재조정 후 verticalMotion, horizontalMotion 갱신
-- [ ] 속도 적용: `player.setVelocity(x, verticalMotion, z)` + `player.velocityDirty = true`
-- [ ] `isHeadJumping == true` 시 `setHeightOffset(-1F)` → 포즈/치수 전환 트리거
+- [x] 일반 Up 점프 수직 속도: `0.41999998688697815D + potionJump * 0.1F`
+  - `potionJump` = `JUMP_BOOST` 포션 `getAmplifier()` (없으면 0)
+- [x] 기타 타입: `-0.078 + 0.498 * 1.0D * jumpChargeFactor` [미확인 — jumpChargeFactor 보간 세부값]
+- [x] 스프린트 점프: `motionX -= sin(yaw)*0.2F; motionZ += cos(yaw)*0.2F`
+- [x] 헤드점프 각도 재계산: `normalAngle = atan(vMotion/hSpeed); newAngle = headJumpControlFactor * normalAngle`
+- [x] 속도 적용: `player.setVelocity()` (내부에서 velocityDirty 자동 세팅)
+- [x] `isHeadJumping → setPoseSmall()` (SWIMMING 포즈 전환 + calculateDimensions)
+  - 통계 기록: [미확인 — Stats.JUMP Yarn명 TODO]
+  - 구현: `SmartMovingJumper.tryJump()` (Phase 10)
 
 ### 10-3. getJumpMoving() — 각도 점프 수평 속도 [클라이언트]
 
-- [ ] 순수 수학 함수, 그대로 이식:
+- [x] 원본 공식 그대로 이식:
   - `reset=false`: `actual + move * horizontal`
   - `reset=true, 반대방향`: `move * horizontalJumpFactor`
   - `reset=true, 같은방향`: `max(|actual|, |move| * horizontal) * signum(move)`
+  - 구현: `SmartMovingJumper.getJumpMoving()` (Phase 10)
 
 ### 10-4. [위험] heightOffset — 헤드점프 히트박스 [클라이언트] ★★★★☆
 
-- [ ] `setHeightOffset(-1F)`:
-  - SM 전용 EntityPose 또는 SWIMMING 포즈로 전환
-  - `calculateDimensions()` 자동 트리거 → bounding box 재계산
-  - `getBaseDimensions()` Mixin에서 헤드점프용 EntityDimensions 반환 (높이 증가)
-- [ ] `resetHeightOffset()` (착지 시): 포즈를 STANDING으로 전환
-  - 공간 부족 시 전환 불가 → SM이 직접 위 블록 체크 후 결정
+- [x] `setPoseSmall()`: SWIMMING 포즈 전환 + `calculateDimensions()`
+- [x] `getBaseDimensions()` Mixin: `isHeadJumping && SWIMMING` → `EntityDimensions.changing(0.6F, 1.5F).withEyeHeight(0.4F)` [미확인 — 정확한 치수]
+- [x] `resetHeightOffset()` (착지 시): 위 블록 공간 체크 → STANDING 포즈 복원. 공간 부족 시 SWIMMING 유지
+  - 구현: `SmartMovingJumper.setPoseSmall/resetHeightOffset()`, `MixinPlayerEntityClient` 수정 (Phase 10)
 
 ### 10-5. handleWallJumping() [클라이언트]
 
-- [ ] `player.horizontalCollision` (field_6025) 감지
-- [ ] 반사 각도 계산 + 90° 단위 반올림
-- [ ] `player.setYaw(jumpAngle)` + `player.bodyYaw = jumpAngle`
-- [ ] `player.horizontalCollision = false` 강제 세팅
-- [ ] `player.fallDistance = 0`
+- [x] `player.horizontalCollision` 감지
+- [x] 반사 각도 공식: `reflectedAngle = hCollAngle*2 - moveAngle + 180`; `jumpAngle = round(reflectedAngle/90)*90`
+- [x] `player.setYaw(jumpAngle)` + `player.bodyYaw = jumpAngle`
+- [x] `player.horizontalCollision = false` + `player.fallDistance = 0`
+  - [미확인 — horizontalCollisionAngle: Orientation.java 이식 필요. 현재 이동 방향 반대 임시값 사용]
+  - 구현: `SmartMovingJumper.handleWallJumping()` (Phase 10)
 
 ### 10-6. HUD — 차지 바 [클라이언트]
 
-- [ ] `HudRenderCallback.EVENT.register()` 등록
-- [ ] `DrawContext.drawTexture()` 또는 `drawHorizontalLine()` 으로 jumpCharge 바 렌더링
-- [ ] `jumpCharge / Config.MaxJumpCharge` 비율 계산
+- [x] `HudRenderCallback.EVENT.register()` 등록
+- [x] `jumpCharge / cfg.jumpChargeMaximum` 비율 → 초록 바 (0xFF00FF00), 너비 100px 기준
+- [x] `headJumpCharge / cfg.headJumpChargeMaximum` 비율 → 파랑 바 (0xFF0000FF)
+  - 구현: `SmartMovingHud.java` (Phase 10)
 
 ---
 
