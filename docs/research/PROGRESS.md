@@ -99,7 +99,7 @@
 - [x] `Button.java`
 - [x] `ClimbGap.java`
 - [x] `Compat.java`
-- [ ] `FeetClimbing.java`
+- [x] `FeetClimbing.java`
 - [ ] `HandsClimbing.java`
 - [ ] `IEntityPlayerMP.java`
 - [ ] `IEntityPlayerSP.java`
