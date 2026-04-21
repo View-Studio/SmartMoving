@@ -102,7 +102,7 @@
 - [x] `FeetClimbing.java`
 - [x] `HandsClimbing.java`
 - [x] `IEntityPlayerMP.java`
-- [ ] `IEntityPlayerSP.java`
+- [x] `IEntityPlayerSP.java`
 - [ ] `ILocalUserNameProvider.java`
 - [ ] `IPacketReceiver.java`
 - [ ] `IPacketSender.java`
