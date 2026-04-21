@@ -30,7 +30,7 @@
 - [x] `RenderPlayer.java`
 - [x] `IModelPlayer.java`
 - [x] `IRenderPlayer.java`
-- [ ] `SmartRenderContext.java`
+- [x] `SmartRenderContext.java`
 - [ ] `SmartRenderInfo.java`
 - [ ] `SmartRenderInstall.java`
 - [ ] `SmartRenderMod.java`
