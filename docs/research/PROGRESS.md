@@ -42,7 +42,7 @@
 
 ### net.smart.render.playerapi
 - [x] `SmartRender.java`
-- [ ] `SmartRenderModelPlayerBase.java`
+- [x] `SmartRenderModelPlayerBase.java`
 - [ ] `SmartRenderRenderPlayerBase.java`
 
 ### net.smart.render.statistics
