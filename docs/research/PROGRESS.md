@@ -84,7 +84,7 @@
 - [x] `SmartMovingSelf.java` ← 103KB, 최우선, 크면 시스템별로 쪼갤 것
 - [x] `SmartMovingBase.java`
 - [x] `SmartMoving.java`
-- [ ] `SmartMovingClient.java`
+- [x] `SmartMovingClient.java`
 - [ ] `SmartMovingServer.java`
 - [ ] `SmartMovingServerComm.java`
 - [ ] `SmartMovingComm.java`
