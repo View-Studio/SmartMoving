@@ -129,7 +129,7 @@
 ### net.smart.moving.render
 - [x] `SmartMovingModel.java`
 - [x] `SmartMovingRender.java`
-- [ ] `SmartRenderContext.java`
+- [x] `SmartRenderContext.java`
 - [ ] `IModelPlayer.java`
 - [ ] `IRenderPlayer.java`
 - [ ] `ModelPlayer.java`
