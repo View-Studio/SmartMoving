@@ -38,6 +38,9 @@ public final class SmartMovingServer {
     /** 서버 측 크롤링 상태 */
     public boolean isCrawling;
 
+    /** 서버 측 슬라이딩 상태 */
+    public boolean isSliding;
+
     /** 서버 측 작은 크기 상태 (TODO Phase 6: EntityDimensions 적용) */
     public boolean isSmall;
 
@@ -92,6 +95,7 @@ public final class SmartMovingServer {
      *   bit 14: isClimbing
      *   bit 15: isSmall
      *   bit 18: isCeilingClimbing
+     *   bit 22: isSliding (원본 SM bit 22 위치 유지)
      *   bit 31: isWallJumping
      *   bit 33: isSneakButtonPressed
      */
@@ -99,6 +103,7 @@ public final class SmartMovingServer {
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
+        isSliding         = ((bits >> 22) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
         isCrawling        = ((bits >> 13) & 1) != 0;
         isSmall           = ((bits >> 15) & 1) != 0;

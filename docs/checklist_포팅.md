@@ -451,8 +451,8 @@
 - [x] `jgap > 1.115` → 수평 속도 `0.08`
 - [x] else → 수평 속도 `0.04`
 - [x] `fallDistance = 0` 강제 초기화
-  - jgap 계산: TODO stub (AABB 충돌 쿼리 미구현 — Phase 9)
-  - 구현: `SmartMovingClimber.handleCeilingClimbing()` (Phase 7)
+  - jgap 계산: 발 Y부터 위 블록까지 AABB 충돌 쿼리 구현 완료 (Phase 9)
+  - 구현: `SmartMovingClimber.handleCeilingClimbing()` (Phase 7) + `computeJgap()` (Phase 9)
 
 ### 7-4. [위험] floatingTicks 리셋 연동 [서버] ★★★★☆
 
@@ -515,8 +515,9 @@
 
 ### 9-1. DataTracker 동기화 [클라이언트 + 서버]
 
-- [ ] `isCrawling` DataTracker 엔트리 등록 (또는 커스텀 패킷 동기화)
-- [ ] `isSliding` DataTracker 엔트리 등록
+- [x] `isSliding` 서버→클라이언트 동기화: State 패킷 bit 22로 전달, `processStatePacket()`에서 파싱 완료 (Phase 9)
+- [ ] `isCrawling` DataTracker 엔트리 등록 (또는 커스텀 패킷 동기화) — TODO Phase 13
+- [ ] `isSliding` DataTracker 엔트리 (별도 DataTracker 등록 필요 여부 확인)
 
 ### 9-2. [위험] SWIMMING 포즈 + isInSwimmingPose() 억제 [클라이언트] ★★★★☆
 
@@ -524,27 +525,28 @@
 
 ### 9-3. LimbAnimator 억제 [클라이언트]
 
-- [ ] **@Accessor**: `LimbAnimator` 내부 `pos` 또는 `speed` 필드 접근
-  - 크롤링 시 limbSwing 억제 적용
-  - [미확인 — LimbAnimator 내부 필드 Yarn 이름 확인 필요]
+- [x] **Mixin 대상**: `LivingEntity.updateLimbs(Z)V` HEAD, `cancellable = true`
+  - `isCrawling || isSliding` 시 `ci.cancel()` — 보행 LimbAnimator 갱신 전체 억제
+  - 구현: `MixinLivingEntityClient.sm_updateLimbs_client()` (Phase 9)
 
 ### 9-4. 슬라이딩 감쇠 공식 [클라이언트]
 
-- [ ] `1 / ((1/slip - 1) / 25 * _slideSlipperinessFactor + 1) * 0.98F`
-  - `slip` = `BlockState.getSlipperiness()` (또는 `Block.getSlipperiness()`)
-  - [미확인 — 1.21.1에서 슬립 접근 방법 Yarn 확인 필요]
+- [x] `1 / ((1/slip - 1) / 25 * slideSlipperinessFactor + 1) * 0.98F`
+  - `slip` = `below.getBlock().getSlipperiness()` (1.21.1 public 확인 완료)
+  - 구현: `SmartMovingSlider.handleSliding()` (Phase 9)
 
 ### 9-5. 슬라이딩 파티클 [클라이언트]
 
-- [ ] `BlockStateParticleEffect(ParticleTypes.BLOCK, blockState)` 생성
-- [ ] `world.getBlockState(pos.down())` 으로 아래 블록 상태 취득
-- [ ] `world.addParticle()` 으로 파티클 추가
+- [x] `BlockStateParticleEffect(ParticleTypes.BLOCK, blockState)` 생성
+- [x] `world.getBlockState(player.getBlockPos().down())` 으로 아래 블록 상태 취득
+- [x] `world.addParticle()` 으로 파티클 추가 (motionX/Z = dir × -4D, motionY = 1.5D)
+  - 구현: `SmartMovingSlider.spawnSlidingParticle()` (Phase 9)
 
 ### 9-6. getPositionOffset() 크롤링 오프셋 [클라이언트]
 
-- [ ] **Mixin 대상**: `PlayerEntityRenderer.getPositionOffset()` (method_23206)
-  - **at**: `@At("TAIL")` 또는 `@ModifyReturnValue`
-  - 크롤링 시 `Vec3d(0, -0.125 * scale, 0)` 추가
+- [x] **Mixin 대상**: `PlayerEntityRenderer.getPositionOffset()` HEAD, `cancellable = true`
+  - 크롤링 시 `Vec3d(0, -entity.getScale() × 0.125D, 0)` 반환 (SWIMMING 포즈 오프셋 대체)
+  - 구현: `MixinPlayerEntityRenderer.sm_getPositionOffset()` (Phase 9)
 
 ---
 

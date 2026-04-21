@@ -72,6 +72,11 @@ public final class SmartMovingClientState {
     /** 작은 크기 상태 (크롤링/슬라이딩) */
     public boolean isSmall;
 
+    // ── 9-5: 슬라이딩 파티클 타이머 ──────────────────────────────────────
+    // 원본 필드명 오타(Slinding) 그대로 보존
+    /** 슬라이딩 파티클 누적 타이머. _slideParticlePeriodFactor × 0.1F 초과 시 파티클 생성. */
+    public float spawnSlindingParticle;
+
     // ── 5-8: 클라이밍 이동 거리 누적 (클라이언트 측) ──────────────────────
     /** 클라이밍 이동 거리 누적 (피로도 계산용). */
     public double distanceClimbedModified;

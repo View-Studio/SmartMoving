@@ -54,6 +54,14 @@ public class SmartMovingConfig {
     public float angleJumpHorizontalFactor = 0.3F;
     public float angleJumpVerticalFactor = 0.2F;
 
+    // ── Sliding ─────────────────────────────────────────────────
+    // 원본: SmartMovingConfig._slideSlipperinessFactor (PositiveFactor, 기본값 미확인 → 1.0F 사용)
+    public float slideSlipperinessFactor = 1.0F;
+    // 원본: SmartMovingConfig._slideParticlePeriodFactor (PositiveFactor, 기본값 0.5F)
+    public float slideParticlePeriodFactor = 0.5F;
+    // 원본: SmartMovingConfig._slidingSpeedStopFactor (PositiveFactor, 기본값 미확인 → 0.01F 사용)
+    public float slidingSpeedStopFactor = 0.01F;
+
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;
     public boolean slide = true;
@@ -127,6 +135,9 @@ public class SmartMovingConfig {
         angleJumpBack            = getBool(p,   "move.jump.angle.back",           angleJumpBack);
         angleJumpHorizontalFactor = getFloat(p, "move.jump.angle.horizontal.factor", angleJumpHorizontalFactor);
         angleJumpVerticalFactor  = getFloat(p,  "move.jump.angle.vertical.factor", angleJumpVerticalFactor);
+        slideSlipperinessFactor  = getFloat(p,  "move.slide.slipperiness.factor", slideSlipperinessFactor);
+        slideParticlePeriodFactor = getFloat(p, "move.slide.particle.period.factor", slideParticlePeriodFactor);
+        slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
         fly                      = getBool(p,   "move.fly",                       fly);
         slide                    = getBool(p,   "move.slide",                     slide);
         crawl                    = getBool(p,   "move.crawl",                     crawl);
@@ -168,6 +179,9 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.angle.back",            String.valueOf(angleJumpBack));
         p.setProperty("move.jump.angle.horizontal.factor", String.valueOf(angleJumpHorizontalFactor));
         p.setProperty("move.jump.angle.vertical.factor", String.valueOf(angleJumpVerticalFactor));
+        p.setProperty("move.slide.slipperiness.factor",  String.valueOf(slideSlipperinessFactor));
+        p.setProperty("move.slide.particle.period.factor", String.valueOf(slideParticlePeriodFactor));
+        p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
         p.setProperty("move.fly",                        String.valueOf(fly));
         p.setProperty("move.slide",                      String.valueOf(slide));
         p.setProperty("move.crawl",                      String.valueOf(crawl));

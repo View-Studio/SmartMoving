@@ -9,6 +9,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.LadderBlock;
 import net.minecraft.block.VineBlock;
+import net.minecraft.util.math.Box;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -373,14 +374,31 @@ public final class SmartMovingClimber {
 
     /**
      * 머리 위 갭(공간) 크기 계산.
-     * 원본: boundingBox 임시 확장 후 AABB 충돌 쿼리로 천장까지 거리 계산.
+     * 원본: "jgap 계산은 천장 블록까지의 거리. AABB 충돌 쿼리로 구현 필요" (climbing.md)
      *
-     * TODO: 정확한 AABB 충돌 쿼리 구현 필요 — 미확인
-     *       1.21.1에서 World.getBlockCollisions() 또는 World.canPlace() 계열 메서드 사용 검토
+     * 구현: 플레이어 발 Y에서 위쪽으로 스캔하여 첫 번째 충돌 있는 블록의 Y 좌표와
+     * 플레이어 발 Y의 차이를 반환한다.
+     *
+     * 기준값:
+     *   jgap > 1.2  → 수평 속도 0.12 (넉넉한 공간)
+     *   jgap > 1.115 → 수평 속도 0.08 (보통)
+     *   else         → 수평 속도 0.04 (좁은 공간)
      */
     private static double computeJgap(ClientPlayerEntity player) {
-        // TODO: 정확한 jgap 계산 미구현
-        // 임시: 1.0을 반환하여 수평 속도 0.04 분기로 처리
-        return 1.0D;
+        World world = player.getWorld();
+        double feetY = player.getY();
+        Box bb = player.getBoundingBox();
+        int px = (int) Math.floor(player.getX());
+        int pz = (int) Math.floor(player.getZ());
+        int headBlockY = (int) Math.ceil(bb.maxY);
+
+        for (int by = headBlockY; by <= headBlockY + 3; by++) {
+            BlockPos pos = new BlockPos(px, by, pz);
+            BlockState state = world.getBlockState(pos);
+            if (!state.getCollisionShape(world, pos).isEmpty()) {
+                return pos.getY() - feetY;
+            }
+        }
+        return 2.0D; // 3블록 이내에 천장 없음 → 넉넉한 공간
     }
 }

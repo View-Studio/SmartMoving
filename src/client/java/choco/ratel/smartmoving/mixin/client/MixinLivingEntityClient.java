@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingSlider;
 import choco.ratel.smartmoving.client.SmartMovingSwimmer;
 import choco.ratel.smartmoving.climbing.ClimbGap;
 import choco.ratel.smartmoving.climbing.FeetClimbing;
@@ -58,6 +59,12 @@ public abstract class MixinLivingEntityClient {
 
         // [8-2] 수중 이동 처리 — SM이 처리하면 vanilla travel() 취소
         if (SmartMovingSwimmer.handleSwimming(player, sm, movementInput, this.jumping)) {
+            ci.cancel();
+            return;
+        }
+
+        // [9-4] 슬라이딩 처리 — SM이 처리하면 vanilla travel() 취소
+        if (SmartMovingSlider.handleSliding(player, sm)) {
             ci.cancel();
             return;
         }
@@ -150,6 +157,20 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(velocity);
+        }
+    }
+
+    /**
+     * 9-3: 크롤링/슬라이딩 중 LimbAnimator 갱신 억제.
+     * vanilla updateLimbs()는 보행 진행 속도로 LimbAnimator를 갱신하는데,
+     * 크롤링/슬라이딩 포즈에서 이를 그대로 실행하면 다리 애니메이션이 비정상 재생된다.
+     */
+    @Inject(method = "updateLimbs(Z)V", at = @At("HEAD"), cancellable = true)
+    private void sm_updateLimbs_client(boolean serverSide, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isSliding) {
+            ci.cancel();
         }
     }
 
