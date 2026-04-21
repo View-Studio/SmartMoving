@@ -26,7 +26,7 @@
 - [x] `SmartRenderModel.java`
 - [x] `SmartRenderRender.java`
 - [x] `ModelRotationRenderer.java`
-- [ ] `ModelPlayer.java`
+- [x] `ModelPlayer.java`
 - [ ] `RenderPlayer.java`
 - [ ] `IModelPlayer.java`
 - [ ] `IRenderPlayer.java`
