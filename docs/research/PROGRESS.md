@@ -131,7 +131,7 @@
 - [x] `SmartMovingRender.java`
 - [x] `SmartRenderContext.java`
 - [x] `IModelPlayer.java`
-- [ ] `IRenderPlayer.java`
+- [x] `IRenderPlayer.java`
 - [ ] `ModelPlayer.java`
 - [ ] `RenderPlayer.java`
 
