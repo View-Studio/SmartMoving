@@ -38,7 +38,7 @@
 - [x] `RendererData.java`
 - [x] `ModelSpecialRenderer.java`
 - [x] `ModelCapeRenderer.java`
-- [ ] `ModelEarsRenderer.java`
+- [x] `ModelEarsRenderer.java`
 
 ### net.smart.render.playerapi
 - [ ] `SmartRender.java`
