@@ -87,7 +87,7 @@
 - [x] `SmartMovingClient.java`
 - [x] `SmartMovingServer.java`
 - [x] `SmartMovingServerComm.java`
-- [ ] `SmartMovingComm.java`
+- [x] `SmartMovingComm.java`
 - [ ] `SmartMovingContext.java`
 - [ ] `SmartMovingCoreEventHandler.java`
 - [ ] `SmartMovingFactory.java`
