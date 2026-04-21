@@ -163,7 +163,7 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 
 - [x] `LivingEntity.travel()`
 - [x] `LivingEntity.tick()` / `tickMovement()`
-- [ ] `LivingEntity.updatePose()` → `trySetPose()`
+- [x] `LivingEntity.updatePose()` → `trySetPose()`
 - [ ] `LivingEntity.isInSwimmingPose()` — 호출되는 모든 곳 추적
 - [ ] `LivingEntity.jump()`
 - [ ] `PlayerEntity.getEntityPose()` 해당 Yarn 메서드
