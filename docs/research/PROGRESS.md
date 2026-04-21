@@ -23,7 +23,7 @@
 소스: https://github.com/makamys/SmartRender
 
 ### net.smart.render
-- [ ] `SmartRenderModel.java`
+- [x] `SmartRenderModel.java`
 - [ ] `SmartRenderRender.java`
 - [ ] `ModelRotationRenderer.java`
 - [ ] `ModelPlayer.java`
