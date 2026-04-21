@@ -138,7 +138,7 @@
 ### net.smart.moving.render.playerapi
 - [x] `SmartMoving.java`
 - [x] `SmartMovingModelPlayerBase.java`
-- [ ] `SmartMovingRenderPlayerBase.java`
+- [x] `SmartMovingRenderPlayerBase.java`
 
 ### net.smart.moving.test
 - [ ] `SmartMovingTestCommand.java`
