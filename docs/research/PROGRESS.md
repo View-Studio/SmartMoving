@@ -167,7 +167,7 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 - [x] `LivingEntity.isInSwimmingPose()` — 호출되는 모든 곳 추적
 - [x] `LivingEntity.jump()`
 - [x] `PlayerEntity.getEntityPose()` 해당 Yarn 메서드
-- [ ] `PlayerEntityRenderer.setupTransforms()`
+- [x] `PlayerEntityRenderer.setupTransforms()`
 - [ ] `PlayerEntityRenderer.getPositionOffset()`
 - [ ] `PlayerEntityModel.setAngles()`
 - [ ] `LivingEntityRenderer.render()`
