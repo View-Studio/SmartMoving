@@ -121,7 +121,7 @@
 
 ### net.smart.moving.playerapi
 - [x] `SmartMoving.java`
-- [ ] `SmartMovingFactory.java`
+- [x] `SmartMovingFactory.java`
 - [ ] `SmartMovingPlayerBase.java`
 - [ ] `SmartMovingSelf.java`
 - [ ] `SmartMovingServerPlayerBase.java`
