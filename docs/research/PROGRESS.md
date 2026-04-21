@@ -133,7 +133,7 @@
 - [x] `IModelPlayer.java`
 - [x] `IRenderPlayer.java`
 - [x] `ModelPlayer.java`
-- [ ] `RenderPlayer.java`
+- [x] `RenderPlayer.java`
 
 ### net.smart.moving.render.playerapi
 - [ ] `SmartMoving.java`
