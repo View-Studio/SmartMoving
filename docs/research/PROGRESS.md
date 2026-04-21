@@ -91,7 +91,7 @@
 - [x] `SmartMovingContext.java`
 - [x] `SmartMovingCoreEventHandler.java`
 - [x] `SmartMovingFactory.java`
-- [ ] `SmartMovingInfo.java`
+- [x] `SmartMovingInfo.java`
 - [ ] `SmartMovingInstall.java`
 - [ ] `SmartMovingMod.java`
 - [ ] `SmartMovingOther.java`
