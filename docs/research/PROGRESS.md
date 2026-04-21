@@ -93,7 +93,7 @@
 - [x] `SmartMovingFactory.java`
 - [x] `SmartMovingInfo.java`
 - [x] `SmartMovingInstall.java`
-- [ ] `SmartMovingMod.java`
+- [x] `SmartMovingMod.java`
 - [ ] `SmartMovingOther.java`
 - [ ] `SmartMovingPacketStream.java`
 - [ ] `Button.java`
