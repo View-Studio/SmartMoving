@@ -127,7 +127,7 @@
 - [x] `SmartMovingServerPlayerBase.java`
 
 ### net.smart.moving.render
-- [ ] `SmartMovingModel.java`
+- [x] `SmartMovingModel.java`
 - [ ] `SmartMovingRender.java`
 - [ ] `SmartRenderContext.java`
 - [ ] `IModelPlayer.java`
