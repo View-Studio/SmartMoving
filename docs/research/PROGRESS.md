@@ -94,7 +94,7 @@
 - [x] `SmartMovingInfo.java`
 - [x] `SmartMovingInstall.java`
 - [x] `SmartMovingMod.java`
-- [ ] `SmartMovingOther.java`
+- [x] `SmartMovingOther.java`
 - [ ] `SmartMovingPacketStream.java`
 - [ ] `Button.java`
 - [ ] `ClimbGap.java`
