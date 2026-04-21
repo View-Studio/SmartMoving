@@ -36,7 +36,7 @@
 - [x] `SmartRenderMod.java`
 - [x] `SmartRenderUtilities.java`
 - [x] `RendererData.java`
-- [ ] `ModelSpecialRenderer.java`
+- [x] `ModelSpecialRenderer.java`
 - [ ] `ModelCapeRenderer.java`
 - [ ] `ModelEarsRenderer.java`
 
