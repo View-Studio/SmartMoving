@@ -168,7 +168,7 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 - [x] `LivingEntity.jump()`
 - [x] `PlayerEntity.getEntityPose()` 해당 Yarn 메서드
 - [x] `PlayerEntityRenderer.setupTransforms()`
-- [ ] `PlayerEntityRenderer.getPositionOffset()`
+- [x] `PlayerEntityRenderer.getPositionOffset()`
 - [ ] `PlayerEntityModel.setAngles()`
 - [ ] `LivingEntityRenderer.render()`
 - [ ] `Entity.calculateDimensions()`
