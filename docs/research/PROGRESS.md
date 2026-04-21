@@ -74,7 +74,7 @@
 - [x] `SmartCoreClassVisitor.java`
 - [x] `SmartCoreContainer.java`
 - [x] `SmartCoreEventHandler.java`
-- [ ] `SmartCoreInfo.java`
+- [x] `SmartCoreInfo.java`
 - [ ] `SmartCoreMethodVisitor.java`
 - [ ] `SmartCorePlugin.java`
 - [ ] `SmartCoreTransformation.java`
