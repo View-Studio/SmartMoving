@@ -3,16 +3,8 @@
   "minVersion": "0.8",
   "package": "choco.ratel.smartmoving.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [
-    "LivingEntityDimensionsMixin",
-    "LivingEntityIsClimbingMixin",
-    "LivingEntityTravelMixin",
-    "PlayerEntityPoseMixin"
-  ],
+  "mixins": [],
   "injectors": {
     "defaultRequire": 1
-  },
-  "overwrites": {
-    "requireAnnotations": true
   }
 }

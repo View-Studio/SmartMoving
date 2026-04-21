@@ -3,21 +3,17 @@
   "id": "smartmoving",
   "version": "${version}",
   "name": "SmartMoving",
-  "description": "Akashic records system mod",
+  "description": "",
   "authors": [],
   "contact": {},
   "license": "All-Rights-Reserved",
-  "icon": "assets/smartmoving/icon.png",
   "environment": "*",
   "entrypoints": {
-    "fabric-datagen": [
-      "choco.ratel.smartmoving.client.SmartmovingDataGenerator"
+    "main": [
+      "choco.ratel.smartmoving.SmartMoving"
     ],
     "client": [
-      "choco.ratel.smartmoving.client.SmartmovingClient"
-    ],
-    "main": [
-      "choco.ratel.smartmoving.Smartmoving"
+      "choco.ratel.smartmoving.client.SmartMovingClient"
     ]
   },
   "mixins": [

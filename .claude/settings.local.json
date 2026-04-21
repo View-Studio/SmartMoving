@@ -17,7 +17,28 @@
       "Read(//c/tmp/**)",
       "Bash(curl -s https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/java/net/smart/moving/SmartMovingSelf.java -o SmartMovingSelf.java)",
       "Bash(jar tf *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(gh api *)",
+      "Bash(git add *)",
+      "Bash(curl *)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/java/net/smart/moving/SmartMovingSelf.java\")",
+      "Read(//tmp/**)",
+      "Bash(unzip -l /c/Users/user/.gradle/caches/fabric-loom/decompile/v1.zip)",
+      "Bash(grep \"\\\\\"tick\\\\\"\\\\|method_1937\\\\b\\\\|\\\\\"void tick\\\\\"\\\\| tick$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(grep \"\\(\\)V.*tick$\")",
+      "Bash(grep \"\\(\\)V.*\\\\btick\\\\b$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(awk '/^c\\\\tbtn\\\\t/{found=1} found && /^\\\\tc\\\\t/{found=0} found && /\\\\btick\\\\b$/' /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(grep -B1 \"tick$\")",
+      "Bash(python3 -c \" import sys lines = open\\('/c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny', encoding='utf-8'\\).readlines\\(\\) in_btn = False for line in lines: if line.startswith\\('c\\\\tbtn\\\\t'\\): in_btn = True elif in_btn and line.startswith\\('c\\\\t'\\) and not line.startswith\\('c\\\\tbtn'\\): break if in_btn and 'tick' in line and line.strip\\(\\).startswith\\('m\\\\t'\\): print\\(repr\\(line.rstrip\\(\\)\\)\\) \")",
+      "Bash(python3 *)",
+      "Bash(javap -c -p /c/Users/user/AppData/Local/Temp/net/minecraft/client/render/entity/PlayerEntityRenderer.class)",
+      "Bash(grep \"net/minecraft/entity/player/PlayerEntity$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(mkdir -p /tmp/decompile_player)",
+      "Bash(jar xf *)",
+      "Bash(javap *)",
+      "Bash(grep \"EntityRenderer.class$\")",
+      "Bash(grep \"net/minecraft/client/render/entity/EntityRenderer$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)",
+      "Bash(grep \"net/minecraft/client/render/entity/EntityRenderDispatcher$\" /c/Users/user/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny)"
     ]
   }
 }
