@@ -170,7 +170,7 @@ Yarn 매핑 확인: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.*/map
 - [x] `PlayerEntityRenderer.setupTransforms()`
 - [x] `PlayerEntityRenderer.getPositionOffset()`
 - [x] `PlayerEntityModel.setAngles()`
-- [ ] `LivingEntityRenderer.render()`
+- [x] `LivingEntityRenderer.render()`
 - [ ] `Entity.calculateDimensions()`
 - [ ] 서버 위치/속도 보정 코드 경로 (`ServerPlayNetworkHandler` 등)
 
