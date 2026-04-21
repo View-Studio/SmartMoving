@@ -150,7 +150,7 @@
 - [x] `Value.java`
 
 ### net.smart.utilities
-- [ ] `Name.java`
+- [x] `Name.java`
 - [ ] `Reflect.java`
 
 ---
