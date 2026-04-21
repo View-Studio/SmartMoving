@@ -97,7 +97,7 @@
 - [x] `SmartMovingOther.java`
 - [x] `SmartMovingPacketStream.java`
 - [x] `Button.java`
-- [ ] `ClimbGap.java`
+- [x] `ClimbGap.java`
 - [ ] `Compat.java`
 - [ ] `FeetClimbing.java`
 - [ ] `HandsClimbing.java`
