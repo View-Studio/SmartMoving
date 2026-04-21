@@ -109,7 +109,7 @@
 - [x] `ISmartMovingClient.java`
 - [x] `ISmartMovingSelf.java`
 - [x] `LocalUserNameProvider.java`
-- [ ] `Orientation.java`
+- [x] `Orientation.java`
 
 ### net.smart.moving.config
 - [ ] `SmartMovingClientConfig.java`
