@@ -805,3 +805,66 @@
 30. **moved wrongly 통합 테스트**: 클라이밍/점프 이동 서버-클라이언트 위치 일치 확인
 31. **SWIMMING 포즈 충돌 테스트**: 크롤링/잠수/헤드점프 렌더 상호 간섭 없음 확인
 32. **leaningPitch 전환 속도 테스트**: 크롤링 진입/이탈 시 애니메이션 자연스러운지 확인
+
+---
+
+## 미완료 항목 모음
+
+> 구현 중단된 항목들. 이유와 필요한 리서치 방향을 기록해둠.
+> 재개 시: 리서치 파일 작성 → 체크리스트 항목 복귀 → 구현 순서로 진행.
+
+---
+
+### [Phase 3] 3-3-B: `addMovementStat` HEAD+TAIL Mixin
+
+**내용**
+`PlayerEntity.addMovementStat(dx, dy, dz)` 앞뒤에 `beforeAddMovingHungerBatch()` / `afterAddMovingHungerBatch()`를 Inject해서, SM이 직접 계산한 허기값을 적용하고 vanilla 소진은 차단하는 구조.
+- HEAD: `disableAddExhaustion = true` 설정
+- TAIL: `sm.hunger` 값으로 직접 addExhaustion 호출 후 `disableAddExhaustion = false` 해제
+
+**미완료 이유**
+1.21.1 Yarn 매핑에서 이 메서드의 정확한 이름을 확인하지 못했다. 원본(1.7.10 MCP)의 `addMovementStat`이 Yarn에서 같은 이름인지, 아니면 `increaseStat` / `addTravelExhaustion` 등 다른 이름으로 매핑됐는지 불확실하다. 잘못된 메서드명으로 Mixin을 걸면 런타임 `Invalid mixin target` 크래시가 발생한다.
+
+**필요한 리서치**
+- 1.21.1 Yarn 소스에서 `PlayerEntity` 내 이동 거리 통계 및 소진을 처리하는 메서드명 확인
+- 참고: Yarn GitHub `net/minecraft/entity/player/PlayerEntity.java` 또는 Fabric loom decompile 결과
+
+---
+
+### [Phase 3] 3-3-C: `updatePotionEffects` HEAD+TAIL 역전 처리
+
+**내용**
+원본 SM의 의도적 역전 구조: `LivingEntity.updatePotionEffects()` (또는 동등 메서드)의
+- HEAD: `afterAddMovingHungerBatch()` 호출 (`disableAddExhaustion = false`)
+- TAIL: `beforeAddMovingHungerBatch()` 호출 (`disableAddExhaustion = true`)
+
+포션 업데이트 사이클 타이밍과 허기 배치 처리를 맞추기 위한 구조로, 3-3-B(`addMovementStat` Mixin)와 쌍으로 동작한다.
+
+**미완료 이유**
+두 가지.
+1. 3-3-B(`addMovementStat`)가 선행 구현되어야 이 항목이 의미 있다.
+2. 1.21.1 Yarn에서 `LivingEntity`의 포션 업데이트 메서드명이 `tickStatusEffects`인지 `updatePotionEffects`인지 확인되지 않았다.
+
+**필요한 리서치**
+- 1.21.1 Yarn 소스에서 `LivingEntity` 내 포션/상태효과 틱 처리 메서드명 확인
+- 참고: Yarn GitHub `net/minecraft/entity/LivingEntity.java` 또는 loom decompile
+
+---
+
+### [Phase 3] 3-6: `setSmall()` — 서버 플레이어 히트박스 동적 변경
+
+**내용**
+크롤링(`isSmall == true`) 시 서버 플레이어 히트박스를 높이 0.8F로 축소, 해제 시 1.8F로 복원.
+원본은 `player.setHeight(float)` 한 줄이었으나 1.21.1에서 `EntityDimensions` 시스템으로 교체됐다.
+
+**미완료 이유**
+1.21.1에서 런타임 히트박스 변경 방법이 복잡하다. 단순 setter가 없고 아래 구조가 필요하다:
+1. `EntityDimensions.fixed(width, height)` 생성
+2. Mixin으로 `getBaseDimensions(EntityPose)` 오버라이드 — `isSmall` 상태일 때 축소 치수 반환
+3. `player.calculateDimensions()` 호출 — 서버에서 히트박스 갱신 + 클라이언트에 동기화
+
+이를 잘못 구현하면 서버-클라이언트 히트박스 desync가 발생한다. Phase 5(포즈/치수 시스템)에서 `getBaseDimensions` Mixin을 이미 다룰 예정이므로, 그 시점에 함께 구현하는 것이 안전하다.
+
+**필요한 리서치**
+- Phase 5 `getBaseDimensions()` / `calculateDimensions()` Mixin 리서치와 통합해서 진행
+- 참고: `docs/research_포즈치수.md` (Phase 5 리서치 파일 작성 시 함께 다룰 것)
