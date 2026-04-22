@@ -111,21 +111,21 @@ public abstract class MixinLivingEntity {
         }
     }
 
-    // ── 3-3-C: 포션 업데이트 사이클 역전 처리 stub ──────────────────────────
-    // 1.21.1 Yarn명: LivingEntity.tickStatusEffects() (A-28 확인)
-    // HEAD: afterAddMovingHungerBatch (disableAddExhaustion depth 감소)
-    // TAIL: beforeAddMovingHungerBatch (disableAddExhaustion depth 증가)
-    // C-23: <methodName>을 tickStatusEffects로 교체 후 아래 두 메서드 활성화
-    //
-    // @Inject(method = "<methodName>", at = @At("HEAD"))
-    // private void sm_beforeTickStatusEffects(CallbackInfo ci) {
-    //     if (!((Object) this instanceof ServerPlayerEntity player)) return;
-    //     SmartMovingServer.get(player).afterAddMovingHungerBatch();
-    // }
-    //
-    // @Inject(method = "<methodName>", at = @At("TAIL"))
-    // private void sm_afterTickStatusEffects(CallbackInfo ci) {
-    //     if (!((Object) this instanceof ServerPlayerEntity player)) return;
-    //     SmartMovingServer.get(player).beforeAddMovingHungerBatch();
-    // }
+    // ── C-23: tickStatusEffects() HEAD/TAIL — 포션 업데이트 사이클 역전 처리 ──
+    // 원본: beforeUpdatePotionEffects→afterAddMovingHungerBatch,
+    //       afterUpdatePotionEffects→beforeAddMovingHungerBatch (의도적 역전, A-28 확인)
+    // HEAD: afterAddMovingHungerBatch (depth 감소)
+    // TAIL: beforeAddMovingHungerBatch (depth 증가)
+
+    @Inject(method = "tickStatusEffects", at = @At("HEAD"))
+    private void sm_beforeTickStatusEffects(CallbackInfo ci) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer.get(player).afterAddMovingHungerBatch();
+    }
+
+    @Inject(method = "tickStatusEffects", at = @At("TAIL"))
+    private void sm_afterTickStatusEffects(CallbackInfo ci) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer.get(player).beforeAddMovingHungerBatch();
+    }
 }

@@ -1,7 +1,9 @@
 package choco.ratel.smartmoving.mixin.server;
 
 import choco.ratel.smartmoving.server.SmartMovingServer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -82,25 +84,24 @@ public abstract class MixinServerPlayerEntity {
         }
     }
 
-    // ── 3-3-B: addMovementStat HEAD+TAIL stub ────────────────────────────────
-    // 1.21.1: addMovementStat 독립 메서드 없음 — 소진 처리는 PlayerEntity.travel() 인라인 (A-27 확인)
-    // travel()에 HEAD/TAIL inject로 소진 배치 처리 필요
-    // C-22: @Inject(method="travel") HEAD+TAIL으로 소진 배치 구현
-    //
-    // @Inject(method = "<methodName>", at = @At("HEAD"))
-    // private void sm_beforeMovementStat(CallbackInfo ci) {
-    //     SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
-    //     sm.beforeAddMovingHungerBatch();
-    // }
-    //
-    // @Inject(method = "<methodName>", at = @At("TAIL"))
-    // private void sm_afterMovementStat(CallbackInfo ci) {
-    //     SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
-    //     if (sm.hunger > 0F) {
-    //         sm.disableAddExhaustion = false;
-    //         ((PlayerEntity)(Object)this).addExhaustion(sm.hunger);
-    //         sm.hunger = 0F;
-    //     }
-    //     sm.afterAddMovingHungerBatch();
-    // }
+    // ── C-22: travel() HEAD/TAIL — SM 소진 배치 처리 ─────────────────────────
+    // 원본: addMovementStat()이 없어짐 → travel() 인라인 처리 (A-27 확인)
+    // HEAD: beforeAddMovingHungerBatch() — 소진 차단 시작
+    // TAIL: hunger 반영 후 afterAddMovingHungerBatch() — 소진 차단 해제
+
+    @Inject(method = "travel", at = @At("HEAD"))
+    private void sm_beforeTravel(Vec3d movementInput, CallbackInfo ci) {
+        SmartMovingServer.get((ServerPlayerEntity)(Object)this).beforeAddMovingHungerBatch();
+    }
+
+    @Inject(method = "travel", at = @At("TAIL"))
+    private void sm_afterTravel(Vec3d movementInput, CallbackInfo ci) {
+        SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
+        if (sm.hunger > 0F) {
+            sm.disableAddExhaustion = false;
+            ((PlayerEntity)(Object)this).addExhaustion(sm.hunger);
+            sm.hunger = 0F;
+        }
+        sm.afterAddMovingHungerBatch();
+    }
 }

@@ -503,14 +503,14 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 | ID | 미구현 기능 | 의존 리서치 | 코드 위치 | 상태 |
 |----|-----------|-----------|----------|------|
 | C-15 | `tickEssential()` 본체 — 상태 패킷 전송, 키 입력 처리, `jumpAvoided` 리셋 등 | — | SmartMovingClientState.java L147 | [x] → jumpAvoided 초기화, configToggle.wasPressed() 토글, !enabled → resetState(). SmartMovingConfig에 enabled 필드 + toggle() 추가. |
-| C-16 | ConfigInfo 서버 수신 처리 — 클라이언트 SM 버전 검증/로깅 | — | SmartMoving.java L53 | [ ] |
-| C-17 | ConfigChange 서버 수신 처리 — 권한 검증 후 Config 적용 + 클라이언트 알림 메시지 | A-26 | SmartMoving.java L59 | [ ] |
-| C-18 | SpeedChange 서버 수신 처리 — 권한 검증 후 `changeSpeed()` 호출 및 클라이언트 동기화 | — | SmartMoving.java L65 | [ ] |
-| C-19 | Sound 패킷 처리 — SM 사운드 요청을 서버 측에서 주변 플레이어에게 재생 | — | SmartMoving.java L77 | [ ] |
-| C-20 | `heightOffset` setPos 위치 보정 — `afterMoveEntity`에서 헤드점프 시 Y 위치 오프셋 적용 | — | MixinEntity.java L71 | [ ] |
-| C-21 | "moved wrongly" 완화 — SM 클라이밍/크롤링 중 서버 위치 검증 skip | A-29 | MixinServerPlayNetworkHandler.java L39 | [ ] |
-| C-22 | `addMovementStat` Mixin — SM 소진 배치 시스템 HEAD+TAIL 연결 | A-27 | MixinServerPlayerEntity.java L86 | [ ] |
-| C-23 | `tickStatusEffects` Mixin — 소진 배치 역전 처리 HEAD+TAIL 연결 | A-28 | MixinLivingEntity.java L115 | [ ] |
+| C-16 | ConfigInfo 서버 수신 처리 — 클라이언트 SM 버전 검증/로깅 | — | SmartMoving.java L53 | [x] → SmartMovingServer.clientVersion 필드에 저장. |
+| C-17 | ConfigChange 서버 수신 처리 — 권한 검증 후 Config 적용 + 클라이언트 알림 메시지 | A-26 | SmartMoving.java L59 | [x] → 서버 설정 활성 중 항상 거부: ConfigChangePayload S2C 전송. 클라이언트가 "no rights" 메시지 표시. |
+| C-18 | SpeedChange 서버 수신 처리 — 권한 검증 후 `changeSpeed()` 호출 및 클라이언트 동기화 | — | SmartMoving.java L65 | [x] → Config.speedUser=true → S2C(difference) 허용; false → S2C(0) 거부. |
+| C-19 | Sound 패킷 처리 — SM 사운드 요청을 서버 측에서 주변 플레이어에게 재생 | — | SmartMoving.java L77 | [x] → SmartMovingSounds.java + sounds.json 작성, ServerWorld.playSound()로 주변 릴레이. |
+| C-20 | `heightOffset` setPos 위치 보정 — `afterMoveEntity`에서 헤드점프 시 Y 위치 오프셋 적용 | — | MixinEntityClient.java sm_afterMove_client | [x] → `sm.heightOffset != 0F` 시 `player.setPos(x, y - heightOffset, z)` 적용. |
+| C-21 | "moved wrongly" 완화 — SM 클라이밍/크롤링 중 서버 위치 검증 skip | A-29 | MixinServerPlayNetworkHandler.java | [x] → @Inject(onPlayerMove HEAD) + @Redirect(requestTeleport, require=0): SM 이동 중 rubber-band 차단. |
+| C-22 | `addMovementStat` Mixin — SM 소진 배치 시스템 HEAD+TAIL 연결 | A-27 | MixinServerPlayerEntity.java | [x] → travel() HEAD: beforeAddMovingHungerBatch(), TAIL: hunger 반영+afterAddMovingHungerBatch(). |
+| C-23 | `tickStatusEffects` Mixin — 소진 배치 역전 처리 HEAD+TAIL 연결 | A-28 | MixinLivingEntity.java | [x] → tickStatusEffects HEAD: afterAddMovingHungerBatch(), TAIL: beforeAddMovingHungerBatch() (역전). |
 | C-24 | 다른 플레이어 State 패킷 수신 처리 — `StatePayload` 수신 시 타인 SmartMovingClientState 갱신 | — | SmartMovingClient.java L38 | [ ] |
 | C-25 | `SmartStatistics` 계산 로직 구현 — 렌더 틱마다 `currentVerticalAngle`, `horizontalDistance` 등 갱신 | — | SmartStatistics.java (계산 없음) | [ ] |
 | C-26 | 클라이밍 — `climbIntoCount` (크롤-클라이밍 갭 진입 카운터) 상태 필드 및 `setShouldClimbSpeed` 연결 | — | SmartMovingClimber.java L177 | [ ] |

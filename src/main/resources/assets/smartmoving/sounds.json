@@ -1,0 +1,17 @@
+{
+  "climb": {
+    "category": "player",
+    "subtitle": "subtitles.smartmoving.climb",
+    "sounds": []
+  },
+  "slide": {
+    "category": "player",
+    "subtitle": "subtitles.smartmoving.slide",
+    "sounds": []
+  },
+  "ceiling_climb": {
+    "category": "player",
+    "subtitle": "subtitles.smartmoving.ceiling_climb",
+    "sounds": []
+  }
+}

@@ -67,6 +67,9 @@ public final class SmartMovingServer {
     /** 클라이밍 이동 거리 누적 (피로도 계산용). 원본 distanceClimbedModified 이식. */
     public double distanceClimbedModified;
 
+    /** 클라이언트가 전송한 SM 버전 문자열 (ConfigInfo 패킷). null=미수신 */
+    public String clientVersion;
+
     // ── 패킷에서 디코딩된 이동 상태 ──────────────────────────────
 
     public boolean isClimbing;
@@ -199,6 +202,35 @@ public final class SmartMovingServer {
                 : new String[0];
         ServerPlayNetworking.send(player,
                 new SmartMovingNetwork.ConfigContentPayload(lines, null));
+    }
+
+    // ── C-16: ConfigInfo 수신 — 클라이언트 SM 버전 저장 ─────────────
+
+    /** 원본: SmartMovingComm.processConfigInfoPacket (server-side) — 클라이언트 버전 기록. */
+    public void processConfigInfoPacket(String info) {
+        clientVersion = info;
+    }
+
+    // ── C-17: ConfigChange 수신 — 서버 설정 변경 권한 거부 응답 ────────
+
+    /**
+     * 클라이언트가 서버 설정 토글을 요청했으나 서버 설정이 활성화된 경우 항상 거부.
+     * 원본: 서버가 ConfigChange S2C를 전송 → 클라이언트 "no rights" 메시지 표시.
+     */
+    public static void processConfigChangePacket(ServerPlayerEntity player) {
+        ServerPlayNetworking.send(player, new SmartMovingNetwork.ConfigChangePayload());
+    }
+
+    // ── C-18: SpeedChange 수신 — 권한 검증 후 속도 변경 동기화 ─────────
+
+    /**
+     * 클라이언트 속도 변경 요청 처리.
+     * speedUser=true → 허용: difference 그대로 반환 → 클라이언트가 changeSpeed() 적용.
+     * speedUser=false → 거부: difference=0 반환 → 클라이언트 "no rights" 메시지 표시.
+     */
+    public static void processSpeedChangePacket(ServerPlayerEntity player, int difference) {
+        int response = SmartMovingConfig.Config.speedUser ? difference : 0;
+        ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(response, null));
     }
 
     // ── 3-8: 권한 확인 ───────────────────────────────────────────

@@ -7,7 +7,11 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.util.Identifier;
 
 public class SmartMoving implements ModInitializer {
 
@@ -16,6 +20,7 @@ public class SmartMoving implements ModInitializer {
     @Override
     public void onInitialize() {
         SmartMovingConfig.load();
+        SmartMovingSounds.register();
         SmartMovingNetwork.register();
         registerServerReceivers();
         registerConnectionEvents();
@@ -47,23 +52,20 @@ public class SmartMoving implements ModInitializer {
                 });
             });
 
-        // ConfigInfo: 클라이언트 설정 정보 수신
+        // ConfigInfo: 클라이언트 설정 정보 수신 → SM 버전 저장 (C-16)
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigInfoPayload.ID,
-            (payload, context) -> {
-                // TODO Phase 7: SmartMovingServer.processConfigInfoPacket(context.player(), payload.config())
-            });
+            (payload, context) ->
+                SmartMovingServer.get(context.player()).processConfigInfoPacket(payload.config()));
 
-        // ConfigChange: 클라이언트 설정 변경 요청 수신
+        // ConfigChange: 클라이언트 설정 변경 요청 수신 → 거부 응답 (C-17)
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigChangePayload.ID,
-            (payload, context) -> {
-                // TODO Phase 7: SmartMovingServer.processConfigChangePacket(context.player())
-            });
+            (payload, context) ->
+                SmartMovingServer.processConfigChangePacket(context.player()));
 
-        // SpeedChange: 클라이언트 속도 변경 요청 수신
+        // SpeedChange: 클라이언트 속도 변경 요청 수신 → 권한 검증 후 응답 (C-18)
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.SpeedChangePayload.ID,
-            (payload, context) -> {
-                // TODO Phase 7: SmartMovingServer.processSpeedChangePacket(payload.difference(), payload.username())
-            });
+            (payload, context) ->
+                SmartMovingServer.processSpeedChangePacket(context.player(), payload.difference()));
 
         // HungerChange: 클라이언트 소진값 수신 — 서버 hunger 필드 갱신
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.HungerChangePayload.ID,
@@ -71,10 +73,18 @@ public class SmartMoving implements ModInitializer {
                 SmartMovingServer.get(context.player()).hunger = payload.hunger();
             });
 
-        // Sound: SM 사운드 요청 수신
+        // Sound: SM 사운드 요청 수신 → 주변 플레이어에게 재생 (C-19)
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.SoundPayload.ID,
             (payload, context) -> {
-                // TODO Phase 3: SmartMovingServer.processSoundPacket(context.player(), payload)
+                ServerPlayerEntity sender = context.player();
+                SoundEvent event = Registries.SOUND_EVENT.get(Identifier.of(payload.soundId()));
+                if (event == null) return;
+                context.server().execute(() ->
+                    sender.getServerWorld().playSound(
+                        sender,
+                        sender.getX(), sender.getY(), sender.getZ(),
+                        event, SoundCategory.PLAYERS,
+                        payload.volume(), payload.pitch()));
             });
     }
 }

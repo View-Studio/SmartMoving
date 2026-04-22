@@ -78,6 +78,13 @@ public abstract class MixinEntityClient {
             sm.distanceClimbedModified += movement.length() * (sm.isClimbing ? 1.2 : 0.9);
         }
 
+        // 헤드점프 heightOffset 위치 보정 (C-20)
+        // 원본: afterMoveEntity() — setPosition(x, y - heightOffset, z)
+        // heightOffset = -1F 시: y - (-1F) = y + 1F → 플레이어를 1블록 위로 보정
+        if (sm.heightOffset != 0F) {
+            player.setPos(player.getX(), player.getY() - sm.heightOffset, player.getZ());
+        }
+
         // 수영 소리 누적 (8-6)
         // isSwimming_sm: SM 수면 수영 상태 (vanilla isSwimming()과 구별하기 위해 필드명 구분)
         if (sm.isSwimming_sm) {
