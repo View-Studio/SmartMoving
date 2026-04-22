@@ -511,8 +511,8 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 | C-21 | "moved wrongly" 완화 — SM 클라이밍/크롤링 중 서버 위치 검증 skip | A-29 | MixinServerPlayNetworkHandler.java | [x] → @Inject(onPlayerMove HEAD) + @Redirect(requestTeleport, require=0): SM 이동 중 rubber-band 차단. |
 | C-22 | `addMovementStat` Mixin — SM 소진 배치 시스템 HEAD+TAIL 연결 | A-27 | MixinServerPlayerEntity.java | [x] → travel() HEAD: beforeAddMovingHungerBatch(), TAIL: hunger 반영+afterAddMovingHungerBatch(). |
 | C-23 | `tickStatusEffects` Mixin — 소진 배치 역전 처리 HEAD+TAIL 연결 | A-28 | MixinLivingEntity.java | [x] → tickStatusEffects HEAD: afterAddMovingHungerBatch(), TAIL: beforeAddMovingHungerBatch() (역전). |
-| C-24 | 다른 플레이어 State 패킷 수신 처리 — `StatePayload` 수신 시 타인 SmartMovingClientState 갱신 | — | SmartMovingClient.java L38 | [ ] |
-| C-25 | `SmartStatistics` 계산 로직 구현 — 렌더 틱마다 `currentVerticalAngle`, `horizontalDistance` 등 갱신 | — | SmartStatistics.java (계산 없음) | [ ] |
+| C-24 | 다른 플레이어 State 패킷 수신 처리 — `StatePayload` 수신 시 타인 SmartMovingClientState 갱신 | — | SmartMovingClient.java L38 | [x] → SmartMovingClientState.get(UUID) + processStatePacket() 추가; entityId→UUID 조회 후 bits 디코드. |
+| C-25 | `SmartStatistics` 계산 로직 구현 — 렌더 틱마다 `currentVerticalAngle`, `horizontalDistance` 등 갱신 | — | SmartStatistics.java | [x] → calculate(prevX..z, x..z): horizontalDistance/verticalAngle/speed 계산; SmartMovingClientState.stats 필드 추가; sm_afterMove_client에서 호출. |
 | C-26 | 클라이밍 — `climbIntoCount` (크롤-클라이밍 갭 진입 카운터) 상태 필드 및 `setShouldClimbSpeed` 연결 | — | SmartMovingClimber.java L177 | [ ] |
 | C-27 | 클라이밍 — `hasClimbCrawlGap`, `isClimbCrawling` 상태 필드 추가 및 `setShouldClimbSpeed` 상한 처리 연결 | — | SmartMovingClimber.java L198 | [ ] |
 | C-28 | 클라이밍 — `isClimbHolding`, `isClimbJumping` 상태 필드 추가 및 `setShouldClimbSpeed` TAIL 연결 | — | SmartMovingClimber.java L204 | [ ] |

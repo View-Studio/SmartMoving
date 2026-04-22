@@ -73,6 +73,10 @@ public abstract class MixinEntityClient {
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
+        // C-25: SmartStatistics 갱신 — prevX/Y/Z는 tickMovement HEAD에서 저장된 이전 위치
+        sm.stats.calculate(player.prevX, player.prevY, player.prevZ,
+                           player.getX(), player.getY(), player.getZ());
+
         // 클라이밍 이동 거리 누적
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             sm.distanceClimbedModified += movement.length() * (sm.isClimbing ? 1.2 : 0.9);

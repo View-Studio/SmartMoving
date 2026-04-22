@@ -3,6 +3,7 @@ package choco.ratel.smartmoving.client;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
+import choco.ratel.smartmoving.stat.SmartStatistics;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -140,12 +141,21 @@ public final class SmartMovingClientState {
     /** 수영 소리 누적 거리. SwimSoundDistance(≈1.4286F) 초과 시 소리 재생. */
     public double distanceSwom;
 
+    // ── C-25: SmartStatistics ──────────────────────────────────────────
+    /** 이동 통계 인스턴스. move() TAIL 이후 calculate()로 갱신. */
+    public final SmartStatistics stats = new SmartStatistics();
+
     // ── 인스턴스 관리 ─────────────────────────────────────────────────
 
     private static final Map<UUID, SmartMovingClientState> INSTANCES = new HashMap<>();
 
     public static SmartMovingClientState get(ClientPlayerEntity player) {
         return INSTANCES.computeIfAbsent(player.getUuid(), id -> new SmartMovingClientState());
+    }
+
+    /** 타 플레이어용 — UUID로 직접 조회/생성 (C-24: State 패킷 수신) */
+    public static SmartMovingClientState get(java.util.UUID uuid) {
+        return INSTANCES.computeIfAbsent(uuid, id -> new SmartMovingClientState());
     }
 
     public static void remove(ClientPlayerEntity player) {
@@ -159,6 +169,33 @@ public final class SmartMovingClientState {
      */
     public boolean isAngleJumping() {
         return angleJumpType > 1 && angleJumpType < 7;
+    }
+
+    // ── C-24: processStatePacket() ────────────────────────────────────
+
+    /**
+     * 타 플레이어 State 패킷의 34비트 long에서 클라이언트가 필요한 비트를 추출한다.
+     * 원본: SmartMovingOther.processStatePacket(long state)
+     * 렌더링/애니메이션에 사용되는 필드만 갱신한다.
+     */
+    public void processStatePacket(long bits) {
+        isClimbing        = ((bits >> 14) & 1) != 0;
+        isCrawlClimbing   = ((bits >> 12) & 1) != 0;
+        isCeilingClimbing = ((bits >> 18) & 1) != 0;
+        isWallJumping     = ((bits >> 31) & 1) != 0;
+        isCrawling        = ((bits >> 13) & 1) != 0;
+        isSmall           = ((bits >> 15) & 1) != 0;
+        isSliding         = ((bits >> 21) & 1) != 0;
+        isHeadJumping     = ((bits >> 20) & 1) != 0;
+        isDipping         = ((bits >> 10) & 1) != 0;
+        isSwimming_sm     = ((bits >> 11) & 1) != 0;
+        isDiving          = ((bits >>  9) & 1) != 0;
+        isSlow            = ((bits >> 29) & 1) != 0;
+        isFast            = ((bits >> 30) & 1) != 0;
+        isFlying          = ((bits >> 17) & 1) != 0;   // doFlyingAnimation bit
+        isClimbJumping    = ((bits >> 27) & 1) != 0;
+        angleJumpType     = (int) ((bits >> 22) & 0x7);
+        isRopeSliding     = ((bits >> 32) & 1) != 0;
     }
 
     // ── 4-2: tickEssential() ─────────────────────────────────────────

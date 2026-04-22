@@ -8,6 +8,8 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
 
 public class SmartMovingClient implements ClientModInitializer {
@@ -33,10 +35,18 @@ public class SmartMovingClient implements ClientModInitializer {
     }
 
     private static void registerClientReceivers() {
-        // State: 다른 플레이어의 이동 상태 수신 (서버 릴레이)
+        // State: 다른 플레이어의 이동 상태 수신 (서버 릴레이) — C-24
+        // 원본: SmartMovingFactory.getOtherSmartMoving(entityId).processStatePacket(state)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.StatePayload.ID,
             (payload, context) -> {
-                // TODO Phase 4/6: SmartMovingFactory.getOtherSmartMoving(entityId).processStatePacket(state)
+                MinecraftClient client = context.client();
+                client.execute(() -> {
+                    ClientWorld world = client.world;
+                    if (world == null) return;
+                    Entity entity = world.getEntityById(payload.entityId());
+                    if (entity == null) return;
+                    SmartMovingClientState.get(entity.getUuid()).processStatePacket(payload.state());
+                });
             });
 
         // ConfigContent: 서버 설정 수신 → Config 전환 (C-11)
