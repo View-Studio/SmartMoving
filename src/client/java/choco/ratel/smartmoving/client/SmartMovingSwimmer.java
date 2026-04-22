@@ -184,8 +184,8 @@ public final class SmartMovingSwimmer {
         float sin = (float) Math.sin(yawRad);
         float cos = (float) Math.cos(yawRad);
 
-        double dx = forward * cos - strafe * sin;
-        double dz = forward * sin + strafe * cos;
+        double dx = strafe * cos - forward * sin;
+        double dz = forward * cos + strafe * sin;
 
         double horLen = Math.sqrt(dx * dx + dz * dz);
         double total  = Math.sqrt(horLen); // sqrt(sqrt(x²+z²)) — SM 비표준 공식

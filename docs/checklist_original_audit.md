@@ -62,7 +62,7 @@
 | 상태 | 리서치 파일 (smartmoving/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
 | [x] | `moving/SmartMovingContext.md` | `SmartMovingContext.java` |
-| [ ] | `moving/SmartMovingBase.md` | `SmartMovingClimber.java`, `SmartMovingSwimmer.java`, `SmartMovingJumper.java`, `SmartMovingSlider.java`, `SmartMovingFlyer.java`, `MixinLivingEntityClient.java` |
+| [x] | `moving/SmartMovingBase.md` | `SmartMovingClimber.java`, `SmartMovingSwimmer.java`, `SmartMovingJumper.java`, `SmartMovingSlider.java`, `SmartMovingFlyer.java`, `MixinLivingEntityClient.java` |
 | [ ] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
 | [ ] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
 | [ ] | `playerapi/SmartMovingSelf.md` | `SmartMovingClient.java`, `MixinLivingEntityClient.java` (moving/SmartMovingSelf.md와 별도 파일) |
@@ -293,6 +293,28 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-22] moving/SmartMovingBase.md
+
+대응 구현: SmartMovingClimber.java, SmartMovingSwimmer.java, SmartMovingFlyer.java, SmartMovingMover.java, MixinLivingEntityClient.java
+
+발견한 불일치:
+- [오역] `SmartMovingSwimmer.moveFlying()` 방향벡터 공식 오류 → 즉시 수정
+  - 버그: `dx = forward*cos - strafe*sin`, `dz = forward*sin + strafe*cos`
+  - 원본: `dx = strafe*cos - forward*sin`, `dz = forward*cos + strafe*sin`
+  - 수정: SmartMovingSwimmer.java L187-188 수정 완료
+- [누락] `reverseHandleMaterialAcceleration()` 미구현 — 수영 중 물 흐름 +0.014D 역상쇄(-0.014D) 없음. SmartMovingSelf 감사 시 처리
+- [누락] `correctOnUpdate(isSmall, reverseMaterialAcceleration)` 미구현 — 느린 이동(0.02<f<0.05) 시 renderYawOffset 보정 없음. SmartMovingSelf 감사 시 처리
+
+오역 없음:
+- `SmartMovingFlyer.moveFlying()` 5-arg 공식: `sqrt(sqrt(x²+z²) + y²)` 원본과 일치 ✓
+- `getOnLadderOrVine()` 탐색 범위 (minY~py+1, isSmall→py-1 확장): 원본과 일치 ✓
+- `handleCeilingClimbing()` jgap 기반 속도(0.04/0.08/0.12): 원본과 일치 ✓
+
+신규 발견 미구현:
+- `reverseHandleMaterialAcceleration`, `correctOnUpdate` → SmartMovingSelf.md 감사 시 처리
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -303,3 +325,5 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-22 | `SmartMovingContext.md` | `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠 미구현. 사용처 없음 | 미처리 (SmartMovingSelf 감사 예정) |
 | 2026-04-22 | `SmartMovingContext.md` | `HorizontalAirodynamicDamping`(0.999F) — 공기역학적 감쇠 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
 | 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환 로직이 SmartMovingSlider에 없음 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingBase.md` | `reverseHandleMaterialAcceleration()` — 수영 중 물 흐름 가속 역상쇄(-0.014D) 미구현. SmartMovingSelf.correctOnUpdate() 흐름 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingBase.md` | `correctOnUpdate(isSmall, reverseMaterialAcceleration)` — 느린 이동 시 renderYawOffset 보정 + reverseHandleMaterialAcceleration 호출. 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
