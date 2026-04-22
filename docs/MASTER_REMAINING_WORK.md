@@ -236,12 +236,12 @@ sm.isClimbCrawling   = false;
 ### IMPL-01. 크롤링 진입/해제 로직 전체 🔴
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 전체 목록, tickEssential() 전체 흐름, resetState() 위치
-- [ ] `src/client/java/choco/ratel/smartmoving/client/input/SmartMovingKeys.java` — grab 키 등록 방식 확인
-- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toCrawling(), fromCrawling(), wantCrawl/canCrawl 조건 코드 (updateEntityActionState 내 크롤링 진입 분기)
-- [ ] `docs/research/mapping/crawl_slide.md` — wantCrawl/canCrawl/mustCrawl 전체 매핑, sneakToggled 플래그 설명
-- [ ] `docs/research/vanilla/EntityPose_system.md` — canChangeIntoPose(STANDING) API 동작 방식
-- [ ] `docs/MASTER_REMAINING_WORK.md` PART 7 7-2-A 절 — 원본 진입/해제 조건 재확인
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 전체 목록, tickEssential() 전체 흐름, resetState() 위치
+- [x] `src/client/java/choco/ratel/smartmoving/client/input/SmartMovingKeys.java` — grab 키 등록 방식 확인 (grab.wasPressed() 정확히 사용됨으로 확인)
+- [x] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toCrawling(), fromCrawling(), wantCrawl/canCrawl 조건 코드 (이전 세션)
+- [x] `docs/research/mapping/crawl_slide.md` — wantCrawl/canCrawl/mustCrawl 전체 매핑 (진입 조건 정확 구현으로 확인)
+- [ ] `docs/research/vanilla/EntityPose_system.md` — canChangeIntoPose(STANDING) API 동작 방식 (미확인 — protected 우회로 box 대안 사용)
+- [x] `docs/MASTER_REMAINING_WORK.md` PART 7 7-2-A 절 — 원본 진입/해제 조건 재확인
 
 **작업 단계 체크리스트**:
 - [x] SmartMovingClientState.java에 `crawlToggled` 필드 추가
@@ -374,11 +374,11 @@ prevSneakPressed = false;
 ### IMPL-02. 슬라이딩 진입 로직 🟠
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — resetHeightOffset() 전체, isHeadJumping = false 설정 위치
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingSlider.java` — handleSliding() 전체 (해제 조건, isSliding 관련 필드)
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — tickEssential() 내 크롤링 처리 이후 위치 (IMPL-01 완료 후 작업)
-- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toSlidingOrCrawling() lines 1607-1631, 스프린트+스니크 직접 슬라이딩 진입 분기
-- [ ] `docs/research/mapping/crawl_slide.md` — 슬라이딩 진입 조건 전체, isFast 플래그 설명
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — resetHeightOffset() 전체, isHeadJumping = false 설정 위치 (파일 직접 수정)
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingSlider.java` — handleSliding() 전체 (이전 세션)
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — tickEssential() 내 크롤링 처리 이후 위치 (파일 직접 수정)
+- [x] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toSlidingOrCrawling() 로직 정확 구현으로 확인 (이전 세션)
+- [x] `docs/research/mapping/crawl_slide.md` — 슬라이딩 진입 조건 정확 구현으로 확인 (이전 세션)
 
 **⚠️ 의존성**: IMPL-01(크롤링) 완료 후 작업 권장 — 헤드점프 착지 시 공간 부족이면 isCrawling으로 전환되므로 crawlToggled 필드가 먼저 존재해야 함.
 
@@ -455,11 +455,11 @@ isSliding = false;
 ### IMPL-03. A/S/D 더블클릭 방향 점프 🟠
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 목록, tickEssential() 전체, angleJumpType 필드 위치, resetState()
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — handleJumping() 전체, tryJump() 전체, getJumpMoving() 선언 및 공식
-- [ ] `docs/research/mapping/jump.md` — angleJumpType 테이블(1-3), getJumpMoving 공식(1-4), jumpMotionX/Z 설명 전체 정독
-- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — sideJump 더블클릭 카운터 코드 lines 2898-2961, handleJumping 최상단 velocity 저장 코드
-- [ ] `docs/research/original/smartmoving/moving/Button.md` — StartPressed(방금 눌림) 원본 구현 — 1.21.1 prev 추적 방식과 비교
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 목록, tickEssential() 전체, angleJumpType 필드 위치, resetState() (파일 직접 수정)
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — handleJumping() 전체, tryJump() 전체, getJumpMoving() 선언 및 공식 (파일 직접 수정)
+- [x] `docs/research/mapping/jump.md` — angleJumpType 테이블(1-3), getJumpMoving 공식(1-4) (((360-relAngle)/45)%8 공식 정확 사용으로 확인)
+- [x] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — 더블클릭 카운터 0→3→-1 패턴 정확 구현으로 확인 (이전 세션)
+- [ ] `docs/research/original/smartmoving/moving/Button.md` — StartPressed 원본 구현 (미확인 — prev 추적 방식으로 대체, Button.md 직접 읽었는지 불확실)
 
 **작업 단계 체크리스트**:
 - [x] SmartMovingClientState.java에 `leftJumpCount`, `rightJumpCount`, `backJumpCount` 필드 추가
