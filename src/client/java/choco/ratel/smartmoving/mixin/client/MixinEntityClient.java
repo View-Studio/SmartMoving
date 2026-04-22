@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -15,6 +16,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 5-8 (클라이언트): move() HEAD/TAIL 훅 — STEP_HEIGHT 억제/복원 + 이동 거리 누적.
@@ -106,6 +108,29 @@ public abstract class MixinEntityClient {
                 );
             }
         }
+    }
+
+    /**
+     * isSneaking() 오버라이드 — SM 상태 기반 스니킹 판정.
+     * 원본: SmartMovingSelf.isSneaking() (SmartMovingPlayerBase.java, 1972-1981줄)
+     *
+     * isSneaking()은 Entity에 정의됨 — LivingEntity/PlayerEntity 오버라이드 없음, Entity Mixin에서 처리.
+     * Config 비활성 또는 탈것 탑승 시 vanilla에 위임.
+     */
+    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
+    private void sm_isSneaking(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        if (!cfg.enabled || player.hasVehicle()) return;
+
+        if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
+
+        boolean result = (sm.isSlow && player.isOnGround())
+                || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
+                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
+        cir.setReturnValue(result);
     }
 
     /**

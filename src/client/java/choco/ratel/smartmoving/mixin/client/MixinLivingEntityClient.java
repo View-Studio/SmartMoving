@@ -189,34 +189,6 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
-     * isSneaking() 오버라이드 — SM 상태 기반 스니킹 판정.
-     * 원본: SmartMovingSelf.isSneaking() (SmartMovingPlayerBase.java, 1972-1981줄)
-     *
-     * Config 비활성 또는 탈것 탑승 시 vanilla에 위임.
-     * forceIsSneaking != null → 강제 반환.
-     * 나머지: isSlow, crawlOverEdge, jumpCharge 조건으로 결정.
-     *
-     * 원본 조건 1: isSlow && (onGround || isInWeb)
-     *   — isInWeb(1.7.10) → 1.21.1 대응 API 미확인. 현재 onGround 만 사용.
-     * 원본 조건 3: ridingEntity != null || !Config.enabled → vanilla 위임 (return 처리)
-     */
-    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
-    private void sm_isSneaking(CallbackInfoReturnable<Boolean> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-
-        if (!cfg.enabled || player.hasVehicle()) return;
-
-        if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
-
-        boolean result = (sm.isSlow && player.isOnGround())
-                || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
-                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
-        cir.setReturnValue(result);
-    }
-
-    /**
      * 5-5 (클라이언트): SM 커스텀 클라이밍 중 isClimbing() = false 강제.
      *
      * 목적 1: applyClimbingSpeed() x/z ±0.15F 클램프 차단
@@ -261,24 +233,6 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isSliding) {
             ci.cancel();
-        }
-    }
-
-    /**
-     * canTriggerWalking — SM 클라이밍/잠수 중 걷기 트리거 억제.
-     * 원본: SmartMovingSelf.canTriggerWalking() (행 1469-1471): return !isClimbing && !isDiving
-     *
-     * 클라이밍/잠수 중 보행음·보행 파티클이 발생하지 않도록 false 반환.
-     * LivingEntity에 정의된 메서드 — PlayerEntity에 오버라이드 없음, LivingEntity Mixin에서 처리.
-     */
-    @Inject(method = "canTriggerWalking", at = @At("HEAD"), cancellable = true)
-    private void sm_canTriggerWalking(CallbackInfoReturnable<Boolean> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isClimbing || sm.isDiving) {
-            cir.setReturnValue(false);
         }
     }
 
