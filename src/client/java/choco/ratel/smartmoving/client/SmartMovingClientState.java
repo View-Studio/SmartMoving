@@ -101,6 +101,18 @@ public final class SmartMovingClientState {
     /** 클라이밍 점프 상태 */
     public boolean isClimbJumping;
 
+    /** 클라이밍 홀딩 — 수직 이동 없이 제자리 유지. setShouldClimbSpeed에서 relevant=false 시 참조. */
+    public boolean isClimbHolding;
+
+    /** 클라이밍 중 크롤 공간 전환 상태 (손이 낮은 천장 아래로 들어갈 때). */
+    public boolean isClimbCrawling;
+
+    /** 머리 위에 크롤 갭이 있는지 여부. setShouldClimbSpeed 속도 상한 판정용. */
+    public boolean hasClimbCrawlGap;
+
+    /** 크롤 갭 진입 카운터. > 0이면 setShouldClimbSpeed에서 HoldMotion 강제. */
+    public int climbIntoCount;
+
     /** 로프 슬라이딩 상태 */
     public boolean isRopeSliding;
 
@@ -232,6 +244,10 @@ public final class SmartMovingClientState {
         isFlying = false;
         isClimbing = false;
         isClimbJumping = false;
+        isClimbHolding = false;
+        isClimbCrawling = false;
+        hasClimbCrawlGap = false;
+        climbIntoCount = 0;
         isWallJumping = false;
         isCrawlClimbing = false;
         isCeilingClimbing = false;

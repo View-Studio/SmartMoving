@@ -173,14 +173,21 @@ public final class SmartMovingClimber {
      */
     public static boolean setShouldClimbSpeed(ClientPlayerEntity player, SmartMovingClientState sm,
                                                double value, boolean isUp, double combinedFactor) {
-        // climbIntoCount > 0 이면 HOLD_MOTION 강제 (crawl gap 진입 중)
-        // TODO: sm.climbIntoCount 미구현 — Phase 9 크롤-클라이밍에서 구현
-        // if (sm.climbIntoCount > 0) { value = HOLD_MOTION; isUp = true; }
+        // climbIntoCount > 0이면 crawl gap 진입 중 — HoldMotion으로 강제 (C-26)
+        if (sm.climbIntoCount > 0) {
+            value = HOLD_MOTION;
+            isUp = true;
+        }
 
         double motionY = player.getVelocity().y;
         boolean relevant = value < 0 || value > motionY;
 
         if (relevant) {
+            // hasClimbCrawlGap && isClimbCrawling: 상단 크롤 갭 도달 시 속도 상한 적용 (C-27)
+            if (sm.hasClimbCrawlGap && sm.isClimbCrawling && value > HOLD_MOTION) {
+                value = Math.min(CATCH_CRAWL_GAP_MOTION, value);
+            }
+
             double newMotionY;
             if (isUp) {
                 double upFactor = 1.0D; // C-29: Config.freeClimbingUpSpeedFactor로 교체 예정
@@ -190,14 +197,11 @@ public final class SmartMovingClimber {
                 newMotionY = HOLD_MOTION - (HOLD_MOTION - value) * downFactor * combinedFactor;
             }
 
-            // hasClimbCrawlGap && isClimbCrawling && value > HOLD_MOTION → CATCH_CRAWL_GAP_MOTION으로 상한
-            // TODO: sm.hasClimbCrawlGap, sm.isClimbCrawling 미구현 — Phase 9에서 구현
-
             player.setVelocity(player.getVelocity().x, newMotionY, player.getVelocity().z);
         }
 
-        // isClimbJumping = !relevant && !isClimbHolding
-        // TODO: sm.isClimbHolding, sm.isClimbJumping 미구현
+        // isClimbJumping = !relevant && !isClimbHolding (C-28)
+        sm.isClimbJumping = !relevant && !sm.isClimbHolding;
 
         return relevant;
     }
