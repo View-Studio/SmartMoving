@@ -75,8 +75,8 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | ID | 미구현 기능 | 의존 리서치 | 상태 |
 |----|-----------|-----------|------|
 | C-01 | 4-4 `processBlockCode` — 채팅 설정 파싱 구현 | A-09, A-10, B-19 | [ ] |
-| C-02 | 6-3 EntityPose — 헤드점프 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [ ] |
-| C-03 | 6-3 EntityPose — 슬라이딩 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [ ] |
+| C-02 | 6-3 EntityPose — 헤드점프 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈 + getBaseDimensions() Mixin(0.6×0.8). updatePose() @HEAD 취소. M-01/M-02/M-04/M-05 미확인 남음. mapping/pose_strategy.md C-02 섹션 기재. |
+| C-03 | 6-3 EntityPose — 슬라이딩 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈(index 15) 재사용 + getBaseDimensions() Mixin. updatePose() @HEAD 취소. M-02/M-03 미확인 남음. mapping/pose_strategy.md C-03 섹션 기재. |
 | C-04 | 6-5 `recalculateDimensions` — 헤드점프 착지 포즈 복원 로직 | B-04, C-02 | [ ] |
 | C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [ ] |
 | C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [ ] |
@@ -342,6 +342,28 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/pose_strategy.md` (신규)
 
+**완료**: [x] → C-02: headJumping → SLIDING 포즈 + getBaseDimensions() Mixin(0.6×0.8). C-03: isSliding → SLIDING 포즈(index 15). calculateDimensions() 자동 연동 확인. updatePose() @HEAD Mixin 설계 확정. 미확인 M-01~M-05 신규 청크 R-16으로 추가. mapping/pose_strategy.md 신규 작성.
+
+---
+
+### 청크 R-16: 교차 분석 보완 — isSliding/isCrawling/isCeilingClimbing hitbox 미확인 항목
+
+**의존**: R-12 완료 후 진행
+
+**확인 항목**: M-01, M-02, M-03 (pose_strategy.md 미확인 목록)
+
+**읽을 소스**:
+- `https://github.com/makamys/SmartMoving` → `SmartMovingSelf.java` → 크롤링 진입/유지 코드에서 setHeightOffset 호출 위치
+- `SmartMovingSelf.java` → isSliding 상태에서 isSmall bit 여부 (addToSendQueue 인코딩)
+- `SmartMovingSelf.java` → isCeilingClimbing 진입 시 heightOffset 처리
+
+**추출할 것**:
+- `isCrawling` 상태 유지 중 `setHeightOffset(-1F)` 명시적 호출 위치 확인
+- `isSliding` 상태에서 `height < 1` (isSmall bit) 여부 — 서버 측 height 변경 유무
+- `isCeilingClimbing` 진입/유지 코드에서 heightOffset 처리 여부
+
+**결과 기록 위치**: `docs/research/mapping/pose_strategy.md` (M-01~M-03 항목 업데이트)
+
 **완료**: [ ]
 
 ---
@@ -419,5 +441,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11
-- 다음 진행: **R-12** (EntityPose 전략 교차 분석)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12
+- 다음 진행: **R-16** (isSliding/isCrawling/isCeilingClimbing hitbox 미확인 항목 보완)
