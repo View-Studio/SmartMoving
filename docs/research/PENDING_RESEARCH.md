@@ -421,7 +421,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/config_system.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → M-12: writeToProperties(mp,key) 정상 경로(config.write→flat String[]+플레이어별 속도 치환) + disabled 경로([globalConfigKey, "false"] 2원소) 확인. M-13: Java ObjectOutputStream writeByte(2)+writeObject(String[])+writeObject(String) 확인 → 1.21.1 PacketByteBuf+별도 채널 분리로 교체 설계. processConfigPacket 전체 흐름·content null/length 의미 확정. mapping/config_system.md 신규 작성.
 
 ---
 
