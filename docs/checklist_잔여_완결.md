@@ -129,7 +129,7 @@ if (bits != lastSentBits) {
 
 ---
 
-### 🔴 R-02. 서버 travel() 파이프라인 스텁 [CRITICAL]
+### ✅ R-02. 서버 travel() 파이프라인 스텁 [COMPLETE]
 
 **문제**: `MixinLivingEntity.sm_travel()` 메서드가 완전한 스텁이다.
 `ci.cancel()`도 주석 처리되어 있어 SM 서버 물리 파이프라인이 전혀 동작하지 않는다.
@@ -166,11 +166,20 @@ private void sm_travel(Vec3d movementInput, CallbackInfo ci) {
 이미 완전 구현됨. 서버 파이프라인은 서버 측 검사 우회가 핵심.
 
 **완료 기준**:
-- [ ] 서버 PlayerEntity 판별 코드 작성
-- [ ] SM 활성 여부 판별 (SmartMovingConfig.Config.enabled + state 존재)
-- [ ] 낙하 거리 리셋 로직 (isClimbing, isSwimming_sm 등에서 fallDistance = 0)
-- [ ] floatKick 방지 로직 구현
-- [ ] 위치 검사 바이패스 구현
+- [x] 서버 PlayerEntity 판별 코드 작성
+- [x] SM 활성 여부 판별
+- [x] 낙하 거리 리셋 로직
+- [x] floatKick 방지 로직 구현
+- [x] 위치 검사 바이패스 구현
+
+**구현 내역** (2026-04-22):
+감사 결과 세 가지 모두 `MixinServerPlayNetworkHandler`에 이미 구현되어 있었음:
+- floatKick 방지: `sm_tick()` → `floatingTicks = 0` (`resetTicksForFloatKick` 플래그 기반)
+- 낙하 거리 리셋: `sm_tick()` → `applyFallDistanceReset()` (`resetFallDistance` 플래그 기반)
+- 위치 검사 바이패스: `sm_cancelTeleportForSmMove()` @Redirect (isClimbing/isCrawling 등 활성 시)
+
+MixinLivingEntity의 빈 `sm_travel()` 스텁(all LivingEntity에서 실행되는 낭비)을 제거하고
+Javadoc을 실제 구조에 맞게 업데이트함.
 
 ---
 
@@ -349,7 +358,7 @@ grep -rn "Payload" src/ | grep -v "send\|record\|implements\|register\|payload\.
 | 서버 StatePayload 수신·릴레이 | ✅ | ✅ | 완료 |
 | `SmartMovingClientState.processStatePacket()` | ✅ | ✅ (타 플레이어) | 완료 |
 | `SmartMovingServer.processStatePacket()` | ✅ | ✅ | 완료 |
-| `sm_travel()` 서버 Mixin | ✅ (스텁) | ❌ | **R-02 미구현** |
+| `sm_travel()` 서버 Mixin | ➖ (제거됨) | ➖ | 완료 — MixinServerPlayNetworkHandler로 대체 (R-02) |
 | `sm_travel_client()` 클라이언트 Mixin | ✅ | ✅ | 완료 |
 | `isSlow/isFast/isFlying` 필드 | ✅ | ❌ (로컬 미계산) | **R-03 미구현** |
 | `isSmall` 필드 | ✅ | ❌ (로컬 미설정) | **R-04 미구현** |

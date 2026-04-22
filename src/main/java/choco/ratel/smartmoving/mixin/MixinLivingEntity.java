@@ -5,7 +5,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,33 +14,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 5-1: travel() HEAD 캔설러블 Mixin — SM 이동 파이프라인 진입점.
  * 5-5 (서버): isClimbing() 오버라이드 — SM 커스텀 클라이밍 중 false 반환.
  * 6-2 (서버): isInSwimmingPose() 오버라이드 — SM 크롤링 중 false 반환.
- * 3-3-C: tickStatusEffects HEAD/TAIL — 소진 배치 역전 처리 stub (미확인).
+ * 3-3-C: tickStatusEffects HEAD/TAIL — 소진 배치 역전 처리.
+ * 3-7: tickMovement TAIL — isSmall 시 아이템 습득 범위 확장.
  *
- * 클라이언트 전용 항목(jump, applyClimbingSpeed, isClimbing 클라이언트) → MixinLivingEntityClient
+ * 참고: 서버 이동 파이프라인(floatKick/낙하거리/위치검사)은 MixinServerPlayNetworkHandler에서 처리.
+ * 클라이언트 전용 항목(jump, applyClimbingSpeed, isClimbing) → MixinLivingEntityClient
  */
 @Mixin(LivingEntity.class)
 public abstract class MixinLivingEntity {
-
-    /**
-     * 5-1: travel() 이동 파이프라인 진입점.
-     *
-     * SM 활성 시 vanilla travel() 취소 + SM 파이프라인 실행:
-     *   handleJumping → handleSwimming → handleLava →
-     *   handleAlternativeFlying → handleLand → handleWallJumping →
-     *   addMovementStat → handleExhaustion
-     *
-     * TODO Phase 7/8: SM 파이프라인 전체 구현 후 ci.cancel() 활성화.
-     *   현재는 vanilla travel()이 그대로 실행됨.
-     */
-    @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
-    private void sm_travel(Vec3d movementInput, CallbackInfo ci) {
-        // TODO Phase 7: SM 활성 판정 + 파이프라인 실행
-        // if (!(this instanceof PlayerEntity)) return;
-        // SmartMoving.runPipeline((LivingEntity)(Object)this, movementInput, ci);
-    }
 
     /**
      * 5-5 (서버): SM 커스텀 클라이밍 중 isClimbing() = false 강제.
