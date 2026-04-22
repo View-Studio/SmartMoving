@@ -63,7 +63,7 @@
 |------|--------------------------|--------------|
 | [x] | `moving/SmartMovingContext.md` | `SmartMovingContext.java` |
 | [x] | `moving/SmartMovingBase.md` | `SmartMovingClimber.java`, `SmartMovingSwimmer.java`, `SmartMovingJumper.java`, `SmartMovingSlider.java`, `SmartMovingFlyer.java`, `MixinLivingEntityClient.java` |
-| [ ] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
+| [x] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
 | [ ] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
 | [ ] | `playerapi/SmartMovingSelf.md` | `SmartMovingClient.java`, `MixinLivingEntityClient.java` (moving/SmartMovingSelf.md와 별도 파일) |
 | [ ] | `playerapi/SmartMovingServerPlayerBase.md` | `MixinLivingEntity.java`(서버측), `MixinPlayerEntity.java` |
@@ -315,6 +315,33 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-22] moving/SmartMovingSelf.md
+
+대응 구현: SmartMovingSwimmer.java, SmartMovingJumper.java, SmartMovingClimber.java, SmartMovingClient.java
+
+발견한 불일치:
+- [오역] `handleSwimming` swimming motionYDiff: 5단계 → 13단계 원본 테이블로 수정 (SmartMovingSwimmer.java L119-130)
+  - 원본: 1.62~1.7D 구간에 7개 세부 단계(0.005→0.000625→0→0.000625→...)
+  - 버그: `< 1.7 → 0D`, `< 1.8 → 0.01D` (너무 단순)
+- [오역] `handleSwimming` dipping motionYDiff 조건 누락 (SmartMovingSwimmer.java L112-113)
+  - 원본: offset < 1.0 → -0.02D, else → -0.01D
+  - 버그: 항상 -0.02D 사용 (전형적 dipping 구간 1.0~1.4에서 부정확)
+- [오역] `handleSwimming` diving diveDown 공식 부호 오류 (SmartMovingSwimmer.java L142)
+  - 원본: `0.01 - 0.1 * speedFactor` (speedFactor=1 → -0.09D)
+  - 버그: `-(0.01 + 0.1 * speedFactor)` (speedFactor=1 → -0.11D)
+
+누락 기록:
+- `handleWallJumping` fallDistance 체크 미구현 (wallUpJump/wallHeadJumpFallMaximumDistance)
+- `handleWallJumping` wasCollidedHorizontally → WallUpSlide/WallHeadSlide(noVertical) 미구현
+- `afterOnUpdate → correctOnUpdate` 호출 미구현 (renderYawOffset 보정 + reverseHandleMaterialAcceleration)
+
+잉여 없음 (구현 전반적으로 원본 로직 준수)
+
+신규 발견 미구현:
+- 위 누락 항목들 → 별도 이슈로 관리
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -327,3 +354,7 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환 로직이 SmartMovingSlider에 없음 | 미처리 (SmartMovingSelf 감사 예정) |
 | 2026-04-22 | `SmartMovingBase.md` | `reverseHandleMaterialAcceleration()` — 수영 중 물 흐름 가속 역상쇄(-0.014D) 미구현. SmartMovingSelf.correctOnUpdate() 흐름 | 미처리 (SmartMovingSelf 감사 예정) |
 | 2026-04-22 | `SmartMovingBase.md` | `correctOnUpdate(isSmall, reverseMaterialAcceleration)` — 느린 이동 시 renderYawOffset 보정 + reverseHandleMaterialAcceleration 호출. 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingSelf.md` | swimming motionYDiff 5단계→13단계 수정, dipping offset 조건 수정, diving diveDown 부호 수정. SmartMovingSwimmer.java 완료 | 처리 완료 |
+| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` fallDistance 체크 누락 — `cfg.wallUpJumpFallMaximumDistance / wallHeadJumpFallMaximumDistance` config 값 확인 필요 | 미처리 |
+| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` `wasCollidedHorizontally` → WallUpSlide/WallHeadSlide(noVertical) 미구현 | 미처리 |
+| 2026-04-22 | `SmartMovingSelf.md` | `afterOnUpdate → correctOnUpdate` 호출: isSwimming/diving/dipping/crawling 시 renderYawOffset 보정 + water flow 역상쇄 미구현 | 미처리 |

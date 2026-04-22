@@ -106,22 +106,34 @@ public final class SmartMovingSwimmer {
 
         if (sm.isDipping) {
             // 수면 경계 — 약간 아래로 당기는 힘 + 수평 이동
+            // 원본: offset < 1.0 → motionYDiff = -0.02D, else → -0.01D
             Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
             motionX += fly.x;
             motionZ += fly.z;
             motionX *= DAMPING_DIPPING_XZ;
-            motionY = (motionY - 0.02D) * DAMPING_DIPPING_Y;
+            double dippingOffset = player.getFluidHeight(FluidTags.WATER) + 0.1625D;
+            double dippingYDiff = dippingOffset < 1.0D ? -0.02D : -0.01D;
+            motionY = (motionY + dippingYDiff) * DAMPING_DIPPING_Y;
             motionZ *= DAMPING_DIPPING_XZ;
 
         } else if (sm.isSwimming_sm) {
             // 수면 수영 — offset 구간에 따라 수직력 세분화
+            // 원본: SmartMovingSelf.handleSwimming() 13단계 테이블 (229-576줄)
             double offset = player.getFluidHeight(FluidTags.WATER) + 0.1625D;
             double motionYDiff;
-            if      (offset < 1.5D) motionYDiff = -0.02D;
-            else if (offset < 1.6D) motionYDiff = -0.01D;
-            else if (offset < 1.7D) motionYDiff =  0.00D;
-            else if (offset < 1.8D) motionYDiff =  0.01D;
-            else                     motionYDiff =  0.02D;
+            if      (offset < 1.5D)   motionYDiff = -0.02D;
+            else if (offset < 1.6D)   motionYDiff = -0.01D;
+            else if (offset < 1.62D)  motionYDiff = -0.005D;
+            else if (offset < 1.64D)  motionYDiff = -0.0025D;
+            else if (offset < 1.66D)  motionYDiff = -0.00125D;
+            else if (offset < 1.664D) motionYDiff = -0.000625D;
+            else if (offset < 1.668D) motionYDiff =  0D;
+            else if (offset < 1.672D) motionYDiff =  0.000625D;
+            else if (offset < 1.676D) motionYDiff =  0.00125D;
+            else if (offset < 1.68D)  motionYDiff =  0.0025D;
+            else if (offset < 1.7D)   motionYDiff =  0.005D;
+            else if (offset < 1.8D)   motionYDiff =  0.01D;
+            else                       motionYDiff =  0.02D;
 
             Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
             motionX += fly.x;
@@ -135,11 +147,12 @@ public final class SmartMovingSwimmer {
 
         } else { // isDiving
             // 완전 잠수 — diveUp/diveDown 수직 제어
+            // 원본: diveDown = 0.01 - 0.1 * speedFactor (SmartMovingSelf 229-576줄)
             double motionYDiff = 0D;
             if (diveUp) {
                 motionYDiff = 0.05D * speedFactor;
             } else if (diveDown) {
-                motionYDiff = -(0.01D + 0.1D * speedFactor);
+                motionYDiff = 0.01D - 0.1D * speedFactor;
             }
 
             Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
