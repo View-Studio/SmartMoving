@@ -499,3 +499,285 @@ matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
 matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(roll));
 ```
 ModelPart.pitch/yaw/roll = 0으로 고정하고 MatrixStack에서 직접 순서 지정.
+
+---
+
+## R-13 추가 — C-08/C-09: ModelRotationRenderer 대체 + 중간 노드 처리
+
+### 각도 상수 전체 (SmartRenderContext 확인됨)
+
+SmartMovingModel.md에서 확인된 SmartRenderContext 상속 상수:
+
+| 상수명 | 값 | 비고 |
+|--------|-----|------|
+| `Half` | π ≈ 3.14159 | (float)Math.PI |
+| `Quarter` | π/2 ≈ 1.5708 | |
+| `Eighth` | π/4 ≈ 0.7854 | |
+| `Sixteenth` | π/8 ≈ 0.3927 | |
+| `Thirtytwoth` | π/16 ≈ 0.1963 | |
+| `Sixtyfourth` | π/32 ≈ 0.0982 | |
+| `Whole` | 2π ≈ 6.2832 | |
+| `RadiantToAngle` | 180/π ≈ 57.2958 | rad → degree 변환 계수 |
+
+---
+
+### C-08-1: 비표준 회전 순서가 필요한 파트 전체 목록 (SmartMovingModel.md 직접 확인됨)
+
+SmartMovingModel.setRotationAngles() 각 분기에서 명시적으로 `rotationOrder`가 설정되는 파트:
+
+| SM 상태 | 파트 | rotationOrder | 사용되는 각도 |
+|---------|------|--------------|--------------|
+| isClimb / isCrawlClimb | bipedRightLeg, bipedLeftLeg | YZX | X: totalVerticalDistance 기반, Z: totalHorizontalDistance 기반 |
+| isSwim | bipedHead | YXZ | Y: cos(dist/2-Quarter)*walkFactor, X: -Eighth*standSneakFactor |
+| isSwim | bipedRightArm, bipedLeftArm | YZX | X: cos기반, Z: Quarter+Eighth+cos*standFactor |
+| isCrawl | bipedTorso | YZX | X: Quarter-Thirtytwoth, Z: cos(dist+Quarter)*Sixtyfourth*walkFactor |
+| isCrawl | bipedRightArm, bipedLeftArm | YZX | X: Half+Eighth, Z: cos기반, Y: ±Quarter |
+| isSlide | bipedBody | YXZ | X: cos기반*Sixtyfourth*walkFactor, Y: cos기반*Sixtyfourth*walkFactor |
+| isSlide | bipedRightArm, bipedLeftArm | YZX | X: cos기반, Z: ±Sixteenth, Y: ±Quarter |
+| isFlying | bipedRightArm, bipedLeftArm | XZY | Z: cos기반+Half-Sixteenth, Y: cos(time)*Sixteenth*standFactor |
+| isFalling | bipedRightArm, bipedLeftArm | XZY | Y: cos(dist+Quarter)*Eighth, Z: cos(dist)*Eighth+Quarter |
+| animateAngleJumping | bipedRightLeg, bipedLeftLeg | ZXY | Z: Thirtytwoth*backness, X: Thirtytwoth*(1+left/right), Y: -angle |
+| animateNonStandardWorking | bipedRightShoulder | ZYX | X: viewVerticalAngelOffset/RadiantToAngle, Y: workingAngle/RadiantToAngle, Z: Half |
+| animateNonStandardBowAiming | bipedRightShoulder, bipedLeftShoulder | ZYX | X: 0(reset), Y: workingAngle/RadiantToAngle, Z: Half |
+
+**명시 없는 경우(기본 XYZ)**: isRopeSliding, isClimb(head/arm 직접), isClimbJump, isCeilingClimb, isDive, isHeadJump, isFalling(leg 직접)
+
+---
+
+### C-08-2: MatrixStack 비표준 회전 순서 구현 방법 확정 (B-18 확인됨)
+
+ModelPart.rotate(MatrixStack)는 내부적으로 `Quaternionf().rotationZYX(roll, yaw, pitch)` 사용 (B-09 확인됨).
+적용 순서: **pitch(X) → yaw(Y) → roll(Z)** (= XYZ, 기본값).
+
+비표준 순서가 필요한 경우 → **해당 파트의 pitch/yaw/roll = 0F로 설정**, 그리고 `ModelPart.render()` 전에 MatrixStack에서 직접 회전 (B-18: `multiply(Quaternionf)` 가 유일한 회전 메서드):
+
+```java
+// YZX: Y → Z → X 순서 (isSwim arm, isCrawl, isSlide arm)
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+
+// YXZ: Y → X → Z 순서 (isSwim head, isSlide body)
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+
+// XZY: X → Z → Y 순서 (isFlying arm, isFalling arm)
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+
+// ZXY: Z → X → Y 순서 (animateAngleJumping leg)
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+
+// ZYX: Z → Y → X 순서 (ignoreSuperRotation shoulder)
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+```
+
+**참고**: 라디안 값을 그대로 사용. SM의 모든 각도 상수(Half/Quarter 등)는 이미 라디안 단위.
+
+---
+
+### C-08-3: 비표준 회전 구현 방법 — ModelPart Mixin 전략
+
+**문제**: `setAngles()`에서는 MatrixStack에 접근 불가. 회전 순서는 `ModelPart.rotate(MatrixStack)`에서 적용됨.
+
+**확인됨 (B-08/B-09 근거)**:
+- `ModelPart.pitch`, `ModelPart.yaw`, `ModelPart.roll` 필드: public float, 런타임 설정 가능
+- `ModelPart.rotate(MatrixStack)`: `rotationZYX(roll, yaw, pitch)` 고정 — 변경 불가
+
+**확정된 구현 방법**: `@Mixin(ModelPart.class)` + `@Inject` into `rotate(MatrixStack)` 를 통해 커스텀 `rotationOrder` 필드 주입
+
+```java
+// 구현 설계 (SmModelPart 전략):
+// 1. ModelPart에 int smRotationOrder 필드 주입 (@Unique + accessor)
+// 2. rotate() @Inject(at=HEAD, cancellable=true): smRotationOrder != 0이면
+//    직접 MatrixStack 회전 순서 적용 후 cir.cancel()
+// 3. setAngles Mixin: 해당 파트에 smRotationOrder 설정 + pitch/yaw/roll 값 설정
+
+@Inject(method = "rotate", at = @At("HEAD"), cancellable = true)
+private void smCustomRotate(MatrixStack matrices, CallbackInfo ci) {
+    if (this.smRotationOrder == 0) return;  // 기본 XYZ: vanilla 그대로
+    matrices.translate(this.pivotX / 16F, this.pivotY / 16F, this.pivotZ / 16F);
+    // smRotationOrder별 분기하여 올바른 순서로 회전
+    ci.cancel();
+}
+```
+
+**미확인 (M-09)**: `ModelPart.rotate()` @Inject 시 `pivot translate` + `scale` 처리 누락 위험. vanilla rotate()의 전체 코드는 translate → rotationZYX → scale 순서 (B-09 확인). Mixin 취소 시 scale(xScale, yScale, zScale)도 직접 처리해야 함.
+
+---
+
+### C-08-4: ModelPart.xScale/yScale/zScale 런타임 사용 가능성
+
+B-08에서 직접 확인:
+```java
+// ModelPart.java (Vineflower 확인됨)
+public float xScale = 1.0F;
+public float yScale = 1.0F;
+public float zScale = 1.0F;
+
+// rotate(MatrixStack) 내부:
+if (this.xScale != 1.0F || this.yScale != 1.0F || this.zScale != 1.0F) {
+    matrices.scale(this.xScale, this.yScale, this.zScale);
+}
+
+// setTransform(ModelTransform) 시 1.0F로 리셋됨
+```
+
+**미확인 (M-10)**: vanilla rendering pipeline에서 `ModelPart.setTransform()`이 언제 호출되는지 미확인. `animateModel()` 또는 다른 시점에서 호출되면 setAngles Mixin에서 설정한 yScale이 리셋될 수 있음. **setAngles @Inject(at=TAIL)에서 설정하면 setTransform 이후이므로 안전할 가능성이 높으나 코드 직접 확인 필요.**
+
+---
+
+### C-09-1: 중간 노드 적층 합산 원칙 (A-15 + GL 렌더링 모델 확인됨)
+
+SM 원본 GL11 렌더링 (A-15, SmartRenderModel 계층 확인됨):
+
+```
+glPushMatrix()
+  glTranslatef(bipedOuter.pivotX/16, bipedOuter.pivotY/16, bipedOuter.pivotZ/16)
+  glRotatef(bipedOuter.X)  glRotatef(bipedOuter.Y)  glRotatef(bipedOuter.Z)
+    glPushMatrix()
+      glTranslatef(bipedTorso.pivot...)
+      glRotatef(bipedTorso.X)  glRotatef(bipedTorso.Y)  glRotatef(bipedTorso.Z)
+        glPushMatrix()
+          ...
+          glPushMatrix()
+            glTranslatef(bipedRightShoulder.pivot = -5/16, 2/16, 0)
+            glRotatef(bipedRightShoulder.X/Y/Z)
+              glPushMatrix()
+                glTranslatef(bipedRightArm.pivot = 0, 0, 0)
+                glRotatef(bipedRightArm.X/Y/Z)
+                [arm geometry rendered here]
+              glPopMatrix()
+          glPopMatrix()
+glPopMatrix()
+```
+
+**최종 각도 합산 원리**: 파트의 world-space 최종 회전 = 루트→해당 파트까지 모든 조상 노드 회전의 누적 적용.
+
+예: isCrawl에서 rightArm world-space X 최종값:
+```
+bipedOuter.X(0) + bipedTorso.X(Quarter-Thirtytwoth) + bipedBreast.X(0) 
++ bipedRightShoulder.X(0) + bipedRightArm.X(Half+Eighth)
+= 0 + (π/2-π/16) + 0 + 0 + (π/2+π/4)
+= 1.4726 + 1.9635 = 3.4361 rad ≈ 196.9°
+```
+(단, rotationOrder가 YZX이면 실제 회전 합산 계산이 다를 수 있음 — 행렬 곱은 비가환)
+
+**1.21.1 setAngles Mixin 구현 방법**:
+
+SM에서 각 파트에 설정되는 각도는 이미 **부모 노드 기여분을 반영한 상대 각도**. 1.21.1에서:
+- `setupTransforms` 단계에서 `bipedOuter`의 X/Y 기울기를 적용 (전역)
+- `setAngles` Mixin에서 각 파트에 설정하는 각도 = `bipedTorso.angle + ... + 해당파트.angle` (중간 노드 합산)
+- 단, `setupTransforms`에서 `bipedOuter` 기여분을 이미 적용했다면, setAngles에서는 `bipedOuter` 제외한 나머지 합산
+
+**pivot 누적**: SM 계층에서 `bipedPelvic.pivotY = 12F` → 다리의 pivot이 Y=12 위치. 1.21.1 PlayerEntityModel에서 `rightLeg.pivotY = 12F` (vanilla 기본값 확인됨, BipedEntityModel_detail.md) → 이미 일치.
+
+---
+
+### C-09-2: isFlying / isHeadJumping body 기울기 구현 확정
+
+**SM 원본 코드 (SmartMovingModel.md 확인됨)**:
+
+isFlying:
+```java
+bipedOuter.fadeRotateAngleX = true;
+bipedOuter.rotateAngleX = (Quarter - verticalAngle) * walkFactor;  // θ
+bipedOuter.rotateAngleY = horizontalAngle;
+bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2F;           // -θ/2
+// 팔/다리: bipedOuter.X를 상속받은 상태에서 추가 각도 직접 설정
+```
+
+isHeadJump:
+```java
+bipedOuter.fadeRotateAngleX = true;
+bipedOuter.rotateAngleX = (Quarter - currentVerticalAngle);         // θ
+bipedOuter.rotateAngleY = currentHorizontalAngle;
+bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2F;            // -θ/2
+```
+
+**1.21.1 대응 전략 (코드 근거)**:
+
+| SM 코드 | 1.21.1 대응 | 코드 근거 |
+|---------|-----------|---------|
+| `bipedOuter.rotateAngleY = horizontalAngle` | setupTransforms @ModifyArg(index=3): bodyYaw를 `180 - horizontalAngle * RadiantToAngle`로 교체 | B-17: index=3 = bodyYaw. LivingEntityRenderer.super.setupTransforms에서 `POSITIVE_Y.rotationDegrees(180 - bodyYaw)` 적용 |
+| `bipedOuter.rotateAngleX = θ` | setupTransforms @Inject(at=TAIL): `matrices.multiply(RotationAxis.POSITIVE_X.rotation(θ))` 추가 | PlayerEntityRenderer_setupTransforms.md: Branch 3 (leaningPitch=0, isFlying/isHeadJump는 STANDING 포즈) → X 회전 자동 없음. SM이 직접 추가해야 함 |
+| `bipedHead.rotateAngleX = -θ/2` | setAngles @Inject(at=TAIL): `head.pitch += -θ/2` | setupTransforms가 θ를 전역 적용 → head도 θ 포함. head.pitch += -θ/2 하면 최종 head X = θ + (-θ/2) = θ/2 (SM 원본과 동일) |
+| 팔/다리 추가 각도 | setAngles에서 직접 설정 | setupTransforms의 θ가 이미 전역 적용됨. SM 원본에서도 bipedRightArm.X는 bipedOuter.X와 별개로 설정됨 |
+
+**등가 증명**:
+- SM 원본 head world-space X = bipedOuter.X(θ) + bipedHead.X(-θ/2) = **θ/2**
+- 1.21.1: setupTransforms에서 θ 적용(전역) → head.pitch = -θ/2 → head 최종 X = **θ + (-θ/2) = θ/2** ✓
+
+**bipedOuter.rotateAngleX 적용 위치 주의**:
+- isFlying/isHeadJump: STANDING 포즈 → setupTransforms Branch 3 → leaningPitch = 0 → vanilla X 회전 없음. SM 전담.
+- isCrawling: SWIMMING 포즈 → setupTransforms Branch 2 → leaningPitch 기반 -90° X 회전 자동 적용. SM이 별도 X 추가 불필요.
+- isSwim: isCrawling과 동일 (SWIMMING 포즈)
+
+---
+
+### C-09-3: bipedOuter.rotationPointY 대응 (M-06 미확인)
+
+SM isSlide에서:
+```java
+bipedOuter.rotationPointY = 5F;  // pivot Y = 5 (1/16 단위 아닌 MC 단위)
+bipedOuter.rotateAngleX = Quarter;
+```
+
+**GL 렌더링 모델 분석 (A-15 계층 구조 + GL 규칙)**:
+GL11에서 `glTranslatef(0, 5/16F, 0)` → `glRotatef(Quarter*180/π, 1, 0, 0)` 순서 적용.
+결과: 전체 모델이 Y+0.3125 위치에서 X축으로 90° 회전.
+
+**1.21.1 대응 (코드 미확인 — M-06)**:
+```java
+// setupTransforms @Inject(at=TAIL) 내부:
+matrices.translate(0, 5F / 16F * entityScale, 0);  // pivotY translate
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(Quarter));  // 이후 X 회전
+```
+단, `ModelRotationRenderer.render()` 원본 코드에서 rotationPointY가 `/16`으로 나뉘는지 직접 확인하지 못함 → M-06.
+
+---
+
+### C-09-4: bipedTorso.rotateAngleX 대응 (중간 노드 부재)
+
+SM isCrawl에서 `bipedTorso.rotateAngleX = Quarter - Thirtytwoth` → 상체 전체(head/arm 계층)가 그 각도를 상속받음.
+
+**1.21.1에서 직접 대응 불가** — `bipedTorso` 중간 노드가 없으므로 영향받는 파트를 개별 조작해야 함.
+
+isCrawl에서 최종 world-space 각도 계산 (bipedOuter.X = 0이므로 setupTransforms X 추가 없음):
+
+| 파트 | SM 최종 X (rad) | 비고 |
+|------|----------------|------|
+| head | bipedTorso.X + bipedHead.X = (Q-T) + (-Eighth) ≈ 1.4726 - 0.7854 = **0.687** | head.pitch = 0.687 |
+| body | bipedTorso.X + 0 = **1.4726** (mesh는 bipedBody에 있음) | body.pitch = 1.4726 |
+| rightArm | bipedTorso.X + bipedRightArm.X = 1.4726 + (H+E) = 1.4726 + 1.9635 = **3.436** | rightArm.pitch = 3.436 (단, YZX 순서 적용 — 단순 합산이 아님) |
+| rightLeg | 0 (bipedPelvic.X=0) + bipedRightLeg.X (cos 기반) | pelvic pivot Y=12 → 1.21.1 rightLeg.pivotY=12와 일치 |
+
+**주의**: YZX 회전 순서 적용 시 pitch/yaw/roll 합산은 단순 덧셈이 아님 (비가환 행렬 곱). 각 파트 최종 각도는 구현 시 실제 렌더 결과로 검증 필요. 위 값은 XYZ 순서 가정 시 근사값.
+
+---
+
+### 미확인 항목 (R-13 신규)
+
+| ID | 미확인 내용 | 추가 필요 작업 |
+|----|------------|-------------|
+| M-06 | `ModelRotationRenderer.render()` 내 `rotationPointY` 처리 코드 — `/16` 적용 여부, glTranslate 순서 | SmartRender GitHub에서 ModelRotationRenderer.java 원본 확인 |
+| M-09 | ModelPart.rotate() @Inject(at=HEAD) 취소 시 pivotX/Y/Z translate와 xScale/yScale/zScale 처리 — 수동으로 모두 재구현해야 함 | rotate() 전체 코드(B-09 확인됨): translate → rotationZYX → scale. @HEAD 취소 시 3단계 전부 직접 구현 필요 |
+| M-10 | setTransform(ModelTransform) 호출 시점 — vanilla rendering pipeline에서 어느 단계에서 호출되어 xScale/yScale/zScale을 리셋하는지 | animateModel() 또는 model.reset() 코드에서 setTransform 호출 여부 확인 |
+| M-11 | isCrawl bipedTorso.rotationPointY = 3F — 상체 회전 중심이 Y=3으로 이동하는 효과의 1.21.1 대응 방법 | ModelRotationRenderer.render() 원본 코드 확인 후 setupTransforms translate로 대응 |
+
+---
+
+### 구현 우선순위 (C-08/C-09 결론)
+
+1. **setupTransforms Mixin 먼저** (bipedOuter.X/Y 대응): SM 상태별 body 기울기 + 방향 제어 확정
+2. **setAngles Mixin** (개별 파트 각도): 비표준 회전 순서 제외하고 먼저 XYZ 근사로 구현
+3. **ModelPart Mixin** (smRotationOrder): 비표준 회전 순서 지원 추가 (M-09 해소 후)
+4. **yScale** (M-10 해소 후): setTransform 호출 시점 확인 후 적용 위치 결정
+
+미확인 항목(M-06, M-09, M-10, M-11)이 있으므로 **C-08/C-09 구현 시작 불가** (RESEARCH_RULES.md 규칙 5). 추가 리서치 청크 R-17 추가 필요.

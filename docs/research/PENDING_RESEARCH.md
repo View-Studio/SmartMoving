@@ -81,8 +81,8 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [ ] |
 | C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [ ] |
 | C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [ ] |
-| C-08 | 12-4 ModelRotationRenderer 대체 — 6-axis MatrixStack | A-15, B-08, B-09, B-18 | [ ] |
-| C-09 | 12-5 중간 노드 부재 — isFlying/isHeadJumping body 기울기 | A-15, C-08 | [ ] |
+| C-08 | 12-4 ModelRotationRenderer 대체 — 6-axis MatrixStack | A-15, B-08, B-09, B-18 | [x] → 비표준 회전 순서 11종 전체 목록 + MatrixStack 구현 패턴 확정. smRotationOrder Mixin 전략 설계. M-09/M-10 미확인→R-17. animation_system.md R-13 섹션. |
+| C-09 | 12-5 중간 노드 부재 — isFlying/isHeadJumping body 기울기 | A-15, C-08 | [x] → setupTransforms X rotate + setAngles head.pitch 보정 전략 확정. 등가 증명 완료. M-06/M-11 미확인→R-17. animation_system.md R-13 섹션. |
 | C-10 | 12-7 `smallOverGroundHeight` 실제 블록 탐색 계산 구현 | — | [ ] |
 | C-11 | 13-1 설정 분리 — ServerConfig vs Options 전환 상태 관리 | A-04 | [ ] |
 | C-12 | 13-2 설정 배포 프로토콜 전체 구현 | C-11 | [ ] |
@@ -381,6 +381,29 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/animation_system.md` (추가)
 
+**완료**: [x] → C-08: 비표준 회전 순서가 필요한 파트 11종 전체 목록 확정, MatrixStack 회전 순서별 구현 패턴 확정(B-18 기반), ModelPart smRotationOrder Mixin 전략 설계. C-09: isFlying/isHeadJump body 기울기 → setupTransforms X rotate + setAngles head.pitch 보정 전략 확정, 등가 증명 완료. 미확인 M-06/M-09/M-10/M-11 추가 → R-17로 분리. animation_system.md R-13 섹션 추가.
+
+---
+
+### 청크 R-17: 교차 분석 보완 — ModelRotationRenderer.render() + setTransform 호출 시점
+
+**의존**: R-13 완료 후 진행
+
+**확인 항목**: M-06, M-09, M-10, M-11 (animation_system.md 미확인 목록)
+
+**읽을 소스**:
+- SmartRender GitHub → `ModelRotationRenderer.java` → render() 전체 코드 (rotationPointY /16 여부 확인)
+- Fabric Loom 디컴파일 → `ModelPart.java` → `setTransform(ModelTransform)` 전체 코드 + 호출 위치 확인
+- Fabric Loom → `PlayerEntityModel.java` → `animateModel()` 또는 `reset()` 등 setTransform 호출 여부 확인
+
+**추출할 것**:
+- `ModelRotationRenderer.render()` 내 rotationPointX/Y/Z 처리: `/16F` 나눔 여부, glTranslate vs glRotate 순서
+- `setTransform(ModelTransform)` 전체 코드 — xScale/yScale/zScale 리셋 이외에 무엇을 하는지
+- vanilla rendering pipeline에서 setTransform이 호출되는 시점 (animateModel? reset? 다른 곳?)
+- rotate() @HEAD 취소 시 pivot translate + scale을 수동으로 재구현해야 하는지 확인
+
+**결과 기록 위치**: `docs/research/mapping/animation_system.md` (M-06~M-11 해소 업데이트)
+
 **완료**: [ ]
 
 ---
@@ -441,5 +464,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-16
-- 다음 진행: **R-13** (중간 노드 대응 + 6-axis rotation 설계) 또는 **R-14** (Config 시스템) 또는 **R-15** (DataTracker 동기화)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-16
+- 다음 진행: **R-17** (ModelRotationRenderer.render() + setTransform 호출 시점 — M-06~M-11 해소) 또는 **R-14** (Config) 또는 **R-15** (DataTracker 동기화)
