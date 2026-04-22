@@ -25,7 +25,7 @@ import net.minecraft.util.Identifier;
 @Environment(EnvType.CLIENT)
 public final class SmartMovingHud {
 
-    private static final Identifier ICONS = Identifier.of("smartmoving", "gui/icons.png");
+    private static final Identifier ICONS = Identifier.of("smartmoving", "textures/gui/icons.png");
     private static final int ICON_SIZE = 9;
 
     private SmartMovingHud() {}
