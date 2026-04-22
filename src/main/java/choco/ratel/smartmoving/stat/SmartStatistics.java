@@ -57,10 +57,10 @@ public class SmartStatistics {
         currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened * 0.5f + currentHorizontalSpeed * 0.5f;
 
         // 수직 이동 각도 (라디안): 수평 이동 방향에서 위/아래 각도
-        // 원본: currentVerticalAngle = atan2(diffY, horizontalDistance)
-        currentVerticalAngle = (distance > 1e-4)
+        // 원본: atan(yDiff/h), h==0 → NaN → Quarter(π/2). 순수 수직 이동 시 항상 Quarter 반환.
+        currentVerticalAngle = (horizontalDistance > 1e-4)
                 ? (float) Math.atan2(diffY, horizontalDistance)
-                : 0f;
+                : (float) (Math.PI / 2f);
 
         // 수평 이동 방향 각도 (world Y 기준): 원본 currentHorizontalAngle
         currentHorizontalAngle = (horizontalDistance > 1e-4)

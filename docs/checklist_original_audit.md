@@ -90,8 +90,8 @@
 
 | 상태 | 리서치 파일 (smartrender/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
-| [ ] | `SmartRenderModel.md` | `MixinPlayerEntityModelClient.java` |
-| [ ] | `SmartRenderRender.md` | 렌더 Mixin |
+| [x] | `SmartRenderModel.md` | N/A — SR 전용 모델 계층 + vanilla 애니메이션 래퍼. TAIL inject로 대체됨 |
+| [x] | `SmartRenderRender.md` | `SmartStatistics.java`, `MixinEntityClient.java`, 렌더 Mixin |
 | [ ] | `SmartRenderContext.md` | `SmartMovingContext.java` 또는 별도 |
 | [ ] | `SmartRenderUtilities.md` | `SmartMovingJumper.java`(getHorizontalCollisionangle 등) |
 | [ ] | `RendererData.md` | `SmartMovingClientState.java`(stats 필드) |
@@ -532,6 +532,47 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/SmartRenderRender.md
+
+대응 구현: SmartStatistics.java (stats 계산), MixinEntityClient.java (calculate 호출), MixinPlayerEntityRenderer.java (bodyYaw override)
+
+발견한 불일치:
+- [오역] `currentVerticalAngle` 가드/공식 오류 (SmartStatistics.java)
+  - 원본: `atan(yDiff/horizontalDistance)`, horizontalDistance==0 → NaN → `Quarter(π/2)`
+  - 버그: `(distance > 1e-4) ? atan2(diffY, h) : 0f` — horizontalDistance=0, diffY<0(하강)이면 `-π/2` 반환
+  - 영향: 크리에이티브 비행 중 순수 수직 하강 시 몸통 기울기 θ=π 발생 (180° 잘못 기울어짐)
+  - 수정: `(horizontalDistance > 1e-4) ? atan2(diffY, h) : (float)(Math.PI/2f)` — 원본 Quarter 일치
+
+불일치 없음 (나머지):
+- `renderPlayer()` stats 전달 → `sm.stats.calculate()` via MixinEntityClient.move TAIL ✓
+- `horizontalDistance`/`verticalDistance`/`distance` 공식: 원본과 일치 ✓
+- `currentHorizontalAngle` 공식: atan2(x,z) vs 원본 -atan(x/z)+(z<0?π/2:0). 공식 다르지만 **animation에서 미사용** → N/A
+- `currentCameraAngle`: 미계산 (항상 0), **animation에서 미사용** → N/A
+- `rotatePlayer()` → `sm_captureBodyYaw`: SM 상태에서만 bodyYaw override (원본은 항상). bipedOuter 계층 없으므로 정상적 차이 ✓
+- `drawFirstPersonHand()` / `renderSpecials()` / `before/afterHandleRotationFloat()` → N/A (1.21.1 별도 처리)
+- `getPreviousRendererData()` (fade 시스템) → N/A (bipedOuter 없음)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] smartrender/SmartRenderModel.md
+
+대응 구현: N/A
+
+불일치 없음:
+- SmartRenderModel은 두 역할을 담당: (1) SR 전용 계층 모델 구조, (2) vanilla 애니메이션 래퍼
+- **SR 전용 모델 계층** (bipedOuter/Torso/Breast/Neck/Shoulder/Pelvic 등): 1.21.1 단일 BipedEntityModel로 이 구조 자체가 없음 → N/A
+- **vanilla 애니메이션 메서드** (animateHeadRotation/ArmSwinging/Riding/ItemHolding/Working/Sneaking/Arms/BowAiming): TAIL inject 전에 vanilla BipedEntityModel.setAngles()가 먼저 실행하여 처리 → N/A
+- **render()의 ignoreRender/renderIgnoreBase 패턴**: 1.21.1 단일 렌더 패스 → N/A
+- **setRotationAngles()의 firstPerson/isInventory 조기 리턴**: 1.21.1 별도 처리 경로 → N/A
+- **SM 특화 애니메이션 부분(isClimbing/isCrawling/…)**: SmartMovingModel.md 감사 시 이미 완전 검증됨
+- DEG_TO_RAD = 1/RadiantToAngle 변환 상수: SmartMovingModel.md 감사 시 확인됨
+
+신규 발견 미구현: 없음
+
+---
+
 ### [2026-04-23] render/RenderPlayer.md
 
 대응 구현: MixinPlayerEntityRenderer.java, MixinPlayerEntityModelClient.java
@@ -579,3 +620,5 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `render/IRenderPlayer.md` | 없음 — PlayerAPI superRender*() 위임 인터페이스 전체 N/A | N/A |
 | 2026-04-23 | `render/playerapi/SmartMovingModelPlayerBase.md` | 없음 — dynamicOverride*/superAnimate* 전부 TAIL inject 대체, @Deprecated getter 16개 N/A | N/A |
 | 2026-04-23 | `render/playerapi/SmartMovingRenderPlayerBase.md` | 없음 — renderPlayer/rotatePlayer/renderPlayerAt/passSpecialRender 전부 Inject 대체, getPlayerModels N/A | N/A |
+| 2026-04-23 | `smartrender/SmartRenderModel.md` | 없음 — SR 전용 모델 계층(bipedOuter/Torso/Shoulder/Pelvic) + vanilla 애니메이션 래퍼 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/SmartRenderRender.md` | `currentVerticalAngle` 가드 오류 — `distance>1e-4` & atan2→순수 하강 시 -π/2. 원본: h==0 → Quarter(π/2). 비행 중 수직 하강 몸통 기울기 180° 버그 | **처리 완료** — SmartStatistics.java: `(horizontalDistance > 1e-4) ? atan2(y,h) : π/2` |
