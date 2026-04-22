@@ -261,8 +261,7 @@ public final class SmartMovingClimber {
         ClimbGap[] handsGap = {new ClimbGap()};
         ClimbGap[] feetGap  = {new ClimbGap()};
 
-        // 4방향(North/South/East/West) 탐색
-        // TODO: 대각 4방향(NE,NW,SE,SW) 탐색 추가 필요
+        // 4방향(N/S/E/W) 탐색
         HandsClimbing[] tempH = {HandsClimbing.NONE};
         FeetClimbing[]  tempF = {FeetClimbing.NONE};
         ClimbGap[] tempHG = {new ClimbGap()};
@@ -275,6 +274,42 @@ public final class SmartMovingClimber {
         }
         if (tempF[0].isRelevant()) {
             feetClimbing = feetClimbing.max(tempF[0], feetGap, tempFG[0]);
+        }
+
+        // 대각 4방향(NE/NW/SE/SW) 탐색 — isSmall 시 생략 (C-30, SmartMovingSelf.md 745줄 조건)
+        if (!isSmall) {
+            int px = (int) Math.floor(player.getX());
+            int py = (int) Math.floor(player.getY());
+            int pz = (int) Math.floor(player.getZ());
+            int[][] diags = {{1, 1}, {-1, 1}, {1, -1}, {-1, -1}};
+            for (int[] d : diags) {
+                for (int by = py; by <= py + 1; by++) {
+                    BlockState state = world.getBlockState(new BlockPos(px + d[0], by, pz + d[1]));
+                    boolean isHandsLevel = (by == py + 1);
+                    if (state.getBlock() instanceof LadderBlock) {
+                        Direction facing = state.get(LadderBlock.FACING);
+                        boolean relevant = (d[0] > 0 && facing == Direction.WEST)
+                                        || (d[0] < 0 && facing == Direction.EAST)
+                                        || (d[1] > 0 && facing == Direction.NORTH)
+                                        || (d[1] < 0 && facing == Direction.SOUTH);
+                        if (relevant) {
+                            ClimbGap gap = new ClimbGap(); gap.state = state;
+                            if (isHandsLevel) handsClimbing = handsClimbing.max(HandsClimbing.UP, handsGap, gap);
+                            else feetClimbing = feetClimbing.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, feetGap, gap);
+                        }
+                    } else if (state.getBlock() instanceof VineBlock) {
+                        boolean hasFace = (d[0] > 0 && Boolean.TRUE.equals(state.get(VineBlock.WEST)))
+                                       || (d[0] < 0 && Boolean.TRUE.equals(state.get(VineBlock.EAST)))
+                                       || (d[1] > 0 && Boolean.TRUE.equals(state.get(VineBlock.NORTH)))
+                                       || (d[1] < 0 && Boolean.TRUE.equals(state.get(VineBlock.SOUTH)));
+                        if (hasFace) {
+                            ClimbGap gap = new ClimbGap(); gap.state = state;
+                            if (isHandsLevel) handsClimbing = handsClimbing.max(HandsClimbing.UP, handsGap, gap);
+                            else feetClimbing = feetClimbing.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, feetGap, gap);
+                        }
+                    }
+                }
+            }
         }
 
         // 클라이밍 가능한 표면이 없으면 처리하지 않음
