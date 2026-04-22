@@ -76,7 +76,8 @@ public class MixinPlayerEntityRenderer {
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
         boolean smActive = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isSwimming_sm || sm.isDiving || sm.isSliding
-                || sm.isHeadJumping || sm.isCrawling;
+                || sm.isHeadJumping || sm.isCrawling
+                || sm.isFlying || sm.isAngleJumping();
         if (!smActive) return;
         Vec3d vel = localPlayer.getVelocity();
         if (vel.x * vel.x + vel.z * vel.z < 1e-4) return;

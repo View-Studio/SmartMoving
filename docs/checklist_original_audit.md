@@ -77,7 +77,7 @@
 | 상태 | 리서치 파일 (smartmoving/render/) | 대응 구현 파일 |
 |------|----------------------------------|--------------|
 | [x] | `SmartMovingModel.md` | `MixinPlayerEntityModelClient.java` |
-| [ ] | `SmartMovingRender.md` | `MixinPlayerEntityRendererClient.java` (또는 관련 렌더 Mixin) |
+| [x] | `SmartMovingRender.md` | `MixinPlayerEntityRenderer.java`, `SmartMovingHud.java` |
 | [ ] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
 | [ ] | `RenderPlayer.md` | 렌더 관련 Mixin 전체 |
 | [ ] | `SmartRenderContext.md` | `SmartMovingContext.java` 또는 별도 컨텍스트 클래스 |
@@ -428,6 +428,34 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - isSwim: isGenericSneaking threshold (0.005 vs 0.015) 미적용 — 시각적 영향 미미
 - isDive: isLevitate/isJump 상태 미추적 — SM 비행+점프 중 수직각 abs() 미적용 (희귀 케이스)
 - isFeetVineClimbing + UpGrab 동시: vine "+=" vs 구현 "=" 차이 — 극히 희귀한 상태 조합
+
+---
+
+### [2026-04-23] render/SmartMovingRender.md
+
+대응 구현: MixinPlayerEntityRenderer.java (rotatePlayer→sm_captureBodyYaw/sm_modifyBodyYaw/sm_setupTransforms, renderPlayerAt→sm_getPositionOffset), SmartMovingHud.java (renderGuiIngame)
+
+발견한 불일치:
+- [누락] sm_captureBodyYaw(rotatePlayer 대응) smActive 조건에서 `isFlying`, `isAngleJumping()` 누락
+  - 원본 rotatePlayer() 조건: isFlying, isAngleJumping() 포함
+  - 버그: 비행/각도점프 중 bodyYaw가 forwardRotation으로 강제되지 않음
+  - 수정: smActive에 `|| sm.isFlying || sm.isAngleJumping()` 추가
+
+잉여 기록 (기능 저하 없음, 원본 근거 없음):
+- [잉여] sm_captureBodyYaw에 `sm.isCrawling` — 원본 rotatePlayer()에 isCrawling 단독 없음
+- [잉여] sm_captureBodyYaw에 `sm.isRopeSliding` — 원본에 isSliding만 있고 isRopeSliding은 별도 상태
+
+불일치 없음 (주요 렌더 로직):
+- rotatePlayer() → sm_captureBodyYaw + sm_modifyBodyYaw: bodyYaw 강제 패턴 일치 ✓
+- renderPlayerAt() → sm_getPositionOffset(): heightOffset Y 보정 일치 ✓
+- sm_setupTransforms() X 기울기: isSwimming/isDiving/isSliding/isFlying/isHeadJumping 각도 원본 일치 ✓
+- HUD Y 위치: height-49, 물/갑옷 조건 -10 일치 ✓
+- HUD X 위치: jumpCharge=(width/2-91)+i*8, exhaustion=(width/2+90)-(i+1)*8 일치 ✓
+- 점프 차지 바 max/ceil 공식 원본 일치 ✓
+
+신규 발견 미구현:
+- renderName() 미구현 — 타인 플레이어 이름 태그 높이 보정(heightOffset-1→d1-=0.2) + 크롤/스니킹 임시isSneaking 변경. 타인 플레이어 SM 상태 동기화 전체가 미구현인 상태에서 단독 구현 불가.
+- HUD exhaustion bar minFitnessForAction/ToStartAction 아이콘 구분 미구현 — SmartMovingClientState에 maxExhaustionForAction/ToStartAction 필드 없어 원본의 5종 아이콘 구분 불가. 단순화된 2종 아이콘(full/half)으로 대체됨.
 
 ---
 
