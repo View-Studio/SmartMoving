@@ -445,7 +445,13 @@ public final class SmartMovingJumper {
             if (vel.horizontalLength() < 0.01D) return;  // 이동 속도 없으면 반사 각도 계산 불가
             jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
             while (jumpAngle > 360F) jumpAngle -= 360F;
-            jumpAngle = Math.round(jumpAngle / 90F) * 90F;
+            // 원본: tolerance != 0 && abs(aligned) < tolerance 일 때만 90° 스냅
+            if (cfg.wallUpJumpOrthogonalTolerance != 0F) {
+                float aligned = jumpAngle;
+                while (aligned > 45F) aligned -= 90F;
+                if (Math.abs(aligned) < cfg.wallUpJumpOrthogonalTolerance)
+                    jumpAngle = Math.round(jumpAngle / 90F) * 90F;
+            }
         } else {
             jumpAngle = horizontalCollisionAngle;
             while (jumpAngle > 360F) jumpAngle -= 360F;

@@ -69,6 +69,8 @@ public class SmartMovingConfig {
     public float wallUpJumpFallMaximumDistance = 2F;
     // 원본: _wallHeadJumpFallMaximumDistance = Positive(...).defaults(3F)
     public float wallHeadJumpFallMaximumDistance = 3F;
+    // 원본: _wallUpJumpOrthogonalTolerance = Positive(...).defaults(5F)
+    public float wallUpJumpOrthogonalTolerance = 5F;
     public boolean jumpCharge = true;
     public float jumpChargeMaximum = 20F;
     public float jumpChargeFactor = 1.3F;
@@ -248,6 +250,7 @@ public class SmartMovingConfig {
         diveSpeedFactor          = getFloat(p,  "move.dive.speed.factor",         diveSpeedFactor);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",      wallUpJumpFallMaximumDistance);
         wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum", wallHeadJumpFallMaximumDistance);
+        wallUpJumpOrthogonalTolerance   = getFloat(p, "move.jump.wall.orthogonal.tolerance", wallUpJumpOrthogonalTolerance);
         jumpCharge               = getBool(p,   "move.jump.charge",               jumpCharge);
         jumpChargeMaximum        = getFloat(p,  "move.jump.charge.maximum",       jumpChargeMaximum);
         jumpChargeFactor         = getFloat(p,  "move.jump.charge.factor",        jumpChargeFactor);
@@ -314,7 +317,8 @@ public class SmartMovingConfig {
         p.setProperty("move.dive",                       String.valueOf(dive));
         p.setProperty("move.dive.speed.factor",          String.valueOf(diveSpeedFactor));
         p.setProperty("move.jump.wall.fall.maximum",      String.valueOf(wallUpJumpFallMaximumDistance));
-        p.setProperty("move.jump.wall.head.fall.maximum", String.valueOf(wallHeadJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall.head.fall.maximum",   String.valueOf(wallHeadJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall.orthogonal.tolerance", String.valueOf(wallUpJumpOrthogonalTolerance));
         p.setProperty("move.jump.charge",                String.valueOf(jumpCharge));
         p.setProperty("move.jump.charge.maximum",        String.valueOf(jumpChargeMaximum));
         p.setProperty("move.jump.charge.factor",         String.valueOf(jumpChargeFactor));

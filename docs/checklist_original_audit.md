@@ -92,8 +92,8 @@
 |------|--------------------------|--------------|
 | [x] | `SmartRenderModel.md` | N/A — SR 전용 모델 계층 + vanilla 애니메이션 래퍼. TAIL inject로 대체됨 |
 | [x] | `SmartRenderRender.md` | `SmartStatistics.java`, `MixinEntityClient.java`, 렌더 Mixin |
-| [ ] | `SmartRenderContext.md` | `SmartMovingContext.java` 또는 별도 |
-| [ ] | `SmartRenderUtilities.md` | `SmartMovingJumper.java`(getHorizontalCollisionangle 등) |
+| [x] | `SmartRenderContext.md` | N/A — FML RenderingRegistry 렌더러 등록. Mixin inject로 대체됨 |
+| [x] | `SmartRenderUtilities.md` | `SmartMovingJumper.java`(getHorizontalCollisionangle 등) |
 | [ ] | `RendererData.md` | `SmartMovingClientState.java`(stats 필드) |
 | [ ] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
 | [ ] | `RenderPlayer.md` | 렌더 관련 Mixin |
@@ -590,6 +590,25 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/SmartRenderUtilities.md
+
+대응 구현: SmartMovingJumper.java (getHorizontalCollisionangle), MixinPlayerEntityModelClient.java (각도 상수), SmartMovingConfig.java (wallUpJumpOrthogonalTolerance)
+
+발견한 불일치:
+- [누락] `wallUpJumpOrthogonalTolerance` 미구현 — 원본: tolerance!=0 && `abs(aligned)<tolerance`일 때만 90° 스냅. 버그: 항상 90° 스냅(`Math.round(jumpAngle/90F)*90F`)
+  - 원본 (`SmartMovingConfig.md` L436): `_wallUpJumpOrthogonalTolerance.defaults(5F)`
+  - 수정: `SmartMovingConfig.java` — `wallUpJumpOrthogonalTolerance=5F` 필드+readFrom+writeTo 추가
+  - 수정: `SmartMovingJumper.java` L448 — tolerance 체크 후 스냅 조건 추가
+
+불일치 없음:
+- 각도 상수 (Half/Quarter/Eighth/Sixteenth/Thirtytwoth/Sixtyfourth): MixinPlayerEntityModelClient.java에 올바르게 구현됨 ✓
+- `getHorizontalCollisionangle()` 진리표(4방향 충돌 조합 → 벽 법선 각도): SmartMovingJumper.java L494-514과 완전 일치 ✓
+- `getAngle(x,y)` → `atan2(-vel.x, vel.z)`: 수학적으로 동등, zero-velocity 체크도 포함 ✓
+
+신규 발견 미구현: wallUpJumpOrthogonalTolerance (위 처리 완료)
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -622,3 +641,4 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `render/playerapi/SmartMovingRenderPlayerBase.md` | 없음 — renderPlayer/rotatePlayer/renderPlayerAt/passSpecialRender 전부 Inject 대체, getPlayerModels N/A | N/A |
 | 2026-04-23 | `smartrender/SmartRenderModel.md` | 없음 — SR 전용 모델 계층(bipedOuter/Torso/Shoulder/Pelvic) + vanilla 애니메이션 래퍼 전체 N/A | N/A |
 | 2026-04-23 | `smartrender/SmartRenderRender.md` | `currentVerticalAngle` 가드 오류 — `distance>1e-4` & atan2→순수 하강 시 -π/2. 원본: h==0 → Quarter(π/2). 비행 중 수직 하강 몸통 기울기 180° 버그 | **처리 완료** — SmartStatistics.java: `(horizontalDistance > 1e-4) ? atan2(y,h) : π/2` |
+| 2026-04-23 | `smartrender/SmartRenderUtilities.md` | `wallUpJumpOrthogonalTolerance` 미구현 — 항상 90° 스냅. 원본: tolerance!=0 && abs(aligned)<5° 일 때만 스냅. | **처리 완료** — SmartMovingConfig.java: 필드+readFrom+writeTo 추가(default=5F); SmartMovingJumper.java: tolerance 체크 후 조건부 스냅 |
