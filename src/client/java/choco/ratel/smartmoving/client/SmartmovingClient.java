@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
 
 public class SmartMovingClient implements ClientModInitializer {
 
@@ -49,20 +50,44 @@ public class SmartMovingClient implements ClientModInitializer {
 
         // ConfigChange: 서버가 "설정 변경 권한 없음"을 알림 (C-12)
         // 원본: SmartMovingOptions.writeNoRightsToChangeConfigMessageToChat(isConnectedToRemoteServer())
-        // 1.21.1: 메시지 문자열 미확인 → 수신만 처리 (no-op)
+        // A-26: 원문 확인 — remote/local 구분 메시지 (en_us.json smartmoving.message.config.illegal.*)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigChangePayload.ID,
-            (payload, context) -> { /* no rights to change config — message content unconfirmed */ });
+            (payload, context) -> {
+                MinecraftClient client = context.client();
+                boolean isRemote = isRemoteServer(client);
+                String key = isRemote
+                    ? "smartmoving.message.config.illegal.remote"
+                    : "smartmoving.message.config.illegal.local";
+                client.execute(() -> {
+                    if (client.player != null) client.player.sendMessage(Text.translatable(key));
+                });
+            });
 
         // SpeedChange: 서버에서 속도 변경 동기화 (C-12)
         // 원본: difference==0 → 권한없음, !=0 → Config.changeSpeed(difference) (SmartMovingComm.md 확인)
+        // A-26: 권한없음 메시지 원문 확인 (en_us.json smartmoving.message.speed.illegal.*)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.SpeedChangePayload.ID,
             (payload, context) -> {
+                MinecraftClient client = context.client();
                 int difference = payload.difference();
                 if (difference != 0) {
-                    context.client().execute(() -> SmartMovingConfig.Config.changeSpeed(difference));
+                    client.execute(() -> SmartMovingConfig.Config.changeSpeed(difference));
+                } else {
+                    boolean isRemote = isRemoteServer(client);
+                    String key = isRemote
+                        ? "smartmoving.message.speed.illegal.remote"
+                        : "smartmoving.message.speed.illegal.local";
+                    client.execute(() -> {
+                        if (client.player != null) client.player.sendMessage(Text.translatable(key));
+                    });
                 }
-                // difference==0: 서버가 권한없음 알림 — 메시지 문자열 미확인 → 생략
             });
+    }
+
+    // 원본: SmartMovingComm.isConnectedToRemoteServer() — MinecraftServer.getServer()==null 등 3조건
+    // 1.21.1: client.getServer()가 null이면 원격 서버 (통합 서버 없음)
+    private static boolean isRemoteServer(MinecraftClient client) {
+        return client.getServer() == null;
     }
 
     // ── 13-1/13-2: processConfigContentPacket ────────────────────────────────
@@ -77,27 +102,48 @@ public class SmartMovingClient implements ClientModInitializer {
     //
     // 첫 수신(first=true) 시: sendConfigInfo 패킷 전송 (원본: SmartMovingConfig._sm_current = "3.2")
     // 주의: 서버 연결 해제 시 Config 복원은 registerConnectionEvents() DISCONNECT에서 처리.
+    // A-26: 메시지 문자열 원본 확인 완료. 키 → en_us.json smartmoving.message.config.server.*
     private static void processConfigContentPacket(String[] content) {
+        MinecraftClient client = MinecraftClient.getInstance();
         if (content == null) {
             // SM 완전 비활성 — Config = INSTANCE 유지
             return;
         }
         if (content.length == 0) {
             // 서버가 클라이언트 자체 설정에 위임
+            // 원본 메시지: "Using local Smart Moving configurations"
             SmartMovingConfig.Config = SmartMovingConfig.INSTANCE;
+            if (client.player != null)
+                client.player.sendMessage(Text.translatable("smartmoving.message.config.server.local"));
             return;
         }
         // 첫 수신 여부 추적 (원본: first = Config != ServerConfig)
         boolean first = SmartMovingConfig.Config != SmartMovingConfig.SERVER_CONFIG;
+        boolean wasEnabled = SmartMovingConfig.Config.enabled;
         // 서버 설정 수신 → SERVER_CONFIG 갱신
         SmartMovingConfig.SERVER_CONFIG.loadFromArray(content);
         if (first) {
             // 최초 서버 설정 적용 → Config = SERVER_CONFIG 전환
             SmartMovingConfig.Config = SmartMovingConfig.SERVER_CONFIG;
+            // 원본 메시지: "Using Smart Moving server configuration"
+            if (client.player != null)
+                client.player.sendMessage(Text.translatable("smartmoving.message.config.server.global"));
             // 클라이언트 버전 정보를 서버에 전송 (원본: sendConfigInfo(instance, _sm_current))
             ClientPlayNetworking.send(new SmartMovingNetwork.ConfigInfoPayload(SmartMovingConfig.SM_VERSION));
+        } else {
+            // first=false: 재설정 — Config = SERVER_CONFIG는 이미 유지됨
+            // 원본은 wasEnabled/username/isGloballyConfigured로 세분화; 여기서는 단순화.
+            // 원본 단순 메시지: enabled→"update", disabled→"enable" or "disable"
+            String key;
+            if (wasEnabled && SmartMovingConfig.Config.enabled)
+                key = "smartmoving.message.config.server.update";
+            else if (SmartMovingConfig.Config.enabled)
+                key = "smartmoving.message.config.server.enable";
+            else
+                key = "smartmoving.message.config.server.disable";
+            if (client.player != null)
+                client.player.sendMessage(Text.translatable(key));
         }
-        // first=false: 재설정 — Config = SERVER_CONFIG는 이미 유지됨, 채팅 메시지 생략(문자열 미확인)
     }
 
     // ── 4-4: processBlockCode ────────────────────────────────────────────────

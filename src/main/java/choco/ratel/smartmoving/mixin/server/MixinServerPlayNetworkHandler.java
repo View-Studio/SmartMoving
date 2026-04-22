@@ -36,10 +36,10 @@ public abstract class MixinServerPlayNetworkHandler {
      * resetFallDistance 플래그를 갱신하므로, 이 Mixin은 단순히 플래그를 참조하기만 한다.
      */
     // ── [11-3] moved wrongly 완화 stub ───────────────────────────────────────
-    // [미확인 — 1.21.1 Yarn에서 onPlayerMove 또는 handleMovePlayerPacket 메서드명 확인 필요]
+    // 1.21.1 Yarn명: ServerPlayNetworkHandler.onPlayerMove(PlayerMoveC2SPacket) (A-29 확인)
     // SM 클라이밍/크롤링 상태일 때 서버 위치 검증(positionSqDist 체크)을 skip해야
     // "moved wrongly" rubber-band 현상을 방지할 수 있다.
-    // TODO Phase 13: ServerPlayNetworkHandler.onPlayerMove() Mixin으로 구현
+    // C-21: @Inject(method="onPlayerMove") 로 구현
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void sm_tick(CallbackInfo ci) {

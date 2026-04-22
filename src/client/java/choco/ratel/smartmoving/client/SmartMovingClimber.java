@@ -166,8 +166,8 @@ public final class SmartMovingClimber {
      * 상방 보간: motionY = (value - HOLD_MOTION) * upFactor * combinedFactor + HOLD_MOTION
      * 하방 보간: motionY = HOLD_MOTION - (HOLD_MOTION - value) * downFactor * combinedFactor
      *
-     * TODO: _freeClimbingUpSpeedFactor / _freeClimbingDownSpeedFactor 기본값 미확인.
-     *       현재 1.0D로 고정 — SmartMovingConfig.md 재확인 필요.
+     * _freeClimbingUpSpeedFactor / _freeClimbingDownSpeedFactor 원본 기본값 = 1F (PositiveFactor).
+     * Standard/Simple/Smart 모드별 factored 읽기는 C-29에서 구현.
      *
      * @return true if relevant (속도를 변경함)
      */
@@ -183,14 +183,10 @@ public final class SmartMovingClimber {
         if (relevant) {
             double newMotionY;
             if (isUp) {
-                // 상방 보간
-                // TODO: _freeClimbingUpSpeedFactor 기본값 미확인 — 1.0D로 임시 설정
-                double upFactor = 1.0D;
+                double upFactor = 1.0D; // C-29: Config.freeClimbingUpSpeedFactor로 교체 예정
                 newMotionY = (value - HOLD_MOTION) * upFactor * combinedFactor + HOLD_MOTION;
             } else {
-                // 하방 보간
-                // TODO: _freeClimbingDownSpeedFactor 기본값 미확인 — 1.0D로 임시 설정
-                double downFactor = 1.0D;
+                double downFactor = 1.0D; // C-29: Config.freeClimbingDownSpeedFactor로 교체 예정
                 newMotionY = HOLD_MOTION - (HOLD_MOTION - value) * downFactor * combinedFactor;
             }
 

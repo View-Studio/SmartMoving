@@ -437,4 +437,52 @@ isClimbing, isCrawling, isCeilingClimbing, isSwimming, isDiving, isDipping 순 �
 
 6. **`getFactor` 의미**: 허기/소진 배율을 이동 상태와 행동 상태 두 단계로 계산. `SmartMovingSelf`에서 매 틱 소진/허기 계산 시 사용.
 
+---
+
+## R-18 추가 리서치 — SmartMovingConfig 미확인 기본값 (2026-04-22)
+
+### PositiveFactor 기본값 확인 (Properties.java)
+
+`Properties.getDefaultValue(type)` 반환값 (타입별):
+- `PositiveFactor` → **1F**
+- `NegativeFactor` → 1F
+- `IncreasingFactor` → 1F
+- `DecreasingFactor` → 1F
+
+### A-18: `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor`
+
+```java
+// SmartMovingConfig.java Section 3 (Climbing)
+public final Property<Float> _freeClimbingUpSpeedFactor   = PositiveFactor("move.climb.free.up.speed.factor");
+public final Property<Float> _freeClimbingDownSpeedFactor = PositiveFactor("move.climb.free.down.speed.factor");
+```
+
+`.defaults()` 호출 없음 → `Properties.getDefaultValue(PositiveFactor)` = **1F**.  
+→ 현재 SmartMovingClimber.java의 `1.0D`가 정확함. **A-18 확인 완료.**
+
+### A-25: `_iceSpeedFactor`
+
+SmartMovingConfig.java 전체에 `_iceSpeedFactor` 필드 **없음**.  
+원본 SmartMovingMover.java에서 ice speed 처리 방식 별도 확인 필요 (R-19 또는 별도 청크).  
+현재 SmartMovingMover.java의 `1.5F`는 config에서 오는 값이 아님. **A-25 닫힘 — config 필드 없음.**
+
+### A-31: `_slideSlipperinessFactor`
+
+```java
+// SmartMovingConfig.java Section 8 (Sliding)
+public final Property<Float> _slideSlipperinessFactor = PositiveFactor("move.slide.glide.factor");
+```
+
+`.defaults()` 없음 → **1F**.  
+→ 현재 SmartMovingConfig.java의 `slideSlipperinessFactor = 1.0F` 정확함. **A-31 확인 완료.**
+
+### A-32: `_slidingSpeedStopFactor`
+
+```java
+public final Property<Float> _slidingSpeedStopFactor = PositiveFactor("move.slide.speed.stop.factor");
+```
+
+`.defaults()` 없음 → **1F**.  
+→ 이전 `0.01F`는 오류. SmartMovingConfig.java에서 **1.0F**로 수정 완료. **A-32 확인 완료.**
+
 7. **1.21.1 이식**: 메서드 구조는 그대로 유지 가능. 상위 클래스 `SmartMovingConfig`의 필드 시스템을 이식하면 이 클래스도 자동으로 동작. `_baseExhautionGainFactor` 오타는 이식 시 수정 검토.

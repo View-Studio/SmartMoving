@@ -83,11 +83,9 @@ public abstract class MixinServerPlayerEntity {
     }
 
     // ── 3-3-B: addMovementStat HEAD+TAIL stub ────────────────────────────────
-    // [미확인 — 1.21.1 PlayerEntity/LivingEntity 이동 통계+소진 처리 메서드 Yarn명 확인 필요]
-    // 후보: "addMovementStat", "addTravelExhaustion", travel() 내 inline 처리 가능성도 있음
-    // HEAD: beforeAddMovingHungerBatch (disableAddExhaustion=true)
-    // TAIL: SM hunger 값 직접 적용 + afterAddMovingHungerBatch (disableAddExhaustion=false)
-    // TODO Phase 13: Yarn 소스 확인 후 <methodName> 교체 후 아래 두 메서드 활성화
+    // 1.21.1: addMovementStat 독립 메서드 없음 — 소진 처리는 PlayerEntity.travel() 인라인 (A-27 확인)
+    // travel()에 HEAD/TAIL inject로 소진 배치 처리 필요
+    // C-22: @Inject(method="travel") HEAD+TAIL으로 소진 배치 구현
     //
     // @Inject(method = "<methodName>", at = @At("HEAD"))
     // private void sm_beforeMovementStat(CallbackInfo ci) {

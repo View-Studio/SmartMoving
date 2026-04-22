@@ -66,12 +66,12 @@ public class SmartMovingConfig {
     public float angleJumpVerticalFactor = 0.2F;
 
     // ── Sliding ─────────────────────────────────────────────────
-    // 원본: SmartMovingConfig._slideSlipperinessFactor (PositiveFactor, 기본값 미확인 → 1.0F 사용)
+    // 원본: SmartMovingConfig._slideSlipperinessFactor (PositiveFactor, 기본값 1F)
     public float slideSlipperinessFactor = 1.0F;
     // 원본: SmartMovingConfig._slideParticlePeriodFactor (PositiveFactor, 기본값 0.5F)
     public float slideParticlePeriodFactor = 0.5F;
-    // 원본: SmartMovingConfig._slidingSpeedStopFactor (PositiveFactor, 기본값 미확인 → 0.01F 사용)
-    public float slidingSpeedStopFactor = 0.01F;
+    // 원본: SmartMovingConfig._slidingSpeedStopFactor (PositiveFactor, 기본값 1F)
+    public float slidingSpeedStopFactor = 1.0F;
 
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;

@@ -624,3 +624,49 @@ private static void processBlockCode(String text, String blockCode, Property<?> 
 6. **`Config`, `ServerConfig`, `Options` static 필드**: 이 파일에서 직접 확인되지 않음 — `SmartMovingContext`에서 선언. `SmartMovingContext` 리서치 시 확인 필요.
 
 7. **1.21.1 이식**: `C17PacketCustomPayload` → Fabric `PacketByteBuf` + `ClientPlayNetworking`. `EntityOtherPlayerMP` → `OtherClientPlayerEntity`. 블록 코드 메커니즘(채팅 텍스트 파싱)은 바닐라 채팅 이벤트 훅으로 대체.
+
+---
+
+## R-21: 채팅 메시지 문자열 확인 (A-26)
+
+소스: 원본 SmartMoving `assets/smartmoving/lang/en_US.lang` (GitHub makamys/SmartMoving)  
+작성: 2026-04-22
+
+### 권한없음 메시지 (writeNoRightsToChangeConfigMessageToChat)
+
+```
+move.config.chat.server.illegal.remote=You have no rights to change the Smart Moving configuration on the remote server.
+move.config.chat.server.illegal.local=You have no rights to change the Smart Moving configuration on your local server.
+move.speed.chat.server.illegal.remote=You have no rights to change the Smart Moving speed on the remote server.
+move.speed.chat.server.illegal.local=You have no rights to change the Smart Moving speed on your local server.
+```
+
+### 서버 설정 메시지 (writeServerConfigMessageToChat / writeServerReconfigMessageToChat)
+
+```
+move.config.chat.server.global.unnamed=Using Smart Moving server configuration
+move.config.chat.server.global.named=Using Smart Moving server configuration '%s'
+move.config.chat.server.local=Using local Smart Moving configurations
+move.config.chat.server.disable=Smart Moving was disabled by the server configuration
+move.config.chat.server.update.named=Smart Moving server configuration was set to '%s'
+move.config.chat.server.update.unnamed=Smart Moving server configuration was updated
+move.config.chat.server.enable=Smart Moving was enabled by the server configuration
+move.config.chat.server.disable.user=Smart Moving disabled by '%s'
+move.config.chat.server.update.named.user=Smart Moving set to '%s' by '%s'
+move.config.chat.server.update.unnamed.user=Smart Moving server configuration was updated by '%s'
+move.config.chat.server.enable.user=Smart Moving enabled by '%s'
+```
+
+### 속도 변경 메시지 (writeServerSpeedMessageToChat)
+
+```
+move.speed.chat.server.change=Smart Moving speed changed to %s%% by '%s'
+move.speed.chat.server.reset=Smart Moving speed changed to 100%% by '%s'
+```
+
+### 1.21.1 이식 결과
+
+- 번역 키 → `en_us.json` `smartmoving.message.config.*` / `smartmoving.message.speed.*` 네이밍으로 추가
+- `isConnectedToRemoteServer()` → `client.getServer() == null` 으로 단순화
+- `processConfigContentPacket`: first/reconfig 분기별 간소화 메시지 구현
+- username/isGloballyConfigured 인자는 현재 payload에 없어 단순화 (C-17 전체 구현 시 재검토)

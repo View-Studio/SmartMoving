@@ -6,5 +6,16 @@
   "key.smartmoving.speed_decrease": "Speed Decrease",
   "subtitles.smartmoving.climb": "Climbing",
   "subtitles.smartmoving.slide": "Sliding",
-  "subtitles.smartmoving.ceiling_climb": "Ceiling Climbing"
+  "subtitles.smartmoving.ceiling_climb": "Ceiling Climbing",
+
+  "smartmoving.message.config.illegal.remote": "You have no rights to change the Smart Moving configuration on the remote server.",
+  "smartmoving.message.config.illegal.local": "You have no rights to change the Smart Moving configuration on your local server.",
+  "smartmoving.message.config.server.global": "Using Smart Moving server configuration",
+  "smartmoving.message.config.server.local": "Using local Smart Moving configurations",
+  "smartmoving.message.config.server.disable": "Smart Moving was disabled by the server configuration",
+  "smartmoving.message.config.server.update": "Smart Moving server configuration was updated",
+  "smartmoving.message.config.server.enable": "Smart Moving was enabled by the server configuration",
+
+  "smartmoving.message.speed.illegal.remote": "You have no rights to change the Smart Moving speed on the remote server.",
+  "smartmoving.message.speed.illegal.local": "You have no rights to change the Smart Moving speed on your local server."
 }

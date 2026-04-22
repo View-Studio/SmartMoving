@@ -464,8 +464,8 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-14, R-15, R-16, R-17
-- 다음 진행: **전체 소스 누수 스캔 완료 (2026-04-22)** → A-18~A-32, C-15~C-43 신규 등록. 청크 R-18~R-22 순차 진행.
+- 완료된 청크: R-01~R-22 전체 완료 (2026-04-22)
+- 다음 진행: A 항목 전부 [x] 완료 → C-15~C-43 구현 시작 가능.
 
 ---
 
@@ -480,21 +480,21 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 | ID | 미확인 내용 | 원본 소스 위치 | 코드 위치 | 상태 |
 |----|------------|--------------|----------|------|
-| A-18 | `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor` 기본값 (현재 1.0D 임시) | SmartMovingConfig.java | SmartMovingClimber.java L187/192 | [ ] |
-| A-19 | `jumpChargeFactor` 보간 공식 세부값 — `verticalJumpFactor` 실제 값 포함 (`-0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor`) | SmartMovingSelf.java | SmartMovingJumper.java L132 | [ ] |
-| A-20 | `Stats.JUMP` 1.21.1 Yarn명 (jump 통계 기록 — `player.incrementStat(...)` 호출에 필요) | vanilla `net.minecraft.stat.Stats` | SmartMovingJumper.java L179 | [ ] |
-| A-21 | `isRunning` 원본 판정 조건 전체 (헤드점프 차지 진입 조건 `isGroundSprinting || isSprintJump || isRunning`) | SmartMovingSelf.java | SmartMovingJumper.java L232 | [ ] |
-| A-22 | `isSlow` 원본 판정 조건 — 수면 점프 y 임계값 분기 (`isSlow ? 0.37 : 0.6`) | SmartMovingSelf.java | SmartMovingJumper.java L249 | [ ] |
-| A-23 | `Orientation.java` `horizontalCollisionAngle` 계산 로직 전체 (벽점프 반사 각도 계산) | SmartMoving(original) `Orientation.java` | SmartMovingJumper.java L309-311 | [ ] |
-| A-24 | `LivingEntity.bodyYaw` 1.21.1 직접 접근 가능 여부 및 Yarn 필드명 (accessor Mixin 필요 여부) | vanilla `LivingEntity.java` | SmartMovingJumper.java L323 | [ ] |
-| A-25 | `iceSpeedFactor` SmartMovingConfig 실제 기본값 (현재 1.5F 하드코딩) | SmartMovingConfig.java (원본) | SmartMovingMover.java L52 | [ ] |
-| A-26 | ConfigChange 권한없음 / 재설정 완료 채팅 메시지 문자열 원본 | SmartMovingComm.java | SmartMovingClient.java L52/100 | [ ] |
-| A-27 | 이동 통계+소진 처리 메서드 Yarn명 (원본 `addMovementStat` 해당 — 1.21.1에서 `travel()` 인라인인지 별도 메서드인지) | vanilla `PlayerEntity.java` / `LivingEntity.java` | MixinServerPlayerEntity.java L86, MixinLivingEntity.java L115 | [ ] |
-| A-28 | 포션 업데이트 메서드 Yarn명 (원본 `updatePotionEffects` → 1.21.1 후보: `tickStatusEffects`) | vanilla `LivingEntity.java` | MixinLivingEntity.java L115 | [ ] |
-| A-29 | 서버 위치 검증 메서드 Yarn명 (원본 `NetHandlerPlayServer.processPlayer` → 1.21.1 후보: `onPlayerMove`, `handleMovePlayerPacket`) | vanilla `ServerPlayNetworkHandler.java` | MixinServerPlayNetworkHandler.java L39 | [ ] |
-| A-30 | `jumpMovementFactor`(offGroundSpeed) 0.05F 제어 방법 — 1.21.1 `ClientPlayerEntity`에서 해당 필드/속성 존재 여부 | vanilla `ClientPlayerEntity.java` | MixinLivingEntityClient.java L61 | [ ] |
-| A-31 | `_slideSlipperinessFactor` 기본값 (현재 1.0F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L69 | [ ] |
-| A-32 | `_slidingSpeedStopFactor` 기본값 (현재 0.01F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L73 | [ ] |
+| A-18 | `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor` 기본값 (현재 1.0D 임시) | SmartMovingConfig.java | SmartMovingClimber.java L187/192 | [x] → PositiveFactor 기본값 1F 확인 (Properties.getDefaultValue). 현재 1.0D 정확함. `SmartMovingClientConfig.md` R-18 섹션 기재. |
+| A-19 | `jumpChargeFactor` 보간 공식 세부값 — `verticalJumpFactor` 실제 값 포함 (`-0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor`) | SmartMovingSelf.java | SmartMovingJumper.java L132 | [x] → verticalJumpFactor = _jumpVerticalFactor.value = PositiveFactor 기본값 1F. jumpChargeFactor = getJumpChargeFactor 공식 확인. 현재 코드 정확. `mapping/jump.md` R-19 섹션 기재. |
+| A-20 | `Stats.JUMP` 1.21.1 Yarn명 (jump 통계 기록 — `player.incrementStat(...)` 호출에 필요) | vanilla `net.minecraft.stat.Stats` | SmartMovingJumper.java L179 | [x] → `public static final Identifier Stats.JUMP`. 사용: `player.incrementStat(Stats.JUMP)` (Identifier 오버로드). `vanilla/vanilla_yarn_misc.md` A-20 기재. |
+| A-21 | `isRunning` 원본 판정 조건 전체 (헤드점프 차지 진입 조건 `isGroundSprinting || isSprintJump || isRunning`) | SmartMovingSelf.java | SmartMovingJumper.java L232 | [x] → isRunning()=isSprinting()&&!isFast&&(onGround||vanilla()), isGroundSprinting=(isFast||isSprinting())&&onGround&&!isSliding&&!isCrawling. SmartMovingClientState에 isSlow/isFast/isFlying 필드 추가, SmartMovingJumper 수정 완료. |
+| A-22 | `isSlow` 원본 판정 조건 — 수면 점프 y 임계값 분기 (`isSlow ? 0.37 : 0.6`) | SmartMovingSelf.java | SmartMovingJumper.java L249 | [x] → isSlow = wantSneak && !wantSprint && !isClimbing. threshold = sm.isSlow ? 0.37D : 0.6D으로 수정. sm.isSlow는 C-15(tickEssential)에서 계산됨. |
+| A-23 | `Orientation.java` `horizontalCollisionAngle` 계산 로직 전체 (벽점프 반사 각도 계산) | SmartMoving(original) `Orientation.java` | SmartMovingJumper.java L309-311 | [x] → SmartRenderUtilities.getHorizontalCollisionangle() 전체 lookup table 확인. X/Z swap call site 패턴 확인. getHorizontalCollisionangle() SmartMovingJumper에 구현. C-38에서 calculateSeparateCollisions 이식 후 연결. |
+| A-24 | `LivingEntity.bodyYaw` 1.21.1 직접 접근 가능 여부 및 Yarn 필드명 (accessor Mixin 필요 여부) | vanilla `LivingEntity.java` | SmartMovingJumper.java L323 | [x] → `public float bodyYaw` (공개 필드). accessor 불필요. `player.bodyYaw = angle` 직접 사용. `vanilla/vanilla_yarn_misc.md` A-24 기재. |
+| A-25 | `iceSpeedFactor` SmartMovingConfig 실제 기본값 (현재 1.5F 하드코딩) | SmartMovingConfig.java (원본) | SmartMovingMover.java L52 | [x] → 원본 SmartMovingConfig.java에 `_iceSpeedFactor` 필드 없음. config에서 오는 값이 아님. 1.5F는 원본 SmartMovingMover.java 직접 상수값 여부 확인 필요 (현재 그대로 유지). C-39 수정: SmartMovingConfig 읽기 불필요. |
+| A-26 | ConfigChange 권한없음 / 재설정 완료 채팅 메시지 문자열 원본 | SmartMovingComm.java | SmartMovingClient.java L52/100 | [x] → illegal.remote/local 원문 확인. reconfig→update/enable/disable 메시지 확인. en_us.json 추가, SmartMovingClient.java 메시지 표시 구현. SmartMovingComm.md R-21 기재. |
+| A-27 | 이동 통계+소진 처리 메서드 Yarn명 (원본 `addMovementStat` 해당 — 1.21.1에서 `travel()` 인라인인지 별도 메서드인지) | vanilla `PlayerEntity.java` / `LivingEntity.java` | MixinServerPlayerEntity.java L86, MixinLivingEntity.java L115 | [x] → 1.21.1에 addMovementStat 독립 메서드 없음. PlayerEntity.travel() 인라인. C-22: travel() HEAD+TAIL inject. `vanilla/vanilla_yarn_misc.md` A-27 기재. |
+| A-28 | 포션 업데이트 메서드 Yarn명 (원본 `updatePotionEffects` → 1.21.1 후보: `tickStatusEffects`) | vanilla `LivingEntity.java` | MixinLivingEntity.java L115 | [x] → `protected void tickStatusEffects()` 확인. C-23: tickStatusEffects HEAD+TAIL inject. `vanilla/vanilla_yarn_misc.md` A-28 기재. |
+| A-29 | 서버 위치 검증 메서드 Yarn명 (원본 `NetHandlerPlayServer.processPlayer` → 1.21.1 후보: `onPlayerMove`, `handleMovePlayerPacket`) | vanilla `ServerPlayNetworkHandler.java` | MixinServerPlayNetworkHandler.java L39 | [x] → `onPlayerMove(PlayerMoveC2SPacket)` 확인. C-21: @Inject(method="onPlayerMove") 로 구현. `vanilla/vanilla_yarn_misc.md` A-29 기재. |
+| A-30 | `jumpMovementFactor`(offGroundSpeed) 0.05F 제어 방법 — 1.21.1 `ClientPlayerEntity`에서 해당 필드/속성 존재 여부 | vanilla `ClientPlayerEntity.java` | MixinLivingEntityClient.java L61 | [x] → jumpMovementFactor 필드 없음. 대신 `protected float getOffGroundSpeed()` 메서드(PlayerEntity). flying→flySpeed, !flying+sprinting→0.026F, otherwise→0.02F. C-41: getOffGroundSpeed @HEAD override. `vanilla/vanilla_yarn_misc.md` A-30 기재. |
+| A-31 | `_slideSlipperinessFactor` 기본값 (현재 1.0F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L69 | [x] → PositiveFactor 기본값 1F 확인. 현재 1.0F 정확함. |
+| A-32 | `_slidingSpeedStopFactor` 기본값 (현재 0.01F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L73 | [x] → PositiveFactor 기본값 1F 확인. 0.01F → 1.0F 수정 완료. |
 
 ---
 
@@ -549,7 +549,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 **결과 기록 위치**: `docs/research/original/smartmoving/config/SmartMovingClientConfig.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → A-18/A-31/A-32: PositiveFactor 기본값 = 1F 확인(Properties.getDefaultValue). A-32 코드 오류 0.01F→1.0F 수정. A-25: 원본에 _iceSpeedFactor 필드 없음 — config 값 아님 확인. SmartMovingClientConfig.md R-18 섹션 기재.
 
 ---
 
@@ -572,7 +572,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 **결과 기록 위치**: `docs/research/mapping/jump.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → A-19: verticalJumpFactor=1F(PositiveFactor 기본값) 확인, 현재 코드 정확. A-21: isRunning()/isGroundSprinting 조건 확인, SmartMovingClientState에 isSlow/isFast/isFlying 추가, SmartMovingJumper 수정. A-22: isSlow 조건 확인, swim jump threshold sm.isSlow?0.37:0.6 수정. A-23: getHorizontalCollisionangle lookup table 확인, SmartMovingJumper에 구현. mapping/jump.md R-19 섹션 기재.
 
 ---
 
@@ -598,7 +598,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 **결과 기록 위치**: `docs/research/vanilla/vanilla_yarn_misc.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → A-20: Stats.JUMP=Identifier, player.incrementStat(Stats.JUMP). A-24: bodyYaw=public float, 직접 접근. A-27: addMovementStat 없음, travel() 인라인→C-22. A-28: tickStatusEffects() 확인→C-23. A-29: onPlayerMove(PlayerMoveC2SPacket)→C-21. A-30: getOffGroundSpeed() 메서드 대체→C-41. vanilla/vanilla_yarn_misc.md 신규 작성.
 
 ---
 
@@ -616,7 +616,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 **결과 기록 위치**: `docs/research/original/smartmoving/moving/SmartMovingComm.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → A-26: illegal.remote/local/speed 원문 확인. config.server.* 전체 메시지 확인. en_us.json에 smartmoving.message.config.*/speed.* 추가. SmartMovingClient.java ConfigChange/SpeedChange 수신 시 메시지 표시 구현, processConfigContentPacket first/reconfig 분기 메시지 구현. SmartMovingComm.md R-21 섹션 기재.
 
 ---
 
@@ -635,4 +635,4 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 **결과 기록 위치**: `docs/research/mapping/animation_system.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → currentVerticalAngle=atan(yDiff/horizDist), NaN→Quarter(π/2). horizontalDistance=sqrt(xDiff²+zDiff²). currentHorizontalAngle=-atan(xDiff/zDiff), zDiff<0→+Half(π). forwardRotation=lerp(prevYaw, yaw, f2). SmartStatistics.calculateAllStats(): EMA×4 for horiz/vert/all. 1.21.1: prevX/lastRenderX, limbAnimator 대응. animation_system.md R-22 섹션 기재.

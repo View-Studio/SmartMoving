@@ -54,6 +54,27 @@ public final class SmartMovingClientState {
     /** 히트박스 오프셋 (헤드점프 시 -1F) */
     public float heightOffset;
 
+    /**
+     * 스니킹 속도로 이동 중 여부 (스프린트 없음 + 클라이밍 없음).
+     * 원본: isSlow = wantSneak && !wantSprint && !isClimbing
+     * C-15: tickEssential()에서 매 틱 계산.
+     */
+    public boolean isSlow;
+
+    /**
+     * 스프린팅+점프로 빠른 이동 중 여부 (스프린트 점프보다 빠름).
+     * 원본: isFast = grabButton.Pressed && isSprinting() (또는 config 속도 임계값)
+     * C-15: tickEssential()에서 매 틱 계산.
+     */
+    public boolean isFast;
+
+    /**
+     * 비행 중 여부 (vanilla flight 또는 SM fly).
+     * 원본: flying = sp.capabilities.isFlying
+     * C-15: tickEssential()에서 매 틱 계산.
+     */
+    public boolean isFlying;
+
     /** 크롤링 상태 */
     public boolean isCrawling;
 

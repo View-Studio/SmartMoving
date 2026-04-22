@@ -112,11 +112,10 @@ public abstract class MixinLivingEntity {
     }
 
     // ── 3-3-C: 포션 업데이트 사이클 역전 처리 stub ──────────────────────────
-    // [미확인 — 1.21.1 Yarn에서 LivingEntity 포션 업데이트 메서드명 확인 필요]
-    // 후보: "tickStatusEffects", "updateStatusEffects", "updatePotionEffects"
+    // 1.21.1 Yarn명: LivingEntity.tickStatusEffects() (A-28 확인)
     // HEAD: afterAddMovingHungerBatch (disableAddExhaustion depth 감소)
     // TAIL: beforeAddMovingHungerBatch (disableAddExhaustion depth 증가)
-    // TODO Phase 13: Yarn 소스 확인 후 <methodName> 교체 후 아래 두 메서드 활성화
+    // C-23: <methodName>을 tickStatusEffects로 교체 후 아래 두 메서드 활성화
     //
     // @Inject(method = "<methodName>", at = @At("HEAD"))
     // private void sm_beforeTickStatusEffects(CallbackInfo ci) {

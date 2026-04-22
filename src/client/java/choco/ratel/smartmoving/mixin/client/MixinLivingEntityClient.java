@@ -58,7 +58,8 @@ public abstract class MixinLivingEntityClient {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
-        // [미확인 — jumpMovementFactor(offGroundSpeed) 0.05F 제어 방법 TODO Phase 12]
+        // 1.21.1: jumpMovementFactor 필드 없음 → getOffGroundSpeed() 메서드(PlayerEntity) (A-30 확인)
+        // C-41: getOffGroundSpeed() @HEAD Mixin으로 0.05F 반환하여 공중 이동 억제
         if (player.getAbilities().flying && !cfg.fly) {
             Vec3d vel = player.getVelocity();
             player.setVelocity(vel.x, vel.y * 0.5999755859375D, vel.z);

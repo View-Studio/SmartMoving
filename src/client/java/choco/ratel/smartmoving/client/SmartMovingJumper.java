@@ -129,7 +129,8 @@ public final class SmartMovingJumper {
             verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
         } else {
             // 원본: -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor
-            // [미확인 — jumpChargeFactor 보간 공식 원본 세부값 미확인]
+            // verticalJumpFactor = Config._jumpVerticalFactor.value = PositiveFactor 기본값 1F (A-19 확인)
+            // jumpChargeFactor = 1F + charge/max * (factor-1F) (getJumpChargeFactor 공식)
             float jumpChargeFactor = 1F + (cfg.jumpChargeMaximum > 0
                     ? charge / cfg.jumpChargeMaximum * (cfg.jumpChargeFactor - 1F)
                     : 0F);
@@ -176,7 +177,9 @@ public final class SmartMovingJumper {
         }
         sm.isSprintJump = fast;
 
-        // [미확인 — Stats.JUMP 1.21.1 Yarn명 확인 필요 → TODO Phase 13]
+        // 원본: sp.addStat(StatList.jumpStat, 1) → 1.21.1: player.incrementStat(Stats.JUMP)
+        // C-37: up && !noVertical 조건 구현 후 아래 줄 활성화
+        // player.incrementStat(Stats.JUMP);
 
         // ── 상태 클리어 ─────────────────────────────────────────────────────
         sm.jumpCharge = 0F;
@@ -229,10 +232,15 @@ public final class SmartMovingJumper {
 
         // ── c. 헤드점프 차지 ────────────────────────────────────────────────
         // 원본: isHeadJumpCharging = grabButton.Pressed && (isGroundSprinting || isSprintJump || isRunning) && !isCrawling
-        // [미확인 — isRunning 조건 생략, isGroundSprinting → player.isSprinting() 근사]
+        //   isGroundSprinting = (isFast || isSprinting()) && onGround && !isSliding && !isCrawling
+        //   isRunning() = isSprinting() && !isFast && (onGround || vanilla()) (A-21 확인)
+        boolean isGroundSprinting = (sm.isFast || player.isSprinting())
+                && player.isOnGround() && !sm.isSliding && !sm.isCrawling;
+        boolean isRunning = player.isSprinting() && !sm.isFast
+                && (player.isOnGround() || sm.isFlying);
         boolean isHeadJumpCharging = false;
         if (cfg.headJump && grabKeyPressed
-                && (player.isSprinting() || sm.isSprintJump)
+                && (isGroundSprinting || sm.isSprintJump || isRunning)
                 && !sm.isCrawling) {
             if (!sm.blockJumpTillButtonRelease) {
                 sm.headJumpCharge = Math.min(sm.headJumpCharge + 1F, cfg.headJumpChargeMaximum);
@@ -245,11 +253,12 @@ public final class SmartMovingJumper {
 
         // ── d. 수면 점프 ────────────────────────────────────────────────────
         // 원본: isDipping && jumpButton.StartPressed && (posY - floor(posY)) > (isSlow ? 0.37 : 0.6)
-        //       motionY -= 0.0399999...; if(onGround) tryJump(Up, ...)
-        // [미확인 — isSlow 여부 미구현, 0.6 고정값 사용]
+        //   isSlow = wantSneak && !wantSprint && !isClimbing (A-22 확인)
+        //   sm.isSlow는 C-15(tickEssential)에서 매 틱 계산됨
         if (sm.isDipping && sm.jumpPending) {
             double frac = player.getY() - Math.floor(player.getY());
-            if (frac > 0.6D) {
+            double threshold = sm.isSlow ? 0.37D : 0.6D;
+            if (frac > threshold) {
                 Vec3d vel = player.getVelocity();
                 player.setVelocity(vel.x, vel.y - 0.04D, vel.z);
                 if (player.isOnGround()) {
@@ -291,8 +300,8 @@ public final class SmartMovingJumper {
      * 반사 각도 공식: reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180
      * jumpAngle = round(reflectedAngle / 90) * 90  (90° 단위 반올림)
      *
-     * [미확인 — horizontalCollisionAngle: Orientation.java 로직 이식 필요]
-     * 현재 임시값으로 이동 방향 반대(벽 법선)를 사용. TODO: Orientation 이식 후 완성.
+     * horizontalCollisionAngle 알고리즘은 A-23(확인 완료) 참조.
+     * C-38: calculateSeparateCollisions() 이식으로 방향별 충돌 감지 후 완성.
      */
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
@@ -306,8 +315,8 @@ public final class SmartMovingJumper {
         float movementAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
         if (movementAngle < 0) movementAngle += 360F;
 
-        // [미확인 — horizontalCollisionAngle: Orientation.java 이식 필요]
-        // 임시값: 이동 방향 반대 (벽 법선이 이동 방향과 반대인 단순 가정)
+        // 원본: calculateSeparateCollisions()로 4방향 충돌 감지 → getHorizontalCollisionangle()
+        // C-38: calculateSeparateCollisions() 이식 후 아래 근사 교체 예정
         float horizontalCollisionAngle = (movementAngle + 180F) % 360F;
 
         // 원본 반사 공식
@@ -320,10 +329,41 @@ public final class SmartMovingJumper {
 
         // 원본: rotationYaw = jumpAngle; isCollidedHorizontally = false; fallDistance = 0F
         player.setYaw(jumpAngle);
-        player.bodyYaw = jumpAngle;  // [미확인 — bodyYaw 직접 접근. 컴파일 오류 시 accessor 추가 필요]
+        player.bodyYaw = jumpAngle;  // LivingEntity.bodyYaw = public float (A-24 확인)
         player.horizontalCollision = false;
         player.fallDistance = 0F;
 
         tryJump(player, sm, WALL_UP, 0F);
+    }
+
+    /**
+     * 4방향 충돌 조합 → 벽 법선 각도(도) 변환.
+     * 원본: SmartRenderUtilities.getHorizontalCollisionangle() — A-23 확인 완료.
+     *
+     * 주의: 원본 call site(SmartMovingSelf.beforeMoveEntity)에서 X/Z 파라미터가 swap됨.
+     * 여기서도 같은 순서 유지: (posZ, negZ, posX, negX) → (param1, param2, param3, param4)
+     *
+     * 단일 방향 충돌 결과: +Z→0°(남벽), -Z→180°(북벽), +X→90°(동벽), -X→270°(서벽)
+     */
+    public static float getHorizontalCollisionangle(
+            boolean isCollidedPositiveX, boolean isCollidedNegativeX,
+            boolean isCollidedPositiveZ, boolean isCollidedNegativeZ) {
+        if (isCollidedPositiveX) {
+            if (isCollidedNegativeX) {
+                if (isCollidedPositiveZ)  return isCollidedNegativeZ ? Float.NaN : 90F;
+                else                       return isCollidedNegativeZ ? 270F : Float.NaN;
+            } else {
+                if (isCollidedPositiveZ)  return isCollidedNegativeZ ? 0F : 45F;
+                else                       return isCollidedNegativeZ ? 315F : 0F;
+            }
+        } else {
+            if (isCollidedNegativeX) {
+                if (isCollidedPositiveZ)  return isCollidedNegativeZ ? 180F : 135F;
+                else                       return isCollidedNegativeZ ? 225F : 180F;
+            } else {
+                if (isCollidedPositiveZ)  return isCollidedNegativeZ ? Float.NaN : 90F;
+                else                       return isCollidedNegativeZ ? 270F : Float.NaN;
+            }
+        }
     }
 }

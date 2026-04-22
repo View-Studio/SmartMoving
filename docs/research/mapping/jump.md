@@ -673,4 +673,105 @@ if(continueWallJumping && (sp.onGround || isClimbing || !jumpButton.Pressed))
 ### 미확인 (이 파일 범위 외)
 
 - `getLeaningPitch()` 증가/감소 속도 → vanilla `LivingEntity.java` 리서치 (B-05, R-08)
+
+---
+
+## R-19 추가 리서치 — SmartMovingSelf 점프 미확인 값 (2026-04-22)
+
+### A-19: `verticalJumpFactor` / `jumpChargeFactor` 보간 공식
+
+**원본 공식 (`tryJump`):**
+```java
+verticalMotion = -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor;
+```
+
+**`verticalJumpFactor` 값:**
+- `Config._jumpVerticalFactor = PositiveFactor("move.jump.vertical.factor")` — `.defaults()` 없음
+- `Properties.getDefaultValue(PositiveFactor)` = **1F**
+- Up 타입 기본 점프: 추가 배율 없음 → `verticalJumpFactor = 1F`
+- `verticalMotion = -0.078 + 0.498 × 1.0 × jumpChargeFactor ≈ 0.42` (charge=0일 때) ← vanilla와 일치
+
+**`jumpChargeFactor` 공식 (`getJumpChargeFactor`):**
+```java
+return 1F + jumpCharge / _jumpChargeMaximum.value * (_jumpChargeFactor.value - 1F);
+```
+- charge=0: 1F (vanilla 동일)
+- charge=max: `_jumpChargeFactor.value` (기본 = IncreasingFactor → 1F, 명시적 `.defaults(1.3F)` 있음 → **1.3F**)
+
+→ **현재 SmartMovingJumper.java L133-136 구현 정확함. A-19 확인 완료.**
+
+---
+
+### A-21: `isRunning` 원본 판정 조건
+
+```java
+// SmartMovingSelf.java L1988-1990
+public boolean isRunning() {
+    return sp.isSprinting() && !isFast && (sp.onGround || vanilla());
+}
+
+// isGroundSprinting (별도 inline)
+boolean isGroundSprinting = (isFast || sp.isSprinting()) && sp.onGround && !isSliding && !isCrawling;
+```
+
+**헤드점프 차지 진입 조건:**
+```java
+isHeadJumpCharging = grabButton.Pressed && (isGroundSprinting || isSprintJump || isRunning()) && !isCrawling;
+```
+
+→ 1.21.1 대응:
+- `isFast` → `sm.isFast` (C-15에서 계산)
+- `sp.onGround` → `player.isOnGround()`
+- `vanilla()` → `sm.isFlying` (비행 능력)
+
+→ **SmartMovingJumper.java 수정 완료. A-21 확인 완료.**
+
+---
+
+### A-22: `isSlow` 원본 판정 조건
+
+```java
+// SmartMovingSelf.java L1863-1867
+wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing;
+isSlow = wantSneak && wouldIsSneaking;
+```
+
+단순화: `isSlow = sneakButtonPressed && !sprintButtonPressed && !isClimbing`
+
+**수면 점프 Y 임계값:**
+```java
+if(posY - floor(posY) > (isSlow ? 0.37 : 0.6))
+```
+
+→ 1.21.1 대응: `sm.isSlow` 필드 추가(C-15에서 계산), swim jump threshold 수정 완료.
+
+→ **SmartMovingJumper.java 수정 완료. A-22 확인 완료.**
+
+---
+
+### A-23: `horizontalCollisionAngle` 계산 알고리즘
+
+**출처:** `SmartRenderUtilities.getHorizontalCollisionangle()` (SmartRender 패키지)
+
+**호출 방식 (SmartMovingSelf.beforeMoveEntity):**
+```java
+horizontalCollisionAngle = getHorizontalCollisionangle(
+    (collisions & CollidedPositiveZ) != 0,   // isCollidedPositiveX param (X/Z swap!)
+    (collisions & CollidedNegativeZ) != 0,   // isCollidedNegativeX param
+    (collisions & CollidedPositiveX) != 0,   // isCollidedPositiveZ param
+    (collisions & CollidedNegativeX) != 0);  // isCollidedNegativeZ param
+```
+
+**결과 매핑 (X/Z swap 포함, 실효 의미):**
+- 남벽(+Z 충돌) → 0°
+- 북벽(-Z 충돌) → 180°
+- 동벽(+X 충돌) → 90°
+- 서벽(-X 충돌) → 270°
+
+**전체 lookup table:** SmartRenderUtilities.md 참조.
+
+→ `getHorizontalCollisionangle()` 메서드 SmartMovingJumper.java에 구현 완료.  
+→ C-38: `calculateSeparateCollisions()` 이식 후 handleWallJumping에서 실제 연결.
+
+→ **A-23 확인 완료.**
 - `getPoses()` 반환값 경로 → A-11, R-04

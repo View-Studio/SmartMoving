@@ -1007,3 +1007,105 @@ private void smCustomRotate(MatrixStack matrices, CallbackInfo ci) {
 | M-11: bipedTorso.rotationPointY=3F | `matrices.translate(0, 3F/16F, 0)` X 회전 전 삽입 |
 | C-08-2 오류 수정 | R-13 MatrixStack call 순서 전부 역순 오류 → 수정 완료 |
 | ignoreSuperRotation | `matrix.m30/m31/m32()` 추출 → `loadIdentity()` → `translate()` |
+
+---
+
+## R-22: SmartStatistics 계산 로직 (C-25 의존)
+
+소스: SmartRenderRender.java `renderPlayer()` + SmartRenderRender.java `rotatePlayer()`  
+작성: 2026-04-22
+
+### 계산 위치
+
+원본에서 `SmartStatistics`의 `calculateAllStats(boolean remote)`는 **매 게임 틱** 호출됨  
+(SmartMovingCoreEventHandler 등 틱 이벤트에서 호출).
+
+모델에 주입되는 `currentVerticalAngle`, `horizontalDistance` 등은 **렌더 프레임마다**  
+`SmartRenderRender.renderPlayer()` 내에서 직접 계산하여 `SmartRenderModel.*` 필드에 세팅:
+
+### 정확한 계산 공식
+
+```java
+// (from SmartRenderRender.renderPlayer)
+double xDiff = entityplayer.posX - entityplayer.prevPosX;
+double yDiff = entityplayer.posY - entityplayer.prevPosY;
+double zDiff = entityplayer.posZ - entityplayer.prevPosZ;
+
+double verticalDistance   = Math.abs(yDiff);
+double horizontalDistance = Math.sqrt(xDiff * xDiff + zDiff * zDiff);
+double distance           = Math.sqrt(horizontalDistance * horizontalDistance + verticalDistance * verticalDistance);
+
+// currentCameraAngle — 현재 yaw (라디안)
+float currentCameraAngle  = entityplayer.rotationYaw / RadiantToAngle;   // RadiantToAngle = 180/π
+
+// currentVerticalAngle — 수직 기울기 (라디안)
+float currentVerticalAngle = (float)Math.atan(yDiff / horizontalDistance);
+if(Float.isNaN(currentVerticalAngle))
+    currentVerticalAngle = Quarter;  // Quarter = π/2 ≈ 1.5708 (horizontalDistance==0 시)
+
+// currentHorizontalAngle — 이동 방향 yaw (라디안)
+float currentHorizontalAngle = (float)-Math.atan(xDiff / zDiff);
+if(Float.isNaN(currentHorizontalAngle)) {
+    // xDiff==0 && zDiff==0 → 움직임 없음
+    if(Float.isNaN(statistics.prevHorizontalAngle))
+        currentHorizontalAngle = currentCameraAngle;
+    else
+        currentHorizontalAngle = statistics.prevHorizontalAngle;  // 이전 방향 유지
+} else if(zDiff < 0)
+    currentHorizontalAngle += Half;  // Half = π — 후방 사분면 보정
+statistics.prevHorizontalAngle = currentHorizontalAngle;
+```
+
+### forwardRotation (rotatePlayer에서)
+
+```java
+// (from SmartRenderRender.rotatePlayer)
+float forwardRotation = entityplayer.prevRotationYaw
+    + (entityplayer.rotationYaw - entityplayer.prevRotationYaw) * renderPartialTicks;
+if(entityplayer.isPlayerSleeping())
+    forwardRotation = 0;
+```
+
+### SmartStatistics.calculateAllStats() — 틱 처리
+
+```java
+// 매 틱 호출 (SmartStatistics.calculateAllStats(remote))
+double diffX = sp.posX - sp.prevPosX;
+double diffY = sp.posY - sp.prevPosY;
+double diffZ = sp.posZ - sp.prevPosZ;
+
+data.horizontal.calcualte(Math.sqrt(diffX*diffX + diffZ*diffZ));  // EMA × 4
+data.vertical.calcualte((float)Math.abs(diffY));
+tickDistance = data.all.calcualte(Math.sqrt(diffX*diffX + diffY*diffY + diffZ*diffZ));
+if(calculateHorizontalStats && !remote)
+    data.horizontal.apply(sp);  // limbSwing* 덮어쓰기 (로컬 플레이어만)
+```
+
+### 상수 요약 (SmartRenderUtilities)
+
+| 상수 | 값 | 의미 |
+|------|----|------|
+| `Quarter` | π/2 ≈ 1.5708 | currentVerticalAngle NaN 대체값 (수직) |
+| `Half` | π ≈ 3.1416 | currentHorizontalAngle 후방 보정 |
+| `RadiantToAngle` | 180/π ≈ 57.296 | degree→radian 변환 |
+
+### 사용 위치 (SmartMovingModel.setRotationAngles)
+
+| 변수 | 사용 케이스 |
+|------|------------|
+| `currentVerticalAngle` | isLevitate/isJump/isHeadJump 시 `bipedOuter.rotateAngleX = Quarter - currentVerticalAngle` |
+| `horizontalDistance` | 0.015F/0.05F 임계값으로 정지 판정 → `horizontalAngle` 소스 결정 |
+| `currentHorizontalAngle` | 이동 중 body Y 방향 |
+| `currentCameraAngle` | 정지 중 body Y 방향 (카메라 방향) |
+| `forwardRotation` | isClimb 시 `bipedOuter.rotateAngleY = forwardRotation / RadiantToAngle` |
+
+### 1.21.1 이식 전략 (C-25)
+
+1. `SmartStatistics.calculateAllStats()` → `MixinLivingEntity.tickMovement TAIL` (매 틱)
+   - 1.21.1: `posX → getX()`, `prevPosX → lastRenderX` (or `prevX`)
+   - `limbSwing → limbAnimator.pos`, `limbSwingAmount → limbAnimator.speed` (1.21.1 LimbAnimator)
+2. renderPlayer 내 `currentVerticalAngle` 등 계산 → `MixinPlayerEntityRenderer.render()` HEAD 또는 TAIL
+   - 1.21.1: `posX → entity.getX()`, `prevPosX → entity.prevX`
+   - `rotationYaw → entity.getYaw()`, `prevRotationYaw → entity.prevYaw`
+3. `SmartRenderModel` 필드 → `SmartStatistics` 클라이언트 상태 객체로 이식
+   - 플레이어당 인스턴스: `SmartStatistics.get(player)` 패턴
