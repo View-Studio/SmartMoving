@@ -36,8 +36,8 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | A-10 | `SmartMovingSelf.updateEntityActionState()` — processBlockCode 결과가 어느 필드에 어떻게 반영되는지 | SmartMovingSelf.java | [x] → 2347~2357줄. `updateCounter < 10` 조건으로 초기 10틱만 채팅 히스토리 스캔. 결과는 Config→ServerConfig 전환을 통해 간접 반영. `SmartMovingClient.md` 및 `SmartMovingSelf.md`에 기록. |
 | A-11 | `getPoses()` 반환값이 사용되는 경로 전체 (어디서 호출, 어떻게 사용) | SmartMovingSelf.java 또는 SmartMovingPlayerBase.java | [x] → SM 전체 계층에 없음 확인. 1.7.10에 EntityPose API 없음. 대응 메커니즘은 player.height/boundingBox.maxY 직접 변경. `SmartMovingServerPlayerBase.md` R-04 섹션 기재. |
 | A-12 | `reverseHandleMaterialAcceleration()` — 실제로 무엇을 하는지, travel() 완전 대체 시 불필요한지 여부 | SmartMovingSelf.java | [x] → SmartMovingBase.java에 있음. 이미 SmartMovingBase.md에 기록됨. 1.21.1 필요 여부: B-11 미확인 → [미확인]. SmartMovingServerPlayerBase.md R-04 섹션 요약 기재. |
-| A-13 | SM 크롤링 서버 측 `isCrawling` 동기화 방식 — State 패킷 비트 배치 확인 (bit 몇 번인지) | SmartMovingOther.java / State 패킷 비트맵 | [ ] |
-| A-14 | SM 슬라이딩 서버 측 `isSliding` 동기화 방식 — State 패킷 비트 배치 확인 | SmartMovingOther.java / State 패킷 비트맵 | [ ] |
+| A-13 | SM 크롤링 서버 측 `isCrawling` 동기화 방식 — State 패킷 비트 배치 확인 (bit 몇 번인지) | SmartMovingOther.java / State 패킷 비트맵 | [x] → bit 13. SmartMovingOther.processStatePacket 디코딩 + SmartMovingSelf.addToSendQueue 인코딩 양쪽 직접 확인. SmartMovingOther.md R-06 섹션 기재. |
+| A-14 | SM 슬라이딩 서버 측 `isSliding` 동기화 방식 — State 패킷 비트 배치 확인 | SmartMovingOther.java / State 패킷 비트맵 | [x] → bit 21. 디코딩·인코딩 양쪽 직접 확인. 서버는 isSliding 추출 안 함 — 클라이언트 렌더링 전용. SmartMovingOther.md R-06 섹션 기재. |
 | A-15 | `bipedOuter`, `bipedTorso`, `bipedBreast`, `bipedNeck`, `bipedPelvic`, `bipedShoulder` 계층 구조 전체 — 부모/자식 관계, 각 노드의 초기 pivotXYZ, rotationXYZ | SmartMovingModel.java / ModelPlayer.java (SmartRender) | [x] → SmartRenderModel.java 생성자 직접 확인. 전체 15노드 계층·pivot 값 SmartMovingModel.md R-05 섹션 + animation_system.md에 기재. |
 | A-16 | `SmartMovingModel.setRotationAngles()` — `isRopeSliding` 분기 전체 (현재 미구현) | SmartMovingModel.java | [x] → SmartMovingModel.md "1. isRopeSliding" 섹션(lines 269~301)에 이미 완전 기록되어 있음. 추가 작업 불필요. |
 | A-17 | 서버 물리 재현 범위 — SmartMovingServerPlayerBase.java가 서버에서 어떤 물리 계산을 수행하는지 전체 | SmartMovingServerPlayerBase.java | [x] → SmartMovingServer.java 전체 확인. 실제 물리(클라이밍/수영 벡터)는 클라이언트 담당. 서버는 hitbox 조정/floatKick 억제/낙하거리 리셋/crawlingCooldown/소진 필터링만 처리. SmartMovingServerPlayerBase.md R-04 섹션 기재. |
@@ -216,7 +216,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/original/smartmoving/moving/SmartMovingOther.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → A-13: isCrawling=bit13 (디코딩·인코딩 양쪽 확인). A-14: isSliding=bit21 (서버는 추출 안 함, 클라이언트 렌더링 전용 확인). 릴레이 경로 전체 확인. SmartMovingOther.md R-06 섹션 기재.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05
-- 다음 진행: **R-06** (State 패킷 비트맵 — isCrawling/isSliding 비트 확인)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06
+- 다음 진행: **R-07** (vanilla EntityPose 시스템)

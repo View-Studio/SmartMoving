@@ -373,6 +373,103 @@ public boolean doFallingAnimation()
 
 ---
 
+## R-06 리서치 결과 추가 (A-13, A-14)
+
+### A-13 — isCrawling State 패킷 비트 위치
+
+**확인 방법**: SmartMovingOther.processStatePacket 역직렬화 순서 직접 계산 + SmartMovingSelf.addToSendQueue 인코딩 측 교차 확인
+
+**결과**: `isCrawling` = **bit 13** (LSB 기준)
+
+본 문서 "비트 레이아웃" 표에 이미 기록됨 (bit 13). 인코딩·디코딩 양쪽 코드에서 동일 위치 확인.
+
+---
+
+### A-14 — isSliding State 패킷 비트 위치
+
+**확인 방법**: SmartMovingOther.processStatePacket 역직렬화 순서 직접 계산 + SmartMovingSelf.addToSendQueue 인코딩 측 교차 확인
+
+**결과**: `isSliding` = **bit 21** (LSB 기준)
+
+본 문서 "비트 레이아웃" 표에 이미 기록됨 (bit 21). 인코딩·디코딩 양쪽 코드에서 동일 위치 확인.
+
+**추가 확인**: `isSliding`은 SmartMovingOther(다른 클라이언트 플레이어 표현)에서 디코딩됨. SmartMovingServer는 isSliding을 processStatePacket에서 추출하지 않음 — 서버 물리에 불필요(A-17 확인).
+
+---
+
+### 인코딩 측 — SmartMovingSelf.addToSendQueue()
+
+**소스 위치**: `SmartMovingSelf.java` → `addToSendQueue()` 메서드 (클라이언트 전용, `sp.worldObj.isRemote` 조건)
+
+**인코딩 코드 전체 (비트 조립)**:
+
+```java
+boolean isSmall = sp.height < 1;
+
+long state = 0;
+state |= isp.localIsSneaking() ? 1 : 0;    // → bit 33
+
+state <<= 1; state |= isRopeSliding ? 1 : 0;      // → bit 32
+state <<= 1; state |= isWallJumping ? 1 : 0;       // → bit 31
+state <<= 1; state |= isFast ? 1 : 0;              // → bit 30
+state <<= 1; state |= isSlow ? 1 : 0;              // → bit 29
+state <<= 1; state |= isClimbBackJumping ? 1 : 0;  // → bit 28
+state <<= 1; state |= isClimbJumping ? 1 : 0;      // → bit 27
+state <<= 1; state |= isHandsVineClimbing ? 1 : 0; // → bit 26
+state <<= 1; state |= isFeetVineClimbing ? 1 : 0;  // → bit 25
+state <<= 3; state |= angleJumpType;                // → bits 22-24
+state <<= 1; state |= isSliding ? 1 : 0;           // → bit 21
+state <<= 1; state |= isHeadJumping ? 1 : 0;       // → bit 20
+state <<= 1; state |= isLevitating ? 1 : 0;        // → bit 19
+state <<= 1; state |= isCeilingClimbing ? 1 : 0;   // → bit 18
+state <<= 1; state |= doFlyingAnimation() ? 1 : 0; // → bit 17
+state <<= 1; state |= doFallingAnimation() ? 1 : 0;// → bit 16
+state <<= 1; state |= isSmall ? 1 : 0;             // → bit 15
+state <<= 1; state |= isClimbing ? 1 : 0;          // → bit 14
+state <<= 1; state |= isCrawling ? 1 : 0;          // → bit 13
+state <<= 1; state |= isCrawlClimbing ? 1 : 0;     // → bit 12
+state <<= 1; state |= isSwimming ? 1 : 0;          // → bit 11
+state <<= 1; state |= isDipping ? 1 : 0;           // → bit 10
+state <<= 1; state |= isDiving ? 1 : 0;            // → bit 9
+state <<= 1; state |= isp.getIsJumpingField() ? 1 : 0; // → bit 8
+state <<= 4; state |= actualHandsClimbType;         // → bits 4-7
+state <<= 4; state |= actualFeetClimbType;          // → bits 0-3
+```
+
+인코딩 결과는 `processStatePacket()`의 역직렬화 비트 순서와 완전히 일치함.
+
+**전송 조건**:
+```java
+boolean sendStatePacket = state != prevPacketState;
+// 또는 worldObj.playerEntities 목록 변경 시
+if(sendStatePacket)
+    SmartMovingPacketStream.sendState(SmartMovingComm.instance, sp.getEntityId(), state);
+```
+상태 변경이 없으면 전송하지 않음 (`prevPacketState`와 비교).
+
+---
+
+### 릴레이 경로 전체
+
+```
+SmartMovingSelf.addToSendQueue()
+  → SmartMovingPacketStream.sendState(SmartMovingComm.instance, entityId, state)
+  → [C→S 패킷]
+  → 서버: SmartMovingServerComm (서버 측 수신)
+       → SmartMovingServer.processStatePacket(state)
+            (hitbox 조정 / floatKick 억제 / 낙하리셋 / crawlingCooldown / 소진 필터 — A-17 참조)
+       → 다른 클라이언트들에게 릴레이 (S→C)
+  → 다른 클라이언트: SmartMovingComm.processStatePacket(packet, player, entityId, state)
+       → SmartMovingFactory.getOtherSmartMoving(entity)
+       → SmartMovingOther.processStatePacket(state)  ← 이 파일
+```
+
+**isCrawling / isSliding의 릴레이 처리**:
+- **isCrawling (bit 13)**: 서버가 `setCrawling()` 호출 (hitbox 갱신). 다른 클라이언트는 `SmartMovingOther.isCrawling` 에 설정 → 렌더링에 사용.
+- **isSliding (bit 21)**: 서버는 추출하지 않음. 다른 클라이언트가 `SmartMovingOther.isSliding`에 설정 → 렌더링에만 사용.
+
+---
+
 ## SmartMovingServer 비트 비교
 
 `SmartMovingServer.processStatePacket`은 동일한 `long state`에서 일부 비트만 선택적 읽기:
