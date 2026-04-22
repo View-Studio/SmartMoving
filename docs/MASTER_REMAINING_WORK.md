@@ -726,16 +726,16 @@ grep -n "isFlying\|flySpeed\|horizontalFactor\|verticalFactor" \
 ```
 
 **작업 단계 체크리스트**:
-- [ ] SmartMovingSelf.md에서 travel() 비행 분기 원본 코드 찾아 읽기 (정확한 공식 확인)
-- [ ] 원본 공식과 이 파일 IMPL-06 명세의 근사치 비교 — 차이 있으면 명세 수정
-- [ ] MixinLivingEntityClient.sm_travel_client()에 `isFlying && cfg.fly` 분기 추가 (클라이밍 처리 전)
-- [ ] pitch 기반 horizontalFactor = cos(pitch), verticalFactor = -sin(pitch) 구현
-- [ ] motionX/Y/Z 3D 이동 벡터 계산 및 setVelocity 적용
-- [ ] 감쇠 0.91F 적용 코드 추가
-- [ ] SM이 처리한 경우 `ci.cancel()` 또는 적절한 vanilla 처리 차단
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [x] SmartMovingSelf.md에서 travel() 비행 분기 원본 코드 찾아 읽기 (handleAlternativeFlying 602-631줄)
+- [x] 원본 공식과 이 파일 IMPL-06 명세의 근사치 비교 — 실제 구현은 SmartMovingBase.moveFlying 전체 알고리즘 이식
+- [x] MixinLivingEntityClient.sm_travel_client()에 `isFlying && cfg.fly` 분기 추가 (클라이밍 리셋 직후)
+- [x] pitch 기반 horizontalFactor = cos(pitch), verticalFactor = -sin(pitch) 구현 (SmartMovingFlyer.moveFlying)
+- [x] motionX/Y/Z 3D 이동 벡터 계산 및 setVelocity 적용 (비표준 정규화 sqrt(sqrt(x²+z²)+y²) 포함)
+- [x] 감쇠 0.91F 적용 코드 추가
+- [x] SM이 처리한 경우 `ci.cancel()` 차단
+- [x] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
 - [ ] T-09 인게임 테스트: 크리에이티브 비행 중 아래 조준+W → 아래 방향으로 전진
-- [ ] PART 6 트래킹 [x] 체크
+- [x] PART 6 트래킹 [x] 체크
 
 **현재 상태**:  
 비행 체 tilt 애니메이션은 `MixinPlayerEntityRenderer.sm_setupTransforms()`에 구현됨.  
@@ -970,7 +970,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [x] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)  ← 2026-04-22 완료
 [x] IMPL-04 F9 토글 채팅 피드백  ← 2026-04-22 완료
 [x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료
-[ ] IMPL-06 비행 물리 (리서치 선행 후)
+[x] IMPL-06 비행 물리 (pitch 기반 3D 이동)  ← 2026-04-22 완료
 [ ] ANIM-01 isFlying head.pitch 보정
 [ ] ANIM-02 isFlying 정지 자세 초기화
 ```

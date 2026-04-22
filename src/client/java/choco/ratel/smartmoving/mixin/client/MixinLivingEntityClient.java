@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingFlyer;
 import choco.ratel.smartmoving.client.SmartMovingJumper;
 import choco.ratel.smartmoving.client.SmartMovingSlider;
 import choco.ratel.smartmoving.client.SmartMovingSwimmer;
@@ -101,6 +102,14 @@ public abstract class MixinLivingEntityClient {
         sm.isClimbHolding    = false;
         sm.isClimbCrawling   = false;
         sm.isClimbBackJumping = false;
+
+        // [11-5] SM 비행 물리 — isFlying && cfg.fly 시 pitch 방향 3D 이동
+        // 원본: handleAlternativeFlying() → !handledSwimming && !handledLava && isFlying && Config.isFlyingEnabled()
+        // 수영/슬라이딩이 이미 ci.cancel()로 반환됐으므로 이 지점 = !handledSwimming && !handledLava 조건 충족
+        if (SmartMovingFlyer.handleFlying(player, sm, movementInput, this.jumping)) {
+            ci.cancel();
+            return;
+        }
 
         // [5-1] 클라이밍 처리
         World world = player.getWorld();

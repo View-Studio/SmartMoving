@@ -84,6 +84,12 @@ public class SmartMovingConfig {
     // 원본: SmartMovingConfig._slidingSpeedStopFactor (PositiveFactor, 기본값 1F)
     public float slidingSpeedStopFactor = 1.0F;
 
+    // ── Flying ──────────────────────────────────────────────────
+    // 원본: Config._flyingSpeedFactor (PositiveFactor, 기본값 1F)
+    public float flyingSpeedFactor = 1.0F;
+    // 원본: Options._flyControlVertical — pitch 방향 3D 이동 활성화 여부 (기본값 true)
+    public boolean flyControlVertical = true;
+
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;
     public boolean slide = true;
@@ -217,6 +223,8 @@ public class SmartMovingConfig {
         slideSlipperinessFactor  = getFloat(p,  "move.slide.slipperiness.factor", slideSlipperinessFactor);
         slideParticlePeriodFactor = getFloat(p, "move.slide.particle.period.factor", slideParticlePeriodFactor);
         slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
+        flyingSpeedFactor        = getFloat(p,  "move.fly.speed.factor",          flyingSpeedFactor);
+        flyControlVertical       = getBool(p,   "move.fly.control.vertical",      flyControlVertical);
         fly                      = getBool(p,   "move.fly",                       fly);
         slide                    = getBool(p,   "move.slide",                     slide);
         crawl                    = getBool(p,   "move.crawl",                     crawl);
@@ -270,6 +278,8 @@ public class SmartMovingConfig {
         p.setProperty("move.slide.slipperiness.factor",  String.valueOf(slideSlipperinessFactor));
         p.setProperty("move.slide.particle.period.factor", String.valueOf(slideParticlePeriodFactor));
         p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
+        p.setProperty("move.fly.speed.factor",           String.valueOf(flyingSpeedFactor));
+        p.setProperty("move.fly.control.vertical",       String.valueOf(flyControlVertical));
         p.setProperty("move.fly",                        String.valueOf(fly));
         p.setProperty("move.slide",                      String.valueOf(slide));
         p.setProperty("move.crawl",                      String.valueOf(crawl));
