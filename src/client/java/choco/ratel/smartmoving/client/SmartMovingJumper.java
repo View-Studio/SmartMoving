@@ -11,6 +11,7 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.stat.Stats;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
@@ -315,9 +316,9 @@ public final class SmartMovingJumper {
         float movementAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
         if (movementAngle < 0) movementAngle += 360F;
 
-        // 원본: calculateSeparateCollisions()로 4방향 충돌 감지 → getHorizontalCollisionangle()
-        // C-38: calculateSeparateCollisions() 이식 후 아래 근사 교체 예정
-        float horizontalCollisionAngle = (movementAngle + 180F) % 360F;
+        // C-38: calculateSeparateCollisions() — 4방향 AABB 충돌 감지
+        // 원본 call site: (posZ, negZ, posX, negX) 순서로 swap하여 getHorizontalCollisionangle 호출
+        float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, movementAngle);
 
         // 원본 반사 공식
         float reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
@@ -334,6 +335,24 @@ public final class SmartMovingJumper {
         player.fallDistance = 0F;
 
         tryJump(player, sm, WALL_UP, 0F);
+    }
+
+    /**
+     * 4방향 AABB 충돌 감지 후 벽 법선 각도를 반환한다.
+     * 원본: SmartMovingSelf.calculateSeparateCollisions() + getHorizontalCollisionangle() 호출.
+     *
+     * 원본 call site: getHorizontalCollisionangle(posZ, negZ, posX, negX) — X/Z swap 유지.
+     */
+    private static float calculateSeparateCollisionAngle(ClientPlayerEntity player, float movementAngle) {
+        World world = player.getWorld();
+        Box bb = player.getBoundingBox();
+        double delta = 0.001D;
+        boolean posX = !world.isSpaceEmpty(player, bb.offset( delta, 0, 0));
+        boolean negX = !world.isSpaceEmpty(player, bb.offset(-delta, 0, 0));
+        boolean posZ = !world.isSpaceEmpty(player, bb.offset(0, 0,  delta));
+        boolean negZ = !world.isSpaceEmpty(player, bb.offset(0, 0, -delta));
+        float angle = getHorizontalCollisionangle(posZ, negZ, posX, negX);
+        return Float.isNaN(angle) ? (movementAngle + 180F) % 360F : angle;
     }
 
     /**

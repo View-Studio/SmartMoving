@@ -42,6 +42,11 @@ public class SmartMovingConfig {
     public float freeClimbingUpSpeedFactor   = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float freeClimbingDownSpeedFactor = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float ceilingClimbingSpeedFactor = 0.2F;
+    // 원본: Config._freeClimbFallDamageStartDistance = 2F, _freeClimbFallDamageFactor = 2F
+    public float freeClimbFallDamageStartDistance = 2.0F;
+    public float freeClimbFallDamageFactor        = 2.0F;
+    // 원본: Options._climbJumpBackHeadOnGrab — false=grabNotPressed시 headJump, true=grabbed시 headJump
+    public boolean climbJumpBackHead = false;
     public boolean climbExhaustion = false;
     public float climbExhaustionStart = 60F;
     public float climbExhaustionStop = 100F;
@@ -180,6 +185,9 @@ public class SmartMovingConfig {
         freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
         freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
         ceilingClimbingSpeedFactor = getFloat(p, "move.climb.ceiling.speed.factor", ceilingClimbingSpeedFactor);
+        freeClimbFallDamageStartDistance = getFloat(p, "move.climb.free.fall.damage.start", freeClimbFallDamageStartDistance);
+        freeClimbFallDamageFactor        = getFloat(p, "move.climb.free.fall.damage.factor", freeClimbFallDamageFactor);
+        climbJumpBackHead        = getBool(p,   "move.climb.jump.back.head",      climbJumpBackHead);
         climbExhaustion          = getBool(p,   "move.climb.exhaustion",          climbExhaustion);
         climbExhaustionStart     = getFloat(p,  "move.climb.exhaustion.start",    climbExhaustionStart);
         climbExhaustionStop      = getFloat(p,  "move.climb.exhaustion.stop",     climbExhaustionStop);
@@ -228,6 +236,9 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
         p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
         p.setProperty("move.climb.ceiling.speed.factor", String.valueOf(ceilingClimbingSpeedFactor));
+        p.setProperty("move.climb.free.fall.damage.start", String.valueOf(freeClimbFallDamageStartDistance));
+        p.setProperty("move.climb.free.fall.damage.factor", String.valueOf(freeClimbFallDamageFactor));
+        p.setProperty("move.climb.jump.back.head",       String.valueOf(climbJumpBackHead));
         p.setProperty("move.climb.exhaustion",           String.valueOf(climbExhaustion));
         p.setProperty("move.climb.exhaustion.start",     String.valueOf(climbExhaustionStart));
         p.setProperty("move.climb.exhaustion.stop",      String.valueOf(climbExhaustionStop));

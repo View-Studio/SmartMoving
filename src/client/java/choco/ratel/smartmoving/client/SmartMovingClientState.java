@@ -116,6 +116,12 @@ public final class SmartMovingClientState {
     /** 로프 슬라이딩 상태 */
     public boolean isRopeSliding;
 
+    // ── C-33: SM 독자 exhaustion (클라이밍 피로도) ──────────────────────────
+    /** 이전 틱 클라이밍 여부 — exhaustion 허용 조건 판정용. */
+    public boolean wasClimbing;
+    /** SM 독자 피로도 (0 ~ climbExhaustionStop 사이). 매 틱 감소, 클라이밍 중 증가. */
+    public float exhaustion;
+
     // ── 12-7: 위 블록까지의 거리 (isCrawlClimbing || isHeadJumping 시 사용) ─
     /** 머리 위 블록까지의 거리. 최대 5.0F. */
     public float smallOverGroundHeight;
@@ -220,6 +226,11 @@ public final class SmartMovingClientState {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
 
+        // C-33: wasClimbing = 이전 틱의 isClimbing 값 저장
+        wasClimbing = isClimbing;
+        // 매 틱 exhaustion 감소 (클라이밍 중 증가량으로 상쇄됨)
+        exhaustion = Math.max(0F, exhaustion - 1.0F);
+
         // 설정 토글 키 처리 (원본: toggleButton.update() + StartPressed 분기)
         if (SmartMovingKeys.configToggle.wasPressed()) {
             if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE) {
@@ -259,6 +270,8 @@ public final class SmartMovingClientState {
         isCrawling = false;
         isSliding = false;
         angleJumpType = 0;
+        wasClimbing  = false;
+        exhaustion   = 0F;
     }
 
     // ── 4-3: isConnectedToRemoteServer() ─────────────────────────────
