@@ -465,4 +465,174 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 ## 현재 진행 상태
 
 - 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-14, R-15, R-16, R-17
-- 다음 진행: **모든 리서치 청크 완료** → C-01~C-14 구현 시작 (RESEARCH_RULES.md 규칙 5 조건 점검)
+- 다음 진행: **전체 소스 누수 스캔 완료 (2026-04-22)** → A-18~A-32, C-15~C-43 신규 등록. 청크 R-18~R-22 순차 진행.
+
+---
+
+## 전체 소스 파일 누수 스캔 결과 (2026-04-22)
+
+> 모든 `.java` 파일의 `TODO` / `[미확인]` / no-op 핸들러를 전수 검색하여 아래에 항목화함.
+> PORTING_RULES.md 기준 적용: 추정값 임시 사용 = A 항목, 구현 없음 = C 항목.
+
+---
+
+### 신규 A 항목 (원본 소스 미확인)
+
+| ID | 미확인 내용 | 원본 소스 위치 | 코드 위치 | 상태 |
+|----|------------|--------------|----------|------|
+| A-18 | `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor` 기본값 (현재 1.0D 임시) | SmartMovingConfig.java | SmartMovingClimber.java L187/192 | [ ] |
+| A-19 | `jumpChargeFactor` 보간 공식 세부값 — `verticalJumpFactor` 실제 값 포함 (`-0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor`) | SmartMovingSelf.java | SmartMovingJumper.java L132 | [ ] |
+| A-20 | `Stats.JUMP` 1.21.1 Yarn명 (jump 통계 기록 — `player.incrementStat(...)` 호출에 필요) | vanilla `net.minecraft.stat.Stats` | SmartMovingJumper.java L179 | [ ] |
+| A-21 | `isRunning` 원본 판정 조건 전체 (헤드점프 차지 진입 조건 `isGroundSprinting || isSprintJump || isRunning`) | SmartMovingSelf.java | SmartMovingJumper.java L232 | [ ] |
+| A-22 | `isSlow` 원본 판정 조건 — 수면 점프 y 임계값 분기 (`isSlow ? 0.37 : 0.6`) | SmartMovingSelf.java | SmartMovingJumper.java L249 | [ ] |
+| A-23 | `Orientation.java` `horizontalCollisionAngle` 계산 로직 전체 (벽점프 반사 각도 계산) | SmartMoving(original) `Orientation.java` | SmartMovingJumper.java L309-311 | [ ] |
+| A-24 | `LivingEntity.bodyYaw` 1.21.1 직접 접근 가능 여부 및 Yarn 필드명 (accessor Mixin 필요 여부) | vanilla `LivingEntity.java` | SmartMovingJumper.java L323 | [ ] |
+| A-25 | `iceSpeedFactor` SmartMovingConfig 실제 기본값 (현재 1.5F 하드코딩) | SmartMovingConfig.java (원본) | SmartMovingMover.java L52 | [ ] |
+| A-26 | ConfigChange 권한없음 / 재설정 완료 채팅 메시지 문자열 원본 | SmartMovingComm.java | SmartMovingClient.java L52/100 | [ ] |
+| A-27 | 이동 통계+소진 처리 메서드 Yarn명 (원본 `addMovementStat` 해당 — 1.21.1에서 `travel()` 인라인인지 별도 메서드인지) | vanilla `PlayerEntity.java` / `LivingEntity.java` | MixinServerPlayerEntity.java L86, MixinLivingEntity.java L115 | [ ] |
+| A-28 | 포션 업데이트 메서드 Yarn명 (원본 `updatePotionEffects` → 1.21.1 후보: `tickStatusEffects`) | vanilla `LivingEntity.java` | MixinLivingEntity.java L115 | [ ] |
+| A-29 | 서버 위치 검증 메서드 Yarn명 (원본 `NetHandlerPlayServer.processPlayer` → 1.21.1 후보: `onPlayerMove`, `handleMovePlayerPacket`) | vanilla `ServerPlayNetworkHandler.java` | MixinServerPlayNetworkHandler.java L39 | [ ] |
+| A-30 | `jumpMovementFactor`(offGroundSpeed) 0.05F 제어 방법 — 1.21.1 `ClientPlayerEntity`에서 해당 필드/속성 존재 여부 | vanilla `ClientPlayerEntity.java` | MixinLivingEntityClient.java L61 | [ ] |
+| A-31 | `_slideSlipperinessFactor` 기본값 (현재 1.0F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L69 | [ ] |
+| A-32 | `_slidingSpeedStopFactor` 기본값 (현재 0.01F 임시) | SmartMovingConfig.java (원본) | SmartMovingConfig.java L73 | [ ] |
+
+---
+
+### 신규 C 항목 (미구현 기능)
+
+| ID | 미구현 기능 | 의존 리서치 | 코드 위치 | 상태 |
+|----|-----------|-----------|----------|------|
+| C-15 | `tickEssential()` 본체 — 상태 패킷 전송, 키 입력 처리, `jumpAvoided` 리셋 등 | — | SmartMovingClientState.java L147 | [ ] |
+| C-16 | ConfigInfo 서버 수신 처리 — 클라이언트 SM 버전 검증/로깅 | — | SmartMoving.java L53 | [ ] |
+| C-17 | ConfigChange 서버 수신 처리 — 권한 검증 후 Config 적용 + 클라이언트 알림 메시지 | A-26 | SmartMoving.java L59 | [ ] |
+| C-18 | SpeedChange 서버 수신 처리 — 권한 검증 후 `changeSpeed()` 호출 및 클라이언트 동기화 | — | SmartMoving.java L65 | [ ] |
+| C-19 | Sound 패킷 처리 — SM 사운드 요청을 서버 측에서 주변 플레이어에게 재생 | — | SmartMoving.java L77 | [ ] |
+| C-20 | `heightOffset` setPos 위치 보정 — `afterMoveEntity`에서 헤드점프 시 Y 위치 오프셋 적용 | — | MixinEntity.java L71 | [ ] |
+| C-21 | "moved wrongly" 완화 — SM 클라이밍/크롤링 중 서버 위치 검증 skip | A-29 | MixinServerPlayNetworkHandler.java L39 | [ ] |
+| C-22 | `addMovementStat` Mixin — SM 소진 배치 시스템 HEAD+TAIL 연결 | A-27 | MixinServerPlayerEntity.java L86 | [ ] |
+| C-23 | `tickStatusEffects` Mixin — 소진 배치 역전 처리 HEAD+TAIL 연결 | A-28 | MixinLivingEntity.java L115 | [ ] |
+| C-24 | 다른 플레이어 State 패킷 수신 처리 — `StatePayload` 수신 시 타인 SmartMovingClientState 갱신 | — | SmartMovingClient.java L38 | [ ] |
+| C-25 | `SmartStatistics` 계산 로직 구현 — 렌더 틱마다 `currentVerticalAngle`, `horizontalDistance` 등 갱신 | — | SmartStatistics.java (계산 없음) | [ ] |
+| C-26 | 클라이밍 — `climbIntoCount` (크롤-클라이밍 갭 진입 카운터) 상태 필드 및 `setShouldClimbSpeed` 연결 | — | SmartMovingClimber.java L177 | [ ] |
+| C-27 | 클라이밍 — `hasClimbCrawlGap`, `isClimbCrawling` 상태 필드 추가 및 `setShouldClimbSpeed` 상한 처리 연결 | — | SmartMovingClimber.java L198 | [ ] |
+| C-28 | 클라이밍 — `isClimbHolding`, `isClimbJumping` 상태 필드 추가 및 `setShouldClimbSpeed` TAIL 연결 | — | SmartMovingClimber.java L204 | [ ] |
+| C-29 | 클라이밍 — Standard/Simple/Smart 모드 구현 (`getCombinedSpeedFactor` + 모드별 속도 분기) | A-18 | SmartMovingClimber.java L246-250 | [ ] |
+| C-30 | 클라이밍 — 대각 4방향(NE/NW/SE/SW) 탐색 추가 | — | SmartMovingClimber.java L263 | [ ] |
+| C-31 | 클라이밍 — `wantClimbUp` / `wantClimbDown` 키 입력 기반 방향 제어 | — | SmartMovingClimber.java L284 | [ ] |
+| C-32 | 클라이밍 — `climbBackJump`, 클라이밍 중 `wallJump`, `handleCrash()` 처리 | — | SmartMovingClimber.java L312-314 | [ ] |
+| C-33 | 클라이밍 — SM 독자 exhaustion 시스템 (`climbExhaustion` 필드 + `climbExhaustionStart/Stop` 로직) | — | SmartMovingClimber.java L240, L341 | [ ] |
+| C-34 | 천장 클라이밍 — `grabButton` 키 `wantClimbCeiling` 조건 연결 | — | SmartMovingClimber.java L344 | [ ] |
+| C-35 | 천장 클라이밍 — `jgap` 정확한 AABB 충돌 쿼리 계산 (현재 블록 스캔 stub) | — | SmartMovingClimber.java L351, L387-403 | [ ] |
+| C-36 | 천장 클라이밍 — 수평 속도 방향 벡터 분해 및 속도 적용 | — | SmartMovingClimber.java L365 | [ ] |
+| C-37 | 점프 — `Stats.JUMP` 통계 기록 (`tryJump` 내) | A-20 | SmartMovingJumper.java L179 | [ ] |
+| C-38 | 점프 — `Orientation.java` 이식 (`horizontalCollisionAngle` 정확한 계산) | A-23 | SmartMovingJumper.java L309-311 | [ ] |
+| C-39 | 속도 팩터 — `iceSpeedFactor` SmartMovingConfig에서 실제값 읽기 | A-25 | SmartMovingMover.java L52 | [ ] |
+| C-40 | 속도 팩터 — 달리기(run) 판정 조건 정확한 구현 | A-21 | SmartMovingMover.java L54 | [ ] |
+| C-41 | 비행 억제 — `jumpMovementFactor` 0.05F 제어 (`ClientPlayerEntity` offGroundSpeed 억제) | A-30 | MixinLivingEntityClient.java L61 | [ ] |
+| C-42 | 렌더 — isFlying/isHeadJumping body X 기울기 (`currentVerticalAngle` 추적 기반) | C-25 | MixinPlayerEntityRenderer.java L142-143 | [ ] |
+| C-43 | 렌더 — `MixinPlayerEntityModelClient.bendFactor` 계산 (`currentVerticalAngle` 기반) | C-25 | MixinPlayerEntityModelClient.java L418 | [ ] |
+
+---
+
+### 신규 리서치 청크
+
+#### 청크 R-18: SmartMovingConfig 미확인 기본값 확인
+
+**확인 항목**: A-18, A-25, A-31, A-32
+
+**읽을 소스**:
+- `https://github.com/makamys/SmartMoving` → `SmartMovingConfig.java` → `_freeClimbingUpSpeedFactor`, `_freeClimbingDownSpeedFactor`, `_iceSpeedFactor`, `_slideSlipperinessFactor`, `_slidingSpeedStopFactor` 초기값
+
+**추출할 것**:
+- 각 팩터 필드의 정확한 초기값 (PositiveFactor 기본값 패턴 확인)
+- 관련 메서드/프로퍼티 접근자 구조
+
+**결과 기록 위치**: `docs/research/original/smartmoving/config/SmartMovingClientConfig.md` (추가)
+
+**완료**: [ ]
+
+---
+
+#### 청크 R-19: SmartMovingSelf 점프 미확인 값 확인
+
+**확인 항목**: A-19, A-21, A-22, A-23
+
+**읽을 소스**:
+- `SmartMovingSelf.java` → `tryJump()` 내 `verticalJumpFactor`, `jumpChargeFactor` 보간 공식
+- `SmartMovingSelf.java` → `isRunning` 판정 로직 전체
+- `SmartMovingSelf.java` → `isSlow` 판정 로직 (수면 점프 임계값)
+- `Orientation.java` → `horizontalCollisionAngle` 계산 전체
+
+**추출할 것**:
+- `verticalJumpFactor` 정확한 값
+- `jumpChargeFactor` 보간 공식 전체 (`charge/maxCharge * (factor - 1) + 1` 여부)
+- `isRunning` 판정 조건 (전진 입력 + !isSneaking + !isSprinting? 또는 별도 속도 임계값?)
+- `isSlow` 판정 조건
+- `Orientation.horizontalCollisionAngle` 계산 알고리즘
+
+**결과 기록 위치**: `docs/research/mapping/jump.md` (추가)
+
+**완료**: [ ]
+
+---
+
+#### 청크 R-20: vanilla Yarn명 일괄 확인 (통계/포션/위치검증/offGroundSpeed)
+
+**확인 항목**: A-20, A-24, A-27, A-28, A-29, A-30
+
+**읽을 소스** (Fabric Loom 디컴파일):
+- `net.minecraft.stat.Stats` → `JUMP` 상수 Yarn명
+- `net.minecraft.entity.LivingEntity` → `bodyYaw` 필드 Yarn명, 직접 접근 가능 여부
+- `net.minecraft.entity.player.PlayerEntity` → 이동 통계+소진 메서드 (travel() 인라인 vs 별도 메서드)
+- `net.minecraft.entity.LivingEntity` → 포션 업데이트 메서드명 (`tickStatusEffects` 여부)
+- `net.minecraft.server.network.ServerPlayNetworkHandler` → 위치 검증 메서드명
+- `net.minecraft.client.network.ClientPlayerEntity` → `jumpMovementFactor`/`offGroundSpeed` 필드 존재 여부
+
+**추출할 것**:
+- `Stats.JUMP` 정확한 Yarn명
+- `bodyYaw` 1.21.1 Yarn 필드명, public/protected/private 여부
+- 이동 통계+소진 메서드명 (없으면 travel() 어느 지점에서 처리되는지)
+- 포션 업데이트 메서드 Yarn명
+- 서버 위치 검증 메서드 Yarn명
+- offGroundSpeed/jumpMovementFactor 필드 존재 여부 및 Yarn명
+
+**결과 기록 위치**: `docs/research/vanilla/vanilla_yarn_misc.md` (신규)
+
+**완료**: [ ]
+
+---
+
+#### 청크 R-21: SmartMovingComm 채팅 메시지 문자열 확인
+
+**확인 항목**: A-26
+
+**읽을 소스**:
+- `SmartMovingComm.java` → `writeNoRightsToChangeConfigMessageToChat()` 전체
+- `SmartMovingComm.java` → 재설정 완료 채팅 메시지 문자열
+
+**추출할 것**:
+- 권한없음 메시지 정확한 문자열
+- 재설정 완료 메시지 정확한 문자열 (있는 경우)
+
+**결과 기록 위치**: `docs/research/original/smartmoving/moving/SmartMovingComm.md` (추가)
+
+**완료**: [ ]
+
+---
+
+#### 청크 R-22: SmartStatistics 계산 로직 확인
+
+**확인 항목**: C-25 (의존: SmartMovingRender.java 원본 확인)
+
+**읽을 소스**:
+- `SmartMovingRender.java` → `render()` 내 SmartStatistics 갱신 코드 전체
+- `SmartMovingModel.java` → `setRotationAngles()` 내 SmartStatistics 사용 패턴
+
+**추출할 것**:
+- `currentVerticalAngle`, `horizontalDistance` 등 각 필드의 갱신 공식
+- 렌더 틱에서 statistics 갱신이 호출되는 정확한 위치
+- isFlying/isHeadJumping body 기울기 계산에 사용하는 필드
+
+**결과 기록 위치**: `docs/research/mapping/animation_system.md` (추가)
+
+**완료**: [ ]

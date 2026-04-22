@@ -7,6 +7,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
 
 public class SmartMovingClient implements ClientModInitializer {
 
@@ -20,11 +21,13 @@ public class SmartMovingClient implements ClientModInitializer {
     }
 
     private static void registerConnectionEvents() {
-        // 클라이언트 접속 해제 시 상태 인스턴스 정리
+        // 클라이언트 접속 해제 시 상태 인스턴스 정리 + Config 복원
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             if (client.player != null) {
                 SmartMovingClientState.remove(client.player);
             }
+            // 서버 설정 전환을 복원 — 다음 서버 접속까지 클라이언트 설정 사용
+            SmartMovingConfig.Config = SmartMovingConfig.INSTANCE;
         });
     }
 
@@ -35,23 +38,66 @@ public class SmartMovingClient implements ClientModInitializer {
                 // TODO Phase 4/6: SmartMovingFactory.getOtherSmartMoving(entityId).processStatePacket(state)
             });
 
-        // ConfigContent: 서버 설정 수신 → Config = ServerConfig 전환
+        // ConfigContent: 서버 설정 수신 → Config 전환 (C-11)
+        // 원본: SmartMovingComm.processConfigContentPacket(content, username, blockCode=false)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigContentPayload.ID,
             (payload, context) -> {
-                // TODO Phase 7/13: SmartMovingComm.processConfigContentPacket(payload.lines(), payload.username())
+                String[] lines = payload.lines();
+                MinecraftClient client = context.client();
+                client.execute(() -> processConfigContentPacket(lines));
             });
 
-        // ConfigChange: 서버 설정 변경 알림 수신
+        // ConfigChange: 서버가 "설정 변경 권한 없음"을 알림 (C-12)
+        // 원본: SmartMovingOptions.writeNoRightsToChangeConfigMessageToChat(isConnectedToRemoteServer())
+        // 1.21.1: 메시지 문자열 미확인 → 수신만 처리 (no-op)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigChangePayload.ID,
-            (payload, context) -> {
-                // TODO Phase 7/13: SmartMovingComm.processConfigChangePacket()
-            });
+            (payload, context) -> { /* no rights to change config — message content unconfirmed */ });
 
-        // SpeedChange: 서버에서 속도 변경 동기화
+        // SpeedChange: 서버에서 속도 변경 동기화 (C-12)
+        // 원본: difference==0 → 권한없음, !=0 → Config.changeSpeed(difference) (SmartMovingComm.md 확인)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.SpeedChangePayload.ID,
             (payload, context) -> {
-                // TODO Phase 7: SmartMovingComm.processSpeedChangePacket(payload.difference(), payload.username())
+                int difference = payload.difference();
+                if (difference != 0) {
+                    context.client().execute(() -> SmartMovingConfig.Config.changeSpeed(difference));
+                }
+                // difference==0: 서버가 권한없음 알림 — 메시지 문자열 미확인 → 생략
             });
+    }
+
+    // ── 13-1/13-2: processConfigContentPacket ────────────────────────────────
+    //
+    // 원본: SmartMovingComm.processConfigContentPacket / processConfigPacket (SmartMovingComm.md 확인)
+    // config_system.md 2-4 / 3-4 기반.
+    //
+    // content 값별 처리:
+    //   null         → SM 완전 비활성. Config = INSTANCE 유지.
+    //   length == 0  → 서버 설정 없음, 클라이언트에 위임. Config = INSTANCE.
+    //   length > 0   → SERVER_CONFIG.loadFromArray(content) → Config = SERVER_CONFIG.
+    //
+    // 첫 수신(first=true) 시: sendConfigInfo 패킷 전송 (원본: SmartMovingConfig._sm_current = "3.2")
+    // 주의: 서버 연결 해제 시 Config 복원은 registerConnectionEvents() DISCONNECT에서 처리.
+    private static void processConfigContentPacket(String[] content) {
+        if (content == null) {
+            // SM 완전 비활성 — Config = INSTANCE 유지
+            return;
+        }
+        if (content.length == 0) {
+            // 서버가 클라이언트 자체 설정에 위임
+            SmartMovingConfig.Config = SmartMovingConfig.INSTANCE;
+            return;
+        }
+        // 첫 수신 여부 추적 (원본: first = Config != ServerConfig)
+        boolean first = SmartMovingConfig.Config != SmartMovingConfig.SERVER_CONFIG;
+        // 서버 설정 수신 → SERVER_CONFIG 갱신
+        SmartMovingConfig.SERVER_CONFIG.loadFromArray(content);
+        if (first) {
+            // 최초 서버 설정 적용 → Config = SERVER_CONFIG 전환
+            SmartMovingConfig.Config = SmartMovingConfig.SERVER_CONFIG;
+            // 클라이언트 버전 정보를 서버에 전송 (원본: sendConfigInfo(instance, _sm_current))
+            ClientPlayNetworking.send(new SmartMovingNetwork.ConfigInfoPayload(SmartMovingConfig.SM_VERSION));
+        }
+        // first=false: 재설정 — Config = SERVER_CONFIG는 이미 유지됨, 채팅 메시지 생략(문자열 미확인)
     }
 
     // ── 4-4: processBlockCode ────────────────────────────────────────────────
@@ -69,8 +115,7 @@ public class SmartMovingClient implements ClientModInitializer {
     }
 
     // 원본: SmartMovingComm.processBlockCode(String text) — public static boolean
-    // 1.21.1: SmartMovingConfig.INSTANCE 필드 직접 설정으로 단순화.
-    //         Config=ServerConfig 전환(C-11)은 미구현 — 서버 설정 적용 시 별도 연결 필요.
+    // 1.21.1: SmartMovingConfig.Config 필드 직접 설정으로 단순화 (C-11: Config 전환 연동).
     //
     // 형식: "§0§1...§f§f" (앞 4자=시작마커, 뒤 4자=끝마커)
     // codes에 포함된 §코드에 해당하는 기능을 설정값으로 변경:
@@ -82,7 +127,7 @@ public class SmartMovingClient implements ClientModInitializer {
         if (!text.startsWith("§0§1") || !text.endsWith("§f§f")) return;
 
         String codes = text.substring(4, text.length() - 4);
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         if (codes.contains("§0")) cfg.baseClimb = true;
         if (codes.contains("§1")) cfg.freeClimb = false;
