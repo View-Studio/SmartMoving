@@ -64,8 +64,8 @@
 | [x] | `moving/SmartMovingContext.md` | `SmartMovingContext.java` |
 | [x] | `moving/SmartMovingBase.md` | `SmartMovingClimber.java`, `SmartMovingSwimmer.java`, `SmartMovingJumper.java`, `SmartMovingSlider.java`, `SmartMovingFlyer.java`, `MixinLivingEntityClient.java` |
 | [x] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
-| [ ] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
-| [ ] | `playerapi/SmartMovingSelf.md` | `SmartMovingClient.java`, `MixinLivingEntityClient.java` (moving/SmartMovingSelf.md와 별도 파일) |
+| [x] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
+| [x] | `playerapi/SmartMovingSelf.md` | `SmartMovingClient.java`, `MixinLivingEntityClient.java` (moving/SmartMovingSelf.md와 별도 파일) |
 | [ ] | `playerapi/SmartMovingServerPlayerBase.md` | `MixinLivingEntity.java`(서버측), `MixinPlayerEntity.java` |
 
 ---
@@ -342,6 +342,38 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-22] playerapi/SmartMovingPlayerBase.md
+
+대응 구현: MixinLivingEntityClient.java, MixinLivingEntity.java, MixinEntity.java, MixinEntityClient.java, MixinPlayerEntity.java, SmartMovingClient.java
+
+발견한 불일치:
+- 오역 없음: 구현된 훅들(beforeMoveEntity/afterMoveEntity → STEP_HEIGHT억제/복원, beforeOnUpdate/afterOnUpdate → tickEssential, jump → sm_jump, moveEntityWithHeading → sm_travel_client, isOnLadder → sm_isClimbing, updateEntityActionState → sm_jumpingFilter, isSneaking(서버) → MixinLivingEntity)은 원본과 정확히 대응
+
+누락 기록 (6종):
+- [누락] `canTriggerWalking` override 미구현 — 크롤링/클라이밍 중 발소리·발자국 억제. 원본: isCrawling || isClimbing → false 반환
+- [누락] `isInsideOfMaterial` override 미구현 — isSwimming_sm/isDiving/isDipping 중 물속 판정 오버라이드. 원본: offset 기반 직접 판정
+- [누락] `beforeSetPositionAndRotation` 미구현 — multiPlayerInitialized 카운터(0→5) 세팅. 멀티플레이어 초기화 완료 전 상태 패킷 무시에 사용
+- [누락] `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리(착지했지만 isFlying 유지 조건)
+- [누락] 클라이언트 측 `isSneaking` override 미구현 — isSmall/isCrawling 중 crawlOverEdge 보호용 sneak 강제
+- [누락] `getFOVMultiplier` override 미구현 — SM 비행/클라이밍 속도에 따른 FOV 배율 조정
+
+신규 발견 미구현:
+- 위 누락 6종 → 신규 발견 항목 테이블에 추가
+
+---
+
+### [2026-04-22] playerapi/SmartMovingSelf.md
+
+대응 구현: SmartMovingClient.java (해당 없음)
+
+불일치 없음:
+- SPC(Single Player Commands) 1.7.10 전용 모드 호환용 `doFlyingAnimation()` override만 포함
+- SPC는 1.21.1에 존재하지 않는 구 모드 → 파일 전체 N/A, 1:1 포팅 대상 아님
+
+신규 발견 미구현: 없음
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -358,3 +390,9 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` fallDistance 체크 누락 — `cfg.wallUpJumpFallMaximumDistance / wallHeadJumpFallMaximumDistance` config 값 확인 필요 | 미처리 |
 | 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` `wasCollidedHorizontally` → WallUpSlide/WallHeadSlide(noVertical) 미구현 | 미처리 |
 | 2026-04-22 | `SmartMovingSelf.md` | `afterOnUpdate → correctOnUpdate` 호출: isSwimming/diving/dipping/crawling 시 renderYawOffset 보정 + water flow 역상쇄 미구현 | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `canTriggerWalking` override 미구현 — isCrawling/isClimbing 중 false 반환 (발소리·발자국 억제) | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `isInsideOfMaterial` override 미구현 — isSwimming_sm/isDiving/isDipping 시 offset 기반 물속 판정 오버라이드 | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeSetPositionAndRotation` 미구현 — multiPlayerInitialized 카운터(0→5) 세팅 (멀티 초기화 완료 전 상태 패킷 무시) | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리 (착지했지만 isFlying 유지 조건) | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | 클라이언트 `isSneaking` override 미구현 — isSmall/isCrawling 중 crawlOverEdge 보호용 sneak 강제 | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 — SM 비행/클라이밍 속도 기반 FOV 배율 조정 | 미처리 |
