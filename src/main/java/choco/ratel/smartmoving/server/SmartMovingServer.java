@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.server;
 
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -166,20 +167,23 @@ public final class SmartMovingServer {
 
     /**
      * 플레이어 접속 시 서버→클라이언트 초기화 패킷 전송.
-     * 원본: SmartMovingServer.initialize(player)
+     * 원본: SmartMovingServer.initialize(player) (config_system.md 2-1 기반)
      *
-     * ConfigContent 패킷으로 서버 설정 내용을 전달한다.
-     *   lines = new String[0]: 빈 설정 (서버 독립 설정 없음)
-     *   username = null: 설정 편집 권한 없음
+     * globalConfig=true: 서버 설정 전체를 전송 → 클라이언트 Config = ServerConfig로 전환됨.
+     * 그 외: new String[0] → 클라이언트에 위임 (Config = Options 유지).
+     * username=null: 설정 편집 권한 없음.
      *
-     * TODO: SmartMovingConfig 기반 실제 설정 배열 전송 구현 (Phase 12)
+     * serverConfig(개인별 설정) 지원은 미구현 — globalConfig 우선.
      */
     public static void initialize(ServerPlayerEntity player, MinecraftServer server) {
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.initialized) return;
         sm.initialized = true;
+        String[] lines = SmartMovingConfig.INSTANCE.globalConfig
+                ? SmartMovingConfig.INSTANCE.toArray()
+                : new String[0];
         ServerPlayNetworking.send(player,
-                new SmartMovingNetwork.ConfigContentPayload(new String[0], null));
+                new SmartMovingNetwork.ConfigContentPayload(lines, null));
     }
 
     // ── 3-8: 권한 확인 ───────────────────────────────────────────

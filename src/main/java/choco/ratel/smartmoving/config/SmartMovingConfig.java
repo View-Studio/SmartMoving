@@ -13,6 +13,15 @@ import java.util.Properties;
  */
 public class SmartMovingConfig {
 
+    // ── 버전 (config_system.md: SmartMovingConfig._sm_current = "3.2" → 1.21.1 포트는 "1.0") ──
+    public static final String SM_VERSION = "1.0";
+
+    // ── 서버 배포 제어 플래그 (config_system.md 2-1, 5-3) ───────────
+    /** true → 접속한 모든 클라이언트에게 이 설정을 강제 적용. */
+    public boolean globalConfig = false;
+    /** true → 플레이어별 개인 설정 관리 활성화 (현재 미구현 — globalConfig 우선). */
+    public boolean serverConfig = false;
+
     // ── Global Speed ────────────────────────────────────────────
     public float speedFactor = 1F;
     public boolean speedUser = true;
@@ -130,6 +139,23 @@ public class SmartMovingConfig {
             props.setProperty(content[i], content[i + 1]);
         }
         readFrom(props);
+    }
+
+    /**
+     * 이 인스턴스의 설정을 flat String[] [k1,v1,k2,v2,...] 배열로 직렬화한다.
+     * 원본: SmartMovingServerOptions.writeToProperties() 정상 경로 (config_system.md M-12)
+     * 서버가 클라이언트에게 ConfigContent 패킷으로 전송할 때 사용한다.
+     */
+    public String[] toArray() {
+        Properties props = new Properties();
+        writeTo(props);
+        String[] result = new String[props.size() * 2];
+        int i = 0;
+        for (String key : props.stringPropertyNames()) {
+            result[i++] = key;
+            result[i++] = props.getProperty(key);
+        }
+        return result;
     }
 
     private void readFrom(Properties p) {
