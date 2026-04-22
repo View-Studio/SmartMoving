@@ -3,6 +3,7 @@ package choco.ratel.smartmoving.client;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
+import choco.ratel.smartmoving.network.SmartMovingState;
 import choco.ratel.smartmoving.stat.SmartStatistics;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -115,6 +116,20 @@ public final class SmartMovingClientState {
 
     /** 로프 슬라이딩 상태 */
     public boolean isRopeSliding;
+
+    // ── R-01: State 패킷 인코딩용 클라이밍 타입 필드 ─────────────────────────
+    /** 현재 발 클라이밍 타입 (FeetClimbing.ordinal()). getOnLadderOrVine() 결과 저장. */
+    public int actualFeetClimbType;
+    /** 현재 손 클라이밍 타입 (HandsClimbing.ordinal()). getOnLadderOrVine() 결과 저장. */
+    public int actualHandsClimbType;
+    /** 발이 넝쿨 클라이밍 중인지 여부 (사다리와 구분). */
+    public boolean isFeetVineClimbing;
+    /** 손이 넝쿨 클라이밍 중인지 여부 (사다리와 구분). */
+    public boolean isHandsVineClimbing;
+    /** 클라이밍 백점프 상태 (SmartMovingJumper에서 갱신). */
+    public boolean isClimbBackJumping;
+    /** 마지막으로 전송한 State 비트맵 (중복 전송 방지). */
+    private long lastSentBits = 0L;
 
     // ── C-33: SM 독자 exhaustion (클라이밍 피로도) ──────────────────────────
     /** 이전 틱 클라이밍 여부 — exhaustion 허용 조건 판정용. */
@@ -263,6 +278,11 @@ public final class SmartMovingClientState {
         isCrawlClimbing = false;
         isCeilingClimbing = false;
         isRopeSliding = false;
+        actualFeetClimbType = 0;
+        actualHandsClimbType = 0;
+        isFeetVineClimbing = false;
+        isHandsVineClimbing = false;
+        isClimbBackJumping = false;
         isDipping = false;
         isSwimming_sm = false;
         isDiving = false;
@@ -272,6 +292,52 @@ public final class SmartMovingClientState {
         angleJumpType = 0;
         wasClimbing  = false;
         exhaustion   = 0F;
+    }
+
+    // ── R-01: sendStatePacket() ───────────────────────────────────────
+
+    /**
+     * 현재 SmartMovingClientState를 34비트 long으로 인코딩해 서버로 전송한다.
+     * 상태가 이전 틱과 달라진 경우에만 전송 (lastSentBits 비교).
+     * 원본: SmartMovingPlayerBase.updateEntityActionState() 끝부분 writeEntityState().
+     */
+    public void sendStatePacket(ClientPlayerEntity player) {
+        if (!ClientPlayNetworking.canSend(SmartMovingNetwork.StatePayload.ID)) return;
+
+        SmartMovingState s = new SmartMovingState();
+        s.actualFeetClimbType  = actualFeetClimbType;
+        s.actualHandsClimbType = actualHandsClimbType;
+        s.isJumping            = !player.isOnGround() && !isClimbing && !isSwimming_sm && !isDiving && !isDipping;
+        s.isDiving             = isDiving;
+        s.isDipping            = isDipping;
+        s.isSwimming           = isSwimming_sm;
+        s.isCrawlClimbing      = isCrawlClimbing;
+        s.isCrawling           = isCrawling;
+        s.isClimbing           = isClimbing;
+        s.isSmall              = isSmall;
+        s.doFallingAnimation   = !player.isOnGround() && player.getVelocity().y < -0.1D
+                                  && !isClimbing && !isSwimming_sm && !isDiving;
+        s.doFlyingAnimation    = isFlying;
+        s.isCeilingClimbing    = isCeilingClimbing;
+        s.isLevitating         = false; // 로프 미구현
+        s.isHeadJumping        = isHeadJumping;
+        s.isSliding            = isSliding;
+        s.angleJumpType        = angleJumpType;
+        s.isFeetVineClimbing   = isFeetVineClimbing;
+        s.isHandsVineClimbing  = isHandsVineClimbing;
+        s.isClimbJumping       = isClimbJumping;
+        s.isClimbBackJumping   = isClimbBackJumping;
+        s.isSlow               = isSlow;
+        s.isFast               = isFast;
+        s.isWallJumping        = isWallJumping;
+        s.isRopeSliding        = isRopeSliding;
+        s.isSneakButtonPressed = player.isSneaking();
+
+        long bits = SmartMovingState.encode(s);
+        if (bits != lastSentBits) {
+            ClientPlayNetworking.send(new SmartMovingNetwork.StatePayload(player.getId(), bits));
+            lastSentBits = bits;
+        }
     }
 
     // ── 4-3: isConnectedToRemoteServer() ─────────────────────────────

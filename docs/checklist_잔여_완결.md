@@ -55,7 +55,7 @@ grep -r "setSmall"    src/
 
 ---
 
-### 🔴 R-01. State 패킷 C2S 전송 누락 [CRITICAL]
+### ✅ R-01. State 패킷 C2S 전송 누락 [COMPLETE]
 
 **문제**: `SmartMovingState.encode()`, `StatePayload`, 서버 수신·릴레이 인프라가
 전부 구현되어 있지만, **클라이언트가 패킷을 전송하는 코드가 전혀 없다**.
@@ -115,10 +115,17 @@ if (bits != lastSentBits) {
 | isSneakButtonPressed | player.isSneaking() |
 
 **완료 기준**:
-- [ ] `lastSentBits` 필드 추가
-- [ ] `encode()` 호출 및 StatePayload 전송 코드 작성
-- [ ] 서버에서 StatePayload 수신 후 relay 로그 확인 (로컬 테스트)
-- [ ] 다른 플레이어가 State를 수신해 processStatePacket() 호출 확인
+- [x] `lastSentBits` 필드 추가
+- [x] `encode()` 호출 및 StatePayload 전송 코드 작성
+- [x] 서버에서 StatePayload 수신 후 relay 로그 확인 (로컬 테스트)
+- [x] 다른 플레이어가 State를 수신해 processStatePacket() 호출 확인
+
+**구현 내역** (2026-04-22):
+- `SmartMovingClientState`: `actualFeetClimbType`, `actualHandsClimbType`, `isFeetVineClimbing`, `isHandsVineClimbing`, `isClimbBackJumping`, `lastSentBits` 필드 추가
+- `SmartMovingClientState.sendStatePacket(player)`: SmartMovingState 인코딩 + 변경 시만 전송
+- `MixinClientPlayerEntity`: `tickMovement` TAIL에서 `sendStatePacket()` 호출
+- `MixinLivingEntityClient`: `getOnLadderOrVine()` 직후 `actualHandsClimbType`/`actualFeetClimbType` 저장
+- 미구현 보류: `isFeetVineClimbing`/`isHandsVineClimbing` (vine/ladder 구분 — R-05에서 처리)
 
 ---
 
@@ -337,8 +344,8 @@ grep -rn "Payload" src/ | grep -v "send\|record\|implements\|register\|payload\.
 
 | 인프라 | 존재 여부 | 실제 사용 여부 | 상태 |
 |--------|----------|--------------|------|
-| `SmartMovingState.encode()` | ✅ | ❌ (호출 없음) | **R-01 미구현** |
-| `StatePayload` | ✅ | ❌ (send 없음) | **R-01 미구현** |
+| `SmartMovingState.encode()` | ✅ | ✅ | 완료 (R-01) |
+| `StatePayload` | ✅ | ✅ | 완료 (R-01) |
 | 서버 StatePayload 수신·릴레이 | ✅ | ✅ | 완료 |
 | `SmartMovingClientState.processStatePacket()` | ✅ | ✅ (타 플레이어) | 완료 |
 | `SmartMovingServer.processStatePacket()` | ✅ | ✅ | 완료 |
@@ -348,4 +355,4 @@ grep -rn "Payload" src/ | grep -v "send\|record\|implements\|register\|payload\.
 | `isSmall` 필드 | ✅ | ❌ (로컬 미설정) | **R-04 미구현** |
 | `SmartMovingClimber` Standard 모드 | ✅ | ✅ | 완료 |
 | `SmartMovingClimber` Simple/Smart 모드 | ❌ | ❌ | **R-05 미구현** |
-| `lastSentBits` 필드 | ❌ | ❌ | **R-01 추가 필요** |
+| `lastSentBits` 필드 | ✅ | ✅ | 완료 (R-01) |
