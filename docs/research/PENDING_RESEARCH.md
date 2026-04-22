@@ -83,7 +83,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [x] → sm_captureBodyYaw(@HEAD)에서 isClimbing/isCrawlClimbing/isCeilingClimbing/isSwimming_sm/isDiving/isSliding/isHeadJumping/isCrawling 상태 시 `atan2(-vel.x, vel.z)`로 smBodyYawOverride 계산. sm_modifyBodyYaw(@ModifyArg index=3)에서 super.setupTransforms 호출 시 교체. MixinPlayerEntityRenderer.java. |
 | C-08 | 12-4 ModelRotationRenderer 대체 — 6-axis MatrixStack | A-15, B-08, B-09, B-18 | [x] → 비표준 회전 순서 11종 전체 목록 + MatrixStack 구현 패턴 확정. smRotationOrder Mixin 전략 설계. M-09/M-10 미확인→R-17. animation_system.md R-13 섹션. |
 | C-09 | 12-5 중간 노드 부재 — isFlying/isHeadJumping body 기울기 | A-15, C-08 | [x] → setupTransforms X rotate + setAngles head.pitch 보정 전략 확정. 등가 증명 완료. M-06/M-11 미확인→R-17. animation_system.md R-13 섹션. |
-| C-10 | 12-7 `smallOverGroundHeight` 실제 블록 탐색 계산 구현 | — | [ ] |
+| C-10 | 12-7 `smallOverGroundHeight` 실제 블록 탐색 계산 구현 | — | [x] → sm_setAngles HEAD에서 isCrawlClimbing\|isHeadJumping일 때 computeSmallOverGroundHeight() 호출. playerY 기준 최대 5블록 아래 열 스캔 → 첫 고체 블록 topY와의 차 반환(0~5F). MixinPlayerEntityModelClient.java. |
 | C-11 | 13-1 설정 분리 — ServerConfig vs Options 전환 상태 관리 | A-04 | [ ] |
 | C-12 | 13-2 설정 배포 프로토콜 전체 구현 | C-11 | [ ] |
 | C-13 | `isRopeSliding` 애니메이션 구현 | A-16 | [ ] |

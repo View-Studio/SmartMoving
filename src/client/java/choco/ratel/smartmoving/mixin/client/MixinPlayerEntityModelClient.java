@@ -7,7 +7,11 @@ import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -79,6 +83,13 @@ public abstract class MixinPlayerEntityModelClient {
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
             this.leaningPitch = 0f;
+        }
+
+        // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
+        // 원본: SmartMovingRender.rotatePlayer() → moving.getOverGroundHeight(5D)
+        // isCrawlClimbing/isHeadJumping 상태에서만 발 아래 지면까지의 거리를 계산한다.
+        if (sm.isCrawlClimbing || sm.isHeadJumping) {
+            sm.smallOverGroundHeight = computeSmallOverGroundHeight(player, player.getWorld());
         }
 
         // ── SM 11-state if-else 체인 (SmartMovingModel.setRotationAngles 우선순위) ──
@@ -435,6 +446,33 @@ public abstract class MixinPlayerEntityModelClient {
     // ─────────────────────────────────────────────────────────────────────────
     // 내부 유틸리티
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * [12-7] 발 아래 지면까지의 거리 계산 (최대 5블록).
+     *
+     * 원본: SmartMovingBase.getOverGroundHeight(5D) 클라이언트 경로
+     *   = sp.boundingBox.minY - getMaxPlayerSolidBetween(minY - 5D, minY, 0)
+     *
+     * 1.21.1: 플레이어 중심 열(column)을 최대 5블록 아래까지 스캔하여
+     *         첫 고체 블록의 top surface Y를 구하고, playerY와의 차를 반환한다.
+     * 반환값 범위: 0.0F (지면 위) ~ 5.0F (5블록 아래까지 고체 없음).
+     */
+    private static float computeSmallOverGroundHeight(ClientPlayerEntity player, World world) {
+        double playerY = player.getY(); // feet Y (= bounding box minY)
+        int px = MathHelper.floor(player.getX());
+        int pz = MathHelper.floor(player.getZ());
+        int startY = MathHelper.floor(playerY) - 1;
+
+        for (int i = 0; i < 5; i++) {
+            BlockPos pos = new BlockPos(px, startY - i, pz);
+            VoxelShape shape = world.getBlockState(pos).getCollisionShape(world, pos);
+            if (!shape.isEmpty()) {
+                double blockTopY = (startY - i) + shape.getMax(Direction.Axis.Y);
+                return (float) Math.max(0D, playerY - blockTopY);
+            }
+        }
+        return 5f;
+    }
 
     /**
      * SmartMovingModel.Factor() 이식 — 선형 보간 팩터.
