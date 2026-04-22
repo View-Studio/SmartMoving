@@ -134,8 +134,8 @@
 | 상태 | 리서치 파일 (smartmoving/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
 | [x] | `moving/ClimbGap.md` | `climbing/ClimbGap.java` |
-| [ ] | `moving/FeetClimbing.md` | `climbing/FeetClimbing.java` |
-| [ ] | `moving/HandsClimbing.md` | `climbing/HandsClimbing.java` |
+| [x] | `moving/FeetClimbing.md` | `climbing/FeetClimbing.java` |
+| [x] | `moving/HandsClimbing.md` | `climbing/HandsClimbing.java` |
 | [ ] | `moving/Button.md` | `SmartMovingKeys.java`, 키 처리 코드 |
 | [ ] | `moving/Orientation.md` | 사용처 grep으로 확인 |
 | [ ] | `moving/Compat.md` | Compat 관련 구현 (있는 경우) |
@@ -641,6 +641,32 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] moving/FeetClimbing.md + moving/HandsClimbing.md
+
+대응 구현: `climbing/FeetClimbing.java`, `climbing/HandsClimbing.java`
+
+발견한 불일치:
+- [오역] `FeetClimbing.isUp()` — 원본: `this == SlowUpWithHoldWithoutHands || this == SlowUpWithSinkWithoutHands || this == FastUp` (ordinal≥4)
+  - 버그: `this.ordinal() > BASE_HOLD.ordinal()` (ordinal>1 → BASE_WITH_HANDS/TOP_WITH_HANDS도 true)
+  - 영향: 현재 feetClimbing은 NONE/SLOW_UP_WITH_HOLD_WITHOUT_HANDS만 사용되므로 기능 영향 없으나 논리 오류
+  - 수정: `this == SLOW_UP_WITH_HOLD_WITHOUT_HANDS || this == SLOW_UP_WITH_SINK_WITHOUT_HANDS || this == FAST_UP`
+- [누락] `FeetClimbing.max()` SkipGaps 조건 — 원본: `!SkipGaps` 조건으로 canStand/mustCrawl 합산 제어. 버그: 항상 OR 합산
+  - 수정: `if (!otherGap.skipGaps)` 조건 블록 추가, state/direction만 교체 (canStand/mustCrawl/skipGaps 복사 안 함)
+- [누락] `HandsClimbing.max()` SkipGaps 조건 — FeetClimbing과 동일한 패턴
+  - 수정: 동일하게 SkipGaps 조건 추가
+
+불일치 없음:
+- `HandsClimbing.isUp()`: `ordinal() > BOTTOM_HOLD.ordinal()` → UP/FAST_UP만 true. 원본 `_value > 0` 과 동등 ✓
+- `HandsClimbing.toUp()`/`toDown()`: BottomHold→Up, TopHold→Sink 전환 ✓
+- `FeetClimbing.isRelevant()`, `isIndependentlyRelevant()` ✓
+- int 상수: DownStep/NoStep → DOWN_STEP/NO_STEP, MiddleGrab/UpGrab/NoGrab → MIDDLE_GRAB/UP_GRAB/NO_GRAB ✓
+
+컴파일: BUILD SUCCESSFUL ✓
+
+신규 발견 미구현: 없음
+
+---
+
 ### [2026-04-23] moving/ClimbGap.md
 
 대응 구현: `climbing/ClimbGap.java`
@@ -762,3 +788,5 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/ModelCapeRenderer.md` | 없음 — 망토 물리 시뮬레이션. bipedOuter(outer.rotateAngleX 참조)/bipedBreast 노드(N/A) + GL11 의존. 1.21.1 vanilla는 CapeFeatureRenderer에서 자체 망토 물리 처리. | N/A |
 | 2026-04-23 | `smartrender/ModelEarsRenderer.md` | 없음 — 귀 렌더. bipedHead as ModelRotationRenderer(N/A) + GL11 의존. SmartRenderRender.renderSpecials() 호출 경로 전체 N/A. | N/A |
 | 2026-04-23 | `moving/ClimbGap.md` | 없음 — 데이터 컨테이너 6필드. Block+Meta→BlockState, Orientation→Direction 대응. canStand/mustCrawl/skipGaps ✓. copyFrom()은 잉여이나 FeetClimbing/HandsClimbing에서 실제 사용됨. | N/A |
+| 2026-04-23 | `moving/FeetClimbing.md` | `isUp()` 오역 — 원본: `SlowUpWithHoldWithoutHands\|\|SlowUpWithSinkWithoutHands\|\|FastUp` (ordinal≥4), 버그: `ordinal > BASE_HOLD` (ordinal≥2). `max()` SkipGaps 조건 누락. | **처리 완료** — FeetClimbing.java: isUp() 3개 enum 상수 비교로 수정; max() SkipGaps 조건 복원 |
+| 2026-04-23 | `moving/HandsClimbing.md` | `isUp()` ✓ (원본 `_value > BottomHold._value` = ordinal>3 대응). `max()` SkipGaps 조건 누락. | **처리 완료** — HandsClimbing.java: max() SkipGaps 조건 복원 |

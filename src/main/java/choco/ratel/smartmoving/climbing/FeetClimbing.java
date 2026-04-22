@@ -31,26 +31,27 @@ public enum FeetClimbing {
         return this.ordinal() > BASE_WITH_HANDS.ordinal();
     }
 
-    /** BaseHold 초과. 원본: _value > BaseHold._value → BaseWithHands(-1) 이상. IsIndependentlyRelevant와 다름. */
+    // 원본: this == SlowUpWithHoldWithoutHands || this == SlowUpWithSinkWithoutHands || this == FastUp
     public boolean isUp() {
-        return this.ordinal() > BASE_HOLD.ordinal();
+        return this == SLOW_UP_WITH_HOLD_WITHOUT_HANDS
+            || this == SLOW_UP_WITH_SINK_WITHOUT_HANDS
+            || this == FAST_UP;
     }
 
     /**
      * 두 FeetClimbing 중 더 강한 쪽을 선택한다.
-     * CanStand/MustCrawl은 OR로 합산하고, 더 강한 쪽의 ClimbGap 정보를 inout_thisGap에 복사한다.
+     * 원본: !SkipGaps이면 CanStand/MustCrawl OR 합산. other가 더 강하면 Block/Meta/Direction 교체.
      */
     public FeetClimbing max(FeetClimbing other, ClimbGap[] inout_thisGap, ClimbGap otherGap) {
-        boolean canStand = inout_thisGap[0].canStand || otherGap.canStand;
-        boolean mustCrawl = inout_thisGap[0].mustCrawl || otherGap.mustCrawl;
+        if (!otherGap.skipGaps) {
+            inout_thisGap[0].canStand |= otherGap.canStand;
+            inout_thisGap[0].mustCrawl |= otherGap.mustCrawl;
+        }
         if (other.ordinal() > this.ordinal()) {
-            inout_thisGap[0].copyFrom(otherGap);
-            inout_thisGap[0].canStand = canStand;
-            inout_thisGap[0].mustCrawl = mustCrawl;
+            inout_thisGap[0].state = otherGap.state;
+            inout_thisGap[0].direction = otherGap.direction;
             return other;
         }
-        inout_thisGap[0].canStand = canStand;
-        inout_thisGap[0].mustCrawl = mustCrawl;
         return this;
     }
 }
