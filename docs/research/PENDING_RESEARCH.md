@@ -502,7 +502,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 | ID | 미구현 기능 | 의존 리서치 | 코드 위치 | 상태 |
 |----|-----------|-----------|----------|------|
-| C-15 | `tickEssential()` 본체 — 상태 패킷 전송, 키 입력 처리, `jumpAvoided` 리셋 등 | — | SmartMovingClientState.java L147 | [ ] |
+| C-15 | `tickEssential()` 본체 — 상태 패킷 전송, 키 입력 처리, `jumpAvoided` 리셋 등 | — | SmartMovingClientState.java L147 | [x] → jumpAvoided 초기화, configToggle.wasPressed() 토글, !enabled → resetState(). SmartMovingConfig에 enabled 필드 + toggle() 추가. |
 | C-16 | ConfigInfo 서버 수신 처리 — 클라이언트 SM 버전 검증/로깅 | — | SmartMoving.java L53 | [ ] |
 | C-17 | ConfigChange 서버 수신 처리 — 권한 검증 후 Config 적용 + 클라이언트 알림 메시지 | A-26 | SmartMoving.java L59 | [ ] |
 | C-18 | SpeedChange 서버 수신 처리 — 권한 검증 후 `changeSpeed()` 호출 및 클라이언트 동기화 | — | SmartMoving.java L65 | [ ] |

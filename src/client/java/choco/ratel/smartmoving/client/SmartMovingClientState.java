@@ -1,7 +1,11 @@
 package choco.ratel.smartmoving.client;
 
+import choco.ratel.smartmoving.client.input.SmartMovingKeys;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
+import choco.ratel.smartmoving.network.SmartMovingNetwork;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 
@@ -162,10 +166,46 @@ public final class SmartMovingClientState {
     /**
      * isActive 여부 무관하게 매 틱 실행되는 필수 처리.
      * 원본: SmartMovingPlayerBase.updateEntityActionState() → moving.tickEssential()
-     *
-     * TODO Phase 5: 상태 패킷 전송, 키 입력 처리, jumpAvoided 리셋 등 구현
      */
     public void tickEssential() {
+        // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
+        jumpAvoided = false;
+
+        // 설정 토글 키 처리 (원본: toggleButton.update() + StartPressed 분기)
+        if (SmartMovingKeys.configToggle.wasPressed()) {
+            if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE) {
+                SmartMovingConfig.INSTANCE.toggle();
+            } else {
+                ClientPlayNetworking.send(new SmartMovingNetwork.ConfigChangePayload());
+            }
+        }
+
+        // SM 비활성 시 이동 상태 전체 초기화 (원본: !isActive() → resetState())
+        if (!SmartMovingConfig.Config.enabled) {
+            resetState();
+        }
+    }
+
+    // 원본: SmartMovingSelf.resetState() — 비활성 시 모든 이동 상태를 기본값으로 리셋.
+    // heightOffset 위치 복원(resetHeightOffset)은 C-20에서 처리.
+    private void resetState() {
+        heightOffset = 0F;
+        isSlow = false;
+        isFast = false;
+        isFlying = false;
+        isClimbing = false;
+        isClimbJumping = false;
+        isWallJumping = false;
+        isCrawlClimbing = false;
+        isCeilingClimbing = false;
+        isRopeSliding = false;
+        isDipping = false;
+        isSwimming_sm = false;
+        isDiving = false;
+        isHeadJumping = false;
+        isCrawling = false;
+        isSliding = false;
+        angleJumpType = 0;
     }
 
     // ── 4-3: isConnectedToRemoteServer() ─────────────────────────────

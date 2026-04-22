@@ -82,6 +82,10 @@ public class SmartMovingConfig {
     public boolean sprint = true;
     public boolean ceilingClimbing = true;
 
+    // ── 활성화 플래그 ──────────────────────────────────────────
+    /** SM 전체 on/off. toggle() 으로 반전 후 저장. */
+    public boolean enabled = true;
+
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
@@ -159,6 +163,7 @@ public class SmartMovingConfig {
     }
 
     private void readFrom(Properties p) {
+        enabled                  = getBool(p,   "move.enabled",                   enabled);
         speedFactor              = getFloat(p,  "move.speed.factor",              speedFactor);
         speedUser                = getBool(p,   "move.speed.user",                speedUser);
         speedUserFactor          = getFloat(p,  "move.speed.user.factor",         speedUserFactor);
@@ -204,6 +209,7 @@ public class SmartMovingConfig {
     }
 
     private void writeTo(Properties p) {
+        p.setProperty("move.enabled",                    String.valueOf(enabled));
         p.setProperty("move.speed.factor",               String.valueOf(speedFactor));
         p.setProperty("move.speed.user",                 String.valueOf(speedUser));
         p.setProperty("move.speed.user.factor",          String.valueOf(speedUserFactor));
@@ -252,6 +258,11 @@ public class SmartMovingConfig {
     public float getUserSpeedFactor() {
         if (!speedUser || speedUserExponent == 0) return 1F;
         return (float) Math.pow(1F + speedUserFactor, speedUserExponent);
+    }
+
+    public void toggle() {
+        enabled = !enabled;
+        save();
     }
 
     public void changeSpeed(int difference) {
