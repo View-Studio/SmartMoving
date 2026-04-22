@@ -143,7 +143,7 @@
 | [x] | `moving/ISmartMovingSelf.md` | N/A — 외부 모드 실시간 상태 API. SmartMovingClientState 필드 직접 접근으로 대체 |
 | [x] | `moving/SmartMovingOther.md` | `SmartMovingClientState.processStatePacket()` |
 | [x] | `moving/SmartMovingClient.md` | `SmartMovingClient.java` |
-| [ ] | `moving/SmartMovingServer.md` | 서버 측 Mixin |
+| [x] | `moving/SmartMovingServer.md` | 서버 측 Mixin |
 
 ---
 
@@ -371,6 +371,41 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - SPC는 1.21.1에 존재하지 않는 구 모드 → 파일 전체 N/A, 1:1 포팅 대상 아님
 
 신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] moving/SmartMovingServer.md
+
+대응 구현: SmartMovingServer.java, MixinServerPlayerEntity.java, MixinServerPlayNetworkHandler.java, MixinLivingEntity.java, MixinPlayerEntity.java, MixinEntity.java, SmartMoving.java
+
+발견한 불일치:
+- [잉여] `SmartMovingServer.processStatePacket()` — `isSliding = ((bits >> 22) & 1) != 0;` 잘못 추가됨
+  - 원본 서버는 isSliding 미추출. bit 22는 angleJumpType LSB (클라이언트 전용)
+  - 수정: 해당 라인 + `public boolean isSliding;` 필드 제거
+- [오역] `SmartMovingServer.beforeAddMovingHungerBatch()` — hunger 조건 누락
+  - 원본: `if(hunger != -1) disableAddExhaustion = true;` → vanilla 소진 허용(hunger=-1) vs SM override(hunger≥0) 구분
+  - 구현: 조건 없이 항상 `disableAddExhaustion = true;` → hunger=-1(미수신)일 때도 차단
+  - 수정: `if (hunger >= 0F) disableAddExhaustion = true;`
+
+메서드 매핑 검증 (전체):
+- `processStatePacket(bits 12,13,14,15,18,31,33)` → SmartMovingServer.processStatePacket ✓ (isSliding 잉여 제거 후)
+- `setCrawling(boolean)` → SmartMovingServer.setCrawling (cooldown=10) ✓
+- `setSmall(boolean)` → SmartMovingServer.setSmall (calculateDimensions 경유) ✓
+- `initialize(player)` → SmartMovingServer.initialize (ConfigContent 패킷 전송) ✓
+- `processConfigInfoPacket` → SmartMovingServer.processConfigInfoPacket ✓
+- `processConfigChangePacket` → SmartMovingServer.processConfigChangePacket (ConfigChange S2C 반환) ✓
+- `processSpeedChangePacket` → SmartMovingServer.processSpeedChangePacket (speedUser 검증) ✓
+- `hasPermission` → SmartMovingServer.hasPermission (equals 교체) ✓
+- `beforeAddMovingHungerBatch/afterAddMovingHungerBatch` → SmartMovingServer 메서드 ✓ (hunger 조건 수정 후)
+- `applyFallDistanceReset` → SmartMovingServer.applyFallDistanceReset ✓
+- State 릴레이 `mp.sendPacketToTrackedPlayers` → SmartMoving.java PlayerLookup.tracking 루프 ✓
+- `beforeActivateBlockOrUseItem/afterActivateBlockOrUseItem` → forceIsSneaking 블록 상호작용 훅 미구현
+
+신규 발견 미구현:
+- [누락] `beforeActivateBlockOrUseItem` / `afterActivateBlockOrUseItem` — 블록 상호작용 시 `forceIsSneaking` 설정/해제 훅
+  - 원본: 블록 활성화 전 `forceIsSneaking=true`, 후 `forceIsSneaking=null` 설정하여 MixinEntity.sm_isSneaking이 강제 반환
+  - `forceIsSneaking` 필드는 선언·읽기 코드 존재, 쓰는 훅(activateBlock 전후)이 없음
+  - 영향: 크롤링 중 블록 상호작용 시 isSneaking()이 올바르게 오버라이드되지 않을 수 있음
 
 ---
 
@@ -883,3 +918,6 @@ N/A (구조적 변환):
 | 2026-04-23 | `moving/SmartMovingClient.md` | 블록코드 채팅 메시지 억제 누락 — 원본: processBlockCode 반환 true → chatMessageList.remove(i--) (채팅창에서 제거). 1.21.1: GAME 이벤트로 처리만 하고 §-코드 메시지가 채팅에 노출됨. | **처리 완료** — ALLOW_GAME 이벤트에서 마커 감지 후 false 반환으로 채팅 억제 |
 | 2026-04-23 | `moving/SmartMovingOther.md` | `processStatePacket()` 렌더링 필드 4개 누락 — actualFeetClimbType(bits 0-3), actualHandsClimbType(bits 4-7), isFeetVineClimbing(bit 25), isHandsVineClimbing(bit 26). 모두 MixinPlayerEntityModelClient.sm_animateClimbing에서 사용됨. | **처리 완료** — processStatePacket()에 4개 추출 추가, 비트 순서를 원본 역직렬화 순서(bit 0부터)에 맞춰 정렬. isClimbBackJumping(bit 28)도 추가(field 존재, onStartClimbBackJump 미이식). 컴파일: BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `moving/SmartMovingClient.md` | 블록코드 채팅 메시지 억제 누락 — 원본(A-10): processBlockCode 반환 true → chatMessageList.remove(i--). 1.21.1: GAME 이벤트로 처리만 하고 채팅에서 제거하지 않음 → §0§1...§f§f 메시지 노출. | **처리 완료** — GAME→ALLOW_GAME 이벤트 전환, 마커 검사 후 false 반환으로 채팅 억제. processBlockCode 내부 중복 마커 검사 제거. BUILD SUCCESSFUL ✓
+| 2026-04-23 | `moving/SmartMovingServer.md` | [잉여] processStatePacket 내 `isSliding = ((bits >> 22) & 1) != 0` — 원본 서버 미추출, bit 22는 angleJumpType LSB(클라이언트 전용). 필드+라인 제거. | **처리 완료** — SmartMovingServer.java: isSliding 필드 + 비트 추출 라인 제거. BUILD SUCCESSFUL ✓
+| 2026-04-23 | `moving/SmartMovingServer.md` | [오역] beforeAddMovingHungerBatch() hunger 조건 누락 — 원본: `if(hunger != -1) disableAddExhaustion = true;` 구현: 조건 없이 항상 차단. hunger=-1(미수신) 시 vanilla 소진이 차단되는 버그. | **처리 완료** — `if (hunger >= 0F) disableAddExhaustion = true;` 조건 추가. BUILD SUCCESSFUL ✓
+| 2026-04-23 | `moving/SmartMovingServer.md` | [누락] beforeActivateBlockOrUseItem / afterActivateBlockOrUseItem — 블록 상호작용 시 forceIsSneaking 설정/해제 훅. forceIsSneaking 필드는 선언·읽기 코드 존재하나 쓰는 훅 없음. 크롤링 중 블록 상호작용 시 isSneaking() 오버라이드 불작동. | 미처리 (이슈 등록 필요)

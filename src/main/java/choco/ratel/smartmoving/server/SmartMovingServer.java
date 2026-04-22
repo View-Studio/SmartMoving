@@ -43,9 +43,6 @@ public final class SmartMovingServer {
     /** 서버 측 크롤링 상태 */
     public boolean isCrawling;
 
-    /** 서버 측 슬라이딩 상태 */
-    public boolean isSliding;
-
     /** 서버 측 작은 크기 상태. setSmall() → calculateDimensions() 경로로 서버 AABB 갱신. */
     public boolean isSmall;
 
@@ -103,15 +100,14 @@ public final class SmartMovingServer {
      *   bit 14: isClimbing
      *   bit 15: isSmall
      *   bit 18: isCeilingClimbing
-     *   bit 22: isSliding (원본 SM bit 22 위치 유지)
      *   bit 31: isWallJumping
      *   bit 33: isSneakButtonPressed
+     * 원본 미추출: isSliding(bit 21), angleJumpType(bits 22-24) 등 — 서버 물리에 불필요
      */
     public void processStatePacket(ServerPlayerEntity player, long bits) {
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
-        isSliding         = ((bits >> 22) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
         setCrawling(((bits >> 13) & 1) != 0);
         // R-04: setSmall() 경유하여 calculateDimensions() 호출 → 서버 AABB 갱신
@@ -159,7 +155,9 @@ public final class SmartMovingServer {
      */
     public void beforeAddMovingHungerBatch() {
         disableAddExhaustionDepth++;
-        disableAddExhaustion = disableAddExhaustionDepth > 0;
+        // 원본: if(hunger != -1) disableAddExhaustion = true;
+        // hunger = -1F (초기/미수신) → vanilla 소진 허용, hunger >= 0 → SM이 override
+        if (hunger >= 0F) disableAddExhaustion = true;
     }
 
     /**
