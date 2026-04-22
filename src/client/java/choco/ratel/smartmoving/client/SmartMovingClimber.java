@@ -221,16 +221,12 @@ public final class SmartMovingClimber {
      * 원본: SmartMovingSelf.handleClimbing() — Free 모드 핵심 로직.
      *
      * 처리 순서:
-     * 1. exhaustion 체크 (TODO: SM 독자 exhaustion 미구현)
+     * 1. exhaustion 체크
      * 2. 8방향 탐색 (4방향 + 대각 4방향)
      * 3. HandsClimbing/FeetClimbing 상태 집계
      * 4. grab 키 + movementForward로 wantClimbUp/wantClimbDown 판정
      * 5. setShouldClimbSpeed로 Y 속도 결정
      * 6. fallDistance = 0 (낙하 데미지 방지)
-     *
-     * TODO: Standard/Simple/Smart 모드 미구현
-     * TODO: climbBackJump, wallJump 미구현
-     * TODO: SM exhaustion 체크 미구현
      */
     public static void handleClimbing(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
@@ -441,8 +437,6 @@ public final class SmartMovingClimber {
      *   else         → 0.04
      * fallDistance = 0
      *
-     * TODO: jgap 정확한 AABB 충돌 쿼리 미구현 (C-35)
-     * TODO: 수평 속도 방향 벡터 분해 미구현 (C-36)
      */
     public static void handleCeilingClimbing(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
