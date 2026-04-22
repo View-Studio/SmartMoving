@@ -75,7 +75,7 @@ if (distSq > 0.0001F) {
 
 ---
 
-### R-10. 클라이밍 애니메이션 손 타입 분기 미구현 🟠
+### ✅ R-10. 클라이밍 애니메이션 손 타입 분기 미구현 🟠 [COMPLETE]
 
 **파일**: `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java`  
 **관련**: `src/client/java/choco/ratel/smartmoving/climbing/HandsClimbing.java`
@@ -150,7 +150,7 @@ if (sm.isHandsVineClimbing) {
 
 ---
 
-### R-10b. 클라이밍 애니메이션 발 타입 분기 + isFeetVineClimbing 분기 미구현 🟠
+### ✅ R-10b. 클라이밍 애니메이션 발 타입 분기 + isFeetVineClimbing 분기 미구현 🟠 [COMPLETE]
 
 **파일**: `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java`
 
@@ -206,7 +206,7 @@ if (sm.isFeetVineClimbing) {
 
 ---
 
-### R-10c. isCrawlClimbing — legAngleZ(roll) 누락 🟡
+### ✅ R-10c. isCrawlClimbing — legAngleZ(roll) 누락 🟡 [COMPLETE]
 
 **파일**: `MixinPlayerEntityModelClient.java:213-232`
 
@@ -251,7 +251,7 @@ if (sm.isCrawlClimbing) {
 
 ---
 
-### R-11. isFeetVineClimbing / isHandsVineClimbing 항상 false 🟠
+### ✅ R-11. isFeetVineClimbing / isHandsVineClimbing 항상 false 🟠 [COMPLETE]
 
 **파일**: `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java`
 
@@ -318,7 +318,7 @@ sm.isFeetVineClimbing   = feetVine[0];    // 추가
 
 ---
 
-### R-13. sm_animateClimbing Javadoc stale 마커 🟢
+### ✅ R-13. sm_animateClimbing Javadoc stale 마커 🟢 [COMPLETE]
 
 **파일**: `MixinPlayerEntityModelClient.java:187`
 

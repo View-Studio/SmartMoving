@@ -78,12 +78,15 @@ public final class SmartMovingClimber {
             ClientPlayerEntity player, World world,
             boolean isSmall, boolean faceOnly,
             HandsClimbing[] out_hands, FeetClimbing[] out_feet,
-            ClimbGap[] out_handsGap, ClimbGap[] out_feetGap) {
+            ClimbGap[] out_handsGap, ClimbGap[] out_feetGap,
+            boolean[] out_handsVine, boolean[] out_feetVine) {
 
         out_hands[0] = HandsClimbing.NONE;
         out_feet[0]  = FeetClimbing.NONE;
         out_handsGap[0].reset();
         out_feetGap[0].reset();
+        out_handsVine[0] = false;
+        out_feetVine[0]  = false;
 
         int px = (int) Math.floor(player.getX());
         int py = (int) Math.floor(player.getY());
@@ -144,8 +147,10 @@ public final class SmartMovingClimber {
                             gap.direction = dir;
                             if (isHandsLevel) {
                                 out_hands[0] = out_hands[0].max(HandsClimbing.UP, out_handsGap, gap);
+                                out_handsVine[0] = true;
                             } else {
                                 out_feet[0] = out_feet[0].max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, out_feetGap, gap);
+                                out_feetVine[0] = true;
                             }
                         }
                     }
@@ -264,7 +269,8 @@ public final class SmartMovingClimber {
         ClimbGap[] tempHG = {new ClimbGap()};
         ClimbGap[] tempFG = {new ClimbGap()};
 
-        getOnLadderOrVine(player, world, isSmall, false, tempH, tempF, tempHG, tempFG);
+        boolean[] _hv = {false}, _fv = {false};
+        getOnLadderOrVine(player, world, isSmall, false, tempH, tempF, tempHG, tempFG, _hv, _fv);
 
         if (tempH[0].isRelevant()) {
             handsClimbing = handsClimbing.max(tempH[0], handsGap, tempHG[0]);

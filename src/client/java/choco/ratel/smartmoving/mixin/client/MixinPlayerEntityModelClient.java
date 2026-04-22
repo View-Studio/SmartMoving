@@ -183,8 +183,9 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isClimbing / isCrawlClimbing: 사다리/넝쿨 클라이밍.
-     * 원본: SmartMovingModel.setRotationAngles() 2번 분기 (handsClimbType UpGrab 기준).
-     * Phase 13: handsClimbType/feetClimbType 세분화, 속도 기반 verticalSpeed 추적.
+     * 원본: SmartMovingModel.setRotationAngles() 2번 분기.
+     * handsClimbType/feetClimbType ordinal로 손/발 포즈 분기 (R-10/R-10b).
+     * isCrawlClimbing 시 legAngleZ(roll) 보정 (R-10c).
      */
     private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch) {
         float verticalSpeed = Math.min(0.5f, limbSwingAmount);
@@ -194,41 +195,85 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw   = 0f;
         head.pitch = headPitch * DEG_TO_RAD;
 
-        // 팔 (YZX 순서): pitch=X(앞뒤 흔들림), yaw=Y(좌우), roll=0
-        float rPitch = MathHelper.cos(limbSwing * 0.6662f + HALF) * verticalSpeed * 2f - QUARTER;
-        float lPitch = MathHelper.cos(limbSwing * 0.6662f)        * verticalSpeed * 2f - QUARTER;
+        // 팔: handsClimbType 3-way 분기 (R-10)
+        // ordinal 매핑: UP(4)/FAST_UP(5)→UpGrab, TOP_HOLD(2)/BOTTOM_HOLD(3)→MiddleGrab, NONE(0)/SINK(1)→NoGrab
+        int h = sm.actualHandsClimbType;
+        float handsDistUp, handsOffset;
+        if (h >= 4) {         // UP_GRAB: UP(4), FAST_UP(5)
+            handsDistUp = 2f;
+            handsOffset = -2.5f;
+        } else if (h >= 2) {  // MIDDLE_GRAB: TOP_HOLD(2), BOTTOM_HOLD(3)
+            handsDistUp = 2f;
+            handsOffset = -QUARTER;
+        } else {              // NO_GRAB: NONE(0), SINK(1)
+            handsDistUp = 0f;
+            handsOffset = -0.5f;
+        }
+        float rPitch = MathHelper.cos(limbSwing * 0.6662f + HALF) * verticalSpeed * handsDistUp + handsOffset;
+        float lPitch = MathHelper.cos(limbSwing * 0.6662f)        * verticalSpeed * handsDistUp + handsOffset;
         float rYaw   = MathHelper.cos(limbSwing * 0.6662f + QUARTER) * horizontalSpeed;
         float lYaw   = MathHelper.cos(limbSwing * 0.6662f)            * horizontalSpeed;
         setAnglesYZX(rightArm, rPitch, rYaw, 0f);
         setAnglesYZX(leftArm,  lPitch, lYaw, 0f);
+        // isHandsVineClimbing: yaw 추가 보정 (원본 SmartMovingModel.md L346-352)
+        if (sm.isHandsVineClimbing) {
+            rightArm.yaw = rightArm.yaw * (1f + 0.6662f) - EIGHTH;
+            leftArm.yaw  = leftArm.yaw  * (1f + 0.6662f) + EIGHTH;
+        }
 
-        // 발: default NoStep (발 그립 없음) — 발 각도 0
-        rightLeg.pitch = 0f;
-        leftLeg.pitch  = 0f;
-        rightLeg.roll  = 0f;
-        leftLeg.roll   = 0f;
-        rightLeg.yaw   = 0f;
-        leftLeg.yaw    = 0f;
+        // 발: isFeetVineClimbing → vine 공식, else feetClimbType 분기 (R-10b)
+        // FeetClimbing ordinal: SLOW_UP_WITH_HOLD_WITHOUT_HANDS(4)/SLOW_UP_WITH_SINK_WITHOUT_HANDS(5)/FAST_UP(6) → UpGrab
+        if (sm.isFeetVineClimbing) {
+            float total = (MathHelper.cos(limbSwing + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
+            rightLeg.pitch = -total;
+            leftLeg.pitch  = -total;
+            float diff = Math.max(0f, MathHelper.cos(limbSwing - QUARTER)) * SIXTYFOURTH;
+            rightLeg.roll  =  diff;
+            leftLeg.roll   = -diff;
+            rightLeg.yaw   = 0f;
+            leftLeg.yaw    = 0f;
+        } else {
+            int fOrd = sm.actualFeetClimbType;
+            if (fOrd >= 4 && verticalSpeed > 0f) {
+                float feetDistUp = 0.3f / verticalSpeed;
+                rightLeg.pitch = MathHelper.cos(limbSwing * 0.6662f)        * feetDistUp * verticalSpeed - 0.3f;
+                leftLeg.pitch  = MathHelper.cos(limbSwing * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f;
+                rightLeg.roll  = -(MathHelper.cos(limbSwing * 0.6662f) - 1f)          * horizontalSpeed * 0.5f;
+                leftLeg.roll   = -(MathHelper.cos(limbSwing * 0.6662f + QUARTER) + 1f) * horizontalSpeed * 0.5f;
+            } else {
+                rightLeg.pitch = 0f;
+                leftLeg.pitch  = 0f;
+                rightLeg.roll  = 0f;
+                leftLeg.roll   = 0f;
+            }
+            rightLeg.yaw = 0f;
+            leftLeg.yaw  = 0f;
+        }
 
-        // isCrawlClimbing 추가 보정: 몸통 X 기울기 (smallOverGroundHeight 기반)
+        // isCrawlClimbing 추가 보정: 몸통 X 기울기 + 다리 roll (R-10c)
         if (sm.isCrawlClimbing) {
             float height = sm.smallOverGroundHeight + 0.25f;
             float bodyLength = 0.7f, legLength = 0.55f;
-            float bodyAngleX, legAngleX;
+            float bodyAngleX, legAngleX, legAngleZ;
             if (height < bodyLength) {
                 bodyAngleX = Math.max(0f, (float) Math.acos(height / bodyLength));
                 legAngleX  = QUARTER - bodyAngleX;
+                legAngleZ  = THIRTYTWOTH;
             } else if (height < bodyLength + legLength) {
                 bodyAngleX = 0f;
                 legAngleX  = Math.max(0f, (float) Math.acos((height - bodyLength) / legLength));
+                legAngleZ  = THIRTYTWOTH * (legAngleX / 1.537f);
             } else {
                 bodyAngleX = 0f;
                 legAngleX  = 0f;
+                legAngleZ  = 0f;
             }
             body.pitch     =  bodyAngleX;
             head.pitch     = -bodyAngleX;
             rightLeg.pitch =  legAngleX;
             leftLeg.pitch  =  legAngleX;
+            rightLeg.roll  =  legAngleZ;
+            leftLeg.roll   = -legAngleZ;
         }
     }
 

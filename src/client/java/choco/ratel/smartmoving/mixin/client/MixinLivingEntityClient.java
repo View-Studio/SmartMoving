@@ -96,11 +96,15 @@ public abstract class MixinLivingEntityClient {
         FeetClimbing[]  feet  = {FeetClimbing.NONE};
         ClimbGap[] handsGap   = {new ClimbGap()};
         ClimbGap[] feetGap    = {new ClimbGap()};
-        SmartMovingClimber.getOnLadderOrVine(player, world, isSmall, false, hands, feet, handsGap, feetGap);
+        boolean[] handsVine = {false};
+        boolean[] feetVine  = {false};
+        SmartMovingClimber.getOnLadderOrVine(player, world, isSmall, false, hands, feet, handsGap, feetGap, handsVine, feetVine);
 
         // R-01: 클라이밍 타입을 State 패킷 인코딩용으로 저장
         sm.actualHandsClimbType = hands[0].ordinal();
         sm.actualFeetClimbType  = feet[0].ordinal();
+        sm.isHandsVineClimbing  = handsVine[0];
+        sm.isFeetVineClimbing   = feetVine[0];
 
         boolean onClimbable = hands[0].isRelevant() || feet[0].isRelevant();
         if (!onClimbable && !sm.isCeilingClimbing) return;
