@@ -122,10 +122,10 @@
 
 | 상태 | 리서치 파일 (smartrender/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
-| [ ] | `ModelCapeRenderer.md` | 망토 렌더 Mixin (있는 경우) |
-| [ ] | `ModelEarsRenderer.md` | 귀 렌더 Mixin (있는 경우) |
-| [ ] | `ModelRotationRenderer.md` | 회전 렌더 Mixin |
-| [ ] | `ModelSpecialRenderer.md` | 특수 렌더 Mixin |
+| [x] | `ModelCapeRenderer.md` | 망토 렌더 Mixin (있는 경우) |
+| [x] | `ModelEarsRenderer.md` | 귀 렌더 Mixin (있는 경우) |
+| [x] | `ModelRotationRenderer.md` | 회전 렌더 Mixin |
+| [x] | `ModelSpecialRenderer.md` | 특수 렌더 Mixin |
 
 ---
 
@@ -641,6 +641,20 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/ 특수 렌더 4개 (ModelRotationRenderer.md + ModelSpecialRenderer.md + ModelCapeRenderer.md + ModelEarsRenderer.md)
+
+대응 구현: N/A
+
+불일치 없음 (4개 파일 일괄):
+- **`ModelRotationRenderer`**: vanilla `ModelRenderer` 상속. GL11 displayList 기반 렌더, 6종 회전 순서(XYZ/XZY/YXZ/YZX/ZXY/ZYX), fade 보간(RendererData), `bipedOuter` 등 SmartRender 노드 전체의 기반 타입. 1.21.1은 MatrixStack 기반, displayList 없음, `SmartRenderModel` 노드(bipedOuter/Torso/Breast/Pelvic 등) 자체가 없음 → 전체 N/A
+- **`ModelSpecialRenderer`**: `ModelRotationRenderer` 상속. `ignoreRender=true` 기본 잠금 + `beforeRender()/afterRender()` 토글 + `doPopPush` glPop/glPush 패턴. `ModelRotationRenderer` N/A이므로 N/A
+- **`ModelCapeRenderer`**: `ModelSpecialRenderer` 상속. 망토 물리 시뮬레이션 — renderYawOffset 보간, 망토 위치 SRG 필드 6개, `outer.rotateAngleX`(bipedOuter) 참조, GL11 glRotatef 4회. `bipedOuter`/`bipedBreast` 노드 N/A. 1.21.1은 vanilla `CapeFeatureRenderer`가 자체 망토 물리 처리 → N/A
+- **`ModelEarsRenderer`**: `ModelSpecialRenderer` 상속. 귀 렌더 — `_i` 카운터로 좌우 교대(±0.375F X오프셋), -0.375F Y이동, 1.333F 확대, GL11 glTranslatef/glScalef. `bipedHead`(as `ModelRotationRenderer`) N/A. `SmartRenderRender.renderSpecials()` 호출 경로 전체 N/A → N/A
+
+신규 발견 미구현: 없음
+
+---
+
 ### [2026-04-23] smartrender/statistics/ (7개 파일)
 
 대응 구현: SmartStatistics.java, MixinEntityClient.java (calculate 호출), SmartMovingClientState.stats
@@ -728,3 +742,7 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/statistics/IEntityPlayerSP.md` | 없음 — `getStatistics()` 단일 메서드 인터페이스. SmartMovingClientState.stats 필드로 대체. | N/A |
 | 2026-04-23 | `smartrender/statistics/playerapi/SmartStatisticsPlayerBase.md` | 없음 — PlayerAPI ClientPlayerBase + IEntityPlayerSP 구현체. `afterMoveEntityWithHeading` → Mixin TAIL inject로 대체. | N/A |
 | 2026-04-23 | `smartrender/SmartRenderInfo.md` | 없음 — FML @Mod 상수 홀더(ModId/ModName/ModVersion). fabric.mod.json으로 완전 대체. | N/A |
+| 2026-04-23 | `smartrender/ModelRotationRenderer.md` | 없음 — SmartRender GL11 모델 파트 시스템 전체(6회전순서/fade보간/displayList/reflection). 1.21.1은 MatrixStack 기반, displayList 없음, SmartRenderModel 노드(bipedOuter 등) 없음. | N/A |
+| 2026-04-23 | `smartrender/ModelSpecialRenderer.md` | 없음 — ignoreRender 토글 + doPopPush GL스택 리셋 패턴. ModelRotationRenderer 의존 → N/A. | N/A |
+| 2026-04-23 | `smartrender/ModelCapeRenderer.md` | 없음 — 망토 물리 시뮬레이션. bipedOuter(outer.rotateAngleX 참조)/bipedBreast 노드(N/A) + GL11 의존. 1.21.1 vanilla는 CapeFeatureRenderer에서 자체 망토 물리 처리. | N/A |
+| 2026-04-23 | `smartrender/ModelEarsRenderer.md` | 없음 — 귀 렌더. bipedHead as ModelRotationRenderer(N/A) + GL11 의존. SmartRenderRender.renderSpecials() 호출 경로 전체 N/A. | N/A |
