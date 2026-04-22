@@ -142,7 +142,7 @@
 | [x] | `moving/ISmartMovingClient.md` | N/A — 외부 모드 플러그인 API. 1.21.1 해당 모드 없음 |
 | [x] | `moving/ISmartMovingSelf.md` | N/A — 외부 모드 실시간 상태 API. SmartMovingClientState 필드 직접 접근으로 대체 |
 | [x] | `moving/SmartMovingOther.md` | `SmartMovingClientState.processStatePacket()` |
-| [ ] | `moving/SmartMovingClient.md` | `SmartMovingClient.java` |
+| [x] | `moving/SmartMovingClient.md` | `SmartMovingClient.java` |
 | [ ] | `moving/SmartMovingServer.md` | 서버 측 Mixin |
 
 ---
@@ -880,4 +880,6 @@ N/A (구조적 변환):
 | 2026-04-23 | `moving/Orientation.md` | `handleClimbing()` 대각 탐색 vine 방향 완전 반전 — d[0]>0(East) → vine.WEST, d[1]>0(South) → vine.NORTH. 원본 `hasVineOrientation()`: 탐색방향==vine face 방향. | **처리 완료** — SmartMovingClimber.java L304-307: vine.EAST/WEST/SOUTH/NORTH로 올바르게 수정 |
 | 2026-04-23 | `moving/Compat.md` | `isSpectator()` + `isFallFlying()` 체크 누락 — 원본: `Compat.isBlockedByIncompatibility()` (isSpectator=EtFuturum gameType3, isElytraFlying=IElytraPlayer). 1.21.1 vanilla: `isSpectator()`/`isFallFlying()` 미구현. | **처리 완료** — tickEssential resetState 조건 확장, sm_travel_client 상단 early return 추가 |
 | 2026-04-23 | `moving/ISmartMovingSelf.md` | 없음 — 외부 모드 실시간 상태 API (getExhaustion/getUpJumpCharge/addExhaustion 등). 1.21.1에서 해당 외부 모드 없음. SmartMovingClientState 필드(sm.exhaustion/sm.jumpCharge/sm.headJumpCharge)로 직접 접근 대체. | N/A |
+| 2026-04-23 | `moving/SmartMovingClient.md` | 블록코드 채팅 메시지 억제 누락 — 원본: processBlockCode 반환 true → chatMessageList.remove(i--) (채팅창에서 제거). 1.21.1: GAME 이벤트로 처리만 하고 §-코드 메시지가 채팅에 노출됨. | **처리 완료** — ALLOW_GAME 이벤트에서 마커 감지 후 false 반환으로 채팅 억제 |
 | 2026-04-23 | `moving/SmartMovingOther.md` | `processStatePacket()` 렌더링 필드 4개 누락 — actualFeetClimbType(bits 0-3), actualHandsClimbType(bits 4-7), isFeetVineClimbing(bit 25), isHandsVineClimbing(bit 26). 모두 MixinPlayerEntityModelClient.sm_animateClimbing에서 사용됨. | **처리 완료** — processStatePacket()에 4개 추출 추가, 비트 순서를 원본 역직렬화 순서(bit 0부터)에 맞춰 정렬. isClimbBackJumping(bit 28)도 추가(field 존재, onStartClimbBackJump 미이식). 컴파일: BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `moving/SmartMovingClient.md` | 블록코드 채팅 메시지 억제 누락 — 원본(A-10): processBlockCode 반환 true → chatMessageList.remove(i--). 1.21.1: GAME 이벤트로 처리만 하고 채팅에서 제거하지 않음 → §0§1...§f§f 메시지 노출. | **처리 완료** — GAME→ALLOW_GAME 이벤트 전환, 마커 검사 후 false 반환으로 채팅 억제. processBlockCode 내부 중복 마커 검사 제거. BUILD SUCCESSFUL ✓

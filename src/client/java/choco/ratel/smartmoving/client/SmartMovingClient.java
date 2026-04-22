@@ -169,14 +169,18 @@ public class SmartMovingClient implements ClientModInitializer {
     // ── 4-4: processBlockCode ────────────────────────────────────────────────
 
     // 원본: SmartMovingComm.processBlockCode 를 채팅 히스토리 직접 스캔(Reflect+GuiNewChat)으로 처리.
-    // 1.21.1: ClientReceiveMessageEvents.GAME 이벤트로 대체. 메시지 수신 시 즉시 처리 (updateCounter<10 스캔 불필요).
-    // 원본 채팅 메시지 제거(chatMessageList.remove) 대응:
-    //   ALLOW_GAME 이벤트에서 false 반환으로 억제 가능하나, 미확인 항목(mapping 미기재) → 미구현.
+    // 1.21.1: ClientReceiveMessageEvents.ALLOW_GAME 이벤트로 대체. 메시지 수신 시 즉시 처리 (updateCounter<10 스캔 불필요).
+    // 원본 chatMessageList.remove(i--) 대응: ALLOW_GAME에서 false 반환으로 채팅 억제.
     private static void registerGameMessageHandler() {
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
             // overlay=true는 액션바(핫바 위 표시) → 블록 코드 대상 아님 (B-19 확인)
-            if (overlay) return;
-            processBlockCode(message.getString());
+            if (overlay) return true;
+            String text = message.getString();
+            if (text.startsWith("§0§1") && text.endsWith("§f§f")) {
+                processBlockCode(text);
+                return false; // 원본: chatMessageList.remove — 채팅창에서 억제
+            }
+            return true;
         });
     }
 
@@ -189,9 +193,8 @@ public class SmartMovingClient implements ClientModInitializer {
     // codes에 없는 코드는 변경하지 않음 (현재 값 유지).
     //
     // Text.getString() §코드 포함 여부: 서버가 LiteralText로 전송한 경우 포함 가능 (B-19 확인).
+    // 호출 전 마커 검사(`§0§1`/`§f§f`)는 registerGameMessageHandler에서 완료됨.
     private static void processBlockCode(String text) {
-        if (!text.startsWith("§0§1") || !text.endsWith("§f§f")) return;
-
         String codes = text.substring(4, text.length() - 4);
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
