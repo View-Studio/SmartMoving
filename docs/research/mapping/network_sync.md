@@ -753,3 +753,241 @@ SmartMovingServerComm.localUserNameProvider = new LocalUserNameProvider();
 5. `sendPacketToTrackedPlayers` 릴레이 구현
 6. 클라이언트 수신 처리 (`SmartMovingComm`, `processConfigPacket`)
 7. 설정 배포 프로토콜 통합 테스트
+
+---
+
+## 15. DataTracker 동기화 설계 — R-15 (C-05, C-06)
+
+### 15-1. 배경 — 원본 SM 상태 동기화 구조
+
+원본 SM의 타인 플레이어 상태 동기화는 State 패킷 릴레이 방식:
+
+```
+로컬 클라이언트: SmartMovingSelf → State 패킷(33비트 long) C→S
+서버: SmartMovingServer.processStatePacket()
+  → 일부 비트 추출(isCrawling bit13, isSmall bit15 등) → 서버 처리
+  → mp.sendPacketToTrackedPlayers(packet) → 원본 패킷 그대로 릴레이
+다른 클라이언트: SmartMovingOther.processStatePacket(state) → 모든 상태 필드 수동 설정
+```
+
+1.21.1에서 `SmartMovingOther` 패턴을 그대로 이식하거나, 일부 상태를 DataTracker로 대체하는 두 방식이 가능하다. R-15는 `isCrawling`과 `isSliding`에 대해 DataTracker 방식 적합성을 분석한다.
+
+---
+
+### 15-2. C-05 — isCrawling DataTracker 동기화 (확인됨)
+
+#### 원본 동기화 경로 (코드 근거)
+
+```java
+// 1) 클라이언트 인코딩 (SmartMovingSelf.addToSendQueue)
+state <<= 1; state |= isCrawling ? 1 : 0;   // → bit 13
+
+// 2) 서버 추출 (SmartMovingServer.processStatePacket)
+boolean isCrawling = (state >>> 13) & 1) != 0;
+setCrawling(isCrawling);                      // hitbox 갱신: crawlingCooldown=10 or 0
+
+// 3) 서버 릴레이
+mp.sendPacketToTrackedPlayers(packet);
+
+// 4) 다른 클라이언트 (SmartMovingOther.processStatePacket — bit 13)
+isCrawling = (state & 1) != 0;               // bit 13 추출 후 직접 필드 설정
+```
+
+#### DataTracker 방식 설계
+
+**서버가 State 패킷에서 bit 13을 추출하여 DataTracker에 설정**:
+
+```java
+// DataTracker TrackedData 등록 (Mixin static 초기화)
+@Mixin(PlayerEntity.class)
+public abstract class PlayerEntitySmMixin {
+    private static final TrackedData<Boolean> SM_CRAWLING =
+        DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+
+    @Inject(method = "initDataTracker", at = @At("TAIL"))
+    private void smInitDataTracker(DataTracker.Builder builder, CallbackInfo ci) {
+        builder.add(SM_CRAWLING, false);
+    }
+}
+```
+
+```java
+// 서버측 State 패킷 처리 (SmartMovingServer.processStatePacket 대응)
+boolean isCrawling = ((state >>> 13) & 1) != 0;
+serverPlayer.getDataTracker().set(SM_CRAWLING, isCrawling);
+// → MC가 자동으로 이 플레이어를 추적 중인 모든 클라이언트에 DataTracker 패킷 전송
+```
+
+```java
+// 다른 클라이언트 렌더링 (SmartMovingOther 대응 코드)
+boolean isCrawling = otherPlayer.getDataTracker().get(SM_CRAWLING);
+// → SmartMovingOther.processStatePacket의 isCrawling 필드 수동 설정 대체
+```
+
+#### 충돌 분석
+
+| 충돌 대상 | 충돌 여부 | 근거 |
+|-----------|-----------|------|
+| `PlayerEntity.initDataTracker()` | **없음** | `@TAIL` 주입 — vanilla `builder.add()` 완료 후 추가. B-16 확인 |
+| DataTracker ID 충돌 | **없음** | `registerData()`가 `CLASS_TO_LAST_ID` 카운터로 자동 증가. Mixin 호출 순서로 중복 없음. B-16 확인 |
+| `sendPacketToTrackedPlayers` 릴레이 | **대체 가능** | DataTracker 자동 전파로 isCrawling에 대한 수동 릴레이 불필요 |
+
+#### State 패킷 릴레이와의 관계
+
+- State 패킷 자체는 여전히 필요 (isClimbing, isSliding 등 나머지 30+ 비트 상태 때문)
+- `sendPacketToTrackedPlayers` 릴레이도 여전히 필요 (다른 상태 동기화를 위해)
+- DataTracker 방식은 `isCrawling`에 대해 "추가 동기화 경로"를 제공하는 것 — 릴레이 방식과 병렬로 동작하거나 isCrawling을 State 패킷에서 제거하고 DataTracker로만 전달 가능
+
+**결론**: isCrawling DataTracker 동기화 **적합**. 서버가 이미 bit 13을 처리하므로 DataTracker.set() 1줄 추가로 자동 전파 가능. 타인 플레이어 렌더 시 `SmartMovingOther` 맵 조회 대신 `otherPlayer.dataTracker.get(SM_CRAWLING)` 직접 접근.
+
+---
+
+### 15-3. C-06 — isSliding DataTracker 필요 여부 (확인됨)
+
+#### 원본 동기화 경로 (코드 근거)
+
+```java
+// 1) 클라이언트 인코딩 (SmartMovingSelf.addToSendQueue)
+state <<= 1; state |= isSliding ? 1 : 0;    // → bit 21
+
+// 2) 서버 (SmartMovingServer.processStatePacket)
+// isSliding 미추출 — 서버는 isSliding 처리 없음 (A-14 확인)
+
+// 3) 서버 릴레이
+mp.sendPacketToTrackedPlayers(packet);       // 원본 패킷 그대로 릴레이
+
+// 4) 다른 클라이언트 (SmartMovingOther.processStatePacket — bit 21)
+isSliding = (state & 1) != 0;               // bit 21 추출 후 직접 필드 설정
+```
+
+`isSliding`은 서버 물리 처리 없음 (A-14: "서버는 isSliding을 processStatePacket에서 추출하지 않음 — 서버 물리에 불필요"). 렌더링 전용.
+
+#### DataTracker 방식 적용 시 필요 변경
+
+서버가 `isSliding`을 DataTracker에 설정하려면:
+1. 서버의 `processStatePacket`에서 bit 21 추출 추가 (현재 없음)
+2. `player.getDataTracker().set(SM_SLIDING, isSliding)` 설정 추가
+
+```java
+// 서버 processStatePacket에 추가 필요 (신규)
+boolean isSliding = ((state >>> 21) & 1) != 0;
+serverPlayer.getDataTracker().set(SM_SLIDING, isSliding);
+```
+
+**DataTracker 방식의 장점**:
+- `SmartMovingOther` 패턴 없이 `otherPlayer.dataTracker.get(SM_SLIDING)` 직접 접근
+- isCrawling과 동일한 패턴 — 일관성
+
+**DataTracker 방식의 단점**:
+- 서버에 bit 21 추출 코드 추가 필요 (서버 물리에는 불필요한 처리)
+- State 패킷 릴레이로 이미 동작하는 것을 변경
+
+#### 결론: isSliding DataTracker 방식 채택
+
+- State 패킷 릴레이와 DataTracker를 병행 사용하는 것은 복잡도 증가
+- isCrawling과 동일 패턴을 적용하면 `SmartMovingOther` 맵 의존 제거 가능 (일관성)
+- 서버 추가 코드는 bit 21 추출 1줄 + DataTracker.set() 1줄로 최소
+- **결정**: isSliding도 DataTracker 방식 채택. 서버가 bit 21 추출 후 `SM_SLIDING` DataTracker 설정
+
+---
+
+### 15-4. 두 상태 DataTracker 종합 설계
+
+#### TrackedData 등록
+
+```java
+@Mixin(PlayerEntity.class)
+public abstract class PlayerEntitySmStateMixin {
+
+    // 서버가 설정 → MC 자동 전파 → 다른 클라이언트 렌더링에 사용
+    static final TrackedData<Boolean> SM_CRAWLING =
+        DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+
+    static final TrackedData<Boolean> SM_SLIDING =
+        DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+
+    @Inject(method = "initDataTracker", at = @At("TAIL"))
+    private void smInitDataTracker(DataTracker.Builder builder, CallbackInfo ci) {
+        builder.add(SM_CRAWLING, false);
+        builder.add(SM_SLIDING, false);
+    }
+}
+```
+
+- `registerData()`: static 필드 → 클래스 로드 시 1회 실행. `PlayerEntity.class` 지정 필수 (B-16: "Mixin target이 PlayerEntity.class인 경우 registerData(PlayerEntity.class, ...)")
+- `initDataTracker @TAIL`: vanilla Builder.add() 완료 후 추가 → ID 순서 충돌 없음
+
+#### 서버 State 패킷 처리 (SmartMovingServer 대응)
+
+```java
+// 서버 수신 processStatePacket 내부
+boolean isCrawling = ((state >>> 13) & 1) != 0;
+boolean isSliding  = ((state >>> 21) & 1) != 0;
+
+// 기존 서버 처리 (setCrawling, setSmall 등) 그대로 유지
+setCrawling(isCrawling);
+
+// DataTracker 설정 — MC가 자동으로 추적 중인 모든 클라이언트에 전파
+serverPlayer.getDataTracker().set(SM_CRAWLING, isCrawling);
+serverPlayer.getDataTracker().set(SM_SLIDING, isSliding);
+```
+
+#### 다른 클라이언트 렌더링 접근
+
+```java
+// SmartMovingOther 대응 렌더 코드에서 (타인 플레이어 렌더링)
+// 기존: SmartMovingFactory 맵에서 SmartMovingOther 조회 후 isCrawling/isSliding 접근
+// 변경: DataTracker 직접 접근
+
+boolean otherCrawling = otherPlayer.getDataTracker().get(PlayerEntitySmStateMixin.SM_CRAWLING);
+boolean otherSliding  = otherPlayer.getDataTracker().get(PlayerEntitySmStateMixin.SM_SLIDING);
+```
+
+MC의 DataTracker 동기화가 자동으로 처리되므로 `sendPacketToTrackedPlayers`의 isCrawling/isSliding 부분은 DataTracker가 대체. 단, 나머지 상태 비트(isClimbing, isSwimming 등)를 위한 State 패킷 릴레이는 여전히 필요.
+
+#### 로컬 플레이어 자신의 상태 설정
+
+DataTracker는 서버 권한 — 클라이언트가 `localPlayer.dataTracker.set(SM_CRAWLING, true)` 직접 호출 시 로컬에만 반영, 서버로 전송되지 않음. 따라서:
+
+- **로컬 플레이어의 isCrawling**: `SmartMovingSelf`의 `isCrawling` 필드를 그대로 사용 (로컬 물리/렌더용)
+- **DataTracker의 SM_CRAWLING**: 서버가 설정 → 다른 클라이언트 렌더링용
+
+즉, 로컬 플레이어는 `SmartMovingSelf.isCrawling`으로 렌더링하고, 타인 플레이어는 `otherPlayer.dataTracker.get(SM_CRAWLING)`으로 렌더링.
+
+---
+
+### 15-5. State 패킷 릴레이와 DataTracker 병행 방식 충돌
+
+State 패킷 릴레이 (`sendPacketToTrackedPlayers`)와 DataTracker 전파가 동시에 동작하면 다른 클라이언트에서:
+1. DataTracker 패킷 수신 → `SM_CRAWLING = true`
+2. State 패킷 수신 → `SmartMovingOther.processStatePacket(state)` → `isCrawling = true` (수동 설정)
+
+두 경로가 병행되면 isCrawling/isSliding이 두 번 설정될 수 있음. 값이 동일하므로 최종 결과는 동일하지만, **SmartMovingOther가 DataTracker 값을 사용하도록 변경하면** 수동 설정 코드 제거 가능.
+
+**권장 방식**: State 패킷 릴레이 유지 (다른 상태 비트 때문에 필수), `SmartMovingOther.processStatePacket()`에서 isCrawling/isSliding 설정 라인만 제거하고 DataTracker를 신뢰.
+
+또는: `SmartMovingOther.processStatePacket()`에서 DataTracker 값으로 덮어쓰기 허용 (무해, 동일 값).
+
+---
+
+### 15-6. 미확인 항목
+
+| ID | 내용 | 이유 |
+|----|------|------|
+| M-14 | `DataTracker.get()` 접근 시 `static` TrackedData 참조 — 다른 클래스의 Mixin static 필드를 렌더 코드에서 접근하는 패턴 | Mixin static 필드의 접근성 제한(private/package) 확인 필요. `accessor` 인터페이스 또는 package-private 으로 공개 필요 여부 미확인. |
+
+M-14는 구현 시점에서 접근자 설계로 해소 가능 (Mixin accessor 인터페이스 또는 별도 유틸 클래스에 TrackedData 보관). 청크 추가 불필요.
+
+---
+
+### C-05, C-06 완료 요약
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| isCrawling 동기화 방식 | DataTracker (`SM_CRAWLING` BOOLEAN) | 서버가 이미 bit 13 처리 → DataTracker.set() 추가로 자동 전파 |
+| isSliding 동기화 방식 | DataTracker (`SM_SLIDING` BOOLEAN) | 일관성 + 서버 bit 21 추출 최소 변경으로 전환 가능 |
+| SmartMovingOther 수동 설정 | 렌더 코드를 DataTracker로 전환하면 제거 가능 | State 패킷 릴레이 자체는 유지 (다른 상태 때문) |
+| registerData 대상 클래스 | `PlayerEntity.class` | B-16: Mixin target과 동일 클래스 지정 필수 |
+| initDataTracker 진입점 | `@Inject @TAIL` | B-16: 부모 Builder.add() 완료 후 추가 → 순서 보장 |
+| 로컬 플레이어 렌더 | `SmartMovingSelf.isCrawling/isSliding` | DataTracker는 서버 권한 — 클라이언트 자체 set 불가 |
+| 타인 플레이어 렌더 | `otherPlayer.dataTracker.get(SM_CRAWLING/SLIDING)` | DataTracker 자동 동기화 활용 |

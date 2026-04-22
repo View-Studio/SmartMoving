@@ -78,8 +78,8 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-02 | 6-3 EntityPose — 헤드점프 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈 + getBaseDimensions() Mixin(0.6×0.8). updatePose() @HEAD 취소. M-01/M-02/M-04/M-05 미확인 남음. mapping/pose_strategy.md C-02 섹션 기재. |
 | C-03 | 6-3 EntityPose — 슬라이딩 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈(index 15) 재사용 + getBaseDimensions() Mixin. updatePose() @HEAD 취소. M-02/M-03 미확인 남음. mapping/pose_strategy.md C-03 섹션 기재. |
 | C-04 | 6-5 `recalculateDimensions` — 헤드점프 착지 포즈 복원 로직 | B-04, C-02 | [ ] |
-| C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [ ] |
-| C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [ ] |
+| C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [x] → DataTracker 방식 채택. 서버 bit 13 추출 후 SM_CRAWLING DataTracker.set() → MC 자동 전파. 타인 렌더: otherPlayer.dataTracker.get(SM_CRAWLING). network_sync.md 15절. |
+| C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [x] → DataTracker 방식 채택 (isCrawling과 동일 패턴). 서버에 bit 21 추출 + SM_SLIDING DataTracker.set() 추가. 원본 서버는 미처리였으나 1.21.1에서 추가. network_sync.md 15절. |
 | C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [ ] |
 | C-08 | 12-4 ModelRotationRenderer 대체 — 6-axis MatrixStack | A-15, B-08, B-09, B-18 | [x] → 비표준 회전 순서 11종 전체 목록 + MatrixStack 구현 패턴 확정. smRotationOrder Mixin 전략 설계. M-09/M-10 미확인→R-17. animation_system.md R-13 섹션. |
 | C-09 | 12-5 중간 노드 부재 — isFlying/isHeadJumping body 기울기 | A-15, C-08 | [x] → setupTransforms X rotate + setAngles head.pitch 보정 전략 확정. 등가 증명 완료. M-06/M-11 미확인→R-17. animation_system.md R-13 섹션. |
@@ -438,7 +438,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/network_sync.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] → C-05: isCrawling DataTracker(SM_CRAWLING BOOLEAN) 방식 확정. 서버 processStatePacket에서 bit 13 추출 후 DataTracker.set() 추가. C-06: isSliding DataTracker(SM_SLIDING BOOLEAN) 방식 채택 — 서버에 bit 21 추출 1줄 추가로 일관성 확보. State 패킷 릴레이는 다른 상태 비트 때문에 유지. 타인 렌더: dataTracker.get() 직접. 로컬 렌더: SmartMovingSelf 필드 유지. network_sync.md 섹션 15 추가.
 
 ---
 
@@ -464,5 +464,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-16, R-17
-- 다음 진행: **R-14** (Config 시스템 설계) 또는 **R-15** (DataTracker 동기화 설계)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-14, R-15, R-16, R-17
+- 다음 진행: **모든 리서치 청크 완료** → C-01~C-14 구현 시작 (RESEARCH_RULES.md 규칙 5 조건 점검)
