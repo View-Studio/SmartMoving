@@ -955,6 +955,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 ```
 [x] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)  ← 2026-04-22 완료
 [x] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)  ← 2026-04-22 완료
+[ ] BUG-03  벽 점프 grab(LCTRL) 조건 누락 (SmartMovingJumper.handleWallJumping)
 [x] IMPL-01 크롤링 진입/해제 전체  ← 2026-04-22 완료
 [x] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)  ← 2026-04-22 완료
 [x] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)  ← 2026-04-22 완료
@@ -984,17 +985,17 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 
 | 상태 | 진입 키 | 원본 조건 요약 | 1.21.1 구현 방법 | 현황 |
 |------|---------|--------------|-----------------|------|
-| 크롤링 (Crawling) | **LCTRL 방금 누름** + Shift 유지 | `grabButton.StartPressed && (sneakToggled \|\| sneakButton.Pressed) && onGround` | `SmartMovingKeys.grab.wasPressed() && player.isSneaking()` | ❌ 미구현 |
-| 슬라이딩 (Sliding) | ① 헤드점프 착지 + grabButton 유지 | `toSlidingOrCrawling() → isHeadJumping && onGround → grabButton.Pressed \|\| wasHeadJumping` | SmartMovingJumper 착지 시 전환 | ❌ 미구현 |
-| 슬라이딩 (Sliding) | ② Shift + Sprint | `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping` | tickEssential() 내 조건 체크 | ❌ 미구현 |
+| 크롤링 (Crawling) | **LCTRL 방금 누름** + Shift 유지 | `grabButton.StartPressed && (sneakToggled \|\| sneakButton.Pressed) && onGround` | `SmartMovingKeys.grab.wasPressed() && player.isSneaking()` | ✅ IMPL-01 완료 (2026-04-22) |
+| 슬라이딩 (Sliding) | ① 헤드점프 착지 + grabButton 유지 | `toSlidingOrCrawling() → isHeadJumping && onGround → grabButton.Pressed \|\| wasHeadJumping` | SmartMovingJumper.resetHeightOffset() 착지 감지 | ✅ IMPL-02 완료 (2026-04-22) |
+| 슬라이딩 (Sliding) | ② Shift + Sprint | `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping` | tickEssential() 내 조건 체크 | ✅ IMPL-02 완료 (2026-04-22) |
 | 다이빙 (Diving) | 자동 (물 깊이) | 수면 오프셋 ≥ 1.9 → `isDiving = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
 | 수영 (Swimming) | 자동 (물 깊이) | 수면 오프셋 1.4~1.9 → `isSwimming_sm = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
 | 물살짝잠김 (Dipping) | 자동 (물 깊이) | 수면 오프셋 < 1.4 → `isDipping = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
-| 클라이밍 (Climbing) | **LCTRL 유지** + 클라이밍 가능 블록 | `grabButton.Pressed && onClimbable` | `SmartMovingKeys.grab.isPressed()` | ✅ 구현됨 (BUG-01 사다리 방향 버그 수정 필요) |
-| 천장 클라이밍 | **LCTRL 유지** + 천장 근접 | `grabButton.Pressed && !wantCrawlNotClimb && !isSneaking()` | SmartMovingClimber.handleCeilingClimbing() | ⚠️ 진입 조건 재확인 필요 |
-| 헤드점프 (HeadJump) | **LCTRL + Sprint** 중 Space | `grabButton.Pressed && sp.isSprinting()` → 점프 충전 → 발사 | SmartMovingJumper에 구현 여부 확인 필요 | ⚠️ 부분 구현 |
-| 방향 점프 (AngleJump) | **A/D/S 더블클릭** | `leftJumpCount/rightJumpCount/backJumpCount` 카운터 시스템 | IMPL-03 참고 | ❌ 미구현 |
-| 벽 점프 (WallJump) | **벽 충돌 + 더블클릭** | `horizontalCollision && continueWallJumping` | handleWallJumping() 확인 필요 | ⚠️ 부분 구현 |
+| 클라이밍 (Climbing) | **LCTRL 유지** + 클라이밍 가능 블록 | `grabButton.Pressed && onClimbable` | `SmartMovingKeys.grab.isPressed()` | ✅ 완료 (BUG-01 사다리 방향 수정 포함 2026-04-22) |
+| 천장 클라이밍 | **LCTRL 유지** + 천장 근접 | `grabButton.Pressed && !wantCrawlNotClimb && !isSneaking()` | `grab.isPressed() && !isCrawling && !isSneaking() + jgap 계산` | ✅ 완전 구현 (SmartMovingClimber.handleCeilingClimbing) |
+| 헤드점프 (HeadJump) | **LCTRL + Sprint** 중 Space | `grabButton.Pressed && sp.isSprinting()` → 점프 충전 → 발사 | `grab.isPressed() && isSprinting && isOnGround → headJumpCharge++ → tryJump(HEAD_UP)` | ✅ 완전 구현 (SmartMovingJumper.handleJumping 섹션 c) |
+| 방향 점프 (AngleJump) | **A/D/S 더블클릭** | `leftJumpCount/rightJumpCount/backJumpCount` 카운터 시스템 | SmartMovingJumper + tickEssential 더블클릭 카운터 | ✅ IMPL-03 완료 (2026-04-22) |
+| 벽 점프 (WallJump) | **벽 충돌 + LCTRL** | `horizontalCollision && continueWallJumping && grabButton.Pressed` | handleWallJumping() | ⚠️ 구현됨 — grab.isPressed() 조건 누락
 
 ---
 
@@ -1219,13 +1220,17 @@ BUG-02(매 틱 미초기화)로 인해 `false`로 돌아오지 않는 버그 존
 
 ### 7-3. 원본과 현재 구현 불일치 목록
 
-| 항목 | 원본 키 | 현재 구현 | 수정 필요 항목 |
-|------|---------|---------|--------------|
-| 크롤링 진입 트리거 | LCTRL (grabButton.StartPressed) + Shift 유지 | 미구현 | IMPL-01 구현 시 반드시 grab.wasPressed() 사용 |
-| 슬라이딩 진입 | 없음 (isSliding = true 설정 코드 없음) | 미구현 | IMPL-02 구현 필요 |
-| 방향 점프 | A/D/S 더블클릭 카운터 | 미구현 | IMPL-03 구현 필요 |
-| 클라이밍 방향 감지 | 4방향 탐색 중 dir 기준 | playerFacing 오류 | BUG-01 수정 필요 |
-| 클라이밍 상태 리셋 | 매 틱 false 리셋 후 재평가 | 리셋 없음 | BUG-02 수정 필요 |
+> 2026-04-22 최신화. 이전에 ❌로 기록된 항목들은 모두 구현 완료됨.
+
+| 항목 | 원본 조건 | 현재 구현 | 상태 |
+|------|---------|---------|------|
+| 크롤링 진입 트리거 | LCTRL.StartPressed + Shift + onGround | grab.wasPressed() + isSneaking() + isOnGround() | ✅ IMPL-01 완료 |
+| 슬라이딩 진입 ① | isHeadJumping && onGround → isSliding=true | resetHeightOffset() 착지 감지 → isSliding=true | ✅ IMPL-02 완료 |
+| 슬라이딩 진입 ② | isSneaking && isSprinting && onGround | tickEssential() 내 동일 조건 | ✅ IMPL-02 완료 |
+| 방향 점프 | A/D/S 더블클릭 카운터 | tickEssential + SmartMovingJumper 카운터 | ✅ IMPL-03 완료 |
+| 클라이밍 방향 감지 | 4방향 탐색 중 dir 기준 판정 | BUG-01: dir 기준으로 수정됨 | ✅ BUG-01 완료 |
+| 클라이밍 상태 리셋 | 매 틱 false 리셋 후 재평가 | BUG-02: sm_travel_client에 매 틱 리셋 추가 | ✅ BUG-02 완료 |
+| **벽 점프 grab 조건** | `horizontalCollision && grabButton.Pressed` | grab.isPressed() 체크 없음 — 벽에 닿으면 무조건 발동 | ⚠️ 미수정 — BUG-03 추가 필요 |
 
 ---
 
