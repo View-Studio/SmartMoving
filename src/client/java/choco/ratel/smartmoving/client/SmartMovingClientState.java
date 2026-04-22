@@ -140,6 +140,24 @@ public final class SmartMovingClientState {
     /** toCrawling() 직후 한 틱 스니크 StopPressed 무시 플래그 */
     public boolean ignoreNextStopSneakButtonPressed;
 
+    // ── IMPL-03: 더블클릭 방향 점프 카운터 ──────────────────────────────
+    /** A키 더블클릭 카운터. 0=비활성, >0=첫 클릭 대기, -1=발동 예약, -2=대각선 대기. */
+    public int leftJumpCount;
+    /** D키 더블클릭 카운터. */
+    public int rightJumpCount;
+    /** S키 더블클릭 카운터. */
+    public int backJumpCount;
+    /** 점프 직전 저장 velocity.x (getJumpMoving 계산용). */
+    public double jumpMotionX;
+    /** 점프 직전 저장 velocity.z. */
+    public double jumpMotionZ;
+    /** 이전 틱 A키 상태 (rising-edge 감지용). */
+    private boolean prevPressLeft;
+    /** 이전 틱 D키 상태. */
+    private boolean prevPressRight;
+    /** 이전 틱 S키 상태. */
+    private boolean prevPressBack;
+
     // ── C-33: SM 독자 exhaustion (클라이밍 피로도) ──────────────────────────
     /** 이전 틱 클라이밍 여부 — exhaustion 허용 조건 판정용. */
     public boolean wasClimbing;
@@ -348,6 +366,48 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // IMPL-03: 더블클릭 방향 점프 카운터 갱신
+            // 원본: updateEntityActionState() 내 방향키 StartPressed → count 갱신
+            {
+                MinecraftClient mc = MinecraftClient.getInstance();
+                boolean pressLeft  = mc.options.leftKey.isPressed();
+                boolean pressRight = mc.options.rightKey.isPressed();
+                boolean pressBack  = mc.options.backKey.isPressed();
+
+                boolean startLeft  = pressLeft  && !prevPressLeft;
+                boolean startRight = pressRight && !prevPressRight;
+                boolean startBack  = pressBack  && !prevPressBack;
+
+                prevPressLeft  = pressLeft;
+                prevPressRight = pressRight;
+                prevPressBack  = pressBack;
+
+                // 원본: if(StartPressed) { count==0→3, else→-1 } else if(count>0) count--
+                if (cfg.angleJumpSide) {
+                    if (startLeft) {
+                        if (leftJumpCount  == 0) leftJumpCount  = 3; else leftJumpCount  = -1;
+                    } else if (leftJumpCount  > 0) leftJumpCount--;
+
+                    if (startRight) {
+                        if (rightJumpCount == 0) rightJumpCount = 3; else rightJumpCount = -1;
+                    } else if (rightJumpCount > 0) rightJumpCount--;
+                }
+                if (cfg.angleJumpBack) {
+                    if (startBack) {
+                        if (backJumpCount  == 0) backJumpCount  = 3; else backJumpCount  = -1;
+                    } else if (backJumpCount  > 0) backJumpCount--;
+                }
+
+                // 대각선 우선순위: -1 중복 시 -2로 강등 (좌/우+후 동시 방지)
+                if (rightJumpCount == -1 && backJumpCount  > 0) rightJumpCount = -2;
+                if (leftJumpCount  == -1 && backJumpCount  > 0) leftJumpCount  = -2;
+                if (backJumpCount  == -1 && (leftJumpCount > 0 || rightJumpCount > 0)) backJumpCount = -2;
+                // -2 → -1 승격 (다른 방향이 해소되면)
+                if (rightJumpCount == -2 && backJumpCount  <= 0) rightJumpCount = -1;
+                if (leftJumpCount  == -2 && backJumpCount  <= 0) leftJumpCount  = -1;
+                if (backJumpCount  == -2 && leftJumpCount  <= 0 && rightJumpCount <= 0) backJumpCount = -1;
+            }
+
             // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
             // isCrawling/isSliding이 확정된 후 계산해야 정확함
             isSmall = isCrawling || isSliding || isHeadJumping;
@@ -384,6 +444,14 @@ public final class SmartMovingClientState {
         crawlToggled = false;
         ignoreNextStopSneakButtonPressed = false;
         isSliding = false;
+        leftJumpCount  = 0;
+        rightJumpCount = 0;
+        backJumpCount  = 0;
+        jumpMotionX    = 0D;
+        jumpMotionZ    = 0D;
+        prevPressLeft  = false;
+        prevPressRight = false;
+        prevPressBack  = false;
         isSmall = false;
         angleJumpType = 0;
         wasClimbing  = false;

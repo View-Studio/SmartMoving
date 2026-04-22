@@ -222,6 +222,77 @@ public final class SmartMovingJumper {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         MinecraftClient mc = MinecraftClient.getInstance();
 
+        // jumpMotionX/Z 저장 — 매 틱 최신 velocity 보존 (getJumpMoving 계산용, 원본: handleJumping 최상단)
+        {
+            Vec3d cv = player.getVelocity();
+            sm.jumpMotionX = cv.x;
+            sm.jumpMotionZ = cv.z;
+        }
+
+        // ── [IMPL-03] 더블클릭 방향 점프 (원본: handleJumping 내 count==-1 분기)
+        {
+            int left = 0, back = 0;
+            if (sm.leftJumpCount  == -1) left++;
+            if (sm.rightJumpCount == -1) left--;
+            if (sm.backJumpCount  == -1) back++;
+
+            if (left != 0 || back != 0) {
+                boolean canAngleJump = player.isOnGround() && !sm.isCrawling && !sm.isClimbing
+                        && !sm.isCrawlClimbing && !sm.isSwimming_sm && !sm.isDiving;
+
+                if (canAngleJump) {
+                    int relAngle;
+                    if (left > 0)      relAngle = back == 0 ? 270 : 225;
+                    else if (left < 0) relAngle = back == 0 ? 90  : 135;
+                    else               relAngle = 180;
+
+                    // 애니메이션 타입 (원본: ((360 - relAngle) / 45) % 8)
+                    sm.angleJumpType = ((360 - relAngle) / 45) % 8;
+
+                    // 세계 공간 점프 방향 (rotationYaw + 상대 각도)
+                    double worldAngleDeg = (player.getYaw() + relAngle) % 360.0;
+                    if (worldAngleDeg < 0) worldAngleDeg += 360.0;
+                    double worldAngleRad = Math.toRadians(worldAngleDeg);
+                    double jumpDirX = -Math.sin(worldAngleRad);
+                    double jumpDirZ =  Math.cos(worldAngleRad);
+
+                    // 수평 속도 (getJumpMoving, 원본: motionX = getJumpMoving(jumpMotionX, moveX, reset=true, ...))
+                    double newVx = getJumpMoving(sm.jumpMotionX,
+                            jumpDirX * cfg.angleJumpHorizontalFactor, true,
+                            cfg.angleJumpHorizontalFactor, cfg.angleJumpVerticalFactor);
+                    double newVz = getJumpMoving(sm.jumpMotionZ,
+                            jumpDirZ * cfg.angleJumpHorizontalFactor, true,
+                            cfg.angleJumpHorizontalFactor, cfg.angleJumpVerticalFactor);
+
+                    // 수직 속도 (vanilla Up 점프)
+                    StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
+                    int potionJump = (jumpBoost != null) ? jumpBoost.getAmplifier() : 0;
+                    double verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
+
+                    // 스프린트 수평 보정 (원본 tryJump와 동일)
+                    boolean fast = player.isSprinting();
+                    if (fast) {
+                        double yawRad = Math.toRadians(player.getYaw());
+                        newVx -= Math.sin(yawRad) * 0.2F;
+                        newVz += Math.cos(yawRad) * 0.2F;
+                    }
+
+                    player.setVelocity(newVx, verticalMotion, newVz);
+                    sm.isSprintJump = fast;
+                    player.incrementStat(Stats.JUMP);
+                    sm.jumpCharge = 0F;
+                    sm.headJumpCharge = 0F;
+                    sm.blockJumpTillButtonRelease = true;
+                    sm.jumpPending = false;
+                }
+
+                sm.leftJumpCount  = 0;
+                sm.rightJumpCount = 0;
+                sm.backJumpCount  = 0;
+                return;
+            }
+        }
+
         boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();
         boolean sneakKeyPressed = mc.options.sneakKey.isPressed();
         boolean grabKeyPressed  = SmartMovingKeys.grab.isPressed();

@@ -462,20 +462,20 @@ isSliding = false;
 - [ ] `docs/research/original/smartmoving/moving/Button.md` — StartPressed(방금 눌림) 원본 구현 — 1.21.1 prev 추적 방식과 비교
 
 **작업 단계 체크리스트**:
-- [ ] SmartMovingClientState.java에 `leftJumpCount`, `rightJumpCount`, `backJumpCount` 필드 추가
-- [ ] SmartMovingClientState.java에 `jumpMotionX`, `jumpMotionZ` 필드 추가
-- [ ] SmartMovingClientState.java에 `prevPressLeft`, `prevPressRight`, `prevPressBack` private 필드 추가
-- [ ] tickEssential()에 매 틱 카운터 감소 코드 추가 (leftJumpCount--, rightJumpCount--, backJumpCount--)
-- [ ] tickEssential()에 이동 키 rising-edge 추적 코드 추가 (startLeft/Right/Back)
-- [ ] tickEssential()에 더블클릭 감지 및 angleJumpType 설정 코드 추가 (cfg.angleJumpSide/Back 조건 포함)
-- [ ] SmartMovingJumper.handleJumping() 최상단에 `jumpMotionX/Z = currentVel.x/z` 저장 추가
-- [ ] SmartMovingJumper.tryJump()에 `sm.isAngleJumping()` 분기 및 방향 수평 속도 적용 코드 추가
-- [ ] resetState()에 6개 신규 필드 초기화 추가
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
-- [ ] `grep -rn "leftJumpCount\|rightJumpCount\|backJumpCount" src/` 결과 확인
-- [ ] `grep -rn "getJumpMoving(" src/.../SmartMovingJumper.java` 결과 1개 이상 확인
+- [x] SmartMovingClientState.java에 `leftJumpCount`, `rightJumpCount`, `backJumpCount` 필드 추가
+- [x] SmartMovingClientState.java에 `jumpMotionX`, `jumpMotionZ` 필드 추가
+- [x] SmartMovingClientState.java에 `prevPressLeft`, `prevPressRight`, `prevPressBack` private 필드 추가
+- [x] tickEssential()에 매 틱 카운터 감소 코드 추가 (원본 else if 패턴으로 정확 이식)
+- [x] tickEssential()에 이동 키 rising-edge 추적 코드 추가 (startLeft/Right/Back)
+- [x] tickEssential()에 더블클릭 감지 + 대각선 우선순위 처리 추가 (cfg.angleJumpSide/Back 조건 포함)
+- [x] SmartMovingJumper.handleJumping() 최상단에 `jumpMotionX/Z = currentVel.x/z` 저장 추가
+- [x] SmartMovingJumper.handleJumping()에 count==-1 분기: 방향 점프 직접 처리 (rotationYaw+relAngle 세계 공간 각도)
+- [x] resetState()에 8개 신규 필드 초기화 추가
+- [x] `./gradlew compileJava` 컴파일 통과 확인 ← 2026-04-22 완료
+- [x] `grep -rn "leftJumpCount\|rightJumpCount\|backJumpCount" src/` 결과 다수 확인
+- [x] `grep -rn "getJumpMoving(" src/.../SmartMovingJumper.java` 결과 2개 확인
 - [ ] T-06 인게임 테스트: 지상에서 A키 빠르게 두 번 → 왼쪽으로 살짝 점프 이동
-- [ ] PART 6 트래킹 [x] 체크
+- [x] PART 6 트래킹 [x] 체크
 
 **현재 상태**:  
 ① `SmartMovingClientState`에 `leftJumpCount`/`rightJumpCount`/`backJumpCount` 필드 없음.  
@@ -967,7 +967,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [x] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)  ← 2026-04-22 완료
 [x] IMPL-01 크롤링 진입/해제 전체  ← 2026-04-22 완료
 [x] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)  ← 2026-04-22 완료
-[ ] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)
+[x] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)  ← 2026-04-22 완료
 [x] IMPL-04 F9 토글 채팅 피드백  ← 2026-04-22 완료
 [x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료
 [ ] IMPL-06 비행 물리 (리서치 선행 후)
