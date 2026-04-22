@@ -94,8 +94,8 @@
 | [x] | `SmartRenderRender.md` | `SmartStatistics.java`, `MixinEntityClient.java`, 렌더 Mixin |
 | [x] | `SmartRenderContext.md` | N/A — FML RenderingRegistry 렌더러 등록. Mixin inject로 대체됨 |
 | [x] | `SmartRenderUtilities.md` | `SmartMovingJumper.java`(getHorizontalCollisionangle 등) |
-| [ ] | `RendererData.md` | `SmartMovingClientState.java`(stats 필드) |
-| [ ] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
+| [x] | `RendererData.md` | N/A — bipedOuter fade/보간 시스템 전용 데이터 컨테이너. bipedOuter 없으므로 N/A |
+| [x] | `ModelPlayer.md` | N/A — SmartRenderModel 위임 래퍼 + PlayerAPI 없는 경로 중개 클래스. SmartRenderModel N/A |
 | [ ] | `RenderPlayer.md` | 렌더 관련 Mixin |
 | [ ] | `IModelPlayer.md` | 인터페이스 대응 확인 |
 | [ ] | `IRenderPlayer.md` | 인터페이스 대응 확인 |
@@ -609,6 +609,38 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/RendererData.md
+
+대응 구현: N/A
+
+불일치 없음:
+- `RendererData`는 `ModelRotationRenderer`의 fade/보간 시스템에서 `bipedOuter`의 이전 프레임 상태를 저장하는 순수 데이터 컨테이너
+- 필드 10개: offsetX/Y/Z, rotateAngleX/Y/Z, rotationPointX/Y/Z, totalTime=Float.MIN_VALUE
+- `totalTime=Float.MIN_VALUE` 초기화: 첫 프레임에 보간 스킵하는 안전 패턴
+- `bipedOuter`가 1.21.1에 없으므로 fade 시스템 자체가 불필요 → 전체 N/A
+- `SmartRenderRender.previousRendererData`(Map) / `SmartRenderModel.prevOuterRenderData` 모두 N/A
+- 1.21.1에서 body X 기울기는 `sm_setupTransforms()` MatrixStack transform으로 직접 처리 (fade 없음)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] smartrender/ModelPlayer.md
+
+대응 구현: N/A
+
+불일치 없음:
+- `ModelPlayer extends ModelBiped implements IModelPlayer` — PlayerAPI 없는 경로의 모델 중개 클래스
+- 모든 render/setRotationAngles/animate* 메서드가 `SmartRenderModel`에 위임 → SmartRenderModel 자체가 N/A이므로 전체 N/A
+- `initialize()`: vanilla biped* 필드를 SmartRender `ModelRotationRenderer` 파트로 교체 → ModelRotationRenderer N/A이므로 N/A
+- getter 16개(getOuter/getTorso/getBreast/getNeck/getPelvic 등): SmartRender 전용 노드들 → 1.21.1 단일 PlayerEntityModel에 해당 노드 없음 → N/A
+- `animateArmSwinging`/`animateSneaking` 등 11개 animate* 위임: vanilla TAIL inject에서 setAngles()로 처리 → N/A
+- 결론: SmartRenderModel 의존 + bipedOuter 계열 → 전체 구조적 N/A
+
+신규 발견 미구현: 없음
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -642,3 +674,5 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/SmartRenderModel.md` | 없음 — SR 전용 모델 계층(bipedOuter/Torso/Shoulder/Pelvic) + vanilla 애니메이션 래퍼 전체 N/A | N/A |
 | 2026-04-23 | `smartrender/SmartRenderRender.md` | `currentVerticalAngle` 가드 오류 — `distance>1e-4` & atan2→순수 하강 시 -π/2. 원본: h==0 → Quarter(π/2). 비행 중 수직 하강 몸통 기울기 180° 버그 | **처리 완료** — SmartStatistics.java: `(horizontalDistance > 1e-4) ? atan2(y,h) : π/2` |
 | 2026-04-23 | `smartrender/SmartRenderUtilities.md` | `wallUpJumpOrthogonalTolerance` 미구현 — 항상 90° 스냅. 원본: tolerance!=0 && abs(aligned)<5° 일 때만 스냅. | **처리 완료** — SmartMovingConfig.java: 필드+readFrom+writeTo 추가(default=5F); SmartMovingJumper.java: tolerance 체크 후 조건부 스냅 |
+| 2026-04-23 | `smartrender/RendererData.md` | 없음 — bipedOuter fade 시스템 전용 데이터 컨테이너. bipedOuter N/A → 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/ModelPlayer.md` | 없음 — SmartRenderModel 위임 래퍼. SmartRenderModel/ModelRotationRenderer/bipedOuter 계열 전체 N/A | N/A |
