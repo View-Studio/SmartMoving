@@ -99,6 +99,14 @@ public class SmartMovingConfig {
     // false → 크롤링 중 엣지에서 isSneaking=true 강제 (추락 방지)
     public boolean crawlOverEdge = true;
 
+    // ── Name tag display ────────────────────────────────────────
+    // 원본: _sneakNameTag = Modified("move.sneak.name") → 기본값 true
+    // true → 스니킹 중에도 이름 태그 64 거리 기준 (vanilla는 32)
+    public boolean sneakNameTag = true;
+    // 원본: _crawlNameTag = Modified("move.crawl.name") → 기본값 true
+    // true → 크롤 중 이름 태그 표시, false → 숨김
+    public boolean crawlNameTag = true;
+
     // ── Flying close-to-ground ─────────────────────────────────
     // 원본: _flyCloseToGround = Modified("move.fly.ground.close") → 기본값 true
     public boolean flyCloseToGround = true;
@@ -261,6 +269,8 @@ public class SmartMovingConfig {
         slide                    = getBool(p,   "move.slide",                     slide);
         crawl                    = getBool(p,   "move.crawl",                     crawl);
         crawlOverEdge            = getBool(p,   "move.crawl.edge",                crawlOverEdge);
+        sneakNameTag             = getBool(p,   "move.sneak.name",                sneakNameTag);
+        crawlNameTag             = getBool(p,   "move.crawl.name",                crawlNameTag);
         sneak                    = getBool(p,   "move.sneak",                     sneak);
         run                      = getBool(p,   "move.run",                       run);
         sprint                   = getBool(p,   "move.sprint",                    sprint);
@@ -326,6 +336,8 @@ public class SmartMovingConfig {
         p.setProperty("move.slide",                      String.valueOf(slide));
         p.setProperty("move.crawl",                      String.valueOf(crawl));
         p.setProperty("move.crawl.edge",                 String.valueOf(crawlOverEdge));
+        p.setProperty("move.sneak.name",                 String.valueOf(sneakNameTag));
+        p.setProperty("move.crawl.name",                 String.valueOf(crawlNameTag));
         p.setProperty("move.sneak",                      String.valueOf(sneak));
         p.setProperty("move.run",                        String.valueOf(run));
         p.setProperty("move.sprint",                     String.valueOf(sprint));

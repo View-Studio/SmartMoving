@@ -1,12 +1,15 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 9-6: getPositionOffset() — 크롤링/헤드점프 렌더 Y 오프셋.
  * 12-3: setupTransforms() — SM 이동 상태별 body X 기울기 + bodyYaw stub.
  * 12-6: getPositionOffset() — heightOffset 렌더 적용.
+ * renderName(): 타인 플레이어 이름 태그 — 크롤 숨김 + heightOffset Y 보정.
  */
 @Mixin(PlayerEntityRenderer.class)
 @Environment(EnvType.CLIENT)
@@ -151,6 +155,43 @@ public class MixinPlayerEntityRenderer {
         if (sm.isHeadJumping) {
             float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+        }
+    }
+
+    /**
+     * renderName() 대응 — 타인 플레이어 이름 태그 Y 보정 + 크롤 중 이름 숨김.
+     *
+     * 원본: SmartMovingRender.renderName()
+     *   - isCrawling && !isClimbing && !crawlNameTag → 이름 숨김
+     *   - heightOffset == -1 → d1 -= 0.2F
+     *   - originalSneaking && sneakNameTag → d1 -= 0.05F (비스니킹 취급 시 y 보정)
+     *
+     * sneakNameTag(스니킹 중 64 거리 기준 확장)은 MixinLivingEntityRenderer에서 처리.
+     */
+    @Inject(method = "renderLabelIfPresent(Lnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/text/Text;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;IF)V",
+            at = @At("HEAD"), cancellable = true)
+    private void sm_renderLabel(AbstractClientPlayerEntity entity, Text text,
+            MatrixStack matrices, VertexConsumerProvider consumers, int light, float tickDelta,
+            CallbackInfo ci) {
+        if (entity instanceof ClientPlayerEntity) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(entity.getUuid());
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+
+        // 크롤 중 이름 숨김 (crawlNameTag=false)
+        if (sm.isCrawling && !sm.isClimbing && !cfg.crawlNameTag) {
+            ci.cancel();
+            return;
+        }
+
+        // heightOffset == -1: 헤드점프 상태 이름 태그 y -0.2F 보정
+        if (sm.heightOffset == -1f) {
+            matrices.translate(0.0, -0.2, 0.0);
+        }
+        // 스니킹 중 sneakNameTag=true: 비스니킹 취급으로 이름 표시 → y -0.05F 보정
+        // (원본: 스니킹→비스니킹 포즈 전환 시 이름 태그 위치 차이 보정)
+        else if (entity.isSneaking() && cfg.sneakNameTag) {
+            matrices.translate(0.0, -0.05, 0.0);
         }
     }
 }

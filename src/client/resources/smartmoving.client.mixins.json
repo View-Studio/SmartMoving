@@ -9,6 +9,7 @@
     "MixinClientPlayerEntity",
     "MixinEntityClient",
     "MixinLivingEntityClient",
+    "MixinLivingEntityRenderer",
     "MixinPlayerEntityClient",
     "MixinPlayerEntityModelClient",
     "MixinPlayerEntityRenderer"
