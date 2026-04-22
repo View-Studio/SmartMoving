@@ -66,7 +66,7 @@
 | [x] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
 | [x] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
 | [x] | `playerapi/SmartMovingSelf.md` | `SmartMovingClient.java`, `MixinLivingEntityClient.java` (moving/SmartMovingSelf.md와 별도 파일) |
-| [ ] | `playerapi/SmartMovingServerPlayerBase.md` | `MixinLivingEntity.java`(서버측), `MixinPlayerEntity.java` |
+| [x] | `playerapi/SmartMovingServerPlayerBase.md` | `MixinLivingEntity.java`(서버측), `MixinPlayerEntity.java` |
 
 ---
 
@@ -371,6 +371,31 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - SPC는 1.21.1에 존재하지 않는 구 모드 → 파일 전체 N/A, 1:1 포팅 대상 아님
 
 신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] playerapi/SmartMovingServerPlayerBase.md
+
+대응 구현: MixinEntity.java, MixinLivingEntity.java, MixinPlayerEntity.java, MixinServerPlayerEntity.java, MixinServerPlayNetworkHandler.java, SmartMovingServer.java
+
+발견한 불일치:
+- 오역 없음: 전체 훅 매핑이 1.21.1 메커니즘으로 올바르게 대응됨
+
+훅 매핑 검증 (전체):
+- `beforeOnUpdate(crawlingCooldown--)` → MixinServerPlayerEntity.sm_beforeTick ✓
+- `afterOnUpdate(resetFallDistance/FloatKick)` → MixinServerPlayNetworkHandler.sm_tick ✓
+- `beforeOnLivingUpdate()` → SmartMovingServer에 해당 메서드 없음 (N/A, A-17에서도 내용 불명)
+- `afterOnLivingUpdate(isSmall grab)` → MixinLivingEntity.sm_afterTickMovement ✓
+- `isSneaking()` → MixinEntity.sm_isSneaking ✓
+- `isEntityInsideOpaqueBlock()` → MixinLivingEntity.sm_isInsideWall (crawlingCooldown) ✓
+- `addExhaustion()` → MixinPlayerEntity.sm_addExhaustion ✓
+- `addMovementStat()` → MixinServerPlayerEntity.sm_beforeTravel/sm_afterTravel ✓ (1.21.1 travel 인라인 처리)
+- `beforeUpdatePotionEffects/afterUpdatePotionEffects` → MixinLivingEntity.sm_beforeTickStatusEffects/sm_afterTickStatusEffects ✓ (역전 유지)
+- `resetFallDistance()` → SmartMovingServer.applyFallDistanceReset (motionY=GENERIC_GRAVITY=0.08 의도적 대체) ✓
+- `resetTicksForFloatKick()` → MixinServerPlayNetworkHandler floatingTicks=0 ✓
+- `afterSetPosition/beforeIsPlayerSleeping` → 1.21.1 포즈 기반 AABB으로 대체 (별도 Mixin 불필요) ✓
+
+신규 발견 미구현: 없음 (rigorously checked)
 
 ---
 
