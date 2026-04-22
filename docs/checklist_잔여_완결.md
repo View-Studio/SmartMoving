@@ -283,16 +283,27 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 
 ---
 
-### 🟠 R-06. standSneakFactor swimming setupTransforms 미구현
+### ✅ R-06. standSneakFactor swimming setupTransforms 미구현 [COMPLETE]
 
 **문제**: 수영 애니메이션 setupTransforms에서 `standSneakFactor`가 사용되어야 하지만
 현재 추적되지 않는다.
 
-**원본 참조**: `SmartMovingRenderer.rotateCorpse()` — 수영 시 허리 굽힘 각도 계산
+**원본 참조**: `SmartMovingModel.setRotationAngles()` isSwim 분기 —
+`bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor`
+(정지=67.5°, 보행=90°)
 
 **완료 기준**:
-- [ ] `standSneakFactor` 추적 로직 확인 (MixinPlayerEntityModelClient에서)
-- [ ] 수영 setupTransforms에 적용 여부 확인
+- [x] `standSneakFactor` 추적 로직 확인 (MixinPlayerEntityModelClient에서)
+- [x] 수영 setupTransforms에 적용 여부 확인
+
+**구현 내역** (2026-04-22):
+- `SmartMovingClientState`: `swimStandSneakFactor = 0f` 필드 추가
+- `MixinPlayerEntityModelClient.sm_animateSwimming()`:
+  - `SmartMovingClientState sm` 파라미터 추가
+  - `sm.swimStandSneakFactor = standSneakFactor` 저장
+- `MixinPlayerEntityRenderer.sm_setupTransforms()`:
+  - 수영 기울기 고정값(`Quarter - Sixteenth`) → `Quarter - Sixteenth * sm.swimStandSneakFactor`로 교체
+  - 정지: 67.5°, 보행: 90° (원본 동작 재현)
 
 ---
 

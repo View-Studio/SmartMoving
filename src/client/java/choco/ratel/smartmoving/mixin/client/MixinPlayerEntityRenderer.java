@@ -117,11 +117,10 @@ public class MixinPlayerEntityRenderer {
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
 
         // SM 수영(isSwimming_sm): bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor
-        // standSneakFactor 미추적 → 정지 시 기본값 Quarter 적용 (Phase 13 개선)
+        // 원본: fadeRotateAngleX = true + rotateAngleX = Quarter - Sixteenth * standSneakFactor
+        // standSneakFactor: 정지/스니킹=1 → 67.5°, 보행=0 → 90°(완전 수평)
         if (sm.isSwimming_sm) {
-            // 원본: fadeRotateAngleX = true + rotateAngleX = Quarter - Sixteenth * standSneakFactor
-            // 이동 중에는 Quarter(약 78°) 기울임. 정지 시 약간 덜 기울임
-            float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 8f; // Quarter - Sixteenth
+            float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 8f * sm.swimStandSneakFactor;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
         }
 

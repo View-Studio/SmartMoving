@@ -174,6 +174,15 @@ public final class SmartMovingClientState {
     /** 수영 소리 누적 거리. SwimSoundDistance(≈1.4286F) 초과 시 소리 재생. */
     public double distanceSwom;
 
+    /**
+     * 수영 애니메이션 standSneakFactor 캐시.
+     * sm_animateSwimming()에서 매 프레임 계산하여 저장하고,
+     * sm_setupTransforms()의 bipedOuter X 기울기 계산에서 1프레임 지연으로 소비된다.
+     * 원본: SmartMovingModel.setRotationAngles() isSwim 분기의 standSneakFactor.
+     * 정지/스니킹=1, 보행=0.
+     */
+    public float swimStandSneakFactor = 0f;
+
     // ── C-25: SmartStatistics ──────────────────────────────────────────
     /** 이동 통계 인스턴스. move() TAIL 이후 calculate()로 갱신. */
     public final SmartStatistics stats = new SmartStatistics();

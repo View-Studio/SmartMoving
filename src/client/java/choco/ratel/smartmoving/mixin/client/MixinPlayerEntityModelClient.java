@@ -107,7 +107,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isCeilingClimbing) {
             sm_animateCeilingClimbing(limbSwing, limbSwingAmount, headYaw);
         } else if (sm.isSwimming_sm) {
-            sm_animateSwimming(limbSwing, limbSwingAmount, animationProgress);
+            sm_animateSwimming(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isDiving) {
             sm_animateDiving(limbSwing, limbSwingAmount);
         } else if (sm.isCrawling) {
@@ -255,15 +255,16 @@ public abstract class MixinPlayerEntityModelClient {
     /**
      * isSwimming_sm: SM 수면 수영.
      * 원본: SmartMovingModel.setRotationAngles() 5번 분기 (isSwim).
-     * bipedOuter X 기울기는 setupTransforms Mixin에서 처리.
+     * bipedOuter X 기울기는 setupTransforms Mixin에서 처리 (standSneakFactor 경유).
      */
-    private void sm_animateSwimming(float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateSwimming(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
         float walkFactor  = smFactor(limbSwingAmount, 0.15679921f, 0.52264464f);
         float sneakFactor = Math.min(
                 smFactor(limbSwingAmount, 0f, 0.15679921f),
                 smFactor(limbSwingAmount, 0.52264464f, 0.15679921f));
         float standFactor = smFactor(limbSwingAmount, 0.15679921f, 0f);
         float standSneakFactor = standFactor + sneakFactor;
+        sm.swimStandSneakFactor = standSneakFactor;
 
         head.pitch = -EIGHTH * standSneakFactor;
         head.yaw   = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;
