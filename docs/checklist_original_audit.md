@@ -415,9 +415,9 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` fallDistance 체크 누락 — `cfg.wallUpJumpFallMaximumDistance / wallHeadJumpFallMaximumDistance` config 값 확인 필요 | 미처리 |
 | 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` `wasCollidedHorizontally` → WallUpSlide/WallHeadSlide(noVertical) 미구현 | 미처리 |
 | 2026-04-22 | `SmartMovingSelf.md` | `afterOnUpdate → correctOnUpdate` 호출: isSwimming/diving/dipping/crawling 시 renderYawOffset 보정 + water flow 역상쇄 미구현 | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `canTriggerWalking` override 미구현 — isCrawling/isClimbing 중 false 반환 (발소리·발자국 억제) | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `isInsideOfMaterial` override 미구현 — isSwimming_sm/isDiving/isDipping 시 offset 기반 물속 판정 오버라이드 | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeSetPositionAndRotation` 미구현 — multiPlayerInitialized 카운터(0→5) 세팅 (멀티 초기화 완료 전 상태 패킷 무시) | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리 (착지했지만 isFlying 유지 조건) | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | 클라이언트 `isSneaking` override 미구현 — isSmall/isCrawling 중 crawlOverEdge 보호용 sneak 강제 | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 — SM 비행/클라이밍 속도 기반 FOV 배율 조정 | 미처리 |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `canTriggerWalking` override 미구현 — `moving.canTriggerWalking()` 실제 구현이 SmartMovingBase.md/SmartMovingSelf.md에 없음 → SmartMovingBase.md 감사 시 실제 코드 확인 후 처리 | 미처리 (리서치 보완 필요) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `isInsideOfMaterial` override — FiniteLiquid 모드 전용 코드, 1.21.1 N/A. localIsInsideOfMaterial(=vanilla)과 동일 동작이므로 구현 불필요 | N/A |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeSetPositionAndRotation` 미구현 — `initialized=false; multiPlayerInitialized=5` 세팅. multiPlayerInitialized 사용처(pushOutOfBlocks 억제)까지 SmartMovingSelf.md에서 확인 후 처리 | 미처리 (의존 코드 확인 필요) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리. `cfg.flyWhileOnGround` Config 필드 미존재 → SmartMovingConfig.md 감사 시 처리 | 미처리 (Config 감사 필요) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | 클라이언트 `isSneaking` override 미구현 — `crawlOverEdge` Config 없음, `wouldIsSneaking`/`forceIsSneaking` State 없음 → Config·State 감사 완료 후 처리 | 미처리 (Config/State 감사 필요) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 — `fadingPerspectiveFactor` State 없음, 관련 Config 설정 없음 → Config·State 감사 완료 후 처리 | 미처리 (Config/State 감사 필요) |
