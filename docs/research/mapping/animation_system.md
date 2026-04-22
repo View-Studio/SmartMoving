@@ -446,3 +446,56 @@ PlayerEntityRenderer.render()
 6. **HUD 구현**: Fabric HudRenderCallback.
 
 7. **이름표/heightOffset**: Mixin으로 getPositionOffset() 오버라이드.
+
+---
+
+## R-10 추가 — B-17/B-18 Vineflower 직접 확인 (확인됨)
+
+### B-17: setupTransforms bodyYaw @ModifyArg index = 3 (확인됨)
+
+Vineflower 디컴파일 소스에서 직접 확인.
+
+`LivingEntityRenderer.render()` 내 `setupTransforms` 호출:
+```java
+this.setupTransforms(livingEntity, matrixStack, n, h, g, lx);
+//                   idx=0        idx=1       idx=2 idx=3 idx=4 idx=5
+//                                            ^animPrg ^bodyYaw ^tick ^scale
+```
+
+**`@ModifyArg(index = 3)` = bodyYaw (확인됨)**
+
+`PlayerEntityRenderer.setupTransforms` Vineflower 확인 시그니처:
+```java
+protected void setupTransforms(
+    AbstractClientPlayerEntity abstractClientPlayerEntity,  // 0
+    MatrixStack matrixStack,  // 1
+    float f,  // animationProgress (2)
+    float g,  // bodyYaw (3) ← index = 3
+    float h,  // tickDelta (4)
+    float i   // scale (5)
+)
+```
+
+Yarn intermediary: `method_4212` (PlayerEntityRenderer), `method_4058` (LivingEntityRenderer)
+
+### B-18: MatrixStack 회전 API (확인됨)
+
+MatrixStack (`net.minecraft.client.util.math.MatrixStack`) 회전 전용 메서드:
+- `multiply(Quaternionf quaternion)` — Yarn: `method_22907` **(유일한 회전 메서드)**
+- `multiply(Quaternionf quaternion, float originX, float originY, float originZ)` — Yarn: `method_49278`
+- `rotateX/Y/Z()` 전용 메서드 없음 **(확인됨)**
+
+RotationAxis (`net.minecraft.util.math.RotationAxis`) — @FunctionalInterface:
+- `POSITIVE_X / NEGATIVE_X / POSITIVE_Y / NEGATIVE_Y / POSITIVE_Z / NEGATIVE_Z`
+- `rotation(float rad)` — 라디안
+- `rotationDegrees(float deg)` — 도 단위 (= `rotation(deg * PI/180)`)
+- `of(Vector3f axis)` — 임의 축
+
+**SM 비표준 회전 순서 구현 패턴 (Vineflower 확인 기반)**:
+```java
+// 예: YXZ 순서가 필요한 경우
+matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(yaw));
+matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(roll));
+```
+ModelPart.pitch/yaw/roll = 0으로 고정하고 MatrixStack에서 직접 순서 지정.

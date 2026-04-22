@@ -1,8 +1,9 @@
 # PlayerEntityRenderer.setupTransforms() vanilla 1.21.1 리서치
 
-소스: 리맵된 jar `SmartMoving/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-48f5f74c97/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientOnly-48f5f74c97-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar`에서 `javap -c`로 분석  
-Yarn 매핑: `~/.gradle/caches/fabric-loom/1.21.1/net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/mappings.tiny`  
-Java 소스 파일: 미존재 (클래스 파일만 있음 — 바이트코드 역분석)
+소스: 기존 — 바이트코드(javap -c) 역분석  
+R-10 추가 — Fabric Loom 디컴파일 (Vineflower 1.11.1) 직접 확인  
+Yarn: `net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2`  
+확인 파일: `clientOnly-unpicked.jar` → `PlayerEntityRenderer.class`, `MatrixStack.class`, `RotationAxis.class`
 
 ---
 
@@ -299,3 +300,139 @@ SM이 bodyYaw를 변경하고 싶다면 `setupTransforms()` Mixin 진입 시점�
 | `/ 20.0f * 1.6f` | super | 사망 쓰러짐 정규화 |
 | `-75.0f` | super | 삼지창 Y회전 속도 |
 | `270.0f` | super | 수면 Y보정 |
+
+---
+
+## R-10 추가 — B-17: setupTransforms bodyYaw @ModifyArg index (확인됨)
+
+Vineflower 디컴파일 소스에서 직접 확인한 `PlayerEntityRenderer.setupTransforms` 시그니처:
+
+```java
+// PlayerEntityRenderer.java (Vineflower 확인)
+protected void setupTransforms(
+    AbstractClientPlayerEntity abstractClientPlayerEntity,  // param 0
+    MatrixStack matrixStack,                               // param 1
+    float f,    // animationProgress (param 2)
+    float g,    // bodyYaw           (param 3) ← @ModifyArg index = 3
+    float h,    // tickDelta         (param 4)
+    float i     // scale             (param 5)
+)
+```
+
+파라미터명은 `mappings.tiny`의 `method_4058` (LivingEntityRenderer.setupTransforms) `p` 레코드에서 확인:
+- p1 = entity, p2 = matrices, p3 = animationProgress, p4 = bodyYaw, p5 = tickDelta, p6 = scale
+
+**`@ModifyArg` 적용 시 bodyYaw index: 3 (확인됨)**
+
+`LivingEntityRenderer.render()`에서의 호출 (Vineflower 확인):
+```java
+this.setupTransforms(livingEntity, matrixStack, n, h, g, lx);
+//                   ^^^^^^^^^^^ ^^^^^^^^^^ ^ ^ ^ ^^
+//                   index 0     index 1    2 3 4  5
+//                                          n=animProgress
+//                                            h=bodyYaw ← index 3
+//                                              g=tickDelta
+//                                                lx=scale
+```
+
+---
+
+## R-10 추가 — B-18: MatrixStack 회전 API 전체 (확인됨)
+
+### MatrixStack 공개 메서드 전체 목록
+
+```java
+// net.minecraft.client.util.math.MatrixStack (Vineflower 직접 확인)
+public void translate(double x, double y, double z)   // Yarn: method_22904
+public void translate(float x, float y, float z)      // Yarn: method_46416
+public void scale(float x, float y, float z)           // Yarn: method_22905
+public void multiply(Quaternionf quaternion)            // Yarn: method_22907  ← 주 회전 메서드
+public void multiply(Quaternionf quaternion, float originX, float originY, float originZ)  // Yarn: method_49278
+public void multiplyPositionMatrix(Matrix4f matrix)    // Yarn: method_34425
+public void push()                                     // Yarn: method_22903
+public void pop()                                      // Yarn: method_22909
+public Entry peek()
+public boolean isEmpty()
+public void loadIdentity()
+```
+
+**`rotateX()`, `rotateY()`, `rotateZ()` 같은 전용 메서드 없음 (확인됨).**  
+회전은 반드시 `multiply(Quaternionf)` 를 통해서만 가능.
+
+### multiply(Quaternionf) 내부 구현
+
+```java
+public void multiply(Quaternionf quaternion) {
+    Entry entry = this.stack.getLast();
+    entry.positionMatrix.rotate(quaternion);   // 위치 행렬 회전
+    entry.normalMatrix.rotate(quaternion);     // 법선 행렬 회전
+}
+
+// 원점 기준 회전:
+public void multiply(Quaternionf quaternion, float originX, float originY, float originZ) {
+    Entry entry = this.stack.getLast();
+    entry.positionMatrix.rotateAround(quaternion, originX, originY, originZ);
+    entry.normalMatrix.rotate(quaternion);
+}
+```
+
+### RotationAxis API (확인됨)
+
+```java
+// net.minecraft.util.math.RotationAxis (Vineflower 직접 확인)
+// @FunctionalInterface — 단순 함수형 인터페이스
+RotationAxis NEGATIVE_X = rad -> new Quaternionf().rotationX(-rad);
+RotationAxis POSITIVE_X = rad -> new Quaternionf().rotationX(rad);
+RotationAxis NEGATIVE_Y = rad -> new Quaternionf().rotationY(-rad);
+RotationAxis POSITIVE_Y = rad -> new Quaternionf().rotationY(rad);
+RotationAxis NEGATIVE_Z = rad -> new Quaternionf().rotationZ(-rad);
+RotationAxis POSITIVE_Z = rad -> new Quaternionf().rotationZ(rad);
+
+// 커스텀 축:
+static RotationAxis of(Vector3f axis) {
+    return rad -> new Quaternionf().rotationAxis(rad, axis);
+}
+
+// 메서드:
+Quaternionf rotation(float rad);           // 라디안
+default Quaternionf rotationDegrees(float deg) {  // 도 → 라디안 변환
+    return this.rotation(deg * (float)(Math.PI / 180.0));
+}
+```
+
+### 실제 사용 패턴
+
+```java
+// 1. 도 단위 축 회전 (가장 일반적):
+matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(angle));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(angle));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(angle));
+
+// 2. 라디안 단위:
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(angleRad));
+
+// 3. JOML Quaternionf 직접:
+matrices.multiply(new Quaternionf().rotationX(angleRad));  // X축
+matrices.multiply(new Quaternionf().rotationZYX(roll, yaw, pitch));  // XYZ 동시 (ModelPart.rotate 방식)
+
+// 4. 원점 기준 회전:
+matrices.multiply(quaternion, originX, originY, originZ);  // 원점 이동+회전+복원 합산
+```
+
+### SM 포팅에서의 비표준 회전 순서 구현
+
+원본 SM이 `rotationOrder = YXZ`(수영), `YZX`(크롤), `XZY`(비행) 등을 사용할 때, 1.21.1에서는:
+
+```java
+// YXZ 순서 (수영 등):
+matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(yawDeg));
+matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitchDeg));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rollDeg));
+
+// XZY 순서 (비행 등):
+matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitchDeg));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rollDeg));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(yawDeg));
+```
+
+ModelPart.pitch/yaw/roll을 0으로 두고 렌더 전 MatrixStack에서 직접 순서를 지정하는 방식이 유일한 방법 (ModelPart의 rotationZYX는 변경 불가).
