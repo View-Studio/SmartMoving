@@ -128,7 +128,18 @@ grep -rn "speedIncrease\|speedDecrease" src/   # 키 등록 위치와 처리 위
 
 ---
 
-### BUG-01. 사다리 감지 방향 버그 🔴 [1줄 수정]
+### BUG-01. 사다리 감지 방향 버그 🔴 [1줄 수정] ✅ 완료 (2026-04-22)
+
+**선행 읽기 파일**:
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java` — getOnLadderOrVine() 루프 구조 전체
+- [x] `docs/research/mapping/climbing.md` — 사다리 방향 판정 매핑 확인
+- [x] `docs/research/original/smartmoving/moving/SmartMovingBase.md` — 원본 getOnLadderOrVine() 판정 로직
+
+**작업 단계 체크리스트**:
+- [x] SmartMovingClimber.java:116 에서 `playerFacing` → `dir` 로 1줄 수정
+- [x] Javadoc(69번 줄) 설명 `== playerFacing` → `== dir` 로 수정
+- [x] 인라인 주석(114~115번 줄) 올바른 예시로 교체
+- [x] PART 6 트래킹 [x] 체크
 
 **파일**: `SmartMovingClimber.java:116`
 
@@ -155,6 +166,21 @@ if (ladderFacing.getOpposite() == dir) {
 ---
 
 ### BUG-02. 클라이밍 상태 매 틱 미초기화 🔴
+
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 구조, "[5-1] 클라이밍 처리" 주석 위치 파악
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 상태 필드 전체 목록(isClimbing, isCrawlClimbing 등) 및 위치
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java` — handleClimbing(), handleCeilingClimbing() 내 isClimbing 설정 위치
+- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — updateEntityActionState() 상단 전체 리셋 코드 확인
+- [ ] `docs/research/mapping/climbing.md` — 클라이밍 상태 매핑 전체
+
+**작업 단계 체크리스트**:
+- [ ] MixinLivingEntityClient.java에서 "[5-1] 클라이밍 처리" 주석 바로 앞 위치 확인
+- [ ] 6개 클라이밍 상태 리셋 코드 삽입 (isClimbing, isCrawlClimbing, isCeilingClimbing, isClimbJumping, isClimbHolding, isClimbCrawling)
+- [ ] handleWallJumping() 호출 직전에 `sm.isWallJumping = false` 리셋 삽입
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] `grep -n "isClimbing\s*=\s*false" src/.../MixinLivingEntityClient.java` 로 존재 확인
+- [ ] PART 6 트래킹 [x] 체크
 
 **파일**: `MixinLivingEntityClient.java` → `sm_travel_client()`
 
@@ -208,6 +234,26 @@ sm.isClimbCrawling   = false;
 ---
 
 ### IMPL-01. 크롤링 진입/해제 로직 전체 🔴
+
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 전체 목록, tickEssential() 전체 흐름, resetState() 위치
+- [ ] `src/client/java/choco/ratel/smartmoving/client/input/SmartMovingKeys.java` — grab 키 등록 방식 확인
+- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toCrawling(), fromCrawling(), wantCrawl/canCrawl 조건 코드 (updateEntityActionState 내 크롤링 진입 분기)
+- [ ] `docs/research/mapping/crawl_slide.md` — wantCrawl/canCrawl/mustCrawl 전체 매핑, sneakToggled 플래그 설명
+- [ ] `docs/research/vanilla/EntityPose_system.md` — canChangeIntoPose(STANDING) API 동작 방식
+- [ ] `docs/MASTER_REMAINING_WORK.md` PART 7 7-2-A 절 — 원본 진입/해제 조건 재확인
+
+**작업 단계 체크리스트**:
+- [ ] SmartMovingClientState.java에 `crawlToggled` 필드 추가
+- [ ] SmartMovingClientState.java에 `ignoreNextStopSneakButtonPressed` 필드 추가
+- [ ] tickEssential() 내 크롤링 진입 조건 구현 (grabButton.wasPressed + sneakHeld + onGround + canCrawl 체인)
+- [ ] tickEssential() 내 크롤링 유지/해제 조건 구현 (mustCrawl 강제유지 / crawlToggled 토글해제 / 스니크해제)
+- [ ] resetState()에 crawlToggled, ignoreNextStopSneakButtonPressed 초기화 추가
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] `grep -rn "isCrawling\s*=\s*true" src/` 결과 1개 이상 확인
+- [ ] T-03 인게임 테스트: 1블록 높이 + Shift + LCTRL → 크롤링 진입
+- [ ] T-04 인게임 테스트: 크롤링 중 LCTRL 재입력 → 공간 있으면 일어섬
+- [ ] PART 6 트래킹 [x] 체크
 
 **현재 상태**: `isCrawling` 필드 선언됨. hitbox(`getBaseDimensions`), 포즈(`updatePose`),  
 렌더(`getPositionOffset`), 물리(`isInSwimmingPose` 차단) 등 수신측 코드 모두 완성.  
@@ -327,6 +373,25 @@ prevSneakPressed = false;
 
 ### IMPL-02. 슬라이딩 진입 로직 🟠
 
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — resetHeightOffset() 전체, isHeadJumping = false 설정 위치
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingSlider.java` — handleSliding() 전체 (해제 조건, isSliding 관련 필드)
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — tickEssential() 내 크롤링 처리 이후 위치 (IMPL-01 완료 후 작업)
+- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — toSlidingOrCrawling() lines 1607-1631, 스프린트+스니크 직접 슬라이딩 진입 분기
+- [ ] `docs/research/mapping/crawl_slide.md` — 슬라이딩 진입 조건 전체, isFast 플래그 설명
+
+**⚠️ 의존성**: IMPL-01(크롤링) 완료 후 작업 권장 — 헤드점프 착지 시 공간 부족이면 isCrawling으로 전환되므로 crawlToggled 필드가 먼저 존재해야 함.
+
+**작업 단계 체크리스트**:
+- [ ] SmartMovingJumper.resetHeightOffset() 내 `sm.isHeadJumping = false` 직전 위치 확인
+- [ ] 헤드점프 착지 → 슬라이딩 or 크롤링 전환 코드 삽입 (`isSprinting || isFast` → isSliding, 공간부족 → isCrawling)
+- [ ] tickEssential()에 스프린트+스니크 직접 슬라이딩 진입 조건 추가 (크롤링 체크 이후)
+- [ ] resetState()에 `isSliding = false` 존재 확인 (없으면 추가)
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] `grep -rn "isSliding\s*=\s*true" src/` 결과 1개 이상 확인
+- [ ] T-05 인게임 테스트: 스프린트 중 헤드점프 착지 → 슬라이딩 전환
+- [ ] PART 6 트래킹 [x] 체크
+
 **현재 상태**: `SmartMovingSlider.handleSliding()`은 `isSliding`이 true일 때 물리를 처리하고  
 종료 조건도 있음. 그러나 **`isSliding = true`로 진입시키는 코드가 없음.**
 
@@ -388,6 +453,29 @@ isSliding = false;
 ---
 
 ### IMPL-03. A/S/D 더블클릭 방향 점프 🟠
+
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 기존 필드 목록, tickEssential() 전체, angleJumpType 필드 위치, resetState()
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — handleJumping() 전체, tryJump() 전체, getJumpMoving() 선언 및 공식
+- [ ] `docs/research/mapping/jump.md` — angleJumpType 테이블(1-3), getJumpMoving 공식(1-4), jumpMotionX/Z 설명 전체 정독
+- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — sideJump 더블클릭 카운터 코드 lines 2898-2961, handleJumping 최상단 velocity 저장 코드
+- [ ] `docs/research/original/smartmoving/moving/Button.md` — StartPressed(방금 눌림) 원본 구현 — 1.21.1 prev 추적 방식과 비교
+
+**작업 단계 체크리스트**:
+- [ ] SmartMovingClientState.java에 `leftJumpCount`, `rightJumpCount`, `backJumpCount` 필드 추가
+- [ ] SmartMovingClientState.java에 `jumpMotionX`, `jumpMotionZ` 필드 추가
+- [ ] SmartMovingClientState.java에 `prevPressLeft`, `prevPressRight`, `prevPressBack` private 필드 추가
+- [ ] tickEssential()에 매 틱 카운터 감소 코드 추가 (leftJumpCount--, rightJumpCount--, backJumpCount--)
+- [ ] tickEssential()에 이동 키 rising-edge 추적 코드 추가 (startLeft/Right/Back)
+- [ ] tickEssential()에 더블클릭 감지 및 angleJumpType 설정 코드 추가 (cfg.angleJumpSide/Back 조건 포함)
+- [ ] SmartMovingJumper.handleJumping() 최상단에 `jumpMotionX/Z = currentVel.x/z` 저장 추가
+- [ ] SmartMovingJumper.tryJump()에 `sm.isAngleJumping()` 분기 및 방향 수평 속도 적용 코드 추가
+- [ ] resetState()에 6개 신규 필드 초기화 추가
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] `grep -rn "leftJumpCount\|rightJumpCount\|backJumpCount" src/` 결과 확인
+- [ ] `grep -rn "getJumpMoving(" src/.../SmartMovingJumper.java` 결과 1개 이상 확인
+- [ ] T-06 인게임 테스트: 지상에서 A키 빠르게 두 번 → 왼쪽으로 살짝 점프 이동
+- [ ] PART 6 트래킹 [x] 체크
 
 **현재 상태**:  
 ① `SmartMovingClientState`에 `leftJumpCount`/`rightJumpCount`/`backJumpCount` 필드 없음.  
@@ -532,7 +620,17 @@ prevPressBack  = false;
 
 ---
 
-### IMPL-04. F9 토글 채팅 피드백 🟡
+### IMPL-04. F9 토글 채팅 피드백 🟡 ✅ 완료 (2026-04-22)
+
+**선행 읽기 파일**:
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — tickEssential() 내 configToggle 처리 위치
+- [x] `src/main/resources/assets/smartmoving/lang/en_us.json` — 현재 등록된 메시지 키 목록
+
+**작업 단계 체크리스트**:
+- [x] tickEssential()의 configToggle.wasPressed() 블록 내에 채팅 피드백 코드 추가
+- [x] en_us.json에 `smartmoving.message.config.client.enabled/disabled` 키 추가
+- [x] 컴파일 통과 확인
+- [x] PART 6 트래킹 [x] 체크
 
 **현재 상태**: `tickEssential()`에서 F9 누름 시 `toggle()`을 호출하지만  
 결과를 채팅으로 알리는 코드가 없음.
@@ -570,7 +668,18 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 ---
 
-### IMPL-05. 속도 키(O/I) 클라이언트→서버 요청 🟡
+### IMPL-05. 속도 키(O/I) 클라이언트→서버 요청 🟡 ✅ 완료 (2026-04-22)
+
+**선행 읽기 파일**:
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — tickEssential() 내 키 처리 위치
+- [x] `src/main/java/choco/ratel/smartmoving/network/SmartMovingNetwork.java` — SpeedChangePayload C2S 방향 생성자 확인
+
+**작업 단계 체크리스트**:
+- [x] tickEssential()에 speedIncrease.wasPressed() / speedDecrease.wasPressed() 처리 코드 추가
+- [x] SmartMovingClient.java SpeedChange S2C 수신 시 채팅 피드백 추가 (getSpeedPercent() 사용)
+- [x] SmartMovingConfig.getSpeedPercent() 헬퍼 메서드 추가
+- [x] 컴파일 통과 확인
+- [x] PART 6 트래킹 [x] 체크
 
 **현재 상태**: `SmartMovingKeys.speedIncrease`, `speedDecrease` 등록됨.  
 `tickEssential()` 어디에도 `wasPressed()` 처리 없음.  
@@ -601,6 +710,32 @@ if (SmartMovingKeys.speedDecrease.wasPressed()) {
 ---
 
 ### IMPL-06. 비행 물리 — 바라보는 방향(pitch) 3D 이동 🟠
+
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 흐름, 클라이밍 처리 앞뒤 위치 파악
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityClient.java` — 비행 억제(getOffGroundSpeed) 코드 위치 확인
+- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — isFlying 필드, stats 필드 확인
+- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — travel() 또는 beforeMoveEntity() 내 비행 분기 **전체 코드** 정독 (grep: isFlying, flySpeed, motionY)
+- [ ] `docs/research/mapping/speed_physics.md` — 비행 물리 속도 팩터 매핑
+- [ ] `docs/research/vanilla/LivingEntity_travel.md` — vanilla travel() 비행 처리 구조, ci.cancel() 타이밍
+
+**⚠️ 필수 선행 작업**: 위 파일 읽기 전에 아래 grep으로 원본 코드 범위를 먼저 찾는다:
+```bash
+grep -n "isFlying\|flySpeed\|horizontalFactor\|verticalFactor" \
+  docs/research/original/smartmoving/playerapi/SmartMovingSelf.md | head -30
+```
+
+**작업 단계 체크리스트**:
+- [ ] SmartMovingSelf.md에서 travel() 비행 분기 원본 코드 찾아 읽기 (정확한 공식 확인)
+- [ ] 원본 공식과 이 파일 IMPL-06 명세의 근사치 비교 — 차이 있으면 명세 수정
+- [ ] MixinLivingEntityClient.sm_travel_client()에 `isFlying && cfg.fly` 분기 추가 (클라이밍 처리 전)
+- [ ] pitch 기반 horizontalFactor = cos(pitch), verticalFactor = -sin(pitch) 구현
+- [ ] motionX/Y/Z 3D 이동 벡터 계산 및 setVelocity 적용
+- [ ] 감쇠 0.91F 적용 코드 추가
+- [ ] SM이 처리한 경우 `ci.cancel()` 또는 적절한 vanilla 처리 차단
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] T-09 인게임 테스트: 크리에이티브 비행 중 아래 조준+W → 아래 방향으로 전진
+- [ ] PART 6 트래킹 [x] 체크
 
 **현재 상태**:  
 비행 체 tilt 애니메이션은 `MixinPlayerEntityRenderer.sm_setupTransforms()`에 구현됨.  
@@ -657,6 +792,20 @@ grep -n "isFlying\|flying\|motionY\|flySpeed" \
 
 ### ANIM-01. isFlying 애니메이션 — head.pitch 보정 누락 🟡
 
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체, 현재 head.pitch 설정 코드 확인
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityRenderer.java` — sm_setupTransforms()에서 theta 계산 방식 확인 (theta 공식이 sm_animateFlying과 일치해야 함)
+- [ ] `docs/research/mapping/animation_system.md` — 비행 애니메이션 섹션 (bipedOuter.rotateAngleX, bipedHead.rotateAngleX 보정 공식)
+- [ ] `docs/research/original/smartrender/playerapi/SmartMovingRenderPlayerBase.md` — bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2 원본 코드 확인
+
+**작업 단계 체크리스트**:
+- [ ] MixinPlayerEntityRenderer.sm_setupTransforms()에서 theta 계산 공식 읽기
+- [ ] MixinPlayerEntityModelClient.sm_animateFlying() 내 arm/leg 코드 이후에 head.pitch 보정 추가
+- [ ] theta 계산이 sm_setupTransforms()와 동일한지 검증 (currentVerticalAngle, currentSpeed 사용)
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] 인게임 비행 중 고개 기울기가 동체 각도의 절반으로 보정되는지 확인
+- [ ] PART 6 트래킹 [x] 체크
+
 **파일**: `MixinPlayerEntityModelClient.java`
 
 **원본** (`jump.md` 2-1 + `animation_system.md` R-22):
@@ -682,6 +831,19 @@ if (sm.isFlying) {
 ---
 
 ### ANIM-02. isFlying 중 가만히 있을 때 팔/다리 각도 초기화 누락 🟡
+
+**선행 읽기 파일**:
+- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체, walkFactor 계산 방식, 현재 arm/leg 설정 코드 구조
+- [ ] `docs/research/mapping/animation_system.md` — 비행 정지 자세 기본값, walkFactor=0 시 원본 처리 방식
+- [ ] `docs/research/original/smartrender/playerapi/SmartMovingRenderPlayerBase.md` — 비행 정지 상태 팔/다리 각도 원본값 확인
+
+**작업 단계 체크리스트**:
+- [ ] sm_animateFlying() 내 walkFactor 계산 위치 확인
+- [ ] `walkFactor < 0.01f` 분기 추가 및 정지 자세 팔/다리 각도 명시 설정
+- [ ] 이동 비행 분기는 기존 공식 유지 (`else` 블록으로 감싸기)
+- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [ ] T-10 인게임 테스트: 비행 중 이동 멈춤 → 팔/다리 기본 자세 유지
+- [ ] PART 6 트래킹 [x] 체크
 
 **원본**: 비행 중 이동이 없으면(`walkFactor ≈ 0`) 팔/다리는 기본 자세로 수렴.  
 **현재**: `sm_animateFlying()`에서 `walkFactor=0`이어도 팔/다리 각도를 0으로 명시 설정하지 않음.
