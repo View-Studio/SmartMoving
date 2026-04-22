@@ -9,6 +9,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.stat.Stats;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -177,9 +178,8 @@ public final class SmartMovingJumper {
         }
         sm.isSprintJump = fast;
 
-        // 원본: sp.addStat(StatList.jumpStat, 1) → 1.21.1: player.incrementStat(Stats.JUMP)
-        // C-37: up && !noVertical 조건 구현 후 아래 줄 활성화
-        // player.incrementStat(Stats.JUMP);
+        // 원본: sp.addStat(StatList.jumpStat, 1) — up(수직 점프)일 때만 기록 (C-37)
+        if (up) player.incrementStat(Stats.JUMP);
 
         // ── 상태 클리어 ─────────────────────────────────────────────────────
         sm.jumpCharge = 0F;

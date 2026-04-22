@@ -414,25 +414,32 @@ public abstract class MixinPlayerEntityModelClient {
      * smallOverGroundHeight로 팔 Z 각도 클램프.
      */
     private void sm_animateHeadJumping(SmartMovingClientState sm) {
-        // 팔 X/Z (몸 구부리기)
-        float bendFactor = 0f; // TODO Phase 13: currentVerticalAngle 기반 계산
+        float angle = sm.stats.currentVerticalAngle;
+
+        // bendFactor: Factor(angle, Quarter, 0) ∩ Factor(angle, -Quarter, 0)
+        // 수직 각도 0°(수평)일 때 최대 1, ±Quarter(수직)일 때 0. (SmartMovingModel.md 10번 분기)
+        float bendFactor = Math.min(smFactor(angle, QUARTER, 0f), smFactor(angle, -QUARTER, 0f));
         rightArm.pitch = bendFactor * -EIGHTH;
         leftArm.pitch  = bendFactor * -EIGHTH;
         rightLeg.pitch = bendFactor * -EIGHTH;
         leftLeg.pitch  = bendFactor * -EIGHTH;
 
-        // 팔 Z (머리 위 공간에 따라 클램프)
-        float armFactorZ = HALF - SIXTEENTH; // 기본: Quarter만큼 펼침 (verticalAngle=Quarter 기준)
+        // 머리 X 보정: setupTransforms에서 θ=Quarter-angle이 전역 적용됨.
+        // 원본 head world-X = θ/2 → head.pitch = -θ/2 (C-09-2 등가 증명)
+        head.pitch = -(QUARTER - angle) / 2f;
+
+        // 팔 Z: Factor(angle, Quarter, -Quarter). 머리 위 고체 블록이면 smallOverGroundHeight/5로 클램프.
+        float armFactorZ = smFactor(angle, QUARTER, -QUARTER);
         if (sm.smallOverGroundHeight < 5f) {
-            // overGroundBlock solid → armFactorZ 클램프
             armFactorZ = Math.min(armFactorZ, sm.smallOverGroundHeight / 5f);
         }
         rightArm.roll  =  HALF - SIXTEENTH + armFactorZ * EIGHTH;
-        leftArm.roll   = -(HALF - SIXTEENTH + armFactorZ * EIGHTH);
+        leftArm.roll   = -(HALF - SIXTEENTH) - armFactorZ * EIGHTH;
 
-        // 다리 Z
-        rightLeg.roll =  SIXTYFOURTH;
-        leftLeg.roll  = -SIXTYFOURTH;
+        // 다리 Z: Factor(angle, -Quarter, Quarter)
+        float legFactorZ = smFactor(angle, -QUARTER, QUARTER);
+        rightLeg.roll =  SIXTYFOURTH * legFactorZ;
+        leftLeg.roll  = -SIXTYFOURTH * legFactorZ;
     }
 
     /**

@@ -524,13 +524,13 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 | C-34 | 천장 클라이밍 — `grabButton` 키 `wantClimbCeiling` 조건 연결 | — | SmartMovingClimber.java L344 | [ ] |
 | C-35 | 천장 클라이밍 — `jgap` 정확한 AABB 충돌 쿼리 계산 (현재 블록 스캔 stub) | — | SmartMovingClimber.java L351, L387-403 | [ ] |
 | C-36 | 천장 클라이밍 — 수평 속도 방향 벡터 분해 및 속도 적용 | — | SmartMovingClimber.java L365 | [ ] |
-| C-37 | 점프 — `Stats.JUMP` 통계 기록 (`tryJump` 내) | A-20 | SmartMovingJumper.java L179 | [ ] |
+| C-37 | 점프 — `Stats.JUMP` 통계 기록 (`tryJump` 내) | A-20 | SmartMovingJumper.java L179 | [x] → `if (up) player.incrementStat(Stats.JUMP)` 구현. |
 | C-38 | 점프 — `Orientation.java` 이식 (`horizontalCollisionAngle` 정확한 계산) | A-23 | SmartMovingJumper.java L309-311 | [ ] |
-| C-39 | 속도 팩터 — `iceSpeedFactor` SmartMovingConfig에서 실제값 읽기 | A-25 | SmartMovingMover.java L52 | [ ] |
-| C-40 | 속도 팩터 — 달리기(run) 판정 조건 정확한 구현 | A-21 | SmartMovingMover.java L54 | [ ] |
-| C-41 | 비행 억제 — `jumpMovementFactor` 0.05F 제어 (`ClientPlayerEntity` offGroundSpeed 억제) | A-30 | MixinLivingEntityClient.java L61 | [ ] |
-| C-42 | 렌더 — isFlying/isHeadJumping body X 기울기 (`currentVerticalAngle` 추적 기반) | C-25 | MixinPlayerEntityRenderer.java L142-143 | [ ] |
-| C-43 | 렌더 — `MixinPlayerEntityModelClient.bendFactor` 계산 (`currentVerticalAngle` 기반) | C-25 | MixinPlayerEntityModelClient.java L418 | [ ] |
+| C-39 | 속도 팩터 — `iceSpeedFactor` SmartMovingConfig에서 실제값 읽기 | A-25 | SmartMovingMover.java L52 | [x] → 원본 config에 해당 필드 없음(A-25). 1.5F 고정값 유지, TODO 주석 제거. |
+| C-40 | 속도 팩터 — 달리기(run) 판정 조건 정확한 구현 | A-21 | SmartMovingMover.java L54 | [x] → `getNonSlowInputSpeedFactor`에 sm 파라미터 추가. isSprinting()→isFast?sprintFactor:runFactor(A-21 isRunning=isSprinting&&!isFast). |
+| C-41 | 비행 억제 — `jumpMovementFactor` 0.05F 제어 (`ClientPlayerEntity` offGroundSpeed 억제) | A-30 | MixinLivingEntityClient.java L61 | [x] → MixinPlayerEntityClient에 sm_getOffGroundSpeed() 추가. abilities.flying&&!cfg.fly→0.05F 반환(A-30 확인값). |
+| C-42 | 렌더 — isFlying/isHeadJumping body X 기울기 (`currentVerticalAngle` 추적 기반) | C-25 | MixinPlayerEntityRenderer.java L142-143 | [x] → sm_setupTransforms TAIL: isFlying→θ=(Quarter-angle)*walkFactor, isHeadJumping→θ=Quarter-angle, matrices.multiply(POSITIVE_X.rotation(θ)). |
+| C-43 | 렌더 — `MixinPlayerEntityModelClient.bendFactor` 계산 (`currentVerticalAngle` 기반) | C-25 | MixinPlayerEntityModelClient.java L418 | [x] → bendFactor=min(Factor(angle,Quarter,0), Factor(angle,-Quarter,0)); arm/leg pitch=-bendFactor*Eighth; head.pitch=-θ/2; armFactorZ/legFactorZ 동적 계산으로 교체. |
 
 ---
 

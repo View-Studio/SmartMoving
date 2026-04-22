@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -46,6 +47,21 @@ public abstract class MixinPlayerEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling && pose == EntityPose.SWIMMING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 1.0F).withEyeHeight(0.4F));
+        }
+    }
+
+    /**
+     * 11-4 (클라이언트): SM 비행 비활성화 시 공중 이동 억제.
+     *
+     * vanilla: flying → flySpeed, !flying+sprinting → 0.026F, otherwise → 0.02F.
+     * SM: flying && !cfg.fly → 0.05F (A-30 확인값).
+     * 이 메서드를 0.05F로 제한하면 vanilla travel()의 공중 XZ 가속이 억제된다.
+     */
+    @Inject(method = "getOffGroundSpeed", at = @At("HEAD"), cancellable = true)
+    private void sm_getOffGroundSpeed(CallbackInfoReturnable<Float> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        if (player.getAbilities().flying && !SmartMovingConfig.Config.fly) {
+            cir.setReturnValue(0.05F);
         }
     }
 

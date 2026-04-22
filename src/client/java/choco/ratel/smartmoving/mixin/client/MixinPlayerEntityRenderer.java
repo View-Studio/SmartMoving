@@ -139,7 +139,18 @@ public class MixinPlayerEntityRenderer {
             matrices.translate(0f, 5f / 16f, 0f);
         }
 
-        // TODO Phase 13: isFlying body X 기울기 (verticalAngle 추적 필요)
-        // TODO Phase 13: isHeadJumping body X/Y (currentVerticalAngle/horizontalAngle 추적 필요)
+        // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)
+        // walkFactor = Factor(currentSpeed, 0F, 1) — 속도 0~1 범위 정규화 (SmartMovingModel.md 9번 분기)
+        if (sm.isFlying) {
+            float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
+            float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+        }
+
+        // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
+        if (sm.isHeadJumping) {
+            float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+        }
     }
 }

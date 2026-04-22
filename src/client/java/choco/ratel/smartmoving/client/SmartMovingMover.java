@@ -45,13 +45,18 @@ public final class SmartMovingMover {
     /**
      * 비감속 입력 배율 (얼음/스프린트/달리기).
      * 팩터 적용 우선순위: 얼음 > 스프린트 > 달리기 (중첩 불가).
+     *
+     * isRunning = isSprinting() && !isFast (A-21 확인값).
+     * iceSpeedFactor: 원본 config에 없음 — 1.5F 고정 (A-25 확인).
      */
-    public static float getNonSlowInputSpeedFactor(ClientPlayerEntity player, SmartMovingConfig cfg) {
+    public static float getNonSlowInputSpeedFactor(ClientPlayerEntity player, SmartMovingClientState sm,
+                                                    SmartMovingConfig cfg) {
         BlockState below = player.getWorld().getBlockState(player.getBlockPos().down());
         float slip = below.getBlock().getSlipperiness();
-        if (slip > 0.6F) return 1.5F; // TODO Phase 13: cfg.iceSpeedFactor
-        if (player.isSprinting()) return cfg.sprintFactor;
-        // 달리기(run) 판정: 전진 + !sneaking + !sprinting — TODO Phase 12 정확한 조건 구현
+        if (slip > 0.6F) return 1.5F;
+        if (player.isSprinting()) {
+            return sm.isFast ? cfg.sprintFactor : cfg.runFactor;
+        }
         return 1.0F;
     }
 
@@ -77,7 +82,7 @@ public final class SmartMovingMover {
                                         SmartMovingConfig cfg) {
         return getConfigSpeedFactor(cfg)
              * getPotionSpeedFactor(player)
-             * getNonSlowInputSpeedFactor(player, cfg)
+             * getNonSlowInputSpeedFactor(player, sm, cfg)
              * getSlowInputSpeedFactor(player, sm, cfg);
     }
 }
