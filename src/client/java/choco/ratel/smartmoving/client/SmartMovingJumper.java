@@ -96,6 +96,21 @@ public final class SmartMovingJumper {
         // 공간 확보 — STANDING 복원
         sm.isHeadJumping = false;
         sm.heightOffset = 0F;
+
+        // 헤드점프 착지 → 슬라이딩 or 크롤링 전환 (원본: toSlidingOrCrawling() lines 1607-1631)
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if ((player.isSprinting() || sm.isFast) && cfg.slide) {
+            sm.isSliding = true;
+        } else {
+            Box standBox = player.getDimensions(EntityPose.STANDING)
+                                 .getBoxAt(player.getPos())
+                                 .contract(1.0E-7);
+            if (!world.isSpaceEmpty(player, standBox)) {
+                sm.isCrawling = true;
+                sm.crawlToggled = true;
+            }
+        }
+
         player.setPose(EntityPose.STANDING);
         player.calculateDimensions();
     }

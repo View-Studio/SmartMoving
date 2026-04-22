@@ -383,14 +383,14 @@ prevSneakPressed = false;
 **⚠️ 의존성**: IMPL-01(크롤링) 완료 후 작업 권장 — 헤드점프 착지 시 공간 부족이면 isCrawling으로 전환되므로 crawlToggled 필드가 먼저 존재해야 함.
 
 **작업 단계 체크리스트**:
-- [ ] SmartMovingJumper.resetHeightOffset() 내 `sm.isHeadJumping = false` 직전 위치 확인
-- [ ] 헤드점프 착지 → 슬라이딩 or 크롤링 전환 코드 삽입 (`isSprinting || isFast` → isSliding, 공간부족 → isCrawling)
-- [ ] tickEssential()에 스프린트+스니크 직접 슬라이딩 진입 조건 추가 (크롤링 체크 이후)
-- [ ] resetState()에 `isSliding = false` 존재 확인 (없으면 추가)
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
-- [ ] `grep -rn "isSliding\s*=\s*true" src/` 결과 1개 이상 확인
+- [x] SmartMovingJumper.resetHeightOffset() 내 `sm.isHeadJumping = false` 직전 위치 확인
+- [x] 헤드점프 착지 → 슬라이딩 or 크롤링 전환 코드 삽입 (`isSprinting || isFast` → isSliding, 공간부족 → isCrawling)
+- [x] tickEssential()에 스프린트+스니크 직접 슬라이딩 진입 조건 추가 (크롤링 체크 이후)
+- [x] resetState()에 `isSliding = false` 존재 확인 (기존에 있었음)
+- [x] `./gradlew compileJava` 컴파일 통과 확인 ← 2026-04-22 완료
+- [x] `grep -rn "isSliding\s*=\s*true" src/` 결과 2개 확인 (resetHeightOffset + tickEssential)
 - [ ] T-05 인게임 테스트: 스프린트 중 헤드점프 착지 → 슬라이딩 전환
-- [ ] PART 6 트래킹 [x] 체크
+- [x] PART 6 트래킹 [x] 체크
 
 **현재 상태**: `SmartMovingSlider.handleSliding()`은 `isSliding`이 true일 때 물리를 처리하고  
 종료 조건도 있음. 그러나 **`isSliding = true`로 진입시키는 코드가 없음.**
@@ -966,7 +966,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [x] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)  ← 2026-04-22 완료
 [x] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)  ← 2026-04-22 완료
 [x] IMPL-01 크롤링 진입/해제 전체  ← 2026-04-22 완료
-[ ] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)
+[x] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)  ← 2026-04-22 완료
 [ ] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)
 [x] IMPL-04 F9 토글 채팅 피드백  ← 2026-04-22 완료
 [x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료

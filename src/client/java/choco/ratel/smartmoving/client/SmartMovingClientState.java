@@ -338,8 +338,18 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // IMPL-02: 슬라이딩 진입 (스프린트+스니크 직접 진입)
+            // 원본: wantSlide = isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping
+            if (!isSliding && cfg.slide && !isCrawling) {
+                boolean wantSlide = player.isSneaking() && player.isSprinting()
+                        && player.isOnGround() && !isClimbing && !isHeadJumping;
+                if (wantSlide) {
+                    isSliding = true;
+                }
+            }
+
             // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
-            // isCrawling이 확정된 후 계산해야 정확함
+            // isCrawling/isSliding이 확정된 후 계산해야 정확함
             isSmall = isCrawling || isSliding || isHeadJumping;
         }
     }
