@@ -61,7 +61,7 @@
 
 | 상태 | 리서치 파일 (smartmoving/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
-| [ ] | `moving/SmartMovingContext.md` | `SmartMovingContext.java` |
+| [x] | `moving/SmartMovingContext.md` | `SmartMovingContext.java` |
 | [ ] | `moving/SmartMovingBase.md` | `SmartMovingClimber.java`, `SmartMovingSwimmer.java`, `SmartMovingJumper.java`, `SmartMovingSlider.java`, `SmartMovingFlyer.java`, `MixinLivingEntityClient.java` |
 | [ ] | `moving/SmartMovingSelf.md` | `SmartMovingClient.java`, `SmartMovingClientState.java`, `MixinLivingEntityClient.java` |
 | [ ] | `playerapi/SmartMovingPlayerBase.md` | 위 구현 파일 전체 (PlayerAPI 훅 → Mixin 대응) |
@@ -276,10 +276,30 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-22] moving/SmartMovingContext.md
+
+대응 구현: SmartMovingClimber.java (상수), SmartMovingSwimmer.java, SmartMovingFlyer.java, MixinLivingEntityClient.java, MixinEntityClient.java
+
+발견한 불일치:
+- [누락] 상수 4종 미구현: `SwimCrawlWaterTopBorder`(0.65F), `SwimCrawlWaterMediumBorder`(0.6F), `SwimCrawlWaterBottomBorder`(0.55F), `SwimCrawlWaterMaxBorder`(1F) — 크롤링 중 수중 진입 시 swim 전환 로직 자체가 없음
+- [누락] `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠 상수 미사용
+- [누락] `HorizontalAirodynamicDamping`(0.999F) — 공기역학 감쇠 상수 미사용
+- [누락] `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이딩 중 낙하 시 헤드점프 전환 조건 로직 없음
+
+오역 없음: 구현된 상수(클라이밍 속도 8종, HorizontalAirDamping, SwimSoundDistance)는 전부 정확한 값 사용
+
+신규 발견 미구현:
+- 위 누락 상수 4종의 로직은 SmartMovingSelf.handleSwimming() / handleSliding() 에 속함 → SmartMovingSelf.md 감사 시 함께 처리
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
 
 | 발견일 | 소스 파일 | 설명 | 처리 여부 |
 |--------|----------|------|----------|
-| (감사 진행 중 채워짐) | | | |
+| 2026-04-22 | `SmartMovingContext.md` | `SwimCrawlWaterTopBorder`(0.65F) 등 4개 수경계 상수 — 크롤→수영 전환 로직 자체가 미구현. SmartMovingSelf 감사 시 처리 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingContext.md` | `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠 미구현. 사용처 없음 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingContext.md` | `HorizontalAirodynamicDamping`(0.999F) — 공기역학적 감쇠 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환 로직이 SmartMovingSlider에 없음 | 미처리 (SmartMovingSelf 감사 예정) |
