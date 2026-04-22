@@ -239,7 +239,7 @@ public final class SmartMovingClimber {
             if (!allowed) return;
         }
 
-        if (!cfg.freeClimb) {
+        if (!cfg.freeClimb && !cfg.simpleClimb && !cfg.smartClimb) {
             // Standard 모드: combinedFactor = getConfigSpeedFactor × getPotionSpeedFactor (SmartMovingSelf.md L712)
             // setOnlyShouldClimbSpeed(FAST_UP_MOTION * combinedFactor, true, 1.0D) → motionY = 0.2 * combinedFactor
             double combinedFactor = SmartMovingMover.getConfigSpeedFactor(cfg)
@@ -314,6 +314,46 @@ public final class SmartMovingClimber {
             return;
         }
 
+        double combinedFactor = SmartMovingMover.getConfigSpeedFactor(cfg)
+                              * SmartMovingMover.getPotionSpeedFactor(player);
+
+        // Simple 모드 — grab 없이 자동 클라이밍, 속도는 FeetClimbing/HandsClimbing 상태로 결정
+        // 원본: SmartMovingSelf handleClimbing() Simple Base Climb (825-843줄)
+        if (cfg.simpleClimb) {
+            double value;
+            if (feetClimbing.isRelevant()) {
+                value = FAST_UP_MOTION * combinedFactor;
+            } else {
+                value = SLOW_UP_MOTION * combinedFactor;
+            }
+            setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+            player.fallDistance = 0;
+            return;
+        }
+
+        // Smart 모드 — substitute 판정으로 속도 결정
+        // 원본: SmartMovingSelf handleClimbing() Smart Base Climb (856-894줄)
+        if (cfg.smartClimb) {
+            int px = (int) Math.floor(player.getX());
+            int py = (int) Math.floor(player.getY());
+            int pz = (int) Math.floor(player.getZ());
+            boolean handsSubstitute = hasSubstituteLadderOrVine(world, px, py + 1, pz, false);
+            boolean feetSubstitute  = hasSubstituteLadderOrVine(world, px, py,     pz, true);
+            double value;
+            if (feetClimbing.isRelevant() && handsClimbing.isUp()) {
+                value = FAST_UP_MOTION * combinedFactor;
+            } else if (feetClimbing.isRelevant()) {
+                value = handsSubstitute ? FAST_UP_MOTION * combinedFactor : SLOW_UP_MOTION * combinedFactor;
+            } else if (handsClimbing.isUp()) {
+                value = feetSubstitute ? FAST_UP_MOTION * combinedFactor : SLOW_UP_MOTION * combinedFactor;
+            } else {
+                return;
+            }
+            setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+            player.fallDistance = 0;
+            return;
+        }
+
         // C-31: wantClimbUp / wantClimbDown 키 입력 기반 방향 제어
         // 원본: grabButton.Pressed + movementInput.moveForward 조합
         boolean wantClimb     = SmartMovingKeys.grab.isPressed();
@@ -366,6 +406,23 @@ public final class SmartMovingClimber {
 
         // C-32: handleCrash — 자유 클라이밍 낙하 데미지
         if (sm.isClimbing) handleCrash(player, cfg.freeClimbFallDamageStartDistance, cfg.freeClimbFallDamageFactor);
+    }
+
+    /**
+     * Smart 모드: 주어진 Y 레벨에서 인접 블록에 사다리/넝쿨이 있는지 확인한다.
+     * 원본: SmartMovingSelf isHandsLadderSubstitute / isFeetLadderSubstitute 판정.
+     * includeCenter=true → 현재 위치(ZZ)도 포함 (feetSubstitute 용).
+     */
+    private static boolean hasSubstituteLadderOrVine(World world, int px, int py, int pz, boolean includeCenter) {
+        if (includeCenter) {
+            BlockState s = world.getBlockState(new BlockPos(px, py, pz));
+            if (s.getBlock() instanceof LadderBlock || s.getBlock() instanceof VineBlock) return true;
+        }
+        for (Direction dir : Direction.Type.HORIZONTAL) {
+            BlockState s = world.getBlockState(new BlockPos(px + dir.getOffsetX(), py, pz + dir.getOffsetZ()));
+            if (s.getBlock() instanceof LadderBlock || s.getBlock() instanceof VineBlock) return true;
+        }
+        return false;
     }
 
     /**

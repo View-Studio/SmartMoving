@@ -256,7 +256,7 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 
 ---
 
-### 🟠 R-05. Simple/Smart 클라이밍 모드 미구현
+### ✅ R-05. Simple/Smart 클라이밍 모드 미구현 [COMPLETE]
 
 **문제**: SmartMovingClimber는 Standard 클라이밍 모드만 구현되어 있다.
 원본에는 Standard / Simple / Smart 세 가지 모드가 있다.
@@ -268,10 +268,18 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 **구현 위치**: `SmartMovingClimber.java` 클라이밍 모드 분기
 
 **완료 기준**:
-- [ ] SmartMovingConfig에 climbingMode 필드 확인/추가
-- [ ] Simple 모드 구현 (자동 클라이밍 진입 조건)
-- [ ] Smart 모드 구현 (자동 경로 결정)
-- [ ] 세 모드 전환 테스트
+- [x] SmartMovingConfig에 climbingMode 필드 확인/추가
+- [x] Simple 모드 구현 (자동 클라이밍 진입 조건)
+- [x] Smart 모드 구현 (자동 경로 결정)
+- [x] 세 모드 전환 테스트
+
+**구현 내역** (2026-04-22):
+- `SmartMovingConfig`: `simpleClimb = false`, `smartClimb = false` 필드 추가, load/save 등록
+- `SmartMovingClimber.handleClimbing()`:
+  - Standard 모드 조건 → `!freeClimb && !simpleClimb && !smartClimb`
+  - 8방향 탐색 공유 후 Simple 브랜치: feet.isRelevant() → FastUp, else → SlowUp (grab 불필요)
+  - Smart 브랜치: handsSubstitute/feetSubstitute 판정 — feet+hands → FastUp; feet 단독 → substitute ? FastUp : SlowUp; hands 단독 → substitute ? FastUp : SlowUp
+  - `hasSubstituteLadderOrVine()` 헬퍼 추가 (인접 4방향 + 선택적 현재위치 검사)
 
 ---
 
@@ -288,7 +296,7 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 
 ---
 
-### 🟡 R-07. Stale TODO 주석 제거
+### ✅ R-07. Stale TODO 주석 제거 [COMPLETE]
 
 **문제**: 이미 구현된 기능을 가리키는 TODO 주석이 코드에 남아 있어 혼란을 유발한다.
 
@@ -301,11 +309,13 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 | `SmartMovingServer.java` | 49 | "TODO Phase 6: EntityDimensions 적용" | setSmall() + MixinPlayerEntity에 구현됨 |
 
 **완료 기준**:
-- [ ] `MixinEntity.java` L48 TODO 주석 제거
-- [ ] `MixinEntity.java` L71 TODO 주석 제거
-- [ ] `MixinLivingEntityClient.java` L50-52 stale TODO 정리
-- [ ] `MixinLivingEntityClient.java` L148-151 stale TODO 정리
-- [ ] `SmartMovingServer.java` L49 stale Javadoc 수정
+- [x] `MixinEntity.java` L48 TODO → "MixinEntityClient.sm_beforeMove_client()에서 구현됨"으로 교체
+- [x] `MixinEntity.java` L71 TODO → "MixinEntityClient.sm_afterMove_client()에서 구현됨"으로 교체
+- [x] `MixinLivingEntityClient.java` L50-52 stale TODO 3줄 제거
+- [x] `MixinLivingEntityClient.java` jump() 부작용 TODO Phase 10 마커 제거
+- [x] `SmartMovingServer.java` L49 → setSmall() + calculateDimensions() 경로 설명으로 교체
+
+**구현 내역** (2026-04-22): 5곳 stale TODO/Phase 마커 제거 또는 실제 구현 위치로 교체.
 
 ---
 

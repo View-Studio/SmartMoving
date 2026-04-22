@@ -42,7 +42,7 @@ public class SmartMoving implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.StatePayload.ID,
             (payload, context) -> {
                 ServerPlayerEntity sender = context.player();
-                SmartMovingServer.get(sender).processStatePacket(payload.state());
+                SmartMovingServer.get(sender).processStatePacket(sender, payload.state());
                 context.server().execute(() -> {
                     for (ServerPlayerEntity tracker : PlayerLookup.tracking(sender)) {
                         if (tracker != sender) {

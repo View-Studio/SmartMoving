@@ -45,7 +45,7 @@ public abstract class MixinEntity {
      * SM 크롤링/천장 클라이밍 중 STEP_HEIGHT=0으로 설정.
      * 원본 ySize=0 (계단 오르기 억제)에 해당.
      *
-     * 클라이언트 측 STEP_HEIGHT 억제: TODO — 클라이언트 Mixin 추가 시 구현.
+     * 클라이언트 측 STEP_HEIGHT 억제: MixinEntityClient.sm_beforeMove_client()에서 구현됨.
      */
     @Inject(method = "move", at = @At("HEAD"))
     private void sm_beforeMove(MovementType type, Vec3d movement, CallbackInfo ci) {
@@ -68,7 +68,7 @@ public abstract class MixinEntity {
      *   isClimbing: 지면 접촉 중 → 1.2 배율
      *   isCrawlClimbing / isCeilingClimbing: 공중 → 0.9 배율
      *
-     * TODO Phase 9: heightOffset 위치 보정 (setPos)
+     * heightOffset 위치 보정: MixinEntityClient.sm_afterMove_client()에서 구현됨.
      */
     @Inject(method = "move", at = @At("TAIL"))
     private void sm_afterMove(MovementType type, Vec3d movement, CallbackInfo ci) {

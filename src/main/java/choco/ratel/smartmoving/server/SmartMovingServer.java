@@ -46,7 +46,7 @@ public final class SmartMovingServer {
     /** 서버 측 슬라이딩 상태 */
     public boolean isSliding;
 
-    /** 서버 측 작은 크기 상태 (TODO Phase 6: EntityDimensions 적용) */
+    /** 서버 측 작은 크기 상태. setSmall() → calculateDimensions() 경로로 서버 AABB 갱신. */
     public boolean isSmall;
 
     /** 클라이언트 소진값. -1=억제 해제, 0=소진 없음 */

@@ -47,9 +47,6 @@ public abstract class MixinLivingEntityClient {
      *   - x/z 감속: 0.91F 배율 (공기 저항)
      *   - motionY 하한: max(motionY, -0.15D) (과도한 낙하 방지)
      *
-     * TODO: wantClimbUp / wantClimbDown 키 입력 기반 조건 추가 (Phase 10)
-     * TODO: SM 파이프라인 전체 구현 (handleSwimming, handleLand 등)
-     * TODO: 서버 측 travel() 파이프라인 — MixinLivingEntity.sm_travel() 참고
      */
     @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
     private void sm_travel_client(Vec3d movementInput, CallbackInfo ci) {
@@ -150,12 +147,10 @@ public abstract class MixinLivingEntityClient {
      * 실제 점프 처리는 tickEssential() → handleJumping() → tryJump()에서 수행된다.
      *
      * vanilla jump() 차단 부작용:
-     *   - addExhaustion(0.05F * 2): SM 자체 소진 시스템으로 대체 (TODO Phase 10)
-     *   - Stats.JUMP 통계: SM tryJump()에서 별도 기록 (TODO Phase 10)
-     *   - 스프린트 점프 +0.2F: SM tryJump()에서 자체 계산 (TODO Phase 10)
+     *   - addExhaustion(0.05F * 2): SM 자체 소진 시스템으로 대체
+     *   - Stats.JUMP 통계: SM tryJump()에서 별도 기록
+     *   - 스프린트 점프 +0.2F: SM tryJump()에서 자체 계산
      *   - jumpingCooldown=10 (5-3): jump() 미실행으로 자동 차단
-     *
-     * ⚠️ Phase 10 (tryJump) 구현 전까지 점프가 비활성화됨.
      */
     @Inject(method = "jump", at = @At("HEAD"), cancellable = true)
     private void sm_jump(CallbackInfo ci) {
