@@ -55,6 +55,11 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
+        // 비호환 상태 차단 (원본: Compat.isBlockedByIncompatibility — isSpectator + isElytraFlying)
+        // 1.7.10 Compat 스펙테이터: Et Futurum Requiem 전용 → 1.21.1은 vanilla isSpectator()
+        // 1.7.10 Compat 엘리트라: Et Futurum Requiem IElytraPlayer → 1.21.1은 vanilla isFallFlying()
+        if (player.isSpectator() || player.isFallFlying()) return;
+
         // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
         // 1.21.1: jumpMovementFactor 필드 없음 → getOffGroundSpeed() 메서드(PlayerEntity) (A-30 확인)
         // C-41: getOffGroundSpeed() @HEAD Mixin으로 0.05F 반환하여 공중 이동 억제

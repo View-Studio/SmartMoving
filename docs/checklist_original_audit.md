@@ -138,8 +138,8 @@
 | [x] | `moving/HandsClimbing.md` | `climbing/HandsClimbing.java` |
 | [x] | `moving/Button.md` | `SmartMovingKeys.java`, 키 처리 코드 |
 | [x] | `moving/Orientation.md` | `SmartMovingClimber.java` (getOnLadderOrVine, handleClimbing) |
-| [ ] | `moving/Compat.md` | Compat 관련 구현 (있는 경우) |
-| [ ] | `moving/ISmartMovingClient.md` | 인터페이스 대응 확인 |
+| [x] | `moving/Compat.md` | `SmartMovingClientState.tickEssential()`, `MixinLivingEntityClient.sm_travel_client` |
+| [x] | `moving/ISmartMovingClient.md` | N/A — 외부 모드 플러그인 API. 1.21.1 해당 모드 없음 |
 | [ ] | `moving/ISmartMovingSelf.md` | 인터페이스 대응 확인 |
 | [ ] | `moving/SmartMovingOther.md` | 기타 유틸 대응 확인 |
 | [ ] | `moving/SmartMovingClient.md` | `SmartMovingClient.java` |
@@ -641,6 +641,50 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] moving/ISmartMovingClient.md
+
+대응 구현: N/A
+
+불일치 없음:
+- `ISmartMovingClient`는 외부 1.7.10 모드가 SmartMoving 내부 데이터에 접근하는 플러그인 API 인터페이스
+- `SmartMovingContext.Client` static 필드 타입 → 1.21.1에서 SmartMovingClientState per-player로 교체, Client singleton 없음
+- 소진 API (`setMaximumExhaustionValue/getMaximumExhaustionValue/removeMaximumExhaustionValue`): 외부 모드 key-value 등록 시스템 → 1.21.1 해당 모드 없음 → N/A
+- `getMaximumExhaustion()`: 원본 `Math.max(Config.getMaxExhaustion(), 외부등록값)` → 1.21.1 `cfg.climbExhaustionStop` 직접 사용 (외부 등록값 없으므로 동등) ✓
+- `getMaximumUpJumpCharge/getMaximumHeadJumpCharge`: 점프 충전 최대값 query API → 외부 모드용 → N/A
+- `setNativeUserInterfaceDrawing/getNativeUserInterfaceDrawing`: SM HUD 제어 → SmartMovingHud.register() 고정 → N/A
+- 결론: 전체 N/A (외부 API 인터페이스, 1.21.1에서 해당 API를 사용하는 모드 없음)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] moving/Compat.md
+
+대응 구현: `SmartMovingClientState.tickEssential()`, `MixinLivingEntityClient.sm_travel_client`
+
+발견한 불일치:
+- [누락] `isSpectator` 체크 누락 (tickEssential + sm_travel_client)
+  - 원본: `isActive = !Compat.isBlockedByIncompatibility(sp)` → `isSpectator(sp)` = EtFuturum 스펙테이터 gameType ID 3
+  - 1.21.1: vanilla 스펙테이터 → `player.isSpectator()` 사용
+  - 버그: tickEssential에서 스펙테이터 시 resetState() 미호출, sm_travel_client에서 스펙테이터 flying 감쇠 잘못 적용
+  - 수정: tickEssential `!cfg.enabled` 조건에 `|| player.isSpectator()` 추가, sm_travel_client 상단에 early return 추가
+- [누락] `isElytraFlying` 체크 누락 (tickEssential + sm_travel_client)
+  - 원본: `isElytraFlying(sp)` = EtFuturum Requiem `IElytraPlayer.etfu$isElytraFlying()`
+  - 1.21.1: vanilla 엘리트라 → `player.isFallFlying()` 사용
+  - 버그: 엘리트라 비행 중 resetState() 미호출, SM 이동 처리 개입 가능
+  - 수정: 동일하게 `|| player.isFallFlying()` 추가
+
+N/A (구조적 변환):
+- `init()`, `isStarMinerGravitized()`, `isOnCuchazShip()`, 내부 클래스 3개: StarMiner/Ships/EtFuturum 모드 → 1.21.1 미존재, 전체 N/A
+- `classExists()` 이중 검사: EtFuturum 버전별 클래스 존재 여부 확인 → N/A
+- Compat 클래스 자체 없음 (기능 인라인으로 대체됨)
+
+컴파일: BUILD SUCCESSFUL ✓
+
+신규 발견 미구현: 없음
+
+---
+
 ### [2026-04-23] moving/Button.md
 
 대응 구현: `SmartMovingKeys.java`, 키 처리 코드 전체
@@ -834,3 +878,4 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `moving/FeetClimbing.md` | `isUp()` 오역 — 원본: `SlowUpWithHoldWithoutHands\|\|SlowUpWithSinkWithoutHands\|\|FastUp` (ordinal≥4), 버그: `ordinal > BASE_HOLD` (ordinal≥2). `max()` SkipGaps 조건 누락. | **처리 완료** — FeetClimbing.java: isUp() 3개 enum 상수 비교로 수정; max() SkipGaps 조건 복원 |
 | 2026-04-23 | `moving/HandsClimbing.md` | `isUp()` ✓ (원본 `_value > BottomHold._value` = ordinal>3 대응). `max()` SkipGaps 조건 누락. | **처리 완료** — HandsClimbing.java: max() SkipGaps 조건 복원 |
 | 2026-04-23 | `moving/Orientation.md` | `handleClimbing()` 대각 탐색 vine 방향 완전 반전 — d[0]>0(East) → vine.WEST, d[1]>0(South) → vine.NORTH. 원본 `hasVineOrientation()`: 탐색방향==vine face 방향. | **처리 완료** — SmartMovingClimber.java L304-307: vine.EAST/WEST/SOUTH/NORTH로 올바르게 수정 |
+| 2026-04-23 | `moving/Compat.md` | `isSpectator()` + `isFallFlying()` 체크 누락 — 원본: `Compat.isBlockedByIncompatibility()` (isSpectator=EtFuturum gameType3, isElytraFlying=IElytraPlayer). 1.21.1 vanilla: `isSpectator()`/`isFallFlying()` 미구현. | **처리 완료** — tickEssential resetState 조건 확장, sm_travel_client 상단 early return 추가 |

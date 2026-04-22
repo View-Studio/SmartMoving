@@ -369,7 +369,9 @@ public final class SmartMovingClientState {
         }
 
         // SM 비활성 시 이동 상태 전체 초기화 (원본: !isActive() → resetState())
-        if (!SmartMovingConfig.Config.enabled) {
+        // isActive = !Compat.isBlockedByIncompatibility(sp) && Config.enabled
+        // 1.7.10 Compat: StarMiner/Ships → N/A, EtFuturum elytra → isFallFlying(), 스펙테이터 → isSpectator()
+        if (!SmartMovingConfig.Config.enabled || player.isSpectator() || player.isFallFlying()) {
             resetState();
         } else {
             // C-15: isSlow / isFast / isFlying 매 틱 계산
