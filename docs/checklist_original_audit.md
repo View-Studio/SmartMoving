@@ -133,7 +133,7 @@
 
 | 상태 | 리서치 파일 (smartmoving/) | 대응 구현 파일 |
 |------|--------------------------|--------------|
-| [ ] | `moving/ClimbGap.md` | `climbing/ClimbGap.java` |
+| [x] | `moving/ClimbGap.md` | `climbing/ClimbGap.java` |
 | [ ] | `moving/FeetClimbing.md` | `climbing/FeetClimbing.java` |
 | [ ] | `moving/HandsClimbing.md` | `climbing/HandsClimbing.java` |
 | [ ] | `moving/Button.md` | `SmartMovingKeys.java`, 키 처리 코드 |
@@ -641,6 +641,21 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] moving/ClimbGap.md
+
+대응 구현: `climbing/ClimbGap.java`
+
+불일치 없음:
+- `Block Block` + `int Meta = -1` → `BlockState state` (null = 미설정) ✓ 1.21.1 BlockState 대응
+- `boolean CanStand` → `canStand`, `boolean MustCrawl` → `mustCrawl`, `boolean SkipGaps` → `skipGaps` ✓
+- `Orientation Direction` → `Direction direction` (타입 차이: 9방향→6방향 enum). direction 필드는 현재 설정만 되고 읽히지 않음(미사용). Orientation.md 감사 시 재검토.
+- 생성자 `ClimbGap() { reset(); }` 없음 → Java 기본값으로 동등 ✓
+- `copyFrom(ClimbGap other)` 추가: [잉여] 원본 없음. FeetClimbing/HandsClimbing.max()에서 실제 사용됨 → 수정 불필요
+
+신규 발견 미구현: 없음
+
+---
+
 ### [2026-04-23] smartrender/ 특수 렌더 4개 (ModelRotationRenderer.md + ModelSpecialRenderer.md + ModelCapeRenderer.md + ModelEarsRenderer.md)
 
 대응 구현: N/A
@@ -746,3 +761,4 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/ModelSpecialRenderer.md` | 없음 — ignoreRender 토글 + doPopPush GL스택 리셋 패턴. ModelRotationRenderer 의존 → N/A. | N/A |
 | 2026-04-23 | `smartrender/ModelCapeRenderer.md` | 없음 — 망토 물리 시뮬레이션. bipedOuter(outer.rotateAngleX 참조)/bipedBreast 노드(N/A) + GL11 의존. 1.21.1 vanilla는 CapeFeatureRenderer에서 자체 망토 물리 처리. | N/A |
 | 2026-04-23 | `smartrender/ModelEarsRenderer.md` | 없음 — 귀 렌더. bipedHead as ModelRotationRenderer(N/A) + GL11 의존. SmartRenderRender.renderSpecials() 호출 경로 전체 N/A. | N/A |
+| 2026-04-23 | `moving/ClimbGap.md` | 없음 — 데이터 컨테이너 6필드. Block+Meta→BlockState, Orientation→Direction 대응. canStand/mustCrawl/skipGaps ✓. copyFrom()은 잉여이나 FeetClimbing/HandsClimbing에서 실제 사용됨. | N/A |
