@@ -355,7 +355,8 @@ public class SmartMovingConfig {
 
     /** getUserSpeedFactor() 공식: (1 + speedUserFactor)^speedUserExponent */
     public float getUserSpeedFactor() {
-        if (!speedUser || speedUserExponent == 0) return 1F;
+        // 원본: isUserSpeedAlwaysDefault() = !speedUser || speedUserFactor==1F
+        if (!speedUser || speedUserFactor == 1F || speedUserExponent == 0) return 1F;
         return (float) Math.pow(1F + speedUserFactor, speedUserExponent);
     }
 

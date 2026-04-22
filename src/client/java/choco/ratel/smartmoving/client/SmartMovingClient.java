@@ -198,7 +198,8 @@ public class SmartMovingClient implements ClientModInitializer {
         String codes = text.substring(4, text.length() - 4);
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        if (codes.contains("§0")) cfg.baseClimb = true;
+        // §0 → _baseClimb="standard" → _isFreeBaseClimb/Smart/Simple 모두 false
+        if (codes.contains("§0")) { cfg.freeClimb = false; cfg.simpleClimb = false; cfg.smartClimb = false; }
         if (codes.contains("§1")) cfg.freeClimb = false;
         if (codes.contains("§2")) cfg.ceilingClimbing = false;
         if (codes.contains("§3")) cfg.swim = false;

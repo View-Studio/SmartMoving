@@ -151,7 +151,7 @@
 
 | 상태 | 리서치 파일 (smartmoving/config/) | 대응 구현 파일 |
 |------|----------------------------------|--------------|
-| [ ] | `SmartMovingConfig.md` | `SmartMovingConfig.java` |
+| [x] | `SmartMovingConfig.md` | `SmartMovingConfig.java` |
 | [ ] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
 | [ ] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
 | [ ] | `SmartMovingServerConfig.md` | 서버 설정 대응 (있는 경우) |
@@ -406,6 +406,38 @@ Reflect.md  — 리플렉션 유틸. 불필요.
   - 원본: 블록 활성화 전 `forceIsSneaking=true`, 후 `forceIsSneaking=null` 설정하여 MixinEntity.sm_isSneaking이 강제 반환
   - `forceIsSneaking` 필드는 선언·읽기 코드 존재, 쓰는 훅(activateBlock 전후)이 없음
   - 영향: 크롤링 중 블록 상호작용 시 isSneaking()이 올바르게 오버라이드되지 않을 수 있음
+
+---
+
+### [2026-04-23] config/SmartMovingConfig.md
+
+대응 구현: SmartMovingConfig.java, SmartMovingClient.java (processBlockCode)
+
+발견한 불일치:
+- [오역] `processBlockCode §0` — `cfg.baseClimb = true` 설정 (미사용 필드)
+  - 원본: `processBlockCode(codes, "§0", Options._baseClimb, "standard")` → `_baseClimb = "standard"` → 계산된 속성 `_isFreeBaseClimb/_isSmartBaseClimb/_isSimpleBaseClimb` 모두 false
+  - 1.21.1: `baseClimb` 필드는 SmartMovingClimber가 참조하지 않음 → §0 수신 시 climbing 모드 실질적 변화 없음
+  - 수정: `cfg.freeClimb = false; cfg.simpleClimb = false; cfg.smartClimb = false;` 로 교체
+- [오역] `getUserSpeedFactor()` — `speedUserFactor == 1F` 조기 반환 조건 누락
+  - 원본: `isUserSpeedAlwaysDefault() = !speedUser.value || speedUserFactor.value == 1F` 로 검사 후 true이면 1F 반환
+  - 1.21.1: `!speedUser || exponent == 0` 만 검사 → speedUserFactor=1F일 때 `2^exponent` 반환 (원본은 1F)
+  - 수정: `if (!speedUser || speedUserFactor == 1F || speedUserExponent == 0) return 1F;`
+
+메서드 매핑 검증 (전체):
+- 버전 상수 (`_sm_current = "3.2"`) → `SM_VERSION = "1.0"` (포트 버전 분리) ✓
+- `changeSpeed(difference)` → SmartMovingConfig.changeSpeed ✓
+- `getUserSpeedFactor()` → SmartMovingConfig.getUserSpeedFactor ✓ (수정 후)
+- `isUserSpeedEnabled()` → 1.21.1 미사용 (N/A)
+- `isUserSpeedAlwaysDefault()` → getUserSpeedFactor() 인라인 처리 ✓ (수정 후)
+- `getSpeedPercent()` → SmartMovingConfig.getSpeedPercent (int 단순화, 소수점 손실) — 표시 전용이므로 허용
+- `loadFromProperties()` → readFrom() ✓
+- `writeToProperties()` → writeTo() ✓
+- `loadFromOptionsFile()` → load() ✓
+- `saveToOptionsFile()` → save() ✓
+- `printHeader/printVersion` → java.util.Properties.store() 헤더로 대체 (N/A)
+- Property 팩토리 (`Creative/Hard/Medium`) → 단순 기본값으로 대체 ✓
+
+신규 발견 미구현: 없음 (복잡한 의존성/버전 마이그레이션 시스템은 1.21.1 단일 설정파일 구조에서 N/A)
 
 ---
 
@@ -921,3 +953,5 @@ N/A (구조적 변환):
 | 2026-04-23 | `moving/SmartMovingServer.md` | [잉여] processStatePacket 내 `isSliding = ((bits >> 22) & 1) != 0` — 원본 서버 미추출, bit 22는 angleJumpType LSB(클라이언트 전용). 필드+라인 제거. | **처리 완료** — SmartMovingServer.java: isSliding 필드 + 비트 추출 라인 제거. BUILD SUCCESSFUL ✓
 | 2026-04-23 | `moving/SmartMovingServer.md` | [오역] beforeAddMovingHungerBatch() hunger 조건 누락 — 원본: `if(hunger != -1) disableAddExhaustion = true;` 구현: 조건 없이 항상 차단. hunger=-1(미수신) 시 vanilla 소진이 차단되는 버그. | **처리 완료** — `if (hunger >= 0F) disableAddExhaustion = true;` 조건 추가. BUILD SUCCESSFUL ✓
 | 2026-04-23 | `moving/SmartMovingServer.md` | [누락] beforeActivateBlockOrUseItem / afterActivateBlockOrUseItem — 블록 상호작용 시 forceIsSneaking 설정/해제 훅. forceIsSneaking 필드는 선언·읽기 코드 존재하나 쓰는 훅 없음. 크롤링 중 블록 상호작용 시 isSneaking() 오버라이드 불작동. | 미처리 (이슈 등록 필요)
+| 2026-04-23 | `config/SmartMovingConfig.md` | [오역] processBlockCode §0 — `cfg.baseClimb = true` 설정, 그러나 `baseClimb`은 climbing 코드 미사용. 원본: `_baseClimb="standard"` → `_isFreeBaseClimb/_isSmartBase/_isSimpleBase` 모두 false. 1.21.1: freeClimb/simpleClimb/smartClimb 변경 없음 → §0 수신 시 climbing 모드 무변경. | **처리 완료** — `§0` → `cfg.freeClimb=false; cfg.simpleClimb=false; cfg.smartClimb=false;` 로 수정. BUILD SUCCESSFUL ✓
+| 2026-04-23 | `config/SmartMovingConfig.md` | [오역] getUserSpeedFactor() — `speedUserFactor==1F` 조기 반환 조건 누락. 원본: `isUserSpeedAlwaysDefault() = !speedUser \|\| factor==1F`. 1.21.1: `!speedUser \|\| exponent==0`만 체크. speedUserFactor=1F+exponent≠0일 때 2^exp 반환 (원본은 1F). | **처리 완료** — `if (!speedUser \|\| speedUserFactor == 1F \|\| speedUserExponent == 0)` 조건으로 수정. BUILD SUCCESSFUL ✓
