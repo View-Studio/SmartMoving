@@ -27,6 +27,11 @@ public final class SmartMovingSwimmer {
     private static final double OFFSET_SWIMMING = 1.4D;  // isDipping/isSwimming 경계
     private static final double OFFSET_DIVING   = 1.9D;  // isSwimming/isDiving 경계
 
+    // SwimCrawlWater 경계 상수 (SmartMovingContext, R-06)
+    // 1.21.1: wasHeightOffset=0 근사이므로 playerCrawlWaterBorder = dippingDepth 그대로 비교
+    private static final float SWIM_CRAWL_TOP = 0.65F;  // 크롤→수영 전환 하한 (SwimCrawlWaterTopBorder)
+    private static final float SWIM_CRAWL_MAX = 1.0F;   // 크롤 수경계 최대 (SwimCrawlWaterMaxBorder)
+
     // ── 8-2: 수중 이동 상수 ──────────────────────────────────────────────────
     // 원본: SmartMovingSelf.handleSwimming() 내 motionX/Y/Z 감쇠값
     private static final double DAMPING_DIPPING_XZ = 0.80D;
@@ -55,14 +60,27 @@ public final class SmartMovingSwimmer {
      */
     public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientState sm) {
         if (!player.isTouchingWater()) {
-            sm.isDipping     = false;
-            sm.isSwimming_sm = false;
-            sm.isDiving      = false;
+            sm.isDipping      = false;
+            sm.isSwimming_sm  = false;
+            sm.isDiving       = false;
             sm.waterMovementTicks = 0;
+            sm.dippingDepth   = -1F;
             return;
         }
 
-        double offset = player.getFluidHeight(FluidTags.WATER) + 0.1625D;
+        double fluidHeight = player.getFluidHeight(FluidTags.WATER);
+        sm.dippingDepth = (float)fluidHeight;
+
+        // 원본: isCrawling || isClimbCrawling || isCrawlClimbing → isDipping 강제 (handleSwimming L308-309)
+        if (sm.isCrawling || sm.isCrawlClimbing) {
+            sm.isDipping     = true;
+            sm.isSwimming_sm = false;
+            sm.isDiving      = false;
+            sm.waterMovementTicks++;
+            return;
+        }
+
+        double offset = fluidHeight + 0.1625D;
         sm.isDipping     = offset < OFFSET_SWIMMING;
         sm.isSwimming_sm = offset >= OFFSET_SWIMMING && offset < OFFSET_DIVING;
         sm.isDiving      = offset >= OFFSET_DIVING;
@@ -83,6 +101,35 @@ public final class SmartMovingSwimmer {
             SmartMovingClientState sm,
             Vec3d movementInput,
             boolean jumping) {
+
+        // ── SwimCrawlWater 전환 (원본: handleSwimming L274-279, L416-432, R-06) ──────
+        // wasHeightOffset = heightOffset (크롤링 hitbox 오프셋 캡처).
+        // 1.21.1: bounding box minY 이동 없음 → wasHeightOffset=0, playerCrawlWaterBorder=dippingDepth
+        boolean wasCrawling = sm.isCrawling;
+
+        // ① standupIfPossible 상당: 수심 > TopBorder → 크롤링 해제 시도
+        if (sm.isCrawling && sm.dippingDepth > SWIM_CRAWL_TOP) {
+            sm.isCrawling = false;
+        }
+
+        // ② playerCrawlWaterBorder 판정 (이전 틱에서 크롤링 중이었던 경우)
+        if (wasCrawling && sm.dippingDepth >= 0F) {
+            float playerCrawlWaterBorder = sm.dippingDepth;
+            if (playerCrawlWaterBorder < SWIM_CRAWL_MAX) {
+                if (playerCrawlWaterBorder < SWIM_CRAWL_TOP) {
+                    // 얕은 물 — 계속 크롤링 (handleSwimmingRejected = true)
+                    sm.isCrawling = true;
+                    return false;
+                } else {
+                    // 크롤링 → 수영 전환 (원본: isCrawling=false; isSwimming=true; isDipping=false)
+                    sm.isCrawling    = false;
+                    sm.isDiving      = false;
+                    sm.isSwimming_sm = true;
+                    sm.isDipping     = false;
+                }
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────────────
 
         if (!sm.isDipping && !sm.isSwimming_sm && !sm.isDiving) return false;
 

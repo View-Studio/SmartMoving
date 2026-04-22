@@ -2237,3 +2237,129 @@ public boolean canTriggerWalking()
 
 클라이밍 또는 다이빙 중 발소리·발자국 파티클 억제.
 1.21.1 `Entity.canTriggerWalking()` Mixin HEAD inject + cancellable로 구현.
+
+---
+
+## R-06 추가 리서치 — SwimCrawlWater 전환 로직 원본 소스 (2026-04-23)
+
+### `handleSwimming()` 내 크롤링 분기 전체 (SmartMovingSelf.java L229~432)
+
+```java
+private boolean handleSwimming(float moveForward, float moveStrafing, ...)
+{
+    boolean handleSwimmingRejected = false;
+    boolean handleSwimming = !isFlying && !isLiquidClimbing
+            && (sp.isInWater() || (wasSwimming && isInLiquid()) || ...);
+    if(handleSwimming)
+    {
+        resetClimbing();
+
+        float wasHeightOffset = heightOffset;   // ← 크롤링 hitbox 오프셋 캡처
+
+        boolean useStandard = !Config.isSwimmingEnabled() && !Config.isDivingEnabled();
+        if(sp.ridingEntity != null) { resetSwimming(); useStandard = true; }
+
+        if(useStandard && isCrawling)
+            standupIfPossible();
+        else
+            resetHeightOffset();   // heightOffset = 0 으로 리셋
+
+        if(!useStandard)
+        {
+            resetSwimming();
+
+            // ... j, j_offset, totalSwimWaterBorder 계산 ...
+            double playerSwimWaterBorder = totalSwimWaterBorder - j - j_offset;
+
+            // ① standupIfPossible: 크롤링 중 수심 > TopBorder(0.65F) → 서기 시도
+            if(isCrawling && playerSwimWaterBorder > SwimCrawlWaterTopBorder)
+                standupIfPossible();
+
+            double motionYDiff = 0;
+
+            // ② 크롤링/크롤클라이밍 중이면 isDipping 강제, 그 외 수심 기반 분기
+            if(isCrawling || isClimbCrawling || isCrawlClimbing)
+                isDipping = true;
+            else if(playerSwimWaterBorder >= 0 && playerSwimWaterBorder <= 2)
+            {
+                double offset = playerSwimWaterBorder + 0.1625D;
+                // ... dipping/swimming/diving 3분류 및 motionYDiff 계산 ...
+            }
+            // ... playerSwimWaterBorder > 2 → diving ...
+
+            // ③ dippingDepth 저장 및 playerCrawlWaterBorder 전환 판정
+            dippingDepth = (float)playerSwimWaterBorder;
+            float playerCrawlWaterBorder = dippingDepth + wasHeightOffset;
+
+            if((isCrawling || isSliding) && playerCrawlWaterBorder < SwimCrawlWaterMaxBorder)
+            {
+                if(playerCrawlWaterBorder < SwimCrawlWaterTopBorder)
+                {
+                    // 얕은 물 — 계속 크롤링
+                    setHeightOffset(wasHeightOffset);
+                    handleSwimmingRejected = true;
+                }
+                else
+                {
+                    // 크롤링 → 수영 전환
+                    if(wantShallowSwim) move(0, 0.1, 0, true);
+                    isCrawling = false;
+                    isDiving   = false;
+                    isSwimming = true;
+                    isDipping  = false;
+                }
+            }
+
+            // ④ 수영/다이빙 상태 확정 후 setHeightOffset(-1F)
+            if(isDiving || isSwimming)
+                setHeightOffset(-1F);
+        }
+        // ... 실제 이동 물리 적용 ...
+    }
+    return !handleSwimmingRejected;
+}
+```
+
+### `canCrawl` 조건 (SmartMovingSelf.java L2434~2445)
+
+```java
+boolean canCrawl =
+    !isSwimming &&
+    !isDiving &&
+    (!isDipping || (dippingDepth + heightOffset) < SwimCrawlWaterTopBorder) &&
+    !isClimbing &&
+    sp.fallDistance < Config._fallingDistanceMinimum.value;
+
+wasCrawling = isCrawling;
+isCrawling  = canCrawl && (wantCrawl || mustCrawl);
+```
+
+### `dippingDepth` 필드 (SmartMovingSelf.java L89)
+
+```java
+public float dippingDepth;   // resetSwimming()에서 -1 로 초기화
+```
+
+### `wasHeightOffset` — 지역변수, `heightOffset` 필드 캡처
+
+`handleSwimming()` 진입 시 `float wasHeightOffset = heightOffset;` 로 캡처.  
+`heightOffset`은 이전 틱에서 `setHeightOffset()` 로 설정된 값:
+- 수영/다이빙: `setHeightOffset(-1F)` → `heightOffset = -1F`
+- 크롤링: 외부 `setHeightOffset()` 호출에 따라 결정 (원본 크롤링 코드 미수록)
+- **1.21.1 근사**: bounding box minY 이동 없음 → `wasHeightOffset = 0` 으로 근사
+
+### 1.21.1 대응 요약
+
+| 원본 | 1.21.1 대응 |
+|------|------------|
+| `playerSwimWaterBorder` | `player.getFluidHeight(FluidTags.WATER)` |
+| `wasHeightOffset` (크롤링) | `0F` (pose 기반 hitbox, minY 이동 없음) |
+| `playerCrawlWaterBorder` | `dippingDepth + 0 = dippingDepth` |
+| `standupIfPossible()` | `sm.isCrawling = false` (공간 체크 근사) |
+| `setHeightOffset(wasHeightOffset)` (얕은 물) | `sm.isCrawling = true; return false` |
+| `isCrawling=false; isSwimming=true` (전환) | `sm.isCrawling=false; sm.isSwimming_sm=true` |
+
+**전환 임계값** (wasHeightOffset=0 가정):
+- `dippingDepth < 0.65F` → 계속 크롤링 (얕은 물)
+- `0.65F ≤ dippingDepth < 1.0F` → 수영으로 전환
+- `dippingDepth ≥ 1.0F` → 일반 다이빙 물리 적용

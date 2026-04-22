@@ -405,7 +405,7 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 | 발견일 | 소스 파일 | 설명 | 처리 여부 |
 |--------|----------|------|----------|
-| 2026-04-22 | `SmartMovingContext.md` | `SwimCrawlWaterTopBorder`(0.65F) 등 4개 수경계 상수 — 크롤→수영 전환 로직 자체가 미구현. | 미처리 — 리서치 파일에 전환 로직 코드 미수록, 리서치 보완 필요 |
+| 2026-04-22 | `SmartMovingContext.md` | `SwimCrawlWaterTopBorder`(0.65F) 등 4개 수경계 상수 — 크롤→수영 전환 로직 자체가 미구현. | **처리 완료** — SmartMovingSelf.md R-06 보완(원본 handleSwimming 크롤링 분기 전체 수록); SmartMovingClientState: dippingDepth 필드 추가+리셋, mustCrawl에 canCrawl 게이트 적용; SmartMovingSwimmer: updateSwimState() 크롤링 isDipping 강제+dippingDepth 설정, handleSwimming() SwimCrawlWater 전환 로직 추가 (standupIfPossible→얕은물 계속크롤/깊은물 수영전환) |
 | 2026-04-22 | `SmartMovingContext.md` | `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠. | **N/A** — 0.6(블록 마찰) × 0.91(HorizontalAirDamping) = 0.546F, vanilla 1.21.1이 동일 값 적용 |
 | 2026-04-22 | `SmartMovingContext.md` | `HorizontalAirodynamicDamping`(0.999F) — 공기역학적 감쇠. | **처리 완료** — SmartMovingSelf.md R-05 보완; State: isAerodynamic 필드 추가; MixinLivingEntityClient.sm_aerodynamicDamping (travel TAIL, factor=0.999F/0.91F) |
 | 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환. | **처리 완료** — SmartMovingSelf.md R-05 보완; SmartMovingClientState.tickEssential(): fallDistance>0.05F 시 isSliding→isHeadJumping+isAerodynamic=true 전환 |

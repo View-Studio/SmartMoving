@@ -64,6 +64,14 @@ public final class SmartMovingClientState {
     public float heightOffset;
 
     /**
+     * 현재 수심 — 발 기준 물 높이(m). isTouchingWater()=false이면 -1F.
+     * 원본: SmartMovingSelf.dippingDepth (행 89), handleSwimming()에서 매 틱 갱신.
+     * 1.21.1: player.getFluidHeight(FluidTags.WATER) 로 근사.
+     * canCrawl / handleSwimming SwimCrawlWater 전환 판정에 사용.
+     */
+    public float dippingDepth = -1F;
+
+    /**
      * 스니킹 속도로 이동 중 여부 (스프린트 없음 + 클라이밍 없음).
      * 원본: isSlow = wantSneak && !wantSprint && !isClimbing
      * C-15: tickEssential()에서 매 틱 계산.
@@ -390,14 +398,20 @@ public final class SmartMovingClientState {
                             && !isFlying && !isSwimming_sm && !isDiving && !isDipping
                             && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
                             && !isSliding && !isHeadJumping;
-                    boolean mustCrawl = !canStandUp(player);
+                    // 원본 canCrawl: !isSwimming && !isDiving && (!isDipping || dippingDepth < 0.65F)
+                    // mustCrawl도 canCrawl 게이트 적용 — 수영 중 mustCrawl이 크롤링을 강제하지 않도록
+                    boolean mustCrawl = !canStandUp(player)
+                            && !isSwimming_sm && !isDiving
+                            && (!isDipping || dippingDepth < 0.65F);
                     if (wantCrawl || mustCrawl) {
                         isCrawling = true;
                         crawlToggled = true;
                         ignoreNextStopSneakButtonPressed = true;
                     }
                 } else {
-                    boolean mustCrawl = !canStandUp(player);
+                    // 원본 canCrawl 게이트: 수심이 0.65F 이상이면 mustCrawl 해제 → 수영 전환 허용
+                    boolean mustCrawl = !canStandUp(player)
+                            && (!isDipping || dippingDepth < 0.65F);
                     if (mustCrawl) {
                         // 공간 부족 — 강제 유지
                     } else if (crawlToggled) {
@@ -557,6 +571,7 @@ public final class SmartMovingClientState {
         wasCapabilitiesIsFlying = false;
         wasCollidedHorizontally = false;
         isAerodynamic = false;
+        dippingDepth = -1F;
         multiPlayerInitialized  = 0;
     }
 
