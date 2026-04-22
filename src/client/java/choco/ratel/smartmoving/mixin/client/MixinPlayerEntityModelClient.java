@@ -10,6 +10,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
@@ -78,7 +79,7 @@ public abstract class MixinPlayerEntityModelClient {
         // leaningPitch > 0이면 setupTransforms Branch 2(-90° X회전)와
         // setAngles Step 13(수영 팔 애니메이션)이 활성화된다. SM 상태에서는 억제.
         boolean flyingCreative = player.getAbilities().flying;
-        boolean anySmState = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+        boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isClimbJumping || sm.isSwimming_sm || sm.isDiving
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
@@ -93,7 +94,9 @@ public abstract class MixinPlayerEntityModelClient {
         }
 
         // ── SM 11-state if-else 체인 (SmartMovingModel.setRotationAngles 우선순위) ──
-        if (sm.isClimbing || sm.isCrawlClimbing) {
+        if (sm.isRopeSliding) {
+            sm_animateRopeSliding(animationProgress, player);
+        } else if (sm.isClimbing || sm.isCrawlClimbing) {
             sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
         } else if (sm.isClimbJumping) {
             // [isClimbJump] 클라이밍 점프 — 팔을 위로 뻗은 자세
@@ -135,6 +138,46 @@ public abstract class MixinPlayerEntityModelClient {
     // ─────────────────────────────────────────────────────────────────────────
     // 상태별 애니메이션 헬퍼 메서드
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * isRopeSliding: 로프를 잡고 슬라이딩.
+     * 원본: SmartMovingModel.setRotationAngles() 1번 분기 (isRopeSliding).
+     * bipedOuter.rotateAngleY(이동 방향 정렬)는 MixinPlayerEntityRenderer bodyYaw에서 처리.
+     * bipedPelvic.rotateAngleX: bipedPelvic 없음 → 생략.
+     * rotationPointY 변경: 피벗 이동 생략.
+     */
+    private void sm_animateRopeSliding(float animationProgress, ClientPlayerEntity player) {
+        float time = animationProgress * 0.15f;
+
+        // 머리 X/Z
+        head.pitch = EIGHTH;
+        Vec3d vel = player.getVelocity();
+        if (vel.x * vel.x + vel.z * vel.z >= 1e-4) {
+            // 카메라-이동 방향 차이를 [-Sixteenth, Sixteenth] 범위로 클램프
+            float diff = MathHelper.wrapDegrees(
+                    player.getYaw() - (float) Math.toDegrees(Math.atan2(-vel.x, vel.z))
+            ) * DEG_TO_RAD;
+            head.roll = MathHelper.clamp(diff, -SIXTEENTH, SIXTEENTH);
+        } else {
+            head.roll = 0f;
+        }
+
+        // 몸통 X (주기적 미세 흔들림)
+        float torsoX = SIXTEENTH + SIXTYFOURTH * MathHelper.cos(time);
+        body.pitch = torsoX;
+
+        // 팔 X = Half - torsoX (매달린 자세), Z (좌우 고정)
+        rightArm.pitch = HALF - torsoX;
+        leftArm.pitch  = HALF - torsoX;
+        rightArm.roll  =  SIXTEENTH + THIRTYTWOTH;
+        leftArm.roll   = -(SIXTEENTH + THIRTYTWOTH);
+
+        // 다리 Z (고정), X (흔들림)
+        rightLeg.roll  =  THIRTYTWOTH;
+        leftLeg.roll   = -THIRTYTWOTH;
+        rightLeg.pitch =  SIXTYFOURTH * MathHelper.cos(time - QUARTER);
+        leftLeg.pitch  =  SIXTYFOURTH * MathHelper.cos(time + QUARTER);
+    }
 
     /**
      * isClimbing / isCrawlClimbing: 사다리/넝쿨 클라이밍.

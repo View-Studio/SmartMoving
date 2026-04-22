@@ -75,6 +75,9 @@ public final class SmartMovingClientState {
     /** 클라이밍 점프 상태 */
     public boolean isClimbJumping;
 
+    /** 로프 슬라이딩 상태 */
+    public boolean isRopeSliding;
+
     // ── 12-7: 위 블록까지의 거리 (isCrawlClimbing || isHeadJumping 시 사용) ─
     /** 머리 위 블록까지의 거리. 최대 5.0F. */
     public float smallOverGroundHeight;

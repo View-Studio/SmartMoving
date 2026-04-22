@@ -86,7 +86,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-10 | 12-7 `smallOverGroundHeight` 실제 블록 탐색 계산 구현 | — | [x] → sm_setAngles HEAD에서 isCrawlClimbing\|isHeadJumping일 때 computeSmallOverGroundHeight() 호출. playerY 기준 최대 5블록 아래 열 스캔 → 첫 고체 블록 topY와의 차 반환(0~5F). MixinPlayerEntityModelClient.java. |
 | C-11 | 13-1 설정 분리 — ServerConfig vs Options 전환 상태 관리 | A-04 | [x] → SmartMovingConfig에 Config(volatile), SERVER_CONFIG, loadFromArray() 추가. SmartMovingClient.processConfigContentPacket: null→유지, length=0→Config=INSTANCE, length>0→SERVER_CONFIG.loadFromArray+Config=SERVER_CONFIG. DISCONNECT 시 Config=INSTANCE 복원. 이동 로직 전체(6파일) INSTANCE→Config 교체. |
 | C-12 | 13-2 설정 배포 프로토콜 전체 구현 | C-11 | [x] → SmartMovingConfig에 SM_VERSION("1.0"), globalConfig/serverConfig 플래그, toArray() 추가. SmartMovingServer.initialize: globalConfig=true이면 INSTANCE.toArray() 전송, 아니면 빈 배열. processConfigContentPacket: first 추적+ConfigInfo 전송 추가. processConfigChangePacket: no-op 연결. processSpeedChangePacket: difference!=0이면 Config.changeSpeed(). |
-| C-13 | `isRopeSliding` 애니메이션 구현 | A-16 | [ ] |
+| C-13 | `isRopeSliding` 애니메이션 구현 | A-16 | [x] → SmartMovingClientState에 isRopeSliding 필드 추가. sm_animateRopeSliding(): time=animationProgress*0.15, body.pitch=Sixteenth+Sixtyfourth*cos(time), arm.pitch=Half-torsoX, arm.roll=±(Sixteenth+Thirtytwoth), leg.roll=±Thirtytwoth, leg.pitch=Sixtyfourth*cos(time∓Quarter), head.pitch=Eighth, head.roll=clamp(wrapDegrees(camYaw-moveYaw)*DEG_TO_RAD, ±Sixteenth). if-else 체인 최우선 분기로 추가. bodyYaw/anySmState에도 isRopeSliding 포함. |
 | C-14 | 서버 물리 재현 범위 결정 및 구현 | A-17 | [ ] |
 
 ---

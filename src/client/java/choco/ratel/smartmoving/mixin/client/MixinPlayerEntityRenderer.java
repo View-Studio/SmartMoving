@@ -74,7 +74,7 @@ public class MixinPlayerEntityRenderer {
         smBodyYawActive = false;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
-        boolean smActive = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+        boolean smActive = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isSwimming_sm || sm.isDiving || sm.isSliding
                 || sm.isHeadJumping || sm.isCrawling;
         if (!smActive) return;
