@@ -10,8 +10,10 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -23,6 +25,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(PlayerEntityRenderer.class)
 @Environment(EnvType.CLIENT)
 public class MixinPlayerEntityRenderer {
+
+    @Unique private static boolean smBodyYawActive;
+    @Unique private static float smBodyYawOverride;
 
     /**
      * [9-6][12-6] getPositionOffset() 오버라이드.
@@ -54,18 +59,52 @@ public class MixinPlayerEntityRenderer {
     }
 
     /**
+     * [12-3] setupTransforms() HEAD 주입 — SM bodyYaw 오버라이드 계산.
+     *
+     * isClimbing/isCrawlClimbing/isCeilingClimbing/isSwimming_sm/isDiving/isSliding/
+     * isHeadJumping/isCrawling 상태에서 forwardRotation(이동 방향 각도)으로 bodyYaw를 강제한다.
+     * 계산 결과는 smBodyYawActive/smBodyYawOverride에 저장하여 @ModifyArg가 읽는다.
+     *
+     * 원본: SmartMovingRender.rotatePlayer() → forwardRotation = Math.atan2(-vel.x, vel.z)
+     */
+    @Inject(method = "setupTransforms", at = @At("HEAD"))
+    private void sm_captureBodyYaw(AbstractClientPlayerEntity player, MatrixStack matrices,
+                                    float animationProgress, float bodyYaw, float tickDelta, float scale,
+                                    CallbackInfo ci) {
+        smBodyYawActive = false;
+        if (!(player instanceof ClientPlayerEntity localPlayer)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
+        boolean smActive = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+                || sm.isSwimming_sm || sm.isDiving || sm.isSliding
+                || sm.isHeadJumping || sm.isCrawling;
+        if (!smActive) return;
+        Vec3d vel = localPlayer.getVelocity();
+        if (vel.x * vel.x + vel.z * vel.z < 1e-4) return;
+        smBodyYawActive = true;
+        smBodyYawOverride = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
+    }
+
+    /**
+     * [12-3] setupTransforms() @ModifyArg — super.setupTransforms() 호출 시 bodyYaw(index=3) 교체.
+     *
+     * sm_captureBodyYaw에서 smBodyYawActive=true인 경우에만 forwardRotation으로 대체한다.
+     * B-17 확인: index=3 = bodyYaw (entity=0, matrices=1, animationProgress=2, bodyYaw=3, tickDelta=4, scale=5)
+     */
+    @ModifyArg(
+        method = "setupTransforms",
+        at = @At(value = "INVOKE",
+                 target = "Lnet/minecraft/client/render/entity/LivingEntityRenderer;setupTransforms(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/util/math/MatrixStack;FFFF)V"),
+        index = 3
+    )
+    private float sm_modifyBodyYaw(float bodyYaw) {
+        return smBodyYawActive ? smBodyYawOverride : bodyYaw;
+    }
+
+    /**
      * [12-3] setupTransforms() TAIL 주입 — SM 이동 상태별 body X 기울기.
      *
      * vanilla setupTransforms()의 super.setupTransforms()가 이미 Y회전(bodyYaw)을
      * 적용했으므로, 여기에 추가로 SM 고유 X 기울기를 적용한다.
-     *
-     * SM 수영/잠수: bipedOuter.rotateAngleX = Quarter - Sixteenth (약 78.75°) 기울임
-     * SM 비행: bipedOuter.rotateAngleX = (Quarter - verticalAngle) * walkFactor
-     *          → 수직 속도 미추적으로 Phase 13에서 정밀화 예정
-     *
-     * bodyYaw 교체 (isClimbing/isSwimming 등에서 forwardRotation 강제):
-     *   → @ModifyArg(index=3) 방식 필요, Phase 13에서 구현
-     *   → 현재는 vanilla bodyYaw 그대로 사용
      *
      * 원본: SmartMovingRender.rotatePlayer() → bipedOuter.rotateAngleY 설정
      *       SmartMovingModel.setRotationAngles() → bipedOuter.rotateAngleX 설정
@@ -102,6 +141,5 @@ public class MixinPlayerEntityRenderer {
 
         // TODO Phase 13: isFlying body X 기울기 (verticalAngle 추적 필요)
         // TODO Phase 13: isHeadJumping body X/Y (currentVerticalAngle/horizontalAngle 추적 필요)
-        // TODO Phase 13: bodyYaw 교체(@ModifyArg) — 클라이밍/수영/비행 시 forwardRotation 강제
     }
 }

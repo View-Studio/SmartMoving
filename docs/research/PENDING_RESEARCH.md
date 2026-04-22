@@ -80,7 +80,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-04 | 6-5 `recalculateDimensions` — 헤드점프 착지 포즈 복원 로직 | B-04, C-02 | [x] → setPoseSmall()=SLIDING, resetHeightOffset()=공간 확보 시에만 STANDING 복원(공간 부족 시 isHeadJumping 유지). getBaseDimensions Mixin: SLIDING→0.6×0.8, eyeHeight=0.62F. updatePose Mixin: isHeadJumping\|isSliding→SLIDING, isCrawling→SWIMMING. 클라이언트(MixinPlayerEntityClient) + 서버(MixinPlayerEntity isSmall→SLIDING) 모두 구현. |
 | C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [x] → DataTracker 방식 채택. 서버 bit 13 추출 후 SM_CRAWLING DataTracker.set() → MC 자동 전파. 타인 렌더: otherPlayer.dataTracker.get(SM_CRAWLING). network_sync.md 15절. |
 | C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [x] → DataTracker 방식 채택 (isCrawling과 동일 패턴). 서버에 bit 21 추출 + SM_SLIDING DataTracker.set() 추가. 원본 서버는 미처리였으나 1.21.1에서 추가. network_sync.md 15절. |
-| C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [ ] |
+| C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [x] → sm_captureBodyYaw(@HEAD)에서 isClimbing/isCrawlClimbing/isCeilingClimbing/isSwimming_sm/isDiving/isSliding/isHeadJumping/isCrawling 상태 시 `atan2(-vel.x, vel.z)`로 smBodyYawOverride 계산. sm_modifyBodyYaw(@ModifyArg index=3)에서 super.setupTransforms 호출 시 교체. MixinPlayerEntityRenderer.java. |
 | C-08 | 12-4 ModelRotationRenderer 대체 — 6-axis MatrixStack | A-15, B-08, B-09, B-18 | [x] → 비표준 회전 순서 11종 전체 목록 + MatrixStack 구현 패턴 확정. smRotationOrder Mixin 전략 설계. M-09/M-10 미확인→R-17. animation_system.md R-13 섹션. |
 | C-09 | 12-5 중간 노드 부재 — isFlying/isHeadJumping body 기울기 | A-15, C-08 | [x] → setupTransforms X rotate + setAngles head.pitch 보정 전략 확정. 등가 증명 완료. M-06/M-11 미확인→R-17. animation_system.md R-13 섹션. |
 | C-10 | 12-7 `smallOverGroundHeight` 실제 블록 탐색 계산 구현 | — | [ ] |
