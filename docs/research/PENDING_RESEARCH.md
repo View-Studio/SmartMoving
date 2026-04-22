@@ -63,10 +63,10 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | B-13 | `AbstractBlock` / `Block` — `getSlipperiness()` 해당 Yarn 메서드명 확인 | `AbstractBlock.java` 또는 `AbstractBlockState.java` | [x] → `Block.getSlipperiness()` (Yarn명). `this.slipperiness` 필드 반환. vanilla/LivingEntity_physics_misc.md B-13 기재. |
 | B-14 | `LivingEntity.isInsideWall()` — 현재 구현한 Mixin 대상이 맞는지 재확인, 크롤링 쿨다운 억제 로직 정확성 | `LivingEntity.java` 또는 `Entity.java` | [x] → Entity.java에 정의(method_5757), LivingEntity가 isSleeping() 체크 후 super 호출로 오버라이드. vanilla/LivingEntity_physics_misc.md B-14 기재. |
 | B-15 | 수영 소리 vanilla 자동 재생 — travel() 또는 별도 경로에서 수영 소리가 자동 재생되는지, 우리와 중복 재생 가능성 | `LivingEntity.java` / `PlayerEntity.java` | [x] → Entity.move() 내 스텝 처리 후 isTouchingWater()→playSwimSound(). onSwimmingStart()에서 입수 시 splash. PlayerEntity가 ENTITY_PLAYER_SWIM/SPLASH로 오버라이드. vanilla/LivingEntity_physics_misc.md B-15 기재. |
-| B-16 | `DataTracker` — 커스텀 엔트리 등록 방법 (TrackedDataHandlerRegistry, Mixin으로 추가하는 방법) | `DataTracker.java` / Fabric API | [ ] |
+| B-16 | `DataTracker` — 커스텀 엔트리 등록 방법 (TrackedDataHandlerRegistry, Mixin으로 추가하는 방법) | `DataTracker.java` / Fabric API | [x] → registerData()+Builder.add() 패턴, Mixin @At("TAIL") 주입 방법, BOOLEAN 핸들러 확인. vanilla/DataTracker_custom_entry.md B-16 기재. |
 | B-17 | `PlayerEntityRenderer.setupTransforms()` — `bodyYaw` 파라미터가 정확히 index 몇 번인지 (ModifyArg 용) | `PlayerEntityRenderer.java` | [x] → @ModifyArg index=3 (0-based). Vineflower 직접 확인: setupTransforms(entity,matrices,animProgress,bodyYaw,tickDelta,scale). PlayerEntityRenderer_setupTransforms.md R-10 기재. |
 | B-18 | `MatrixStack` — X/Y/Z 축 회전 API 전체 (`multiply(RotationAxis.POSITIVE_X.rotation(angle))` 외 다른 방법 있는지) | `MatrixStack.java` | [x] → multiply(Quaternionf)가 유일한 회전 메서드. rotateX/Y/Z 없음. RotationAxis.POSITIVE_X/Y/Z.rotation()/rotationDegrees() 사용. PlayerEntityRenderer_setupTransforms.md R-10 기재. |
-| B-19 | `ClientPlayNetworkHandler` / `ClientReceiveMessageEvents` — 채팅 수신 이벤트에서 raw text (§ 코드 포함) 접근 방법 | Fabric API | [ ] |
+| B-19 | `ClientPlayNetworkHandler` / `ClientReceiveMessageEvents` — 채팅 수신 이벤트에서 raw text (§ 코드 포함) 접근 방법 | Fabric API | [x] → GAME/CHAT 이벤트 시그니처 확인. Text.getString()=평문만(§ 코드 없음). fabric-message-api-v1 Vineflower 디컴파일 직접 확인. vanilla/DataTracker_custom_entry.md B-19 기재. |
 
 ---
 
@@ -325,7 +325,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/vanilla/DataTracker_custom_entry.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → B-16: DataTracker.registerData()+Builder.add() Mixin 패턴 확인. B-19: ClientReceiveMessageEvents GAME/CHAT 이벤트 시그니처 확인, Text.getString()은 § 코드 없는 평문 반환. DataTracker_custom_entry.md 신규 작성.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10
-- 다음 진행: **R-11** (vanilla DataTracker API + 채팅 이벤트)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11
+- 다음 진행: **R-12** (EntityPose 전략 교차 분석)
