@@ -301,20 +301,18 @@ sm.isFeetVineClimbing   = feetVine[0];    // 추가
 
 ---
 
-### R-12. distanceClimbedModified 서버 누적 없음 🟡
+### ✅ R-12. distanceClimbedModified 서버 누적 없음 🟡 [COMPLETE]
 
 **파일**: `src/main/java/choco/ratel/smartmoving/server/SmartMovingServer.java:68`
 
-**현재**: 필드 선언만 있고 서버에서 클라이밍 거리를 누적하는 코드 없음.
+**실제 상태** (가이드 내용이 stale이었음):
+- 누적: `MixinEntity.sm_afterMove` L100에서 `movement.length()` 기반으로 이미 구현됨
+  (`sm.isClimbing ? 1.2 : 0.9` 배율 — 원본 `afterMoveEntity()` 동일 위치)
+- 소비: 서버 직접 계산 대신 클라이언트→서버 패킷 경로 사용
+  - 클라이언트가 `sm.exhaustion` 계산 → `HungerChangePayload` 전송 (`SmartMoving.java:73`)
+  - `sm_afterTravel`에서 `addExhaustion(sm.hunger)` 적용
 
-**원본** (`SmartMovingBase.md`): 클라이밍 이동 거리를 서버에서 추적하여 서버 측 피로도 계산에 사용.
-
-**영향**: 낮음 — 클라이언트 `sm.exhaustion` 시스템이 이미 동작 중. 순수 서버 기반 피로도 경로는 선택적.
-
-**수정** (낮은 우선순위):
-- `MixinServerPlayNetworkHandler.java`에서 State 패킷 수신 시,  
-  isClimbing/isCrawlClimbing/isCeilingClimbing 활성 플레이어의 이동 거리를  
-  `SmartMovingServer.distanceClimbedModified`에 누적.
+클라이언트 피로도 시스템이 이미 완전히 동작 중이므로 서버 직접 소비 경로는 불필요.
 
 ---
 
