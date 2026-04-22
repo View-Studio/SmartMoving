@@ -198,6 +198,8 @@ public abstract class MixinPlayerEntityModelClient {
         // 팔: handsClimbType 3-way 분기 (R-10)
         // ordinal 매핑: UP(4)/FAST_UP(5)→UpGrab, TOP_HOLD(2)/BOTTOM_HOLD(3)→MiddleGrab, NONE(0)/SINK(1)→NoGrab
         int h = sm.actualHandsClimbType;
+        // vine climbing: MiddleGrab → UpGrab 전환 (SmartMovingModel L317-319)
+        if (sm.isHandsVineClimbing && h >= 2 && h < 4) h = 4;
         float handsDistUp, handsOffset;
         if (h >= 4) {         // UP_GRAB: UP(4), FAST_UP(5)
             handsDistUp = 2f;
@@ -274,6 +276,14 @@ public abstract class MixinPlayerEntityModelClient {
             leftLeg.pitch  =  legAngleX;
             rightLeg.roll  =  legAngleZ;
             leftLeg.roll   = -legAngleZ;
+
+            // NoGrab + non-NoStep 추가 보정 (SmartMovingModel L415-421)
+            // 원본: bipedTorso.X=0.5F, head.X-=0.5F, bipedPelvic.X-=0.5F
+            // bipedPelvic/rotationPointZ는 1.21.1 대응 없음 → body.pitch/head.pitch만 적용
+            if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0) {
+                body.pitch = 0.5f;
+                head.pitch -= 0.5f;
+            }
         }
     }
 

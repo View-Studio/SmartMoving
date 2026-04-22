@@ -76,7 +76,7 @@
 
 | 상태 | 리서치 파일 (smartmoving/render/) | 대응 구현 파일 |
 |------|----------------------------------|--------------|
-| [ ] | `SmartMovingModel.md` | `MixinPlayerEntityModelClient.java` |
+| [x] | `SmartMovingModel.md` | `MixinPlayerEntityModelClient.java` |
 | [ ] | `SmartMovingRender.md` | `MixinPlayerEntityRendererClient.java` (또는 관련 렌더 Mixin) |
 | [ ] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
 | [ ] | `RenderPlayer.md` | 렌더 관련 Mixin 전체 |
@@ -396,6 +396,38 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - `afterSetPosition/beforeIsPlayerSleeping` → 1.21.1 포즈 기반 AABB으로 대체 (별도 Mixin 불필요) ✓
 
 신규 발견 미구현: 없음 (rigorously checked)
+
+---
+
+### [2026-04-23] render/SmartMovingModel.md
+
+대응 구현: MixinPlayerEntityModelClient.java
+
+발견한 불일치:
+- [오역] vine MiddleGrab → UpGrab 전환 미구현 (SmartMovingModel L317-319)
+  - 원본: `if(isHandsVineClimbing && handsClimbType == HandsClimbing.MiddleGrab) handsClimbType = HandsClimbing.UpGrab;`
+  - 버그: vine 클라이밍 중 MiddleGrab(h=2,3)이어도 UpGrab 전환 없이 offset=-Quarter 사용
+  - 수정: sm_animateClimbing 진입 시 `if (sm.isHandsVineClimbing && h >= 2 && h < 4) h = 4;` 추가
+- [누락] isCrawlClimbing NoGrab + non-NoStep 보정 (SmartMovingModel L415-421)
+  - 원본: `handsClimbType==NoGrab && feetClimbType!=NoStep` 시 torso.X=0.5F, head.X-=0.5F
+  - 버그: 해당 조건 분기 자체 없음
+  - 수정: isCrawlClimbing 블록 끝에 `if (h < 2 && feetOrd > 0) { body.pitch=0.5f; head.pitch-=0.5f; }` 추가
+  - 1.21.1 제한: bipedPelvic.X-=0.5F, bipedTorso.rotationPointZ=-6.0F 대응 노드 없음 → 생략
+
+불일치 없음 (주요 애니메이션 로직):
+- 11가지 상태 if-else 체인 우선순위: 원본과 완전 일치 ✓
+- 각도 상수 (Half/Quarter/…): 원본과 일치 ✓
+- isClimbJump 팔 각도: 원본과 일치 ✓
+- isCeilingClimbing 속도 임계값(0.12951545F): 원본과 일치 ✓
+- isSwim 속도 구간(0.15679921F/0.52264464F): 원본과 일치 ✓
+- isDive/isCrawl/isSlide/isFlying/isHeadJumping/isFalling 각도: 원본과 일치 ✓
+- Factor()/Between()/Normalize() → smFactor()/clamp()/wrapDegrees(): 정확히 대응 ✓
+- animateAngleJumping: 원본과 일치 ✓
+
+신규 발견 미구현:
+- isSwim: isGenericSneaking threshold (0.005 vs 0.015) 미적용 — 시각적 영향 미미
+- isDive: isLevitate/isJump 상태 미추적 — SM 비행+점프 중 수직각 abs() 미적용 (희귀 케이스)
+- isFeetVineClimbing + UpGrab 동시: vine "+=" vs 구현 "=" 차이 — 극히 희귀한 상태 조합
 
 ---
 
