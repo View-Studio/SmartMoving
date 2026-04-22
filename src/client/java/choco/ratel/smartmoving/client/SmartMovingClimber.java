@@ -532,6 +532,8 @@ public final class SmartMovingClimber {
 
         // C-36: 이동 방향 기반 수평 벡터 분해 (원본: moveFlying(strafe, forward, speed))
         // movementForward / movementSideways 기반으로 yaw 방향 수평 속도 계산
+        // 원본: motionY는 입력 유무와 무관하게 항상 jgap 기반 값으로 설정 (T-04)
+        Vec3d vel = player.getVelocity();
         float forward = player.input.movementForward;
         float strafe  = player.input.movementSideways;
         float distSq  = forward * forward + strafe * strafe;
@@ -543,10 +545,11 @@ public final class SmartMovingClimber {
             double yawRad = Math.toRadians(player.getYaw());
             double cos = Math.cos(yawRad);
             double sin = Math.sin(yawRad);
-            Vec3d vel = player.getVelocity();
             double motionX = strafe * cos - forward * sin;
             double motionZ = forward * cos + strafe * sin;
-            player.setVelocity(motionX, vel.y, motionZ);
+            player.setVelocity(motionX, horizontalSpeed, motionZ);
+        } else {
+            player.setVelocity(vel.x, horizontalSpeed, vel.z);
         }
 
         // fallDistance = 0 (필수 — 낙하 데미지 방지)

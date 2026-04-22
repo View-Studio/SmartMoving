@@ -13,7 +13,7 @@
 
 ---
 
-### R-09. 천장 클라이밍 수직 velocity 미설정 🔴
+### ✅ R-09. 천장 클라이밍 수직 velocity 미설정 🔴 [COMPLETE]
 
 **파일**: `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java`
 

@@ -110,4 +110,21 @@ public abstract class MixinLivingEntity {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;
         SmartMovingServer.get(player).beforeAddMovingHungerBatch();
     }
+
+    /**
+     * 3-5: isInsideWall() 억제.
+     * 크롤링 종료 직후 crawlingCooldown 틱 동안 블록 내부 판정을 억제하여
+     * 크롤링 출구에서 플레이어가 벽 안에 갇히는 현상을 방지한다.
+     *
+     * isInsideWall()은 LivingEntity에서 마지막으로 override되므로 여기서 inject.
+     * ServerPlayerEntity에는 선언되어 있지 않아 MixinServerPlayerEntity에서 inject 불가.
+     */
+    @Inject(method = "isInsideWall", at = @At("HEAD"), cancellable = true)
+    private void sm_isInsideWall(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.crawlingCooldown > 0) {
+            cir.setReturnValue(false);
+        }
+    }
 }

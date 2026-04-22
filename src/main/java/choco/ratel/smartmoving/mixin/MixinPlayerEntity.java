@@ -66,4 +66,20 @@ public abstract class MixinPlayerEntity {
             ci.cancel();
         }
     }
+
+    /**
+     * 3-3: addExhaustion() 소진 차단.
+     * disableAddExhaustion이 true인 동안 vanilla 소진 추가를 전부 차단한다.
+     *
+     * addExhaustion()은 PlayerEntity에서 선언되므로 여기서 inject.
+     * ServerPlayerEntity에는 선언되어 있지 않아 MixinServerPlayerEntity에서 inject 불가.
+     */
+    @Inject(method = "addExhaustion", at = @At("HEAD"), cancellable = true)
+    private void sm_addExhaustion(float exhaustion, CallbackInfo ci) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.disableAddExhaustion) {
+            ci.cancel();
+        }
+    }
 }
