@@ -80,11 +80,11 @@
 | [x] | `SmartMovingRender.md` | `MixinPlayerEntityRenderer.java`, `SmartMovingHud.java` |
 | [x] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
 | [x] | `RenderPlayer.md` | `MixinPlayerEntityRenderer.java`, `MixinPlayerEntityModelClient.java` |
-| [ ] | `SmartRenderContext.md` | `SmartMovingContext.java` 또는 별도 컨텍스트 클래스 |
-| [ ] | `IModelPlayer.md` | 인터페이스 대응 확인 (구현 클래스 grep) |
-| [ ] | `IRenderPlayer.md` | 인터페이스 대응 확인 |
-| [ ] | `playerapi/SmartMovingModelPlayerBase.md` | `MixinPlayerEntityModelClient.java` |
-| [ ] | `playerapi/SmartMovingRenderPlayerBase.md` | 렌더 관련 Mixin 전체 |
+| [x] | `SmartRenderContext.md` | N/A — 다층 갑옷 모델 레이어 스케일 상수 (1.21.1 해당 없음) |
+| [x] | `IModelPlayer.md` | N/A — PlayerAPI super*() 위임 인터페이스. TAIL inject로 대체됨 |
+| [x] | `IRenderPlayer.md` | N/A — PlayerAPI superRender*() 위임 인터페이스. Inject 패턴으로 대체됨 |
+| [x] | `playerapi/SmartMovingModelPlayerBase.md` | N/A — PlayerAPI ModelBase + IModelPlayer 구현. TAIL inject로 대체됨 |
+| [x] | `playerapi/SmartMovingRenderPlayerBase.md` | N/A — PlayerAPI RenderBase + IRenderPlayer 구현. Inject 패턴으로 대체됨 |
 
 #### smartrender/ 렌더 핵심 (11개)
 
@@ -471,6 +471,62 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - superAnimate*() 경로: 불필요 (TAIL inject로 대체됨) ✓
 - getMovingModel(): 불필요 (Mixin이 직접 SmartMovingClientState 접근) ✓
 - factor 파라미터(모델 스케일): 1.21.1 setAngles() 파라미터에 없음 → N/A
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] render/SmartRenderContext.md
+
+대응 구현: N/A
+
+불일치 없음:
+- `SmartRenderContext` (net.smart.moving.render): `Scale=0`, `NoScaleStart=1`, `NoScaleEnd=2` 상수 3개만 정의
+- 이 상수들은 1.7.10에서 다층 갑옷 모델 레이어(modelBipedMain/modelArmorChestplate/modelArmor)별 팔·다리 스케일 타입을 구분하는 데 사용됨
+- 1.21.1에서는 단일 PlayerEntityModel만 존재하므로 다층 스케일 타입 구분 자체가 불필요
+- `setArmScales()`/`setLegScales()` 메서드도 구현되지 않음 (SmartMovingModel.md 감사 시 이미 N/A 확인)
+- 각도 상수(Half/Quarter/…)는 `net.smart.render.SmartRenderContext` (SmartRender 패키지)의 것이며, `MixinPlayerEntityModelClient.java` 47~55행에 HALF/QUARTER/EIGHTH/… 로 이미 구현됨
+- 결론: Scale/NoScaleStart/NoScaleEnd → N/A (구조적 차이)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] render/playerapi/SmartMovingModelPlayerBase.md + render/playerapi/SmartMovingRenderPlayerBase.md
+
+대응 구현: N/A
+
+불일치 없음:
+- `SmartMovingModelPlayerBase`: PlayerAPI `ModelPlayerBase` + `IModelPlayer` 구현체
+  - `dynamicOverride*()` → SM animate 위임: 1.21.1 TAIL inject에서 SM이 직접 애니메이션 처리 ✓
+  - `superAnimate*()` → `super.dynamic()` PlayerAPI 체인: TAIL inject에서 vanilla가 먼저 실행되므로 불필요 ✓
+  - `@Deprecated` getter 16개 (SmartRenderModel 노드): SmartRenderModel 자체가 N/A → 이 getter도 N/A ✓
+  - 지연 초기화 필드 `model`: Mixin에서는 SmartMovingClientState 직접 접근으로 대체 ✓
+- `SmartMovingRenderPlayerBase`: PlayerAPI `RenderPlayerBase` + `IRenderPlayer` 구현체
+  - `renderPlayer()` → `getRenderModel().renderPlayer()`: sm_captureBodyYaw/sm_setupTransforms으로 대체 ✓
+  - `rotatePlayer()` → `getRenderModel().rotatePlayer()`: sm_modifyBodyYaw/sm_setupTransforms으로 대체 ✓
+  - `renderPlayerSleep()` → `getRenderModel().renderPlayerAt()`: sm_getPositionOffset()으로 대체 ✓
+  - `passSpecialRender()` → `getRenderModel().renderName()`: sm_renderLabel()으로 대체 ✓
+  - `getPlayerModels()` / `getPlayerModel*()`: 단일 BipedEntityModel Mixin으로 대체, 다층 모델 없음 ✓
+  - `isRenderedWithBodyTopAlwaysInAccelerateDirection()`: 외부 PlayerBase용, 1.21.1에 호출처 없음 ✓
+- 결론: 두 파일 모두 N/A (PlayerAPI → Mixin 전환에 따른 구조적 소멸)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] render/IModelPlayer.md + render/IRenderPlayer.md
+
+대응 구현: N/A
+
+불일치 없음:
+- 두 인터페이스 모두 1.7.10 PlayerAPI 기반 아키텍처의 브릿지 인터페이스
+- `IModelPlayer`: `SmartMovingModel.imp` 타입 — isStandard 시 vanilla `super*()` 호출 위임
+  - 1.21.1 대응: TAIL inject에서 vanilla setAngles()가 먼저 실행된 후 SM이 덮어씀 → 인터페이스 불필요
+- `IRenderPlayer`: `SmartMovingRender.irp` 타입 — superRender*() / getPlayerModels*() 위임
+  - 1.21.1 대응: inject 패턴으로 vanilla 메서드 직접 intercept → 인터페이스 불필요
+  - 다층 모델 접근(getPlayerModelBipedMain/ArmorChestplate/Armor) → 1.21.1 단일 모델로 N/A
+- 결론: 두 파일 모두 N/A (PlayerAPI → Mixin 전환에 따른 구조적 소멸)
 
 신규 발견 미구현: 없음
 
