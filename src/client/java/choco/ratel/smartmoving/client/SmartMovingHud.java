@@ -31,7 +31,7 @@ public final class SmartMovingHud {
         if (player == null) return;
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         boolean hasCharge     = sm.jumpCharge > 0;
         boolean hasHeadCharge = sm.headJumpCharge > 0;

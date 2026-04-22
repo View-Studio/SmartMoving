@@ -43,7 +43,7 @@ public final class SmartMovingSlider {
      */
     public static boolean handleSliding(ClientPlayerEntity player, SmartMovingClientState sm) {
         if (!sm.isSliding) return false;
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (!cfg.slide) {
             sm.isSliding = false;
             return false;
@@ -95,7 +95,7 @@ public final class SmartMovingSlider {
     private static void spawnSlidingParticle(ClientPlayerEntity player, SmartMovingClientState sm, Vec3d horizontal) {
         if (!player.getWorld().isClient) return;
 
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
         sm.spawnSlindingParticle += 1F;
         float threshold = cfg.slideParticlePeriodFactor * 0.1F;
 

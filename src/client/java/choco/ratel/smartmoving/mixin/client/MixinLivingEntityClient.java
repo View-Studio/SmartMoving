@@ -55,7 +55,7 @@ public abstract class MixinLivingEntityClient {
     private void sm_travel_client(Vec3d movementInput, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
         // [미확인 — jumpMovementFactor(offGroundSpeed) 0.05F 제어 방법 TODO Phase 12]

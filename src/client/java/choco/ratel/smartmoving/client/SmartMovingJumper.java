@@ -109,7 +109,7 @@ public final class SmartMovingJumper {
      */
     public static void tryJump(ClientPlayerEntity player, SmartMovingClientState sm,
                                 int jumpType, float charge) {
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         boolean up   = jumpType == UP || jumpType == CHARGE_UP || jumpType == HEAD_UP;
         boolean head = jumpType == HEAD_UP;
@@ -200,7 +200,7 @@ public final class SmartMovingJumper {
      *   f. jumpPending 클리어
      */
     public static void handleJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
         MinecraftClient mc = MinecraftClient.getInstance();
 
         boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();
@@ -295,7 +295,7 @@ public final class SmartMovingJumper {
      * 현재 임시값으로 이동 방향 반대(벽 법선)를 사용. TODO: Orientation 이식 후 완성.
      */
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (!player.horizontalCollision) return;
         if (!cfg.angleJumpSide && !cfg.angleJumpBack) return;
 

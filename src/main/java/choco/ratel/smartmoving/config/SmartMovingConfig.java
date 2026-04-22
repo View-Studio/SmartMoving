@@ -73,8 +73,21 @@ public class SmartMovingConfig {
     public boolean sprint = true;
     public boolean ceilingClimbing = true;
 
-    // ── Singleton ───────────────────────────────────────────────
+    // ── Singleton / Config 전환 ────────────────────────────────
+    /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
+
+    /** 서버 수신 설정 인스턴스. loadFromArray()로 갱신. */
+    public static final SmartMovingConfig SERVER_CONFIG = new SmartMovingConfig();
+
+    /**
+     * 현재 활성 설정 참조 (원본: SmartMovingContext.Config).
+     * 초기값: INSTANCE (클라이언트 자체 설정).
+     * 서버 설정 수신 시: SERVER_CONFIG로 전환.
+     * 서버 설정 해제 시: INSTANCE로 복원.
+     * volatile — 클라이언트 렌더/틱 스레드 간 가시성 보장.
+     */
+    public static volatile SmartMovingConfig Config = INSTANCE;
 
     private static final String FILE_NAME = "smart_moving_options.properties";
 
@@ -103,6 +116,20 @@ public class SmartMovingConfig {
         try (FileOutputStream out = new FileOutputStream(configFile.toFile())) {
             props.store(out, "SmartMoving configuration");
         } catch (IOException ignored) {}
+    }
+
+    /**
+     * 서버로부터 수신한 flat String[] 배열 [k1,v1,k2,v2,...] 을 이 인스턴스에 적용한다.
+     * 원본: SmartMovingServerConfig.loadFromProperties(String[] content, boolean blockCode)
+     * 패리티 수준: 홀수 길이 배열은 malformed로 간주하고 처리 중단.
+     */
+    public void loadFromArray(String[] content) {
+        if (content.length % 2 != 0) return;
+        Properties props = new Properties();
+        for (int i = 0; i + 1 < content.length; i += 2) {
+            props.setProperty(content[i], content[i + 1]);
+        }
+        readFrom(props);
     }
 
     private void readFrom(Properties p) {

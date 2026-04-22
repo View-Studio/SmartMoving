@@ -86,7 +86,7 @@ public final class SmartMovingSwimmer {
 
         if (!sm.isDipping && !sm.isSwimming_sm && !sm.isDiving) return false;
 
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (sm.isDiving && !cfg.dive) return false;
         if ((sm.isSwimming_sm || sm.isDipping) && !cfg.swim) return false;
 

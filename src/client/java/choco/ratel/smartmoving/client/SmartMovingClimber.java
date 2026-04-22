@@ -234,7 +234,7 @@ public final class SmartMovingClimber {
      * TODO: SM exhaustion 체크 미구현
      */
     public static void handleClimbing(ClientPlayerEntity player, SmartMovingClientState sm) {
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         // exhaustion 체크
         // TODO: SM 독자 exhaustion 필드 미구현 — 항상 허용으로 처리
@@ -333,7 +333,7 @@ public final class SmartMovingClimber {
      * TODO: 수평 속도 방향 벡터 적용 미구현
      */
     public static void handleCeilingClimbing(ClientPlayerEntity player, SmartMovingClientState sm) {
-        SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
 
         if (!cfg.ceilingClimbing) return;
 
