@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 5-7: velocityDirty @Shadow — SM이 직접 속도 변경 시 서버 동기화 트리거.
@@ -47,6 +48,22 @@ public abstract class MixinEntity {
      *
      * 클라이언트 측 STEP_HEIGHT 억제: MixinEntityClient.sm_beforeMove_client()에서 구현됨.
      */
+    /**
+     * 3-4: isSneaking() 오버라이드 — 서버 플레이어 전용.
+     * isSneaking()은 Entity에 선언되어 있어 ServerPlayerEntity에서 inject 불가.
+     * Entity Mixin에서 instanceof 가드로 서버 플레이어에만 적용한다.
+     *
+     * 원본: SmartMovingServer.isSneaking(): forceIsSneaking != null ? forceIsSneaking : vanilla
+     */
+    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
+    private void sm_isSneaking(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (sm.forceIsSneaking != null) {
+            cir.setReturnValue(sm.forceIsSneaking);
+        }
+    }
+
     @Inject(method = "move", at = @At("HEAD"))
     private void sm_beforeMove(MovementType type, Vec3d movement, CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;

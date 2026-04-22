@@ -38,22 +38,6 @@ public abstract class MixinServerPlayerEntity {
     }
 
     /**
-     * 3-4: isSneaking() 오버라이드.
-     * forceIsSneaking이 null이 아닐 때만 강제 반환값을 덮어쓴다.
-     * null이면 vanilla 동작 그대로 유지.
-     *
-     * 원본: SmartMovingServerPlayerBase.isSneaking() → moving.isSneaking()
-     *       SmartMovingServer.isSneaking(): forceIsSneaking != null ? forceIsSneaking : localIsSneaking()
-     */
-    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
-    private void sm_isSneaking(CallbackInfoReturnable<Boolean> cir) {
-        SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
-        if (sm.forceIsSneaking != null) {
-            cir.setReturnValue(sm.forceIsSneaking);
-        }
-    }
-
-    /**
      * 3-5: isInsideWall() 억제.
      * 크롤링 종료 직후 crawlingCooldown 틱 동안 블록 내부 판정을 억제하여
      * 크롤링 출구에서 플레이어가 벽 안에 갇히는 현상을 방지한다.
