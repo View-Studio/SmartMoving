@@ -188,13 +188,12 @@ public final class SmartMovingClimber {
                 value = Math.min(CATCH_CRAWL_GAP_MOTION, value);
             }
 
+            SmartMovingConfig cfg2 = SmartMovingConfig.Config;
             double newMotionY;
             if (isUp) {
-                double upFactor = 1.0D; // C-29: Config.freeClimbingUpSpeedFactor로 교체 예정
-                newMotionY = (value - HOLD_MOTION) * upFactor * combinedFactor + HOLD_MOTION;
+                newMotionY = (value - HOLD_MOTION) * cfg2.freeClimbingUpSpeedFactor * combinedFactor + HOLD_MOTION;
             } else {
-                double downFactor = 1.0D; // C-29: Config.freeClimbingDownSpeedFactor로 교체 예정
-                newMotionY = HOLD_MOTION - (HOLD_MOTION - value) * downFactor * combinedFactor;
+                newMotionY = HOLD_MOTION - (HOLD_MOTION - value) * cfg2.freeClimbingDownSpeedFactor * combinedFactor;
             }
 
             player.setVelocity(player.getVelocity().x, newMotionY, player.getVelocity().z);
@@ -244,9 +243,12 @@ public final class SmartMovingClimber {
         // }
 
         if (!cfg.freeClimb) {
-            // Standard 모드: 기본 속도 적용
-            // TODO: getCombinedSpeedFactor() 미구현
-            // setOnlyShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
+            // Standard 모드: combinedFactor = getConfigSpeedFactor × getPotionSpeedFactor (SmartMovingSelf.md L712)
+            // setOnlyShouldClimbSpeed(FAST_UP_MOTION * combinedFactor, true, 1.0D) → motionY = 0.2 * combinedFactor
+            double combinedFactor = SmartMovingMover.getConfigSpeedFactor(cfg)
+                                  * SmartMovingMover.getPotionSpeedFactor(player);
+            setOnlyShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
+            player.fallDistance = 0;
             return;
         }
 

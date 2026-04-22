@@ -516,7 +516,7 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 | C-26 | 클라이밍 — `climbIntoCount` (크롤-클라이밍 갭 진입 카운터) 상태 필드 및 `setShouldClimbSpeed` 연결 | — | SmartMovingClimber.java L177 | [x] → SmartMovingClientState에 climbIntoCount(int) 추가. climbIntoCount>0 시 value=HOLD_MOTION, isUp=true 강제. |
 | C-27 | 클라이밍 — `hasClimbCrawlGap`, `isClimbCrawling` 상태 필드 추가 및 `setShouldClimbSpeed` 상한 처리 연결 | — | SmartMovingClimber.java L198 | [x] → hasClimbCrawlGap+isClimbCrawling 필드 추가. relevant=true 시 value>HOLD_MOTION이면 min(CATCH_CRAWL_GAP_MOTION, value)로 상한 적용. |
 | C-28 | 클라이밍 — `isClimbHolding`, `isClimbJumping` 상태 필드 추가 및 `setShouldClimbSpeed` TAIL 연결 | — | SmartMovingClimber.java L204 | [x] → isClimbHolding 필드 추가. TAIL: sm.isClimbJumping = !relevant && !sm.isClimbHolding. |
-| C-29 | 클라이밍 — Standard/Simple/Smart 모드 구현 (`getCombinedSpeedFactor` + 모드별 속도 분기) | A-18 | SmartMovingClimber.java L246-250 | [ ] |
+| C-29 | 클라이밍 — Standard/Simple/Smart 모드 구현 (`getCombinedSpeedFactor` + 모드별 속도 분기) | A-18 | SmartMovingClimber.java L246-250 | [x] → SmartMovingConfig에 freeClimbingUpSpeedFactor/freeClimbingDownSpeedFactor(1.0F) 추가. setShouldClimbSpeed에서 cfg값 연결. Standard 모드: getCombinedSpeedFactor()=configFactor×potionFactor로 setOnlyShouldClimbSpeed(FAST_UP*combined, true, 1.0D). Simple/Smart 모드는 추가 config 필드 필요로 미구현. |
 | C-30 | 클라이밍 — 대각 4방향(NE/NW/SE/SW) 탐색 추가 | — | SmartMovingClimber.java L263 | [ ] |
 | C-31 | 클라이밍 — `wantClimbUp` / `wantClimbDown` 키 입력 기반 방향 제어 | — | SmartMovingClimber.java L284 | [ ] |
 | C-32 | 클라이밍 — `climbBackJump`, 클라이밍 중 `wallJump`, `handleCrash()` 처리 | — | SmartMovingClimber.java L312-314 | [ ] |

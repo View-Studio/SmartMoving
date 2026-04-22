@@ -39,6 +39,8 @@ public class SmartMovingConfig {
     // 원본: Options._baseClimb = "standard" (processBlockCode §0 코드). "standard" → true, 그 외 → false
     public boolean baseClimb = true;
     public boolean freeClimb = true;
+    public float freeClimbingUpSpeedFactor   = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
+    public float freeClimbingDownSpeedFactor = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float ceilingClimbingSpeedFactor = 0.2F;
     public boolean climbExhaustion = false;
     public float climbExhaustionStart = 60F;
@@ -175,6 +177,8 @@ public class SmartMovingConfig {
         sprintFactor             = getFloat(p,  "move.sprint.factor",             sprintFactor);
         baseClimb                = getBool(p,   "move.climb.base",                baseClimb);
         freeClimb                = getBool(p,   "move.climb.free",                freeClimb);
+        freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
+        freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
         ceilingClimbingSpeedFactor = getFloat(p, "move.climb.ceiling.speed.factor", ceilingClimbingSpeedFactor);
         climbExhaustion          = getBool(p,   "move.climb.exhaustion",          climbExhaustion);
         climbExhaustionStart     = getFloat(p,  "move.climb.exhaustion.start",    climbExhaustionStart);
@@ -221,6 +225,8 @@ public class SmartMovingConfig {
         p.setProperty("move.sprint.factor",              String.valueOf(sprintFactor));
         p.setProperty("move.climb.base",                 String.valueOf(baseClimb));
         p.setProperty("move.climb.free",                 String.valueOf(freeClimb));
+        p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
+        p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
         p.setProperty("move.climb.ceiling.speed.factor", String.valueOf(ceilingClimbingSpeedFactor));
         p.setProperty("move.climb.exhaustion",           String.valueOf(climbExhaustion));
         p.setProperty("move.climb.exhaustion.start",     String.valueOf(climbExhaustionStart));
