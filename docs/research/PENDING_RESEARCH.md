@@ -77,7 +77,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | C-01 | 4-4 `processBlockCode` — 채팅 설정 파싱 구현 | A-09, A-10, B-19 | [x] → ClientReceiveMessageEvents.GAME 등록 + processBlockCode 구현. "§0§1"/"§f§f" 마커, substring(4,len-4), 12개 코드→SmartMovingConfig.INSTANCE 필드 직접 설정. SmartMovingConfig에 baseClimb 필드 추가. 채팅 억제(ALLOW_GAME false) 미구현(mapping 근거 없음). |
 | C-02 | 6-3 EntityPose — 헤드점프 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈 + getBaseDimensions() Mixin(0.6×0.8). updatePose() @HEAD 취소. M-01/M-02/M-04/M-05 미확인 남음. mapping/pose_strategy.md C-02 섹션 기재. |
 | C-03 | 6-3 EntityPose — 슬라이딩 포즈 전략 확정 및 구현 | B-01, B-02, B-04 | [x] → SLIDING 포즈(index 15) 재사용 + getBaseDimensions() Mixin. updatePose() @HEAD 취소. M-02/M-03 미확인 남음. mapping/pose_strategy.md C-03 섹션 기재. |
-| C-04 | 6-5 `recalculateDimensions` — 헤드점프 착지 포즈 복원 로직 | B-04, C-02 | [ ] |
+| C-04 | 6-5 `recalculateDimensions` — 헤드점프 착지 포즈 복원 로직 | B-04, C-02 | [x] → setPoseSmall()=SLIDING, resetHeightOffset()=공간 확보 시에만 STANDING 복원(공간 부족 시 isHeadJumping 유지). getBaseDimensions Mixin: SLIDING→0.6×0.8, eyeHeight=0.62F. updatePose Mixin: isHeadJumping\|isSliding→SLIDING, isCrawling→SWIMMING. 클라이언트(MixinPlayerEntityClient) + 서버(MixinPlayerEntity isSmall→SLIDING) 모두 구현. |
 | C-05 | 9-1 `isCrawling` DataTracker 동기화 | A-13, B-16 | [x] → DataTracker 방식 채택. 서버 bit 13 추출 후 SM_CRAWLING DataTracker.set() → MC 자동 전파. 타인 렌더: otherPlayer.dataTracker.get(SM_CRAWLING). network_sync.md 15절. |
 | C-06 | 9-1 `isSliding` DataTracker 필요 여부 확인 및 구현 | A-14, B-16 | [x] → DataTracker 방식 채택 (isCrawling과 동일 패턴). 서버에 bit 21 추출 + SM_SLIDING DataTracker.set() 추가. 원본 서버는 미처리였으나 1.21.1에서 추가. network_sync.md 15절. |
 | C-07 | 12-3 bodyYaw `@ModifyArg` — forwardRotation 강제 | B-17, A-15 | [ ] |

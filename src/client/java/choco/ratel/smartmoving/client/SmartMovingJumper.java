@@ -58,44 +58,44 @@ public final class SmartMovingJumper {
     // ── [10-4] setPoseSmall / resetHeightOffset ──────────────────────────────
 
     /**
-     * 헤드점프 시작: SWIMMING 포즈로 전환하여 hitbox 재계산.
+     * 헤드점프 시작: SLIDING 포즈로 전환하여 hitbox 재계산.
      * 원본: setHeightOffset(-1F) → boundingBox.minY 직접 조작 (1.7.10)
-     * 1.21.1: getBaseDimensions() Mixin + 포즈 전환으로 대체.
+     * 1.21.1: getBaseDimensions() Mixin(SLIDING→0.6×0.8) + 포즈 전환으로 대체.
+     * pose_strategy.md C-02 최종 결정: EntityPose.SLIDING + getBaseDimensions Mixin.
      */
     public static void setPoseSmall(ClientPlayerEntity player) {
-        player.setPose(EntityPose.SWIMMING);
+        player.setPose(EntityPose.SLIDING);
         player.calculateDimensions();
     }
 
     /**
-     * 헤드점프 종료(착지): STANDING 포즈 복원. 공간 부족 시 SWIMMING 유지.
+     * 헤드점프 종료(착지): STANDING 포즈 복원. 공간 부족 시 SLIDING 유지.
      * 원본: resetHeightOffset() + standUp()
-     * PlayerEntity는 recalculateDimensions()가 자동 호출되지 않으므로 공간 체크를 SM이 직접 수행.
+     * PlayerEntity는 Entity.calculateDimensions()에서 제외(pose_strategy.md 5-3) →
+     * SM이 직접 공간 확인 후 포즈 전환.
+     *
+     * 호출 측(MixinLivingEntityClient)이 isOnGround && isHeadJumping 매 틱 체크하므로
+     * 공간 확보될 때까지 isHeadJumping = true 유지하여 updatePose Mixin이 SLIDING 지속 강제.
      */
     public static void resetHeightOffset(ClientPlayerEntity player, SmartMovingClientState sm) {
-        sm.isHeadJumping = false;
-        sm.heightOffset = 0F;
-
         World world = player.getWorld();
         int px = (int) Math.floor(player.getX());
         int pz = (int) Math.floor(player.getZ());
-        int fromY = (int) Math.ceil(player.getY() + 1.0D);
+        int fromY = (int) Math.ceil(player.getY() + 0.8D);
         int toY   = (int) Math.ceil(player.getY() + 1.8D);
 
-        boolean canStand = true;
         for (int by = fromY; by <= toY; by++) {
             BlockPos pos = new BlockPos(px, by, pz);
             if (!world.getBlockState(pos).getCollisionShape(world, pos).isEmpty()) {
-                canStand = false;
-                break;
+                return; // 공간 부족 — isHeadJumping 유지, SLIDING 포즈 유지
             }
         }
 
-        if (canStand) {
-            player.setPose(EntityPose.STANDING);
-            player.calculateDimensions();
-        }
-        // 공간 부족 시 SWIMMING 포즈 유지
+        // 공간 확보 — STANDING 복원
+        sm.isHeadJumping = false;
+        sm.heightOffset = 0F;
+        player.setPose(EntityPose.STANDING);
+        player.calculateDimensions();
     }
 
     // ── [10-2] tryJump ───────────────────────────────────────────────────────

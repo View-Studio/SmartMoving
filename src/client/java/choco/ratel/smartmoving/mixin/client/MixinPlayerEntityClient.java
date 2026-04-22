@@ -10,39 +10,67 @@ import net.minecraft.entity.player.PlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 6-1 (클라이언트): getBaseDimensions() 커스텀 EntityDimensions 반환.
+ * 6-4 (클라이언트): updatePose() Mixin — SM 상태별 포즈 강제 설정.
  *
  * getDimensions()는 final → getBaseDimensions()가 유일한 오버라이드 진입점.
  * Yarn: getBaseDimensions (intermediary: method_55694 확인 완료)
+ * Yarn: updatePose (intermediary: method_7318 확인 완료)
  *
- * 서버 측 → MixinPlayerEntity.sm_getBaseDimensions_server()
+ * 서버 측 → MixinPlayerEntity.sm_getBaseDimensions_server(), sm_updatePose_server()
  */
 @Mixin(PlayerEntity.class)
 @Environment(EnvType.CLIENT)
 public abstract class MixinPlayerEntityClient {
 
     /**
-     * 6-1 (클라이언트): SM 크롤링 시 SWIMMING 포즈 hitbox를 1블록 높이로 교체.
+     * 6-1 (클라이언트): SM 포즈별 커스텀 EntityDimensions 반환.
      *
-     * vanilla SWIMMING 포즈: 0.6W × 0.6H — SM 원본 크롤링 hitbox(1블록)와 다름.
-     * SM 크롤링 중 SWIMMING 포즈가 설정된 상태에서 getBaseDimensions 호출 시:
-     *   → 0.6W × 1.0H, eyeHeight 0.4F 반환
+     * SLIDING 포즈: SM isHeadJumping/isSliding 전용 (vanilla PlayerEntity는 SLIDING을 설정하지 않음).
+     *   → SM 원본: height=0.8F, eyeHeight=player.height-0.18F=0.62F (pose_strategy.md M-04 확인)
      *
-     * 헤드점프용 EntityDimensions → TODO Phase 10 (exact dimensions 미확인)
+     * SWIMMING 포즈 + isCrawling: vanilla 0.6H → SM 크롤링 1.0H로 교체.
+     *   → SM 원본 크롤링 hitbox: width=0.6F, height=1.0F (1블록 공간 통과)
      */
     @Inject(method = "getBaseDimensions", at = @At("HEAD"), cancellable = true)
     private void sm_getBaseDimensions_client(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
+        if (pose == EntityPose.SLIDING) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+            return;
+        }
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isHeadJumping && pose == EntityPose.SWIMMING) {
-            // 원본: height += 1F (boundingBox 직접 조작 → 1.7.10)
-            // [미확인 — 정확한 헤드점프 치수 추가 리서치 필요. 현재 1.5H 사용]
-            cir.setReturnValue(EntityDimensions.changing(0.6F, 1.5F).withEyeHeight(0.4F));
-        } else if (sm.isCrawling && pose == EntityPose.SWIMMING) {
+        if (sm.isCrawling && pose == EntityPose.SWIMMING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 1.0F).withEyeHeight(0.4F));
+        }
+    }
+
+    /**
+     * 6-4 (클라이언트): SM 이동 상태에서 vanilla updatePose() 취소 후 SM 포즈 강제 설정.
+     *
+     * vanilla updatePose()는 매 틱 포즈를 STANDING/CROUCHING/SWIMMING 등으로 덮어쓰므로
+     * SM 상태 활성 중 @HEAD에서 취소하여 SM 포즈를 유지한다.
+     *
+     * 우선순위 (pose_strategy.md 5-2):
+     *   isCrawling → SWIMMING (1.0H, leaningPitch/setupTransforms는 sm_isInSwimmingPose_client로 억제)
+     *   isHeadJumping | isSliding → SLIDING (0.8H, vanilla 충돌 없음)
+     *   그 외 → vanilla updatePose() 정상 실행
+     */
+    @Inject(method = "updatePose", at = @At("HEAD"), cancellable = true)
+    private void sm_updatePose_client(CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+
+        if (sm.isCrawling) {
+            player.setPose(EntityPose.SWIMMING);
+            ci.cancel();
+        } else if (sm.isHeadJumping || sm.isSliding) {
+            player.setPose(EntityPose.SLIDING);
+            ci.cancel();
         }
     }
 }
