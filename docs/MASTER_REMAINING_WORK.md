@@ -830,39 +830,29 @@ if (sm.isFlying) {
 
 ---
 
-### ANIM-02. isFlying 중 가만히 있을 때 팔/다리 각도 초기화 누락 🟡
+### ANIM-02. isFlying 중 가만히 있을 때 팔/다리 각도 초기화 ✅ 분석 완료 — 추가 구현 불필요
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체, walkFactor 계산 방식, 현재 arm/leg 설정 코드 구조
-- [ ] `docs/research/mapping/animation_system.md` — 비행 정지 자세 기본값, walkFactor=0 시 원본 처리 방식
-- [ ] `docs/research/original/smartrender/playerapi/SmartMovingRenderPlayerBase.md` — 비행 정지 상태 팔/다리 각도 원본값 확인
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체 확인
+- [x] `docs/research/mapping/animation_system.md` — isFlying 분기 원본 코드 확인
+- [x] `docs/research/original/smartmoving/render/SmartMovingModel.md` — 원본 isFlying 전체 코드 확인
+- [x] `docs/research/vanilla/PlayerEntityModel_setAngles.md` — vanilla arm.pitch 처리 확인
 
 **작업 단계 체크리스트**:
-- [ ] sm_animateFlying() 내 walkFactor 계산 위치 확인
-- [ ] `walkFactor < 0.01f` 분기 추가 및 정지 자세 팔/다리 각도 명시 설정
-- [ ] 이동 비행 분기는 기존 공식 유지 (`else` 블록으로 감싸기)
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
-- [ ] T-10 인게임 테스트: 비행 중 이동 멈춤 → 팔/다리 기본 자세 유지
-- [ ] PART 6 트래킹 [x] 체크
+- [x] sm_animateFlying() 내 walkFactor 계산 위치 확인
+- [x] 원본 isFlying 코드와 1:1 대조 분석
+- [x] PART 6 트래킹 [x] 체크
 
-**원본**: 비행 중 이동이 없으면(`walkFactor ≈ 0`) 팔/다리는 기본 자세로 수렴.  
-**현재**: `sm_animateFlying()`에서 `walkFactor=0`이어도 팔/다리 각도를 0으로 명시 설정하지 않음.
+**분석 결과 — 현재 코드가 이미 정확히 구현됨**:
 
-**수정**: `sm_animateFlying()` 내 분기:
-```java
-if (walkFactor < 0.01f) {
-    // 정지 비행 — 팔/다리 기본 자세
-    rightArm.pitch = -0.2f;
-    leftArm.pitch  = -0.2f;
-    rightArm.yaw   = 0f;
-    leftArm.yaw    = 0f;
-    rightLeg.pitch = 0f;
-    leftLeg.pitch  = 0f;
-} else {
-    // 이동 비행 — 기존 공식
-    ...
-}
-```
+원본 `isFlying` (SmartMovingModel.md 9번 분기) walkFactor=0 (정지) 시:
+- `arm.Z = Quarter * standFactor` → 현재 코드 `rightArm.roll = ... + QUARTER * standFactor` ✓
+- `arm.Y = cos(time)*Sixteenth * standFactor` → 현재 코드 `rightArm.yaw = cos(totalTime*0.15f)*SIXTEENTH*standFactor` ✓
+- `leg.X = cos(time+Half)*Sixtyfourth * standFactor` → 현재 코드 `rightLeg.pitch = ... + cos(...+HALF)*SIXTYFOURTH*standFactor` ✓
+- `arm.X (pitch)`: **원본도 명시적으로 설정 안 함** → vanilla Step 6이 limbSwingAmount→0 시 arm.pitch→0으로 수렴 ✓
+
+제안됐던 `-0.2f` 값은 원본 isFlying 코드 어디에도 존재하지 않음 — 설계 근거 없는 값이므로 구현 금지.
+현재 `walkFactor/standFactor` 합산 공식이 정지/이동 모든 상태를 이미 정확히 처리한다.
 
 ---
 
@@ -972,7 +962,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료
 [x] IMPL-06 비행 물리 (pitch 기반 3D 이동)  ← 2026-04-22 완료
 [x] ANIM-01 isFlying head.pitch 보정  ← 2026-04-22 완료
-[ ] ANIM-02 isFlying 정지 자세 초기화
+[x] ANIM-02 isFlying 정지 자세 초기화  ← 2026-04-22 분석 완료 (현재 구현이 이미 정확 — 추가 코드 불필요)
 ```
 
 ---
