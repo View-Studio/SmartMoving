@@ -10,7 +10,9 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.Box;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -131,6 +133,12 @@ public final class SmartMovingClientState {
     public boolean isClimbBackJumping;
     /** 마지막으로 전송한 State 비트맵 (중복 전송 방지). */
     private long lastSentBits = 0L;
+
+    // ── IMPL-01: 크롤링 토글 상태 ────────────────────────────────────────
+    /** 크롤링이 토글로 진입됨 — 다음 grab.wasPressed()로 해제 */
+    public boolean crawlToggled;
+    /** toCrawling() 직후 한 틱 스니크 StopPressed 무시 플래그 */
+    public boolean ignoreNextStopSneakButtonPressed;
 
     // ── C-33: SM 독자 exhaustion (클라이밍 피로도) ──────────────────────────
     /** 이전 틱 클라이밍 여부 — exhaustion 허용 조건 판정용. */
@@ -294,7 +302,44 @@ public final class SmartMovingClientState {
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
             isFlying = player.getAbilities().flying;
+
+            // IMPL-01: 크롤링 진입/유지/해제
+            // 원본 트리거: grabButton.StartPressed && (sneakToggled || sneakButton.Pressed) && onGround
+            SmartMovingConfig cfg = SmartMovingConfig.Config;
+            if (cfg.crawl) {
+                boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
+                if (!isCrawling) {
+                    boolean wantCrawl = grabJustPressed
+                            && player.isSneaking()
+                            && player.isOnGround()
+                            && !isFlying && !isSwimming_sm && !isDiving && !isDipping
+                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                            && !isSliding && !isHeadJumping;
+                    boolean mustCrawl = !canStandUp(player);
+                    if (wantCrawl || mustCrawl) {
+                        isCrawling = true;
+                        crawlToggled = true;
+                        ignoreNextStopSneakButtonPressed = true;
+                    }
+                } else {
+                    boolean mustCrawl = !canStandUp(player);
+                    if (mustCrawl) {
+                        // 공간 부족 — 강제 유지
+                    } else if (crawlToggled) {
+                        if (grabJustPressed) {
+                            isCrawling = false;
+                            crawlToggled = false;
+                        }
+                    } else {
+                        if (!player.isSneaking()) {
+                            isCrawling = false;
+                        }
+                    }
+                }
+            }
+
             // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
+            // isCrawling이 확정된 후 계산해야 정확함
             isSmall = isCrawling || isSliding || isHeadJumping;
         }
     }
@@ -326,11 +371,20 @@ public final class SmartMovingClientState {
         isDiving = false;
         isHeadJumping = false;
         isCrawling = false;
+        crawlToggled = false;
+        ignoreNextStopSneakButtonPressed = false;
         isSliding = false;
         isSmall = false;
         angleJumpType = 0;
         wasClimbing  = false;
         exhaustion   = 0F;
+    }
+
+    private static boolean canStandUp(ClientPlayerEntity player) {
+        Box standBox = player.getDimensions(EntityPose.STANDING)
+                             .getBoxAt(player.getPos())
+                             .contract(1.0E-7);
+        return player.getWorld().isSpaceEmpty(player, standBox);
     }
 
     // ── R-01: sendStatePacket() ───────────────────────────────────────
