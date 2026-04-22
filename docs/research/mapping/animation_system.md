@@ -73,7 +73,19 @@ PlayerEntityRenderer.render()
 
 ## SmartRenderModel 계층 구조 (bipedOuter/Torso/Breast/Neck/Pelvic/Shoulder)
 
-- **원본 동작**: vanilla `ModelBiped.boxList.clear()` 후 12개 `ModelRotationRenderer` 노드로 재구성. 계층: `bipedOuter → bipedTorso → [bipedBody, bipedBreast → [bipedNeck → bipedHead, bipedCloak, bipedRightShoulder → bipedRightArm, bipedLeftShoulder → bipedLeftArm], bipedPelvic → [bipedRightLeg, bipedLeftLeg]]`. 중간 노드(Torso/Breast/Neck/Pelvic/Shoulder)가 그룹 회전을 담당.
+- **원본 동작**: vanilla `ModelBiped.boxList.clear()` 후 15개 `ModelRotationRenderer` 노드로 재구성. 계층: `bipedOuter → bipedTorso → [bipedBody, bipedBreast → [bipedNeck → bipedHead → [bipedEars, bipedHeadwear], bipedCloak, bipedRightShoulder → bipedRightArm, bipedLeftShoulder → bipedLeftArm], bipedPelvic → [bipedRightLeg, bipedLeftLeg]]`. 중간 노드(Torso/Breast/Neck/Pelvic/Shoulder)가 그룹 회전을 담당.
+  
+  초기 pivot 값 (SmartRenderModel.java 생성자 직접 확인):
+  - bipedOuter: (0, 0, 0), root, fadeEnabled=true
+  - bipedTorso: (0, 0, 0)
+  - bipedBody, bipedBreast, bipedNeck, bipedHead, bipedEars, bipedHeadwear: 모두 (0, 0, 0)
+  - bipedCloak: (0, 0, 2F) — Z=2 (등 쪽)
+  - bipedRightShoulder: (-5F, 2F, 0) / bipedLeftShoulder: (5F, 2F, 0) mirror=true
+  - bipedRightArm, bipedLeftArm: (0, 0, 0) — Shoulder 기준 상대 좌표
+  - bipedPelvic: (0, 12F, 0) — Y=12 (허리 아래)
+  - bipedRightLeg: (-2F, 0, 0) / bipedLeftLeg: (2F, 0, 0) — Pelvic 기준
+  
+  초기 rotateAngle: 모두 0.0F (create() = ModelRotationRenderer 기본값; copy()는 rotateAngle 복사 안 함)
 - **1.21.1 대응**: 없음 — 직접 구현 필요. `PlayerEntityModel`의 파트: head/hat/body/rightArm/leftArm/rightLeg/leftLeg + cloak/ear/sleeve/pants/jacket. 중간 노드 없음.
 - **동작 차이**:
   - `bipedOuter` (전체 방향 루트, fadeRotateAngleY): 없음. setupTransforms의 `POSITIVE_Y.rotationDegrees(180 - bodyYaw)`가 유사한 역할.

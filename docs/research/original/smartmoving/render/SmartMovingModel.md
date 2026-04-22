@@ -1040,6 +1040,68 @@ private static float Normalize(float radiant)
 | `SmartMovingRender.CurrentMainModel` | 생성 시 상태 복사 원본 |
 | `ModelRotationRenderer` | 뼈대 노드 타입, 회전 순서 상수(YZX/XZY/ZXY/YXZ 등) |
 | `MathHelper` | `MathHelper.cos()` |
+
+---
+
+## R-05 리서치 결과 추가 (A-15, A-16)
+
+### A-16 — isRopeSliding 분기
+
+**소스 위치**: `SmartMovingModel.java` → `setRotationAngles()` 첫 번째 분기 (lines 269~301, 이미 본 문서 "1. isRopeSliding" 섹션에 완전 기록됨)
+
+**추가 확인 사항 없음** — 해당 분기 전체가 이미 정확하게 기록되어 있음.
+
+---
+
+### A-15 — SmartRenderModel 계층 구조 (pivot 값 포함)
+
+**소스 위치**: `SmartRenderModel.java` (net.smart.render) → 생성자 전체 직접 확인
+
+**계층 구조 및 초기 pivot (확인됨)**:
+
+```
+bipedOuter          parent=null   pivot=(0, 0, 0)    fadeEnabled=true
+  └─ bipedTorso     parent=bipedOuter   pivot=(0, 0, 0)
+       ├─ bipedBody  parent=bipedTorso   pivot=(0, 0, 0)   [mesh: originalBipedBody 복사]
+       ├─ bipedBreast parent=bipedTorso  pivot=(0, 0, 0)
+       │    ├─ bipedNeck    parent=bipedBreast  pivot=(0, 0, 0)
+       │    │    └─ bipedHead  parent=bipedNeck  pivot=(0, 0, 0)  [mesh: originalBipedHead 복사]
+       │    │         ├─ bipedEars      parent=bipedHead  pivot=(0, 0, 0)
+       │    │         └─ bipedHeadwear  parent=bipedHead  pivot=(0, 0, 0)  [mesh: originalBipedHeadwear]
+       │    ├─ bipedCloak         parent=bipedBreast  pivot=(0, 0, 2F)
+       │    ├─ bipedRightShoulder parent=bipedBreast  pivot=(-5F, 2F, 0)
+       │    │    └─ bipedRightArm  parent=bipedRightShoulder  pivot=(0, 0, 0)  [mesh: originalBipedRightArm]
+       │    └─ bipedLeftShoulder  parent=bipedBreast  pivot=(5F, 2F, 0)   mirror=true
+       │         └─ bipedLeftArm   parent=bipedLeftShoulder   pivot=(0, 0, 0)  [mesh: originalBipedLeftArm]
+       └─ bipedPelvic  parent=bipedTorso  pivot=(0, 12F, 0)
+            ├─ bipedRightLeg  parent=bipedPelvic  pivot=(-2F, 0, 0)  [mesh: originalBipedRightLeg]
+            └─ bipedLeftLeg   parent=bipedPelvic  pivot=(2F, 0, 0)   [mesh: originalBipedLeftLeg]
+```
+
+**초기 rotateAngle**: 모두 0.0F  
+- `create()` = `new ModelRotationRenderer(mp, i, j, base)` — rotateAngle 기본값 0  
+- `copy()` — childModels/cubeList/mirror/isHidden/showModel만 복사, rotationPoint·rotateAngle은 복사하지 않음
+
+**핵심 pivot 값**:
+
+| 노드 | pivotX | pivotY | pivotZ | 비고 |
+|------|--------|--------|--------|------|
+| bipedOuter | 0 | 0 | 0 | root, fadeEnabled |
+| bipedTorso | 0 | 0 | 0 | 상체 그룹 루트 |
+| bipedBody | 0 | 0 | 0 | |
+| bipedBreast | 0 | 0 | 0 | |
+| bipedNeck | 0 | 0 | 0 | |
+| bipedHead | 0 | 0 | 0 | |
+| bipedEars | 0 | 0 | 0 | |
+| bipedHeadwear | 0 | 0 | 0 | |
+| bipedCloak | 0 | 0 | 2F | Z=2 (등 쪽) |
+| bipedRightShoulder | -5F | 2F | 0 | X=-5 (오른쪽) |
+| bipedRightArm | 0 | 0 | 0 | Shoulder 기준 |
+| bipedLeftShoulder | 5F | 2F | 0 | X=+5 (왼쪽), mirror=true |
+| bipedLeftArm | 0 | 0 | 0 | Shoulder 기준 |
+| bipedPelvic | 0 | 12F | 0 | Y=12 (허리 아래) |
+| bipedRightLeg | -2F | 0 | 0 | Pelvic 기준 |
+| bipedLeftLeg | 2F | 0 | 0 | Pelvic 기준 |
 | `HandsClimbing` | `MiddleGrab`, `UpGrab`, `NoGrab` 상수 |
 | `FeetClimbing` | `NoStep` 상수 |
 | `Block` | `overGroundBlock.getMaterial().isSolid()` |
