@@ -27,6 +27,8 @@ public class SmartMovingConfig {
     public float sprintFactor = 1.5F;
 
     // ── Climbing ────────────────────────────────────────────────
+    // 원본: Options._baseClimb = "standard" (processBlockCode §0 코드). "standard" → true, 그 외 → false
+    public boolean baseClimb = true;
     public boolean freeClimb = true;
     public float ceilingClimbingSpeedFactor = 0.2F;
     public boolean climbExhaustion = false;
@@ -113,6 +115,7 @@ public class SmartMovingConfig {
         crawlFactor              = getFloat(p,  "move.crawl.factor",              crawlFactor);
         runFactor                = getFloat(p,  "move.run.factor",                runFactor);
         sprintFactor             = getFloat(p,  "move.sprint.factor",             sprintFactor);
+        baseClimb                = getBool(p,   "move.climb.base",                baseClimb);
         freeClimb                = getBool(p,   "move.climb.free",                freeClimb);
         ceilingClimbingSpeedFactor = getFloat(p, "move.climb.ceiling.speed.factor", ceilingClimbingSpeedFactor);
         climbExhaustion          = getBool(p,   "move.climb.exhaustion",          climbExhaustion);
@@ -157,6 +160,7 @@ public class SmartMovingConfig {
         p.setProperty("move.crawl.factor",               String.valueOf(crawlFactor));
         p.setProperty("move.run.factor",                 String.valueOf(runFactor));
         p.setProperty("move.sprint.factor",              String.valueOf(sprintFactor));
+        p.setProperty("move.climb.base",                 String.valueOf(baseClimb));
         p.setProperty("move.climb.free",                 String.valueOf(freeClimb));
         p.setProperty("move.climb.ceiling.speed.factor", String.valueOf(ceilingClimbingSpeedFactor));
         p.setProperty("move.climb.exhaustion",           String.valueOf(climbExhaustion));
