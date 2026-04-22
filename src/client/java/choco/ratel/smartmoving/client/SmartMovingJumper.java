@@ -108,7 +108,8 @@ public final class SmartMovingJumper {
                                  .contract(1.0E-7);
             if (!world.isSpaceEmpty(player, standBox)) {
                 sm.isCrawling = true;
-                sm.crawlToggled = true;
+                // 원본: toCrawling() → Options.isCrawlToggleEnabled() 게이트
+                if (cfg.crawlToggle) sm.crawlToggled = true;
             }
         }
 

@@ -101,6 +101,11 @@ public class SmartMovingConfig {
     // false → 크롤링 중 엣지에서 isSneaking=true 강제 (추락 방지)
     public boolean crawlOverEdge = true;
 
+    // ── Crawl / Sneak toggle ────────────────────────────────────
+    // 원본: Options._crawlToggle = Modified("move.crawl.toggle") → 기본값 false
+    // false=홀드(스닉키 누름 유지), true=토글(grab 한 번 눌러 크롤링 고정/해제)
+    public boolean crawlToggle = false;
+
     // ── Name tag display ────────────────────────────────────────
     // 원본: _sneakNameTag = Modified("move.sneak.name") → 기본값 true
     // true → 스니킹 중에도 이름 태그 64 거리 기준 (vanilla는 32)
@@ -272,6 +277,7 @@ public class SmartMovingConfig {
         slide                    = getBool(p,   "move.slide",                     slide);
         crawl                    = getBool(p,   "move.crawl",                     crawl);
         crawlOverEdge            = getBool(p,   "move.crawl.edge",                crawlOverEdge);
+        crawlToggle              = getBool(p,   "move.crawl.toggle",              crawlToggle);
         sneakNameTag             = getBool(p,   "move.sneak.name",                sneakNameTag);
         crawlNameTag             = getBool(p,   "move.crawl.name",                crawlNameTag);
         sneak                    = getBool(p,   "move.sneak",                     sneak);
@@ -340,6 +346,7 @@ public class SmartMovingConfig {
         p.setProperty("move.slide",                      String.valueOf(slide));
         p.setProperty("move.crawl",                      String.valueOf(crawl));
         p.setProperty("move.crawl.edge",                 String.valueOf(crawlOverEdge));
+        p.setProperty("move.crawl.toggle",               String.valueOf(crawlToggle));
         p.setProperty("move.sneak.name",                 String.valueOf(sneakNameTag));
         p.setProperty("move.crawl.name",                 String.valueOf(crawlNameTag));
         p.setProperty("move.sneak",                      String.valueOf(sneak));

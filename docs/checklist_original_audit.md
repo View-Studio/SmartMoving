@@ -152,7 +152,7 @@
 | 상태 | 리서치 파일 (smartmoving/config/) | 대응 구현 파일 |
 |------|----------------------------------|--------------|
 | [x] | `SmartMovingConfig.md` | `SmartMovingConfig.java` |
-| [ ] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
+| [x] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
 | [ ] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
 | [ ] | `SmartMovingServerConfig.md` | 서버 설정 대응 (있는 경우) |
 | [ ] | `SmartMovingServerOptions.md` | 서버 설정 대응 |
@@ -438,6 +438,39 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 - Property 팩토리 (`Creative/Hard/Medium`) → 단순 기본값으로 대체 ✓
 
 신규 발견 미구현: 없음 (복잡한 의존성/버전 마이그레이션 시스템은 1.21.1 단일 설정파일 구조에서 N/A)
+
+---
+
+### [2026-04-23] config/SmartMovingOptions.md
+
+대응 구현: SmartMovingConfig.java, SmartMovingClientState.java, SmartMovingJumper.java
+
+발견한 불일치:
+- [오역] `crawlToggle` config 게이트 누락 — `crawlToggled = true` 무조건 설정
+  - 원본: `toCrawling()` → `if(Options.isCrawlToggleEnabled()) crawlToggled = true;`
+  - `isCrawlToggleEnabled() = _crawlToggle.value && enabled`, `_crawlToggle = Modified(...)` 기본값 false
+  - 1.21.1: SmartMovingClientState.initCrawl + SmartMovingJumper.toSlidingOrCrawling 모두 무조건 `crawlToggled = true`
+  - 영향: 기본값(hold 모드)에서도 크롤링이 항상 토글 방식으로 동작
+  - 수정:
+    1. SmartMovingConfig에 `crawlToggle = false` 필드 + readFrom/writeTo 추가 (`"move.crawl.toggle"`)
+    2. SmartMovingClientState: `if (SmartMovingConfig.Config.crawlToggle) crawlToggled = true;`
+    3. SmartMovingJumper: `if (cfg.crawlToggle) sm.crawlToggled = true;`
+
+필드 매핑 검증:
+- `_perspectiveFadeFactor/SpeedFactor/SpeedFactorMax/RunFactor/SprintFactor` → SmartMovingConfig 필드 ✓
+- `_climbJumpBackHeadOnGrab` → `climbJumpBackHead` ✓ (key name은 단순화, 동작 정확)
+- `_flyCloseToGround`, `_flyWhileOnGround` → SmartMovingConfig 필드 ✓
+- `_flyControlVertical` → SmartMovingConfig.flyControlVertical ✓
+- `_crawlToggle` → SmartMovingConfig.crawlToggle ✓ (수정 후)
+- `toggle()` 채팅 메시지 → SmartMovingClientState에서 처리 ✓
+- `changeSpeed()` 채팅 메시지 → SmartMovingClient SpeedChangePayload 수신에서 처리 ✓
+
+신규 발견 미구현 (기능 미이식 — 버그 아님):
+- `_diveControlVertical` — 잠수 수직 시야 연동 이동: SmartMovingSwimmer 미구현
+- `_displayExhaustionBar`/`_displayJumpChargeBar` — HUD 표시 on/off: SmartMovingHud 항상 표시
+- `_sneakToggle` — 스닉 토글: 미이식
+- `_angleJumpDoubleClickTicks`, `_wallJumpDoubleClick/Ticks` — 더블클릭 설정: 미이식
+- `initializeForGameIfNeccessary()`, 게임 타입별 config key 시스템: N/A
 
 ---
 
@@ -955,3 +988,4 @@ N/A (구조적 변환):
 | 2026-04-23 | `moving/SmartMovingServer.md` | [누락] beforeActivateBlockOrUseItem / afterActivateBlockOrUseItem — 블록 상호작용 시 forceIsSneaking 설정/해제 훅. forceIsSneaking 필드는 선언·읽기 코드 존재하나 쓰는 훅 없음. 크롤링 중 블록 상호작용 시 isSneaking() 오버라이드 불작동. | 미처리 (이슈 등록 필요)
 | 2026-04-23 | `config/SmartMovingConfig.md` | [오역] processBlockCode §0 — `cfg.baseClimb = true` 설정, 그러나 `baseClimb`은 climbing 코드 미사용. 원본: `_baseClimb="standard"` → `_isFreeBaseClimb/_isSmartBase/_isSimpleBase` 모두 false. 1.21.1: freeClimb/simpleClimb/smartClimb 변경 없음 → §0 수신 시 climbing 모드 무변경. | **처리 완료** — `§0` → `cfg.freeClimb=false; cfg.simpleClimb=false; cfg.smartClimb=false;` 로 수정. BUILD SUCCESSFUL ✓
 | 2026-04-23 | `config/SmartMovingConfig.md` | [오역] getUserSpeedFactor() — `speedUserFactor==1F` 조기 반환 조건 누락. 원본: `isUserSpeedAlwaysDefault() = !speedUser \|\| factor==1F`. 1.21.1: `!speedUser \|\| exponent==0`만 체크. speedUserFactor=1F+exponent≠0일 때 2^exp 반환 (원본은 1F). | **처리 완료** — `if (!speedUser \|\| speedUserFactor == 1F \|\| speedUserExponent == 0)` 조건으로 수정. BUILD SUCCESSFUL ✓
+| 2026-04-23 | `config/SmartMovingOptions.md` | [오역] crawlToggle config 게이트 누락 — toCrawling()에서 `if(Options.isCrawlToggleEnabled()) crawlToggled=true;`이나 1.21.1은 무조건 crawlToggled=true. 기본값 false(홀드)에서도 항상 토글 동작. | **처리 완료** — SmartMovingConfig: crawlToggle=false 필드+readFrom+writeTo 추가; ClientState+Jumper: crawlToggle config 게이트 추가. BUILD SUCCESSFUL ✓ |

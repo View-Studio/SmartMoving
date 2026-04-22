@@ -412,7 +412,8 @@ public final class SmartMovingClientState {
                             && (!isDipping || dippingDepth < 0.65F);
                     if (wantCrawl || mustCrawl) {
                         isCrawling = true;
-                        crawlToggled = true;
+                        // 원본: Options.isCrawlToggleEnabled() 게이트 — _crawlToggle 기본값 false(홀드)
+                        if (SmartMovingConfig.Config.crawlToggle) crawlToggled = true;
                         ignoreNextStopSneakButtonPressed = true;
                     }
                 } else {
