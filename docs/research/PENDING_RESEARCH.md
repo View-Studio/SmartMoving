@@ -32,8 +32,8 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | A-06 | `wallJumpCount` 최대값 및 `continueWallJumping` 전환 조건 전체 | SmartMovingSelf.java (wallJump 섹션) | [x] → `mapping/jump.md` |
 | A-07 | `jumpMotionX`, `jumpMotionZ` 저장 타이밍 — handleJumping 어느 지점에서 저장하는지 | SmartMovingSelf.java | [x] → `mapping/jump.md` |
 | A-08 | SM이 사용하는 전체 커스텀 키 목록 + 각 키의 역할 | Button.java | [x] → `original/smartmoving/moving/Button.md` |
-| A-09 | `SmartMovingClient.processBlockCode()` 원본 구현 전체 — 채팅 파싱 방식, 마커 포맷, 12개 기능 배열 구조 | SmartMovingClient.java | [ ] |
-| A-10 | `SmartMovingSelf.updateEntityActionState()` — processBlockCode 결과가 어느 필드에 어떻게 반영되는지 | SmartMovingSelf.java | [ ] |
+| A-09 | `SmartMovingClient.processBlockCode()` 원본 구현 전체 — 채팅 파싱 방식, 마커 포맷, 12개 기능 배열 구조 | SmartMovingClient.java | [x] → 실제 위치는 `SmartMovingComm.java`. `SmartMovingComm.md`에 이미 기록됨. `SmartMovingClient.md`에 요약 및 정오 기재. |
+| A-10 | `SmartMovingSelf.updateEntityActionState()` — processBlockCode 결과가 어느 필드에 어떻게 반영되는지 | SmartMovingSelf.java | [x] → 2347~2357줄. `updateCounter < 10` 조건으로 초기 10틱만 채팅 히스토리 스캔. 결과는 Config→ServerConfig 전환을 통해 간접 반영. `SmartMovingClient.md` 및 `SmartMovingSelf.md`에 기록. |
 | A-11 | `getPoses()` 반환값이 사용되는 경로 전체 (어디서 호출, 어떻게 사용) | SmartMovingSelf.java 또는 SmartMovingPlayerBase.java | [ ] |
 | A-12 | `reverseHandleMaterialAcceleration()` — 실제로 무엇을 하는지, travel() 완전 대체 시 불필요한지 여부 | SmartMovingSelf.java | [ ] |
 | A-13 | SM 크롤링 서버 측 `isCrawling` 동기화 방식 — State 패킷 비트 배치 확인 (bit 몇 번인지) | SmartMovingOther.java / State 패킷 비트맵 | [ ] |
@@ -154,7 +154,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/original/smartmoving/moving/SmartMovingClient.md` (추가)
 
-**완료**: [ ]
+**완료**: [x] — A-09: processBlockCode는 SmartMovingComm.java에 있음(SmartMovingClient.java 아님). SmartMovingComm.md에 이미 완전히 기록됨. A-10: updateEntityActionState 내 2347~2357줄에서 updateCounter<10 조건으로 초기 10틱만 채팅 히스토리 스캔. 결과는 Config→ServerConfig 전환으로 간접 반영.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02
-- 다음 진행: **R-03** (processBlockCode + updateEntityActionState 확인)
+- 완료된 청크: R-01, R-02, R-03
+- 다음 진행: **R-04** (getPoses + reverseHandleMaterialAcceleration + 서버 물리 확인)

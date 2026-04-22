@@ -1728,6 +1728,31 @@ private void resetState() {
 
 이 메서드가 모든 입력 처리와 상태 전환의 핵심. 매 틱 호출됨.
 
+### processBlockCode 채팅 스캔 (2347-2357줄) — 접속 초기 10틱만 실행
+
+```java
+if(sp.worldObj.isRemote && updateCounter < 10)
+{
+    List<?> chatMessageList = (List<?>)Reflect.GetField(
+        GuiNewChat.class,
+        isp.getMcField().ingameGUI.getChatGUI(),
+        SmartMovingInstall.GuiNewChat_chatMessageList);
+    for(int i=0; i<chatMessageList.size(); i++)
+        if(SmartMovingComm.processBlockCode(
+            ((ChatLine)chatMessageList.get(i)).func_151461_a().getUnformattedText()))
+            chatMessageList.remove(i--);
+    updateCounter++;
+}
+```
+
+- 조건: `sp.worldObj.isRemote && updateCounter < 10`
+- `Reflect.GetField`로 `GuiNewChat.chatMessageList` private 필드에 직접 접근
+- `ChatLine.func_151461_a().getUnformattedText()` — §코드 포함 raw 문자열
+- `processBlockCode` 반환 `true` → 해당 채팅 라인 제거 (플레이어에게 안 보임)
+- `updateCounter`: SmartMovingSelf 인스턴스 필드. 10틱 후 이 블록은 실행 안 됨.
+
+---
+
 ### 피로 리셋
 
 ```java
