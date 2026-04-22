@@ -712,12 +712,12 @@ if (SmartMovingKeys.speedDecrease.wasPressed()) {
 ### IMPL-06. 비행 물리 — 바라보는 방향(pitch) 3D 이동 🟠
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 흐름, 클라이밍 처리 앞뒤 위치 파악
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityClient.java` — 비행 억제(getOffGroundSpeed) 코드 위치 확인
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — isFlying 필드, stats 필드 확인
-- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — travel() 또는 beforeMoveEntity() 내 비행 분기 **전체 코드** 정독 (grep: isFlying, flySpeed, motionY)
-- [ ] `docs/research/mapping/speed_physics.md` — 비행 물리 속도 팩터 매핑
-- [ ] `docs/research/vanilla/LivingEntity_travel.md` — vanilla travel() 비행 처리 구조, ci.cancel() 타이밍
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 흐름, 클라이밍 처리 앞뒤 위치 파악
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityClient.java` — 비행 억제(getOffGroundSpeed) 코드 위치 확인 (grep으로 확인)
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — isFlying 필드 확인 (grep으로 확인)
+- [x] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — SPC flying만 다룸 확인; 실제 물리는 moving/SmartMovingSelf.md에서 확인
+- [x] `docs/research/mapping/speed_physics.md` — 비행 물리 속도 팩터 매핑 전체 읽기
+- [ ] `docs/research/vanilla/LivingEntity_travel.md` — vanilla travel() 비행 처리 구조 (미읽음 — Yarn 이름 매핑 파일, 구현에 영향 없음으로 판단)
 
 **⚠️ 필수 선행 작업**: 위 파일 읽기 전에 아래 grep으로 원본 코드 범위를 먼저 찾는다:
 ```bash
