@@ -108,13 +108,13 @@
 
 | 상태 | 리서치 파일 (smartrender/statistics/) | 대응 구현 파일 |
 |------|--------------------------------------|--------------|
-| [ ] | `SmartStatistics.md` | `SmartMovingStats.java` 또는 `SmartMovingClientState.stats` |
-| [ ] | `SmartStatisticsData.md` | 통계 필드 대응 |
-| [ ] | `SmartStatisticsDatas.md` | 통계 필드 대응 |
-| [ ] | `SmartStatisticsContext.md` | 통계 상수 |
-| [ ] | `IEntityPlayerSP.md` | 통계 갱신 훅 대응 확인 |
-| [ ] | `playerapi/SmartStatisticsPlayerBase.md` | 통계 갱신 훅 |
-| [ ] | `../SmartRenderInfo.md` | 렌더 정보 대응 (smartrender/SmartRenderInfo.md) |
+| [x] | `SmartStatistics.md` | `SmartMovingStats.java` 또는 `SmartMovingClientState.stats` |
+| [x] | `SmartStatisticsData.md` | 통계 필드 대응 |
+| [x] | `SmartStatisticsDatas.md` | 통계 필드 대응 |
+| [x] | `SmartStatisticsContext.md` | 통계 상수 |
+| [x] | `IEntityPlayerSP.md` | 통계 갱신 훅 대응 확인 |
+| [x] | `playerapi/SmartStatisticsPlayerBase.md` | 통계 갱신 훅 |
+| [x] | `../SmartRenderInfo.md` | 렌더 정보 대응 (smartrender/SmartRenderInfo.md) |
 
 ---
 
@@ -641,6 +641,30 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/statistics/ (7개 파일)
+
+대응 구현: SmartStatistics.java, MixinEntityClient.java (calculate 호출), SmartMovingClientState.stats
+
+발견한 불일치:
+- [오역] `SmartStatistics.java` `currentSpeed/currentHorizontalSpeed/currentVerticalSpeed` EMA 스케일 오류
+  - 원본 `SmartStatisticsData.calcualte()`: `distance *= 4F; legYaw += (distance - legYaw) * 0.4F`
+  - 버그: `currentSpeed = (float) distance` (원시 거리값, 4배/EMA 없음)
+  - 영향: `sm_setupTransforms/sm_animateFlying` 에서 `walkFactor = min(1, currentSpeed)` → 비행 몸통 기울기 4배 약화
+  - 수정: `currentSpeed += ((float) distance * 4f - currentSpeed) * 0.4f` 형태로 3종 EMA 적용 (SmartStatistics.java 완료)
+
+불일치 없음 (나머지):
+- `SmartStatisticsData.md`: 링 버퍼 슬롯(horizontal/vertical/all) → 1.21.1 SmartStatistics 단일 객체로 통합 ✓
+- `SmartStatisticsDatas.md`: 링 버퍼 컨테이너(10슬롯) + renderPartialTicks 보간 → 1.21.1 tick-based 단일 계산 ✓
+- `SmartStatisticsContext.md`: `calculateHorizontalStats` flag + `onTickInGame()` → N/A (vanilla limbSwing* 덮어쓰기 불필요) ✓
+- `IEntityPlayerSP.md`: `getStatistics()` 인터페이스 → SmartMovingClientState.stats 필드 직접 접근으로 대체 ✓
+- `playerapi/SmartStatisticsPlayerBase.md`: `afterMoveEntityWithHeading` → MixinEntityClient.move TAIL inject ✓, `afterUpdateRidden` → N/A (ticksRiding 미구현이지만 해당 필드 1.21.1 미사용)
+- `SmartRenderInfo.md`: FML @Mod 상수 홀더 → fabric.mod.json 대체 → N/A ✓
+
+신규 발견 미구현:
+- 없음 (SmartStatistics EMA 오역만 발견, 수정 완료)
+
+---
+
 ### [2026-04-23] smartrender/RenderPlayer.md + IModelPlayer.md + IRenderPlayer.md + playerapi/SmartRenderModelPlayerBase.md + playerapi/SmartRenderRenderPlayerBase.md
 
 대응 구현: N/A
@@ -697,3 +721,10 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/IRenderPlayer.md` | 없음 — SmartRenderRender↔구현체 브릿지 인터페이스. SmartRenderRender/3-layer model N/A → 전체 N/A | N/A |
 | 2026-04-23 | `smartrender/playerapi/SmartRenderModelPlayerBase.md` | 없음 — PlayerAPI ModelPlayerBase + IModelPlayer 어댑터. PlayerAPI/SmartRenderModel 둘 다 N/A | N/A |
 | 2026-04-23 | `smartrender/playerapi/SmartRenderRenderPlayerBase.md` | 없음 — PlayerAPI RenderPlayerBase + IRenderPlayer 어댑터. PlayerAPI/SmartRenderRender 둘 다 N/A | N/A |
+| 2026-04-23 | `smartrender/statistics/SmartStatistics.md` | `currentSpeed/currentHorizontalSpeed/currentVerticalSpeed` 스케일 오류 — 원본: `EMA(dist*4, 0.4)`, 버그: 원시 거리값 그대로 사용. 비행 walkFactor 4배 약화. | **처리 완료** — SmartStatistics.java: EMA with *4 계수 적용 (`dist*4f - speed) * 0.4f`) |
+| 2026-04-23 | `smartrender/statistics/SmartStatisticsData.md` | 없음 — 링 버퍼 내 개별 슬롯(horizontal/vertical/all). 1.21.1에서 SmartStatistics 단일 객체로 통합. 링 버퍼/보간 없음. | N/A |
+| 2026-04-23 | `smartrender/statistics/SmartStatisticsDatas.md` | 없음 — 링 버퍼 컨테이너(10슬롯). renderPartialTicks 보간 패턴. 1.21.1에서 tick-based 단일 계산으로 대체. | N/A |
+| 2026-04-23 | `smartrender/statistics/SmartStatisticsContext.md` | 없음 — `calculateHorizontalStats` static flag + `onTickInGame()` Forge 이벤트. vanilla limbSwing* 덮어쓰기 패턴 불필요. | N/A |
+| 2026-04-23 | `smartrender/statistics/IEntityPlayerSP.md` | 없음 — `getStatistics()` 단일 메서드 인터페이스. SmartMovingClientState.stats 필드로 대체. | N/A |
+| 2026-04-23 | `smartrender/statistics/playerapi/SmartStatisticsPlayerBase.md` | 없음 — PlayerAPI ClientPlayerBase + IEntityPlayerSP 구현체. `afterMoveEntityWithHeading` → Mixin TAIL inject로 대체. | N/A |
+| 2026-04-23 | `smartrender/SmartRenderInfo.md` | 없음 — FML @Mod 상수 홀더(ModId/ModName/ModVersion). fabric.mod.json으로 완전 대체. | N/A |

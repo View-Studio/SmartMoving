@@ -48,12 +48,14 @@ public class SmartStatistics {
         verticalDistance = Math.abs(diffY);
         distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
 
-        // 원본: currentSpeed = data.all.legYaw (링버퍼 이동 평균). 1.21.1: 틱별 직접값 사용.
-        currentHorizontalSpeed = (float) horizontalDistance;
-        currentVerticalSpeed = (float) verticalDistance;
-        currentSpeed = (float) distance;
+        // 원본: SmartStatisticsData.calcualte() — distance *= 4F; legYaw += (dist - legYaw) * 0.4F
+        // legYaw = EMA(rawDistance * 4, factor=0.4). 일반 보행(~0.22 b/t) → ~0.88, 비행(~0.3 b/t) → 1.0(clamp).
+        // sm_setupTransforms/sm_animateFlying에서 walkFactor = min(1, currentSpeed)으로 사용됨.
+        currentHorizontalSpeed += ((float) horizontalDistance * 4f - currentHorizontalSpeed) * 0.4f;
+        currentVerticalSpeed   += ((float) verticalDistance   * 4f - currentVerticalSpeed)   * 0.4f;
+        currentSpeed           += ((float) distance           * 4f - currentSpeed)           * 0.4f;
 
-        // 평탄화 속도 (간단 EMA: factor=0.5)
+        // 평탄화 수평 속도 (EMA on EMA: factor=0.5)
         currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened * 0.5f + currentHorizontalSpeed * 0.5f;
 
         // 수직 이동 각도 (라디안): 수평 이동 방향에서 위/아래 각도
