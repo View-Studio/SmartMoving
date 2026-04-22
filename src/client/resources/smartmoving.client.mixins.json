@@ -4,6 +4,7 @@
   "package": "choco.ratel.smartmoving.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "MixinAbstractClientPlayerEntityClient",
     "MixinClientPlayNetworkHandler",
     "MixinClientPlayerEntity",
     "MixinEntityClient",

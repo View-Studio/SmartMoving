@@ -107,4 +107,21 @@ public abstract class MixinEntityClient {
             }
         }
     }
+
+    /**
+     * pushOutOfBlocks: 서버→클라이언트 위치 동기화 직후 억제.
+     * 원본: SmartMovingSelf.pushOutOfBlocks (SmartMovingSelf.md L1263-1277)
+     *
+     * multiPlayerInitialized > 0이면 실행 취소 후 카운터 1 감소.
+     * 1.21.1: Entity.pushOutOfBlocks(double,double,double) — Entity에 정의됨.
+     */
+    @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
+    private void sm_pushOutOfBlocks(double x, double y, double z, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.multiPlayerInitialized > 0) {
+            sm.multiPlayerInitialized--;
+            ci.cancel();
+        }
+    }
 }

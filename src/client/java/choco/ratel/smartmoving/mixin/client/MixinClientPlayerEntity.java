@@ -5,14 +5,10 @@ import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.MathHelper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 4-2: tickEssential() 무조건 호출 Mixin.
@@ -26,53 +22,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(ClientPlayerEntity.class)
 public abstract class MixinClientPlayerEntity {
-
-    /**
-     * getFovMultiplier() 오버라이드 — fadingPerspectiveFactor 기반 부드러운 FOV 배율.
-     * 원본: SmartMovingSelf.getFOVMultiplier (SmartMovingSelf.md L2036-2044)
-     *
-     * 원본: MOVEMENT_SPEED attribute value를 fadingPerspectiveFactor로 임시 교체 후 vanilla 호출.
-     * 1.21.1: vanilla getFovMultiplier() (AbstractClientPlayerEntity) 로직을 직접 재현하되
-     *         getAttributeValue(MOVEMENT_SPEED) → fadingPerspectiveFactor로 교체.
-     *
-     * vanilla 로직 (AbstractClientPlayerEntity.getFovMultiplier() 바이트코드 역산):
-     *   f = 1.0; if flying f*=1.1;
-     *   f *= (MOVEMENT_SPEED / walkSpeed + 1) / 2;
-     *   bow: f *= 1 - t²*0.15; spyglass 1인칭: return 0.1;
-     *   return lerp(fovEffectScale, 1.0, f)
-     */
-    @Inject(method = "getFovMultiplier", at = @At("HEAD"), cancellable = true)
-    private void sm_getFovMultiplier(CallbackInfoReturnable<Float> cir) {
-        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.fadingPerspectiveFactor == -1F) return;
-
-        float f = 1.0F;
-        if (player.getAbilities().flying) f *= 1.1F;
-        float walkSpeed = player.getAbilities().getWalkSpeed();
-        if (walkSpeed != 0F) {
-            f *= (sm.fadingPerspectiveFactor / walkSpeed + 1F) / 2F;
-        }
-        if (walkSpeed == 0F || Float.isNaN(f) || Float.isInfinite(f)) f = 1.0F;
-
-        if (player.isUsingItem()) {
-            var activeItem = player.getActiveItem();
-            if (activeItem.isOf(Items.BOW)) {
-                float t = Math.min(player.getItemUseTime() / 20.0F, 1.0F);
-                t = t * t;
-                f *= 1.0F - t * 0.15F;
-            } else if (MinecraftClient.getInstance().options.getPerspective().isFirstPerson()
-                    && player.isUsingSpyglass()) {
-                cir.setReturnValue(0.1F);
-                return;
-            }
-        }
-
-        float fovScale = ((Double) MinecraftClient.getInstance().options.getFovEffectScale().getValue()).floatValue();
-        cir.setReturnValue(MathHelper.lerp(fovScale, 1.0F, f));
-    }
 
     @Inject(method = "tickMovement", at = @At("HEAD"))
     private void sm_tickMovement(CallbackInfo ci) {
