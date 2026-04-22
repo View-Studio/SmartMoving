@@ -307,22 +307,27 @@ public final class SmartMovingClientState {
      * 렌더링/애니메이션에 사용되는 필드만 갱신한다.
      */
     public void processStatePacket(long bits) {
-        isClimbing        = ((bits >> 14) & 1) != 0;
-        isCrawlClimbing   = ((bits >> 12) & 1) != 0;
-        isCeilingClimbing = ((bits >> 18) & 1) != 0;
-        isWallJumping     = ((bits >> 31) & 1) != 0;
-        isCrawling        = ((bits >> 13) & 1) != 0;
-        isSmall           = ((bits >> 15) & 1) != 0;
-        isSliding         = ((bits >> 21) & 1) != 0;
-        isHeadJumping     = ((bits >> 20) & 1) != 0;
+        actualFeetClimbType  = (int) (bits & 0xF);           // bits 0-3
+        actualHandsClimbType = (int) ((bits >> 4) & 0xF);    // bits 4-7
+        isDiving          = ((bits >>  9) & 1) != 0;
         isDipping         = ((bits >> 10) & 1) != 0;
         isSwimming_sm     = ((bits >> 11) & 1) != 0;
-        isDiving          = ((bits >>  9) & 1) != 0;
+        isCrawlClimbing   = ((bits >> 12) & 1) != 0;
+        isCrawling        = ((bits >> 13) & 1) != 0;
+        isClimbing        = ((bits >> 14) & 1) != 0;
+        isSmall           = ((bits >> 15) & 1) != 0;
+        isFlying          = ((bits >> 17) & 1) != 0;   // doFlyingAnimation bit
+        isCeilingClimbing = ((bits >> 18) & 1) != 0;
+        isHeadJumping     = ((bits >> 20) & 1) != 0;
+        isSliding         = ((bits >> 21) & 1) != 0;
+        angleJumpType     = (int) ((bits >> 22) & 0x7);
+        isFeetVineClimbing   = ((bits >> 25) & 1) != 0;  // bit 25
+        isHandsVineClimbing  = ((bits >> 26) & 1) != 0;  // bit 26
+        isClimbJumping    = ((bits >> 27) & 1) != 0;
+        isClimbBackJumping   = ((bits >> 28) & 1) != 0;  // bit 28 (onStartClimbBackJump 미이식)
         isSlow            = ((bits >> 29) & 1) != 0;
         isFast            = ((bits >> 30) & 1) != 0;
-        isFlying          = ((bits >> 17) & 1) != 0;   // doFlyingAnimation bit
-        isClimbJumping    = ((bits >> 27) & 1) != 0;
-        angleJumpType     = (int) ((bits >> 22) & 0x7);
+        isWallJumping     = ((bits >> 31) & 1) != 0;
         isRopeSliding     = ((bits >> 32) & 1) != 0;
     }
 
