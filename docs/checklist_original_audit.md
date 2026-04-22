@@ -574,3 +574,8 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 | **처리 완료** — Config: perspectiveFadeFactor 등 5개 추가, State: fadingPerspectiveFactor EMA 계산 추가, MixinClientPlayerEntity.sm_getFovMultiplier (AbstractClientPlayerEntity.getFovMultiplier HEAD inject) |
 | 2026-04-23 | `SmartMovingRender.md` | `renderName()` 미구현 — 타인 플레이어 이름 태그 Y 보정(heightOffset=-1→-0.2F) + 크롤/스니킹 이름 표시 제어. | **처리 완료** — Config: sneakNameTag/crawlNameTag 추가; MixinPlayerEntityRenderer.sm_renderLabel (크롤숨김+heightOffset보정+스니킹보정); MixinLivingEntityRenderer.sm_isSneakyForLabel (sneakNameTag=true → isSneaky()=false → 64 거리기준) |
 | 2026-04-23 | `SmartMovingRender.md` | HUD exhaustion bar `minFitnessForAction`/`minFitnessToStartAction` 기반 5종 아이콘. | **N/A** — setMaxExhaustionForAction()은 외부 모드 연동용 ISmartMovingSelf API. SmartMoving 내부에서 호출 없음 → minFitnessForAction 항상 0 → 단순 2종 아이콘 구현이 올바름. |
+| 2026-04-23 | `render/SmartRenderContext.md` | 없음 — Scale/NoScaleStart/NoScaleEnd 상수 3개, 다층 갑옷 모델 레이어 전용 → 구조적 N/A | N/A |
+| 2026-04-23 | `render/IModelPlayer.md` | 없음 — PlayerAPI super*() 위임 인터페이스 전체 N/A | N/A |
+| 2026-04-23 | `render/IRenderPlayer.md` | 없음 — PlayerAPI superRender*() 위임 인터페이스 전체 N/A | N/A |
+| 2026-04-23 | `render/playerapi/SmartMovingModelPlayerBase.md` | 없음 — dynamicOverride*/superAnimate* 전부 TAIL inject 대체, @Deprecated getter 16개 N/A | N/A |
+| 2026-04-23 | `render/playerapi/SmartMovingRenderPlayerBase.md` | 없음 — renderPlayer/rotatePlayer/renderPlayerAt/passSpecialRender 전부 Inject 대체, getPlayerModels N/A | N/A |
