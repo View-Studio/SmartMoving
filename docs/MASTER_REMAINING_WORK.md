@@ -165,22 +165,22 @@ if (ladderFacing.getOpposite() == dir) {
 
 ---
 
-### BUG-02. 클라이밍 상태 매 틱 미초기화 🔴
+### BUG-02. 클라이밍 상태 매 틱 미초기화 🔴 ✅ 완료 (2026-04-22)
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 구조, "[5-1] 클라이밍 처리" 주석 위치 파악
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 상태 필드 전체 목록(isClimbing, isCrawlClimbing 등) 및 위치
-- [ ] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java` — handleClimbing(), handleCeilingClimbing() 내 isClimbing 설정 위치
-- [ ] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — updateEntityActionState() 상단 전체 리셋 코드 확인
-- [ ] `docs/research/mapping/climbing.md` — 클라이밍 상태 매핑 전체
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` — sm_travel_client() 전체 구조, "[5-1] 클라이밍 처리" 주석 위치 파악
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — 상태 필드 전체 목록(isClimbing, isCrawlClimbing 등) 및 위치
+- [x] `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java` — handleClimbing(), handleCeilingClimbing() 내 isClimbing 설정 위치
+- [x] `docs/research/original/smartmoving/playerapi/SmartMovingSelf.md` — updateEntityActionState() 상단 전체 리셋 코드 확인 (resetClimbing() + resetState() lines 993~1722)
+- [x] `docs/research/mapping/climbing.md` — 클라이밍 상태 매핑 전체
 
 **작업 단계 체크리스트**:
-- [ ] MixinLivingEntityClient.java에서 "[5-1] 클라이밍 처리" 주석 바로 앞 위치 확인
-- [ ] 6개 클라이밍 상태 리셋 코드 삽입 (isClimbing, isCrawlClimbing, isCeilingClimbing, isClimbJumping, isClimbHolding, isClimbCrawling)
-- [ ] handleWallJumping() 호출 직전에 `sm.isWallJumping = false` 리셋 삽입
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
-- [ ] `grep -n "isClimbing\s*=\s*false" src/.../MixinLivingEntityClient.java` 로 존재 확인
-- [ ] PART 6 트래킹 [x] 체크
+- [x] MixinLivingEntityClient.java에서 "[5-1] 클라이밍 처리" 주석 바로 앞 위치 확인
+- [x] 6개 클라이밍 상태 리셋 코드 삽입 (isClimbing, isCrawlClimbing, isCeilingClimbing, isClimbJumping, isClimbHolding, isClimbCrawling) + isClimbBackJumping 추가
+- [x] handleWallJumping() 호출 직전에 `sm.isWallJumping = false` 리셋 삽입
+- [x] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [x] `grep -n "isClimbing\s*=\s*false" src/.../MixinLivingEntityClient.java` 로 존재 확인
+- [x] PART 6 트래킹 [x] 체크
 
 **파일**: `MixinLivingEntityClient.java` → `sm_travel_client()`
 
@@ -964,7 +964,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 
 ```
 [x] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)  ← 2026-04-22 완료
-[ ] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)
+[x] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)  ← 2026-04-22 완료
 [ ] IMPL-01 크롤링 진입/해제 전체
 [ ] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)
 [ ] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)

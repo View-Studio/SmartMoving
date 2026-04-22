@@ -86,7 +86,21 @@ public abstract class MixinLivingEntityClient {
         }
 
         // [10-5] 벽점프 처리 (클라이밍 전)
+        // ── 매 틱 벽점프 상태 리셋 (G-01) ─────────────────────────────────
+        // 원본: resetState() this.isWallJumping = false → handleWallJumping()이 조건 충족 시 재세팅
+        sm.isWallJumping = false;
         SmartMovingJumper.handleWallJumping(player, sm);
+
+        // ── 매 틱 클라이밍 상태 리셋 (G-01) ─────────────────────────────────
+        // 원본: SmartMovingSelf.resetClimbing() + resetState() 호출 (updateEntityActionState 상단)
+        // 클라이밍 표면을 벗어나도 상태가 true로 남는 버그 방지
+        sm.isClimbing        = false;
+        sm.isCrawlClimbing   = false;
+        sm.isCeilingClimbing = false;
+        sm.isClimbJumping    = false;
+        sm.isClimbHolding    = false;
+        sm.isClimbCrawling   = false;
+        sm.isClimbBackJumping = false;
 
         // [5-1] 클라이밍 처리
         World world = player.getWorld();
