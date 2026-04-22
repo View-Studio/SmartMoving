@@ -48,10 +48,10 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 | ID | 미확인 내용 | vanilla 소스 위치 | 상태 |
 |----|------------|----------------|------|
-| B-01 | `EntityPose` enum — 전체 값 목록, 커스텀 값 추가 가능 여부 | `net.minecraft.entity.EntityPose` | [ ] |
-| B-02 | `PlayerEntity.getEntityPose()` 전체 — 어떤 조건에서 어떤 포즈를 반환하는지 | `PlayerEntity.java` | [ ] |
-| B-03 | `LivingEntity.getPoses()` — 반환값 구조 및 사용 경로 (어디서 호출되는지) | `LivingEntity.java` | [ ] |
-| B-04 | `LivingEntity.updatePose()` / `trySetPose()` — 포즈 전환 조건 전체, EntityPose 전환 시 calculateDimensions() 호출 여부 | `LivingEntity.java` | [ ] |
+| B-01 | `EntityPose` enum — 전체 값 목록, 커스텀 값 추가 가능 여부 | `net.minecraft.entity.EntityPose` | [x] → 18개 (STANDING~INHALING, SLIDING=index15 포함). enum final class — 커스텀 추가 불가. vanilla/EntityPose_system.md B-01 기재. |
+| B-02 | `PlayerEntity.getEntityPose()` 전체 — 어떤 조건에서 어떤 포즈를 반환하는지 | `PlayerEntity.java` | [x] → Yarn명: updatePose(method_7318). 우선순위: FALL_FLYING>SLEEPING>SWIMMING>SPIN_ATTACK>CROUCHING>STANDING. vanilla/LivingEntity_updatePose.md 및 PlayerEntity_pose_dimensions.md에 기재. |
+| B-03 | `LivingEntity.getPoses()` — 반환값 구조 및 사용 경로 (어디서 호출되는지) | `LivingEntity.java` | [x] → vehicle entity(Boat/Minecart/Horse/Pig/Strider) updatePassengerForDismount() 전용. PlayerEntity반환: [STANDING,CROUCHING,SWIMMING]. vanilla/EntityPose_system.md B-03 기재. |
+| B-04 | `LivingEntity.updatePose()` / `trySetPose()` — 포즈 전환 조건 전체, EntityPose 전환 시 calculateDimensions() 호출 여부 | `LivingEntity.java` | [x] → trySetPose 미존재. setPose→DataTracker→onTrackedDataSet→calculateDimensions 자동 호출 확인. vanilla/EntityPose_system.md B-04 및 PlayerEntity_pose_dimensions.md 기재. |
 | B-05 | `LivingEntity.getLeaningPitch()` / `updateLeaningPitch()` — 증가/감소 속도 정확한 수치 | `LivingEntity.java` | [ ] |
 | B-06 | `BipedEntityModel.animateArms()` 전체 코드 — 내부 로직, 파라미터 | `BipedEntityModel.java` | [ ] |
 | B-07 | `BipedEntityModel.setAngles()` — mp.onGround 파라미터가 float인지, 어떤 값이 전달되는지 | `BipedEntityModel.java` | [ ] |
@@ -239,7 +239,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/vanilla/EntityPose_system.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → B-01: EntityPose 18개 전체 확인(SLIDING=index15 포함), 커스텀 추가 불가. B-02: updatePose() 조건 분기 전체 확인. B-03: getPoses()는 vehicle dismount 전용. B-04: setPose→calculateDimensions 자동 호출 확인. vanilla/EntityPose_system.md 신규 작성.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06
-- 다음 진행: **R-07** (vanilla EntityPose 시스템)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07
+- 다음 진행: **R-08** (vanilla LivingEntity 물리 미확인)

@@ -300,5 +300,7 @@ SM이 SWIMMING → STANDING 전환 시 위치 보정 없이 치수만 커지므�
 
 vanilla는 STANDING, CROUCHING, SWIMMING 3가지만 반환.  
 SM 전용 포즈가 필요하다면 `getPoses()` (method_24831)도 오버라이드 필요.  
-단 실제로 SM이 getPoses() 반환값을 직접 사용하는 코드 경로가 있는지 확인 필요.  
-→ [미확인 — getPoses() 호출 위치 파악 안 됨]
+
+**R-07에서 확인됨**: `getPoses()`는 vehicle entity(Boat, Minecart, Horse, Pig, Strider)의  
+`updatePassengerForDismount()` 내에서만 호출됨 — 탈것 dismount 시 플레이어 착지 포즈 탐색 전용.  
+SM 이식 초기에는 vanilla 그대로 유지 가능. 상세: `EntityPose_system.md` B-03 참조.
