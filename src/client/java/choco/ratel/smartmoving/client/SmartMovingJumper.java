@@ -32,10 +32,10 @@ public final class SmartMovingJumper {
     private SmartMovingJumper() {}
 
     // ── jumpType 상수 ────────────────────────────────────────────────────────
-    // 원본: SmartMovingConfig.Up / ChargeUp / HeadUp / WallUp 등 정수 상수
+    // 원본: SmartMovingConfig.Up / ChargeUp / HeadUp / WallUp / WallHead 등 정수 상수
     public static final int UP = 0, CHARGE_UP = 1, HEAD_UP = 2,
             WALL_UP = 3, CLIMB_UP = 4, CLIMB_BACK = 5, CLIMB_BACK_HEAD = 6,
-            LEFT = 7, RIGHT = 8, BACK = 9;
+            LEFT = 7, RIGHT = 8, BACK = 9, WALL_HEAD = 10;
 
     // ── [10-3] getJumpMoving ─────────────────────────────────────────────────
 
@@ -128,8 +128,12 @@ public final class SmartMovingJumper {
                                 int jumpType, float charge) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        boolean up   = jumpType == UP || jumpType == CHARGE_UP || jumpType == HEAD_UP;
-        boolean head = jumpType == HEAD_UP;
+        // 원본 tryJump() up/head 분류:
+        //   up: Up, ChargeUp, HeadUp, ClimbUp, ClimbBackUp, ClimbBackHead, WallUp, WallHead 등
+        //   head: HeadUp, ClimbBackHead, WallHead
+        boolean up   = jumpType == UP || jumpType == CHARGE_UP || jumpType == HEAD_UP
+                    || jumpType == WALL_UP || jumpType == WALL_HEAD;
+        boolean head = jumpType == HEAD_UP || jumpType == WALL_HEAD;
         boolean fast = player.isSprinting();
 
         Vec3d vel = player.getVelocity();
@@ -392,35 +396,46 @@ public final class SmartMovingJumper {
      */
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        // 원본 canWallJumping 조건 (isWallJumpEnabled 포함)
+        if (player.isOnGround()) return;
+        if (sm.isHeadJumping) return;
+        if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) return;
+        if (sm.isSwimming_sm || sm.isDiving) return;
+        if (sm.isFlying) return;
+
         if (!player.horizontalCollision) return;
         if (!cfg.angleJumpSide && !cfg.angleJumpBack) return;
 
         Vec3d vel = player.getVelocity();
         if (vel.horizontalLength() < 0.01D) return;
 
+        // 원본: grab=true → WallHead(헤드점프 변형), grab=false → WallUp
+        boolean grabPressed = SmartMovingKeys.grab.isPressed();
+        int jumpType = grabPressed ? WALL_HEAD : WALL_UP;
+
         // 이동 방향 각도 (atan2 기반, 0=북, 시계 방향)
         float movementAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
         if (movementAngle < 0) movementAngle += 360F;
 
         // C-38: calculateSeparateCollisions() — 4방향 AABB 충돌 감지
-        // 원본 call site: (posZ, negZ, posX, negX) 순서로 swap하여 getHorizontalCollisionangle 호출
         float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, movementAngle);
 
-        // 원본 반사 공식
+        // 원본 반사 공식 + 90° 단위 허용 오차 정렬
         float reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
-        // 90° 단위 반올림
+        while (reflectedAngle > 360F) reflectedAngle -= 360F;
         float jumpAngle = Math.round(reflectedAngle / 90F) * 90F;
 
         sm.isWallJumping = true;
-        sm.continueWallJumping = !sm.isHeadJumping;
+        sm.continueWallJumping = true;
 
         // 원본: rotationYaw = jumpAngle; isCollidedHorizontally = false; fallDistance = 0F
         player.setYaw(jumpAngle);
-        player.bodyYaw = jumpAngle;  // LivingEntity.bodyYaw = public float (A-24 확인)
+        player.bodyYaw = jumpAngle;
         player.horizontalCollision = false;
         player.fallDistance = 0F;
 
-        tryJump(player, sm, WALL_UP, 0F);
+        tryJump(player, sm, jumpType, 0F);
     }
 
     /**

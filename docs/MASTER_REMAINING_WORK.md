@@ -955,7 +955,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 ```
 [x] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)  ← 2026-04-22 완료
 [x] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)  ← 2026-04-22 완료
-[ ] BUG-03  벽 점프 grab(LCTRL) 조건 누락 (SmartMovingJumper.handleWallJumping)
+[x] BUG-03  벽 점프 canWallJumping 조건 + grab 타입 선택 (SmartMovingJumper.handleWallJumping)  ← 2026-04-22 완료
 [x] IMPL-01 크롤링 진입/해제 전체  ← 2026-04-22 완료
 [x] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)  ← 2026-04-22 완료
 [x] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)  ← 2026-04-22 완료
@@ -1230,7 +1230,7 @@ BUG-02(매 틱 미초기화)로 인해 `false`로 돌아오지 않는 버그 존
 | 방향 점프 | A/D/S 더블클릭 카운터 | tickEssential + SmartMovingJumper 카운터 | ✅ IMPL-03 완료 |
 | 클라이밍 방향 감지 | 4방향 탐색 중 dir 기준 판정 | BUG-01: dir 기준으로 수정됨 | ✅ BUG-01 완료 |
 | 클라이밍 상태 리셋 | 매 틱 false 리셋 후 재평가 | BUG-02: sm_travel_client에 매 틱 리셋 추가 | ✅ BUG-02 완료 |
-| **벽 점프 grab 조건** | `horizontalCollision && grabButton.Pressed` | grab.isPressed() 체크 없음 — 벽에 닿으면 무조건 발동 | ⚠️ 미수정 — BUG-03 추가 필요 |
+| **벽 점프 grab 조건** | `canWallJumping(onGround 등) + grab → WALL_HEAD, no-grab → WALL_UP` | BUG-03: !onGround 가드 추가, grab 타입 선택, isClimbing/수영/비행 가드 추가 | ✅ BUG-03 완료 |
 
 ---
 
