@@ -237,7 +237,7 @@ public final class SmartMovingClientState {
      * isActive 여부 무관하게 매 틱 실행되는 필수 처리.
      * 원본: SmartMovingPlayerBase.updateEntityActionState() → moving.tickEssential()
      */
-    public void tickEssential() {
+    public void tickEssential(ClientPlayerEntity player) {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
 
@@ -258,6 +258,14 @@ public final class SmartMovingClientState {
         // SM 비활성 시 이동 상태 전체 초기화 (원본: !isActive() → resetState())
         if (!SmartMovingConfig.Config.enabled) {
             resetState();
+        } else {
+            // C-15: isSlow / isFast / isFlying 매 틱 계산
+            // isSlow 원본: wantSneak && !wantSprint && !isClimbing
+            isSlow = player.isSneaking() && !player.isSprinting() && !isClimbing;
+            // isFast 원본: grabButton.Pressed && isSprinting()
+            isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
+            // isFlying 원본: sp.capabilities.isFlying
+            isFlying = player.getAbilities().flying;
         }
     }
 

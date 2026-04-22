@@ -22,7 +22,8 @@ public abstract class MixinClientPlayerEntity {
 
     @Inject(method = "tickMovement", at = @At("HEAD"))
     private void sm_tickMovement(CallbackInfo ci) {
-        SmartMovingClientState.get((ClientPlayerEntity)(Object)this).tickEssential();
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        SmartMovingClientState.get(player).tickEssential(player);
     }
 
     // R-01: tickMovement TAIL — 모든 이동 처리 후 State 패킷 전송

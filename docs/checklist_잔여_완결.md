@@ -183,7 +183,7 @@ Javadoc을 실제 구조에 맞게 업데이트함.
 
 ---
 
-### 🟠 R-03. isSlow / isFast / isFlying 로컬 플레이어 미계산
+### ✅ R-03. isSlow / isFast / isFlying 로컬 플레이어 미계산 [COMPLETE]
 
 **문제**: `SmartMovingClientState`의 세 필드는 Javadoc에 "tickEssential()에서 매 틱 계산"이라고
 적혀 있지만 tickEssential()에 해당 계산 코드가 없다.
@@ -212,10 +212,18 @@ isFlying = player.getAbilities().flying;
 ```
 
 **완료 기준**:
-- [ ] `isSlow` 계산 코드 추가
-- [ ] `isFast` 계산 코드 추가
-- [ ] `isFlying` 계산 코드 추가
-- [ ] tickEssential() 시그니처가 player 파라미터를 받거나, MinecraftClient에서 가져오는 방식 확정
+- [x] `isSlow` 계산 코드 추가
+- [x] `isFast` 계산 코드 추가
+- [x] `isFlying` 계산 코드 추가
+- [x] tickEssential() 시그니처 player 파라미터 추가
+
+**구현 내역** (2026-04-22):
+- `tickEssential()` → `tickEssential(ClientPlayerEntity player)` 시그니처 변경
+- SM 활성(enabled) 시 `else` 블록에서 매 틱 계산:
+  - `isSlow = player.isSneaking() && !player.isSprinting() && !isClimbing`
+  - `isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting()`
+  - `isFlying = player.getAbilities().flying`
+- `MixinClientPlayerEntity.sm_tickMovement()` 호출부 업데이트
 
 ---
 
