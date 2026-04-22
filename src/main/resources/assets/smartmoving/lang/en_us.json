@@ -17,5 +17,11 @@
   "smartmoving.message.config.server.enable": "Smart Moving was enabled by the server configuration",
 
   "smartmoving.message.speed.illegal.remote": "You have no rights to change the Smart Moving speed on the remote server.",
-  "smartmoving.message.speed.illegal.local": "You have no rights to change the Smart Moving speed on your local server."
+  "smartmoving.message.speed.illegal.local": "You have no rights to change the Smart Moving speed on your local server.",
+
+  "smartmoving.message.config.client.enabled": "Smart Moving is now enabled.",
+  "smartmoving.message.config.client.disabled": "Smart Moving is now disabled.",
+
+  "smartmoving.message.speed.client.change": "Smart Moving speed changed to %s%%.",
+  "smartmoving.message.speed.client.reset": "Smart Moving speed reset to 100%%."
 }

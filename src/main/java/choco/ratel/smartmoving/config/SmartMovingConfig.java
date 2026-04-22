@@ -294,6 +294,11 @@ public class SmartMovingConfig {
         speedUserExponent += difference;
     }
 
+    /** 현재 속도를 정수 퍼센트 문자열로 반환 (원본: SmartMovingOptions.getSpeedPercent()) */
+    public String getSpeedPercent() {
+        return String.valueOf((int)(getUserSpeedFactor() * 100));
+    }
+
     private static float getFloat(Properties p, String key, float def) {
         String v = p.getProperty(key);
         if (v == null) return def;

@@ -74,14 +74,24 @@ public class SmartMovingClient implements ClientModInitializer {
             });
 
         // SpeedChange: 서버에서 속도 변경 동기화 (C-12)
-        // 원본: difference==0 → 권한없음, !=0 → Config.changeSpeed(difference) (SmartMovingComm.md 확인)
+        // 원본: difference==0 → 권한없음, !=0 → Config.changeSpeed(difference) + writeClientSpeedMessageToChat
         // A-26: 권한없음 메시지 원문 확인 (en_us.json smartmoving.message.speed.illegal.*)
         ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.SpeedChangePayload.ID,
             (payload, context) -> {
                 MinecraftClient client = context.client();
                 int difference = payload.difference();
                 if (difference != 0) {
-                    client.execute(() -> SmartMovingConfig.Config.changeSpeed(difference));
+                    client.execute(() -> {
+                        SmartMovingConfig.Config.changeSpeed(difference);
+                        // IMPL-05: 속도 변경 채팅 피드백 (원본: writeClientSpeedMessageToChat)
+                        // 100% = 기본값("reset"), 그 외 = 변경된 값("change")
+                        String percent = SmartMovingConfig.Config.getSpeedPercent();
+                        String msgKey = "100".equals(percent)
+                            ? "smartmoving.message.speed.client.reset"
+                            : "smartmoving.message.speed.client.change";
+                        if (client.player != null)
+                            client.player.sendMessage(Text.translatable(msgKey, percent));
+                    });
                 } else {
                     boolean isRemote = isRemoteServer(client);
                     String key = isRemote

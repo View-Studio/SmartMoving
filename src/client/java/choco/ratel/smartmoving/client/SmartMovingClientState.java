@@ -10,6 +10,7 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.text.Text;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -255,12 +256,30 @@ public final class SmartMovingClientState {
         // 매 틱 exhaustion 감소 (클라이밍 중 증가량으로 상쇄됨)
         exhaustion = Math.max(0F, exhaustion - 1.0F);
 
-        // 설정 토글 키 처리 (원본: toggleButton.update() + StartPressed 분기)
+        // IMPL-04: 설정 토글 키 처리 (원본: toggleButton.update() + StartPressed 분기)
+        // 싱글: toggle() 직접 호출 + 채팅 피드백 / 멀티: 서버에 변경 요청 패킷 전송
         if (SmartMovingKeys.configToggle.wasPressed()) {
             if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE) {
                 SmartMovingConfig.INSTANCE.toggle();
+                String msgKey = SmartMovingConfig.INSTANCE.enabled
+                    ? "smartmoving.message.config.client.enabled"
+                    : "smartmoving.message.config.client.disabled";
+                if (player != null) player.sendMessage(Text.translatable(msgKey));
             } else {
                 ClientPlayNetworking.send(new SmartMovingNetwork.ConfigChangePayload());
+            }
+        }
+
+        // IMPL-05: 속도 키 처리 (원본: speedIncreaseButton/speedDecreaseButton StartPressed → changeSpeed)
+        // 서버에 SpeedChangePayload 전송 → 서버가 권한 확인 후 결과를 S2C로 돌려줌
+        if (SmartMovingKeys.speedIncrease.wasPressed()) {
+            if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
+                ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(1, null));
+            }
+        }
+        if (SmartMovingKeys.speedDecrease.wasPressed()) {
+            if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
+                ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(-1, null));
             }
         }
 
