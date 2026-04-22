@@ -107,14 +107,16 @@ public final class SmartMovingServer {
      *   bit 31: isWallJumping
      *   bit 33: isSneakButtonPressed
      */
-    public void processStatePacket(long bits) {
+    public void processStatePacket(ServerPlayerEntity player, long bits) {
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
         isSliding         = ((bits >> 22) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
         setCrawling(((bits >> 13) & 1) != 0);
-        isSmall           = ((bits >> 15) & 1) != 0;
+        // R-04: setSmall() 경유하여 calculateDimensions() 호출 → 서버 AABB 갱신
+        boolean newSmall = ((bits >> 15) & 1) != 0;
+        if (newSmall != isSmall) setSmall(player, newSmall);
         isSneakButtonPressed = ((bits >> 33) & 1) != 0;
 
         // 3-9: 낙하 거리 리셋 조건 (벽점프 포함)

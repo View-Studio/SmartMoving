@@ -266,6 +266,8 @@ public final class SmartMovingClientState {
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
             isFlying = player.getAbilities().flying;
+            // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
+            isSmall = isCrawling || isSliding || isHeadJumping;
         }
     }
 
@@ -297,6 +299,7 @@ public final class SmartMovingClientState {
         isHeadJumping = false;
         isCrawling = false;
         isSliding = false;
+        isSmall = false;
         angleJumpType = 0;
         wasClimbing  = false;
         exhaustion   = 0F;

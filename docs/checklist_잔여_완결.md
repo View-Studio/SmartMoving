@@ -227,7 +227,7 @@ isFlying = player.getAbilities().flying;
 
 ---
 
-### 🟠 R-04. isSmall 로컬 플레이어 미설정
+### ✅ R-04. isSmall 로컬 플레이어 미설정 [COMPLETE]
 
 **문제**: `isSmall`은 State 패킷 디코딩에서만 설정된다.
 로컬 플레이어 자신은 `isSmall`이 항상 false다.
@@ -243,8 +243,16 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 ```
 
 **완료 기준**:
-- [ ] `isSmall` 계산 코드 추가 (isSlow/isFast/isFlying과 같은 위치)
-- [ ] AABB 크기 변경이 isSmall 기반인지 확인 (MixinPlayerEntity의 setSmall 경로)
+- [x] `isSmall` 계산 코드 추가 (isSlow/isFast/isFlying과 같은 위치)
+- [x] AABB 크기 변경이 isSmall 기반인지 확인 (MixinPlayerEntity의 setSmall 경로)
+
+**구현 내역** (2026-04-22):
+- `tickEssential()` `else` 블록: `isSmall = isCrawling || isSliding || isHeadJumping` 추가
+- `resetState()`: `isSmall = false` 추가 (SM 비활성 시 누락 방지)
+- `SmartMovingServer.processStatePacket()`: 시그니처에 `ServerPlayerEntity player` 추가,
+  `isSmall` 변경 시 `setSmall(player, ...)` 경유로 `calculateDimensions()` 호출 → 서버 AABB 갱신
+- `SmartMoving.java` 호출부: `processStatePacket(sender, payload.state())` 업데이트
+- 클라이언트 AABB는 `sm.isCrawling`/포즈(SLIDING/SWIMMING) 기반 — 이미 올바름
 
 ---
 
