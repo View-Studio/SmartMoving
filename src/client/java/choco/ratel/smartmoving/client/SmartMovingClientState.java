@@ -210,6 +210,49 @@ public final class SmartMovingClientState {
      */
     public float swimStandSneakFactor = 0f;
 
+    // ── FOV / perspective ──────────────────────────────────────────────
+    /**
+     * 속도 기반 FOV 배율의 EMA 누적값 (원본: SmartMovingSelf.fadingPerspectiveFactor).
+     * 초기값 -1F = "아직 미초기화" 표시 → 첫 틱에 landMovementFactor로 직접 초기화.
+     */
+    public float fadingPerspectiveFactor = -1F;
+
+    // ── isSneaking / forceIsSneaking ───────────────────────────────────
+    /**
+     * 스니크 의도 여부 (토글 포함). 원본: wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing.
+     * 1.21.1 구현에서는 isSlow와 동일.
+     */
+    public boolean wouldIsSneaking;
+
+    /**
+     * isSneaking() 강제 재정의. null=미사용. true/false=강제 반환.
+     * 원본: SmartMovingSelf.forceIsSneaking (Boolean).
+     */
+    public Boolean forceIsSneaking = null;
+
+    // ── flyWhileOnGround ───────────────────────────────────────────────
+    /**
+     * beforeOnLivingUpdate에서 저장한 직전 capabilities.isFlying 값.
+     * afterOnLivingUpdate에서 flyWhileOnGround 복원 판정에 사용.
+     */
+    public boolean wasCapabilitiesIsFlying;
+
+    /**
+     * 직전 틱의 수평 충돌 여부 (벽점프 판정용).
+     * 원본: SmartMovingSelf.beforeOnUpdate() → wasCollidedHorizontally = sp.isCollidedHorizontally
+     * tickEssential()에서 vanilla physics 실행 전(HEAD)에 캡처 → 벽에 닿아 있던 이전 틱 상태를 반영.
+     * 1.21.1 대응: player.horizontalCollision
+     */
+    public boolean wasCollidedHorizontally;
+
+    // ── multiPlayerInitialized ─────────────────────────────────────────
+    /**
+     * 서버→클라이언트 위치 동기화 직후 pushOutOfBlocks 억제 카운터.
+     * beforeSetPositionAndRotation에서 5로 세팅, pushOutOfBlocks 호출마다 1씩 감소.
+     * 원본: SmartMovingSelf.multiPlayerInitialized.
+     */
+    public int multiPlayerInitialized;
+
     // ── C-25: SmartStatistics ──────────────────────────────────────────
     /** 이동 통계 인스턴스. move() TAIL 이후 calculate()로 갱신. */
     public final SmartStatistics stats = new SmartStatistics();
@@ -315,11 +358,17 @@ public final class SmartMovingClientState {
         } else {
             // C-15: isSlow / isFast / isFlying 매 틱 계산
             // isSlow 원본: wantSneak && !wantSprint && !isClimbing
-            isSlow = player.isSneaking() && !player.isSprinting() && !isClimbing;
+            // wantSneak = sneakButton.Pressed → 키 입력 직접 (sm_isSneaking override 순환 방지)
+            boolean wantSneak = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
+            isSlow = wantSneak && !player.isSprinting() && !isClimbing;
             // isFast 원본: grabButton.Pressed && isSprinting()
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
             isFlying = player.getAbilities().flying;
+            // wasCapabilitiesIsFlying: beforeOnLivingUpdate에서 저장 (vanilla tickMovement 실행 전)
+            wasCapabilitiesIsFlying = isFlying;
+            // wasCollidedHorizontally: 이전 틱 물리 결과 (HEAD에서 캡처 → 원본 beforeOnUpdate)
+            wasCollidedHorizontally = player.horizontalCollision;
 
             // IMPL-01: 크롤링 진입/유지/해제
             // 원본 트리거: grabButton.StartPressed && (sneakToggled || sneakButton.Pressed) && onGround
@@ -411,6 +460,31 @@ public final class SmartMovingClientState {
             // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
             // isCrawling/isSliding이 확정된 후 계산해야 정확함
             isSmall = isCrawling || isSliding || isHeadJumping;
+
+            // wouldIsSneaking 원본: wouldWantSneak && !wantSprint && !isClimbing → isSlow와 동일
+            wouldIsSneaking = isSlow;
+
+            // fadingPerspectiveFactor EMA 계산 (원본: SmartMovingSelf.tickEssential L1317-1336)
+            // getLandMovementFactor() → 1.21.1: player.getMovementSpeed()
+            float landMovementFactor = player.getMovementSpeed();
+            float perspectiveFactor = landMovementFactor;
+            if (player.isSprinting()) perspectiveFactor /= 1.3F;
+            perspectiveFactor = 0.1f + ((perspectiveFactor - 0.1f) * cfg.perspectiveSpeedFactor);
+            if (cfg.perspectiveSpeedFactorMax > 0F) {
+                perspectiveFactor = net.minecraft.util.math.MathHelper.clamp(
+                        perspectiveFactor,
+                        0.1f - cfg.perspectiveSpeedFactorMax * 0.1f,
+                        0.1f + cfg.perspectiveSpeedFactorMax * 0.1f);
+            }
+            if (player.isSprinting()) perspectiveFactor *= 1.3F;
+            if (isFast || isSprintJump) {
+                if (player.isSprinting()) perspectiveFactor /= 1.3F;
+                perspectiveFactor *= cfg.perspectiveSprintFactor;
+            }
+            if (fadingPerspectiveFactor != -1F)
+                fadingPerspectiveFactor += (perspectiveFactor - fadingPerspectiveFactor) * cfg.perspectiveFadeFactor;
+            else
+                fadingPerspectiveFactor = landMovementFactor;
         }
     }
 
@@ -456,6 +530,12 @@ public final class SmartMovingClientState {
         angleJumpType = 0;
         wasClimbing  = false;
         exhaustion   = 0F;
+        fadingPerspectiveFactor = -1F;
+        wouldIsSneaking = false;
+        forceIsSneaking = null;
+        wasCapabilitiesIsFlying = false;
+        wasCollidedHorizontally = false;
+        multiPlayerInitialized  = 0;
     }
 
     private static boolean canStandUp(ClientPlayerEntity player) {

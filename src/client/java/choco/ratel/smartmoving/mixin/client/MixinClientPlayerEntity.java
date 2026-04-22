@@ -1,11 +1,18 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.input.SmartMovingKeys;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.item.Items;
+import net.minecraft.util.math.MathHelper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 4-2: tickEssential() 무조건 호출 Mixin.
@@ -20,10 +27,128 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPlayerEntity.class)
 public abstract class MixinClientPlayerEntity {
 
+    /**
+     * getFovMultiplier() 오버라이드 — fadingPerspectiveFactor 기반 부드러운 FOV 배율.
+     * 원본: SmartMovingSelf.getFOVMultiplier (SmartMovingSelf.md L2036-2044)
+     *
+     * 원본: MOVEMENT_SPEED attribute value를 fadingPerspectiveFactor로 임시 교체 후 vanilla 호출.
+     * 1.21.1: vanilla getFovMultiplier() (AbstractClientPlayerEntity) 로직을 직접 재현하되
+     *         getAttributeValue(MOVEMENT_SPEED) → fadingPerspectiveFactor로 교체.
+     *
+     * vanilla 로직 (AbstractClientPlayerEntity.getFovMultiplier() 바이트코드 역산):
+     *   f = 1.0; if flying f*=1.1;
+     *   f *= (MOVEMENT_SPEED / walkSpeed + 1) / 2;
+     *   bow: f *= 1 - t²*0.15; spyglass 1인칭: return 0.1;
+     *   return lerp(fovEffectScale, 1.0, f)
+     */
+    @Inject(method = "getFovMultiplier", at = @At("HEAD"), cancellable = true)
+    private void sm_getFovMultiplier(CallbackInfoReturnable<Float> cir) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.fadingPerspectiveFactor == -1F) return;
+
+        float f = 1.0F;
+        if (player.getAbilities().flying) f *= 1.1F;
+        float walkSpeed = player.getAbilities().getWalkSpeed();
+        if (walkSpeed != 0F) {
+            f *= (sm.fadingPerspectiveFactor / walkSpeed + 1F) / 2F;
+        }
+        if (walkSpeed == 0F || Float.isNaN(f) || Float.isInfinite(f)) f = 1.0F;
+
+        if (player.isUsingItem()) {
+            var activeItem = player.getActiveItem();
+            if (activeItem.isOf(Items.BOW)) {
+                float t = Math.min(player.getItemUseTime() / 20.0F, 1.0F);
+                t = t * t;
+                f *= 1.0F - t * 0.15F;
+            } else if (MinecraftClient.getInstance().options.getPerspective().isFirstPerson()
+                    && player.isUsingSpyglass()) {
+                cir.setReturnValue(0.1F);
+                return;
+            }
+        }
+
+        float fovScale = ((Double) MinecraftClient.getInstance().options.getFovEffectScale().getValue()).floatValue();
+        cir.setReturnValue(MathHelper.lerp(fovScale, 1.0F, f));
+    }
+
     @Inject(method = "tickMovement", at = @At("HEAD"))
     private void sm_tickMovement(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         SmartMovingClientState.get(player).tickEssential(player);
+    }
+
+    /**
+     * afterOnLivingUpdate: flyWhileOnGround 처리.
+     * 원본: SmartMovingSelf.afterOnLivingUpdate() (SmartMovingPlayerBase.java, 1368-1377줄)
+     *
+     * vanilla tickMovement 실행 후 착지로 isFlying이 false가 됐지만
+     * SM flyWhileOnGround=true이면 flying을 복원한다.
+     * sneakButton+grabButton 동시 누름 시 착지 허용.
+     *
+     * 원본: sp.cameraYaw=0; sp.prevCameraYaw=0 — 1.21.1에서 해당 필드 없음 (삭제됨).
+     */
+    @Inject(method = "tickMovement", at = @At("TAIL"), order = 900)
+    private void sm_flyWhileOnGround(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        if (!cfg.enabled || !cfg.flyCloseToGround || !cfg.flyWhileOnGround) return;
+        // sneakButton.Pressed: vanilla 키 직접 (SM isSneaking override 우회)
+        if (net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed()
+                && SmartMovingKeys.grab.isPressed()) return;
+        if (sm.wasCapabilitiesIsFlying && !player.getAbilities().flying && player.isOnGround()) {
+            player.getAbilities().flying = true;
+            player.sendAbilitiesUpdate();
+        }
+    }
+
+    /**
+     * correctOnUpdate: 수영/크롤링 등 낮은 속도 이동 시 bodyYaw 보정.
+     * 원본: SmartMovingBase.correctOnUpdate(isSmall, reverseMaterialAcceleration)
+     *       isSmall = isSwimming||isDiving||isDipping||isCrawling
+     *       reverseMaterialAcceleration(isSwimming) → 1.21.1 N/A
+     *
+     * 0.02 < f < 0.05 구간(느린 이동)에서 renderYawOffset(=bodyYaw)을 이동 방향으로 서서히 정렬.
+     * sp.swingProgress > 0 시에는 rotationYaw 고정.
+     */
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void sm_correctOnUpdate(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+
+        boolean isSmall = sm.isSwimming_sm || sm.isDiving || sm.isDipping || sm.isCrawling;
+        if (!isSmall) return;
+
+        double d  = player.getX() - player.prevX;
+        double d1 = player.getZ() - player.prevZ;
+        float f = (float) Math.sqrt(d * d + d1 * d1);
+        if (f <= 0.02F || f >= 0.05F) return;
+
+        float f1 = (float)(Math.atan2(d1, d) * 180.0 / Math.PI) - 90F;
+        if (player.handSwingProgress > 0.0F) f1 = player.getYaw();
+
+        float f4 = f1 - player.bodyYaw;
+        for (; f4 < -180F; f4 += 360F) {}
+        for (; f4 >= 180F;  f4 -= 360F) {}
+        float x = player.bodyYaw + f4 * 0.3F;
+
+        float f5 = player.getYaw() - x;
+        for (; f5 < -180F; f5 += 360F) {}
+        for (; f5 >= 180F;  f5 -= 360F) {}
+        if (f5 < -75F) f5 = -75F;
+        if (f5 >= 75F)  f5 = 75F;
+
+        player.bodyYaw = player.getYaw() - f5;
+        if (f5 * f5 > 2500F) player.bodyYaw += f5 * 0.2F;
+
+        for (; player.bodyYaw - player.prevBodyYaw < -180F; player.prevBodyYaw -= 360F) {}
+        for (; player.bodyYaw - player.prevBodyYaw >= 180F; player.prevBodyYaw += 360F) {}
     }
 
     // R-01: tickMovement TAIL — 모든 이동 처리 후 State 패킷 전송

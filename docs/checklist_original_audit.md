@@ -405,19 +405,20 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 | 발견일 | 소스 파일 | 설명 | 처리 여부 |
 |--------|----------|------|----------|
-| 2026-04-22 | `SmartMovingContext.md` | `SwimCrawlWaterTopBorder`(0.65F) 등 4개 수경계 상수 — 크롤→수영 전환 로직 자체가 미구현. SmartMovingSelf 감사 시 처리 | 미처리 (SmartMovingSelf 감사 예정) |
-| 2026-04-22 | `SmartMovingContext.md` | `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠 미구현. 사용처 없음 | 미처리 (SmartMovingSelf 감사 예정) |
-| 2026-04-22 | `SmartMovingContext.md` | `HorizontalAirodynamicDamping`(0.999F) — 공기역학적 감쇠 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
-| 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환 로직이 SmartMovingSlider에 없음 | 미처리 (SmartMovingSelf 감사 예정) |
-| 2026-04-22 | `SmartMovingBase.md` | `reverseHandleMaterialAcceleration()` — 수영 중 물 흐름 가속 역상쇄(-0.014D) 미구현. SmartMovingSelf.correctOnUpdate() 흐름 | 미처리 (SmartMovingSelf 감사 예정) |
-| 2026-04-22 | `SmartMovingBase.md` | `correctOnUpdate(isSmall, reverseMaterialAcceleration)` — 느린 이동 시 renderYawOffset 보정 + reverseHandleMaterialAcceleration 호출. 미구현 | 미처리 (SmartMovingSelf 감사 예정) |
+| 2026-04-22 | `SmartMovingContext.md` | `SwimCrawlWaterTopBorder`(0.65F) 등 4개 수경계 상수 — 크롤→수영 전환 로직 자체가 미구현. | 미처리 — 리서치 파일에 전환 로직 코드 미수록, 리서치 보완 필요 |
+| 2026-04-22 | `SmartMovingContext.md` | `HorizontalGroundDamping`(0.546F) — 지면 수평 감쇠. | **N/A** — 0.6(블록 마찰) × 0.91(HorizontalAirDamping) = 0.546F, vanilla 1.21.1이 동일 값 적용 |
+| 2026-04-22 | `SmartMovingContext.md` | `HorizontalAirodynamicDamping`(0.999F) — 공기역학적 감쇠. | 미처리 — isAerodynamic 설정/사용 코드가 리서치 파일에 없음, 리서치 보완 필요 |
+| 2026-04-22 | `SmartMovingContext.md` | `SlideToHeadJumpingFallDistance`(0.05F) — 슬라이드→헤드점프 전환. | 미처리 — 전환 로직 코드가 리서치 파일에 없음, 리서치 보완 필요 |
+| 2026-04-22 | `SmartMovingBase.md` | `reverseHandleMaterialAcceleration()` — 수영 중 물 흐름 가속 역상쇄(-0.014D). | **N/A** — SM이 travel() cancel로 vanilla 수중 물리 자체를 차단, 역상쇄 불필요 |
+| 2026-04-22 | `SmartMovingBase.md` | `correctOnUpdate(isSmall, reverseMaterialAcceleration)` — 느린 이동 시 renderYawOffset 보정. | **처리 완료** — MixinClientPlayerEntity.sm_correctOnUpdate (tickMovement TAIL). reverseMatAccel은 N/A |
 | 2026-04-22 | `SmartMovingSelf.md` | swimming motionYDiff 5단계→13단계 수정, dipping offset 조건 수정, diving diveDown 부호 수정. SmartMovingSwimmer.java 완료 | 처리 완료 |
-| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` fallDistance 체크 누락 — `cfg.wallUpJumpFallMaximumDistance / wallHeadJumpFallMaximumDistance` config 값 확인 필요 | 미처리 |
-| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` `wasCollidedHorizontally` → WallUpSlide/WallHeadSlide(noVertical) 미구현 | 미처리 |
-| 2026-04-22 | `SmartMovingSelf.md` | `afterOnUpdate → correctOnUpdate` 호출: isSwimming/diving/dipping/crawling 시 renderYawOffset 보정 + water flow 역상쇄 미구현 | 미처리 |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `canTriggerWalking` override 미구현 — `moving.canTriggerWalking()` 실제 구현이 SmartMovingBase.md/SmartMovingSelf.md에 없음 → SmartMovingBase.md 감사 시 실제 코드 확인 후 처리 | 미처리 (리서치 보완 필요) |
+| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` fallDistance 체크 누락 — `cfg.wallUpJumpFallMaximumDistance / wallHeadJumpFallMaximumDistance` | **처리 완료** — Config: 2개 필드 추가(readFrom/writeTo 포함), SmartMovingJumper.handleWallJumping() fallDistance 조건 추가 |
+| 2026-04-22 | `SmartMovingSelf.md` | `handleWallJumping` `wasCollidedHorizontally` → WallUpSlide/WallHeadSlide(noVertical) 미구현 | **처리 완료** — State: wasCollidedHorizontally 필드+캡처+리셋 추가; Jumper: WALL_UP_SLIDE/WALL_HEAD_SLIDE 상수, handleWallJumping 타입/각도 분기, tryJump noVertical 처리 |
+| 2026-04-22 | `SmartMovingSelf.md` | `afterOnUpdate → correctOnUpdate` 호출: isSwimming/diving/dipping/crawling 시 renderYawOffset 보정 | **처리 완료** — (correctOnUpdate 항목과 동일, 위 참조) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `canTriggerWalking` override 미구현 — `moving.canTriggerWalking()` 실제 구현이 SmartMovingBase.md/SmartMovingSelf.md에 없음 | 미처리 — 리서치 파일에 구현 코드 없음, 리서치 보완 필요 |
 | 2026-04-22 | `SmartMovingPlayerBase.md` | `isInsideOfMaterial` override — FiniteLiquid 모드 전용 코드, 1.21.1 N/A. localIsInsideOfMaterial(=vanilla)과 동일 동작이므로 구현 불필요 | N/A |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeSetPositionAndRotation` 미구현 — `initialized=false; multiPlayerInitialized=5` 세팅. multiPlayerInitialized 사용처(pushOutOfBlocks 억제)까지 SmartMovingSelf.md에서 확인 후 처리 | 미처리 (의존 코드 확인 필요) |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리. `cfg.flyWhileOnGround` Config 필드 미존재 → SmartMovingConfig.md 감사 시 처리 | 미처리 (Config 감사 필요) |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | 클라이언트 `isSneaking` override 미구현 — `crawlOverEdge` Config 없음, `wouldIsSneaking`/`forceIsSneaking` State 없음 → Config·State 감사 완료 후 처리 | 미처리 (Config/State 감사 필요) |
-| 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 — `fadingPerspectiveFactor` State 없음, 관련 Config 설정 없음 → Config·State 감사 완료 후 처리 | 미처리 (Config/State 감사 필요) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeSetPositionAndRotation` 미구현 — `initialized=false; multiPlayerInitialized=5` 세팅. | **처리 완료** — MixinClientPlayNetworkHandler.sm_beforePlayerPositionLook (onPlayerPositionLook HEAD inject) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `pushOutOfBlocks` multiPlayerInitialized 체크 미구현 | **처리 완료** — MixinPlayerEntityClient.sm_pushOutOfBlocks |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `beforeOnLivingUpdate/afterOnLivingUpdate` 미구현 — flyWhileOnGround 처리. | **처리 완료** — Config: flyCloseToGround/flyWhileOnGround 추가, State: wasCapabilitiesIsFlying 추가, MixinClientPlayerEntity.sm_flyWhileOnGround (TAIL inject) |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | 클라이언트 `isSneaking` override 미구현 | **처리 완료** — Config: crawlOverEdge 추가, State: wouldIsSneaking/forceIsSneaking 추가, MixinLivingEntityClient.sm_isSneaking |
+| 2026-04-22 | `SmartMovingPlayerBase.md` | `getFOVMultiplier` override 미구현 | **처리 완료** — Config: perspectiveFadeFactor 등 5개 추가, State: fadingPerspectiveFactor EMA 계산 추가, MixinClientPlayerEntity.sm_getFovMultiplier (AbstractClientPlayerEntity.getFovMultiplier HEAD inject) |

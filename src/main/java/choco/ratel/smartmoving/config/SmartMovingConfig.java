@@ -65,6 +65,10 @@ public class SmartMovingConfig {
     public float diveSpeedFactor = 1F;
 
     // ── Jumping ─────────────────────────────────────────────────
+    // 원본: _wallUpJumpFallMaximumDistance = Positive(...).defaults(2F)
+    public float wallUpJumpFallMaximumDistance = 2F;
+    // 원본: _wallHeadJumpFallMaximumDistance = Positive(...).defaults(3F)
+    public float wallHeadJumpFallMaximumDistance = 3F;
     public boolean jumpCharge = true;
     public float jumpChargeMaximum = 20F;
     public float jumpChargeFactor = 1.3F;
@@ -89,6 +93,30 @@ public class SmartMovingConfig {
     public float flyingSpeedFactor = 1.0F;
     // 원본: Options._flyControlVertical — pitch 방향 3D 이동 활성화 여부 (기본값 true)
     public boolean flyControlVertical = true;
+
+    // ── Crawl edge protection ──────────────────────────────────
+    // 원본: SmartMovingConfig._crawlOverEdge = Unmodified("move.crawl.edge") → 기본값 true
+    // false → 크롤링 중 엣지에서 isSneaking=true 강제 (추락 방지)
+    public boolean crawlOverEdge = true;
+
+    // ── Flying close-to-ground ─────────────────────────────────
+    // 원본: _flyCloseToGround = Modified("move.fly.ground.close") → 기본값 true
+    public boolean flyCloseToGround = true;
+    // 원본: _flyWhileOnGround = Modified("move.fly.ground.collide").depends(_flyCloseToGround) → 기본값 true
+    // flyCloseToGround=false이면 비활성. 착지 시 비행 유지.
+    public boolean flyWhileOnGround = true;
+
+    // ── Perspective (FOV) ──────────────────────────────────────
+    // 원본: _perspectiveFadeFactor = PositiveFactor.values(0.5F, 0.1F, 1F)
+    public float perspectiveFadeFactor = 0.5F;
+    // 원본: _perspectiveSpeedFactor = Float.defaults(1F)
+    public float perspectiveSpeedFactor = 1F;
+    // 원본: _perspectiveSpeedFactorMax = PositiveFactor.defaults(0F)
+    public float perspectiveSpeedFactorMax = 0F;
+    // 원본: _perspectiveRunFactor = Float.defaults(1F)
+    public float perspectiveRunFactor = 1F;
+    // 원본: _perspectiveSprintFactor = Float.defaults(1.5F)
+    public float perspectiveSprintFactor = 1.5F;
 
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;
@@ -210,6 +238,8 @@ public class SmartMovingConfig {
         swimSpeedFactor          = getFloat(p,  "move.swim.speed.factor",         swimSpeedFactor);
         dive                     = getBool(p,   "move.dive",                      dive);
         diveSpeedFactor          = getFloat(p,  "move.dive.speed.factor",         diveSpeedFactor);
+        wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",      wallUpJumpFallMaximumDistance);
+        wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum", wallHeadJumpFallMaximumDistance);
         jumpCharge               = getBool(p,   "move.jump.charge",               jumpCharge);
         jumpChargeMaximum        = getFloat(p,  "move.jump.charge.maximum",       jumpChargeMaximum);
         jumpChargeFactor         = getFloat(p,  "move.jump.charge.factor",        jumpChargeFactor);
@@ -225,13 +255,21 @@ public class SmartMovingConfig {
         slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
         flyingSpeedFactor        = getFloat(p,  "move.fly.speed.factor",          flyingSpeedFactor);
         flyControlVertical       = getBool(p,   "move.fly.control.vertical",      flyControlVertical);
+        flyCloseToGround         = getBool(p,   "move.fly.ground.close",          flyCloseToGround);
+        flyWhileOnGround         = getBool(p,   "move.fly.ground.collide",        flyWhileOnGround);
         fly                      = getBool(p,   "move.fly",                       fly);
         slide                    = getBool(p,   "move.slide",                     slide);
         crawl                    = getBool(p,   "move.crawl",                     crawl);
+        crawlOverEdge            = getBool(p,   "move.crawl.edge",                crawlOverEdge);
         sneak                    = getBool(p,   "move.sneak",                     sneak);
         run                      = getBool(p,   "move.run",                       run);
         sprint                   = getBool(p,   "move.sprint",                    sprint);
         ceilingClimbing          = getBool(p,   "move.climb.ceiling",             ceilingClimbing);
+        perspectiveFadeFactor    = getFloat(p,  "move.perspective.fade.factor",   perspectiveFadeFactor);
+        perspectiveSpeedFactor   = getFloat(p,  "move.perspective.speed.factor",  perspectiveSpeedFactor);
+        perspectiveSpeedFactorMax= getFloat(p,  "move.perspective.speed.factor.max", perspectiveSpeedFactorMax);
+        perspectiveRunFactor     = getFloat(p,  "move.perspective.run.factor",    perspectiveRunFactor);
+        perspectiveSprintFactor  = getFloat(p,  "move.perspective.sprint.factor", perspectiveSprintFactor);
     }
 
     private void writeTo(Properties p) {
@@ -265,6 +303,8 @@ public class SmartMovingConfig {
         p.setProperty("move.swim.speed.factor",          String.valueOf(swimSpeedFactor));
         p.setProperty("move.dive",                       String.valueOf(dive));
         p.setProperty("move.dive.speed.factor",          String.valueOf(diveSpeedFactor));
+        p.setProperty("move.jump.wall.fall.maximum",      String.valueOf(wallUpJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall.head.fall.maximum", String.valueOf(wallHeadJumpFallMaximumDistance));
         p.setProperty("move.jump.charge",                String.valueOf(jumpCharge));
         p.setProperty("move.jump.charge.maximum",        String.valueOf(jumpChargeMaximum));
         p.setProperty("move.jump.charge.factor",         String.valueOf(jumpChargeFactor));
@@ -280,13 +320,21 @@ public class SmartMovingConfig {
         p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
         p.setProperty("move.fly.speed.factor",           String.valueOf(flyingSpeedFactor));
         p.setProperty("move.fly.control.vertical",       String.valueOf(flyControlVertical));
+        p.setProperty("move.fly.ground.close",           String.valueOf(flyCloseToGround));
+        p.setProperty("move.fly.ground.collide",         String.valueOf(flyWhileOnGround));
         p.setProperty("move.fly",                        String.valueOf(fly));
         p.setProperty("move.slide",                      String.valueOf(slide));
         p.setProperty("move.crawl",                      String.valueOf(crawl));
+        p.setProperty("move.crawl.edge",                 String.valueOf(crawlOverEdge));
         p.setProperty("move.sneak",                      String.valueOf(sneak));
         p.setProperty("move.run",                        String.valueOf(run));
         p.setProperty("move.sprint",                     String.valueOf(sprint));
         p.setProperty("move.climb.ceiling",              String.valueOf(ceilingClimbing));
+        p.setProperty("move.perspective.fade.factor",    String.valueOf(perspectiveFadeFactor));
+        p.setProperty("move.perspective.speed.factor",   String.valueOf(perspectiveSpeedFactor));
+        p.setProperty("move.perspective.speed.factor.max", String.valueOf(perspectiveSpeedFactorMax));
+        p.setProperty("move.perspective.run.factor",     String.valueOf(perspectiveRunFactor));
+        p.setProperty("move.perspective.sprint.factor",  String.valueOf(perspectiveSprintFactor));
     }
 
     /** getUserSpeedFactor() 공식: (1 + speedUserFactor)^speedUserExponent */

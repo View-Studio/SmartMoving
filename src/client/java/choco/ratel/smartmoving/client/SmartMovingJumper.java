@@ -35,7 +35,8 @@ public final class SmartMovingJumper {
     // 원본: SmartMovingConfig.Up / ChargeUp / HeadUp / WallUp / WallHead 등 정수 상수
     public static final int UP = 0, CHARGE_UP = 1, HEAD_UP = 2,
             WALL_UP = 3, CLIMB_UP = 4, CLIMB_BACK = 5, CLIMB_BACK_HEAD = 6,
-            LEFT = 7, RIGHT = 8, BACK = 9, WALL_HEAD = 10;
+            LEFT = 7, RIGHT = 8, BACK = 9, WALL_HEAD = 10,
+            WALL_UP_SLIDE = 11, WALL_HEAD_SLIDE = 12;
 
     // ── [10-3] getJumpMoving ─────────────────────────────────────────────────
 
@@ -128,6 +129,16 @@ public final class SmartMovingJumper {
                                 int jumpType, float charge) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
+        // WallUpSlide/WallHeadSlide: 수직 속도 유지, 비슬라이드 타입으로 변환 (원본: noVertical=true)
+        boolean noVertical = false;
+        if (jumpType == WALL_UP_SLIDE) {
+            jumpType = WALL_UP;
+            noVertical = true;
+        } else if (jumpType == WALL_HEAD_SLIDE) {
+            jumpType = WALL_HEAD;
+            noVertical = true;
+        }
+
         // 원본 tryJump() up/head 분류:
         //   up: Up, ChargeUp, HeadUp, ClimbUp, ClimbBackUp, ClimbBackHead, WallUp, WallHead 등
         //   head: HeadUp, ClimbBackHead, WallHead
@@ -188,7 +199,8 @@ public final class SmartMovingJumper {
 
         // ── 속도 적용 ───────────────────────────────────────────────────────
         // setVelocity() 내부에서 velocityDirty = true 자동 세팅
-        player.setVelocity(motionX, verticalMotion, motionZ);
+        // noVertical: Slide 점프 — 수직 속도 유지 (원본: noVertical=true → motionY 미적용)
+        player.setVelocity(motionX, noVertical ? vel.y : verticalMotion, motionZ);
 
         // ── 헤드점프 상태 세팅 ──────────────────────────────────────────────
         if (head) {
@@ -198,8 +210,8 @@ public final class SmartMovingJumper {
         }
         sm.isSprintJump = fast;
 
-        // 원본: sp.addStat(StatList.jumpStat, 1) — up(수직 점프)일 때만 기록 (C-37)
-        if (up) player.incrementStat(Stats.JUMP);
+        // 원본: sp.addStat(StatList.jumpStat, 1) — up && !noVertical 시만 기록 (C-37)
+        if (up && !noVertical) player.incrementStat(Stats.JUMP);
 
         // ── 상태 클리어 ─────────────────────────────────────────────────────
         sm.jumpCharge = 0F;
@@ -403,16 +415,10 @@ public final class SmartMovingJumper {
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) return;
         if (sm.isSwimming_sm || sm.isDiving) return;
         if (sm.isFlying) return;
-
         if (!player.horizontalCollision) return;
         if (!cfg.angleJumpSide && !cfg.angleJumpBack) return;
 
         Vec3d vel = player.getVelocity();
-        if (vel.horizontalLength() < 0.01D) return;
-
-        // 원본: grab=true → WallHead(헤드점프 변형), grab=false → WallUp
-        boolean grabPressed = SmartMovingKeys.grab.isPressed();
-        int jumpType = grabPressed ? WALL_HEAD : WALL_UP;
 
         // 이동 방향 각도 (atan2 기반, 0=북, 시계 방향)
         float movementAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
@@ -421,13 +427,31 @@ public final class SmartMovingJumper {
         // C-38: calculateSeparateCollisions() — 4방향 AABB 충돌 감지
         float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, movementAngle);
 
-        // 원본 반사 공식 + 90° 단위 허용 오차 정렬
-        float reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
-        while (reflectedAngle > 360F) reflectedAngle -= 360F;
-        float jumpAngle = Math.round(reflectedAngle / 90F) * 90F;
+        // grab=true → WallHead/WallHeadSlide, grab=false → WallUp/WallUpSlide
+        // wasCollidedHorizontally: 이전 틱부터 벽에 닿아있던 경우 Slide 타입 (수직 속도 미적용)
+        boolean grabPressed = SmartMovingKeys.grab.isPressed();
+        int jumpType;
+        if (grabPressed) {
+            if (player.fallDistance > cfg.wallHeadJumpFallMaximumDistance) return;
+            jumpType = sm.wasCollidedHorizontally ? WALL_HEAD_SLIDE : WALL_HEAD;
+        } else {
+            if (player.fallDistance > cfg.wallUpJumpFallMaximumDistance) return;
+            jumpType = sm.wasCollidedHorizontally ? WALL_UP_SLIDE : WALL_UP;
+        }
+
+        // 원본: wasCollidedHorizontally=false → 반사 각도; true → 벽 법선 각도 그대로
+        float jumpAngle;
+        if (!sm.wasCollidedHorizontally) {
+            if (vel.horizontalLength() < 0.01D) return;  // 이동 속도 없으면 반사 각도 계산 불가
+            jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
+            while (jumpAngle > 360F) jumpAngle -= 360F;
+            jumpAngle = Math.round(jumpAngle / 90F) * 90F;
+        } else {
+            jumpAngle = horizontalCollisionAngle;
+            while (jumpAngle > 360F) jumpAngle -= 360F;
+        }
 
         sm.isWallJumping = true;
-        sm.continueWallJumping = true;
 
         // 원본: rotationYaw = jumpAngle; isCollidedHorizontally = false; fallDistance = 0F
         player.setYaw(jumpAngle);
@@ -436,6 +460,8 @@ public final class SmartMovingJumper {
         player.fallDistance = 0F;
 
         tryJump(player, sm, jumpType, 0F);
+        // 원본: continueWallJumping = !isHeadJumping (tryJump 성공 후 — WallHead 시 false)
+        sm.continueWallJumping = !sm.isHeadJumping;
     }
 
     /**

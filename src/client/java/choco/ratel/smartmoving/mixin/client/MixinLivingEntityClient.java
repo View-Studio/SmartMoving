@@ -189,6 +189,34 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
+     * isSneaking() 오버라이드 — SM 상태 기반 스니킹 판정.
+     * 원본: SmartMovingSelf.isSneaking() (SmartMovingPlayerBase.java, 1972-1981줄)
+     *
+     * Config 비활성 또는 탈것 탑승 시 vanilla에 위임.
+     * forceIsSneaking != null → 강제 반환.
+     * 나머지: isSlow, crawlOverEdge, jumpCharge 조건으로 결정.
+     *
+     * 원본 조건 1: isSlow && (onGround || isInWeb)
+     *   — isInWeb(1.7.10) → 1.21.1 대응 API 미확인. 현재 onGround 만 사용.
+     * 원본 조건 3: ridingEntity != null || !Config.enabled → vanilla 위임 (return 처리)
+     */
+    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
+    private void sm_isSneaking(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        if (!cfg.enabled || player.hasVehicle()) return;
+
+        if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
+
+        boolean result = (sm.isSlow && player.isOnGround())
+                || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
+                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
+        cir.setReturnValue(result);
+    }
+
+    /**
      * 5-5 (클라이언트): SM 커스텀 클라이밍 중 isClimbing() = false 강제.
      *
      * 목적 1: applyClimbingSpeed() x/z ±0.15F 클램프 차단
