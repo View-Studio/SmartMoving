@@ -2170,3 +2170,70 @@ import net.smart.utilities.*;
    - `SmartMovingPacketStream` → Fabric `ServerPlayNetworking`/`ClientPlayNetworking`으로 대체
    - `MathHelper.floor_double`, `sqrt_double` → `MathHelper.floor`, `sqrt` (1.21.1 Fabric Yarn API)
    - `sp.isInWater()`, `sp.handleLavaMovement()` 등 → Fabric 동등 메서드 확인 필요
+
+---
+
+## R-05 추가 리서치 — isAerodynamic / SlideToHeadJumping / HorizontalAirodynamicDamping / canTriggerWalking (2026-04-23)
+
+### `isAerodynamic` 세팅 로직 (행 2524~2560)
+
+```java
+// isHeadJumping 조건 재평가 — 매 틱
+isHeadJumping = isHeadJumping &&
+    !sp.onGround &&
+    !(isSwimming || isDiving) &&
+    !(isFlying || sp.capabilities.isFlying) &&
+    !(sp.handleWaterMovement() && sp.motionY < 0) &&
+    !sp.handleLavaMovement();
+
+// isHeadJumping이 꺼지면 isAerodynamic도 리셋
+if(!isHeadJumping)
+    isAerodynamic = false;                          // 행 2533
+
+// 슬라이드 → 헤드점프 전환 (SlideToHeadJumpingFallDistance = 0.05F)
+if(isSliding && sp.fallDistance > SlideToHeadJumpingFallDistance)
+{
+    isSliding = false;
+    isHeadJumping = true;
+    isAerodynamic = true;                           // 행 2550
+}
+
+// 슬라이드 시작 시 isAerodynamic 리셋
+if(Config.isSlidingEnabled() && grabButton.Pressed && ...)
+{
+    isSliding = true;
+    isHeadJumping = false;
+    isAerodynamic = false;                          // 행 2560
+}
+```
+
+**요약**:
+- `isAerodynamic = true`: 슬라이딩 중 `fallDistance > 0.05F` → 헤드점프로 전환될 때만
+- `isAerodynamic = false`: 헤드점프가 꺼질 때마다 / 슬라이딩 새로 시작할 때
+
+### `landMotion` 내 HorizontalAirodynamicDamping 적용 (행 751~755)
+
+```java
+// 공중 + isSliding=false 분기
+else if(isAerodynamic)
+    horizontalDamping = HorizontalAirodynamicDamping;   // 0.999F
+else
+    horizontalDamping = HorizontalAirDamping;           // 0.91F
+```
+
+`setLandMotions(horizontalDamping)`에서 `sp.motionX *= horizontalDamping; sp.motionZ *= horizontalDamping` 적용.
+
+**1.21.1 대응**: vanilla travel() 종료 후 이미 0.91F 감쇠가 적용되어 있으므로,
+TAIL inject에서 `velocity *= (0.999F / 0.91F)` 보정으로 교체.
+
+### `canTriggerWalking` (행 1469~1471)
+
+```java
+public boolean canTriggerWalking()
+{
+    return !isClimbing && !isDiving;
+}
+```
+
+클라이밍 또는 다이빙 중 발소리·발자국 파티클 억제.
+1.21.1 `Entity.canTriggerWalking()` Mixin HEAD inject + cancellable로 구현.

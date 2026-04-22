@@ -91,6 +91,23 @@ public abstract class MixinPlayerEntityClient {
     }
 
     /**
+     * canTriggerWalking — SM 클라이밍/잠수 중 걷기 트리거 억제.
+     * 원본: SmartMovingSelf.canTriggerWalking() (행 1469-1471): return !isClimbing && !isDiving
+     *
+     * 클라이밍/잠수 중 보행음·보행 파티클이 발생하지 않도록 false 반환.
+     */
+    @Inject(method = "canTriggerWalking", at = @At("HEAD"), cancellable = true)
+    private void sm_canTriggerWalking(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isClimbing || sm.isDiving) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    /**
      * pushOutOfBlocks: 서버→클라이언트 위치 동기화 직후 억제.
      * 원본: SmartMovingSelf.pushOutOfBlocks (SmartMovingSelf.md L1263-1277)
      *

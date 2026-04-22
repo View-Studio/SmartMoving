@@ -265,6 +265,27 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
+     * HorizontalAerodynamicDamping — 슬라이드→헤드점프 전환 직후 수평 감속 보정.
+     * 원본: SmartMovingBase.landMotion() (행 751-755) — isAerodynamic && !onGround && !isSliding 시
+     *       motionX/Z *= HorizontalAerodynamicDamping(0.999F)
+     *
+     * 1.21.1: vanilla travel() 내 공기저항 0.91F 이후에 삽입.
+     * isAerodynamic=true일 때 vanilla가 적용한 0.91F를 되돌리고 0.999F를 적용.
+     * correction factor = 0.999F / 0.91F
+     */
+    @Inject(method = "travel", at = @At("TAIL"))
+    private void sm_aerodynamicDamping(Vec3d movementInput, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (!sm.isAerodynamic || player.isOnGround()) return;
+        float factor = 0.999F / 0.91F;
+        Vec3d vel = player.getVelocity();
+        player.setVelocity(vel.x * factor, vel.y, vel.z * factor);
+    }
+
+    /**
      * 6-2 (클라이언트): SM 크롤링 중 isInSwimmingPose() = false 강제.
      *
      * SM 크롤링은 SWIMMING 포즈를 사용하지만, vanilla isInSwimmingPose()=true가 되면:

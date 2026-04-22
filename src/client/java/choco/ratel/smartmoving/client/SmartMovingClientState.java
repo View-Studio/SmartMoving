@@ -245,6 +245,14 @@ public final class SmartMovingClientState {
      */
     public boolean wasCollidedHorizontally;
 
+    /**
+     * 슬라이드→헤드점프 전환 시 true — 공기역학적 수평 감쇠(0.999F) 적용.
+     * 원본: SmartMovingSelf.isAerodynamic (행 2533~2560)
+     * true 조건: isSliding && fallDistance > 0.05F 로 헤드점프 전환됐을 때만.
+     * false 조건: 헤드점프가 꺼질 때 / 슬라이딩 새로 시작할 때.
+     */
+    public boolean isAerodynamic;
+
     // ── multiPlayerInitialized ─────────────────────────────────────────
     /**
      * 서버→클라이언트 위치 동기화 직후 pushOutOfBlocks 억제 카운터.
@@ -412,7 +420,20 @@ public final class SmartMovingClientState {
                         && player.isOnGround() && !isClimbing && !isHeadJumping;
                 if (wantSlide) {
                     isSliding = true;
+                    isAerodynamic = false;  // 원본: 슬라이드 시작 시 isAerodynamic 리셋 (행 2560)
                 }
+            }
+
+            // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
+            // 슬라이딩 중 낙하거리가 0.05F 초과 → 헤드점프 + 공기역학 모드 전환
+            if (isSliding && player.fallDistance > 0.05F) {
+                isSliding = false;
+                isHeadJumping = true;
+                isAerodynamic = true;
+            }
+            // isHeadJumping이 꺼지면 isAerodynamic도 리셋 (원본: 행 2533)
+            if (!isHeadJumping) {
+                isAerodynamic = false;
             }
 
             // IMPL-03: 더블클릭 방향 점프 카운터 갱신
@@ -535,6 +556,7 @@ public final class SmartMovingClientState {
         forceIsSneaking = null;
         wasCapabilitiesIsFlying = false;
         wasCollidedHorizontally = false;
+        isAerodynamic = false;
         multiPlayerInitialized  = 0;
     }
 
