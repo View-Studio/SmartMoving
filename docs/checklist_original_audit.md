@@ -78,8 +78,8 @@
 |------|----------------------------------|--------------|
 | [x] | `SmartMovingModel.md` | `MixinPlayerEntityModelClient.java` |
 | [x] | `SmartMovingRender.md` | `MixinPlayerEntityRenderer.java`, `SmartMovingHud.java` |
-| [ ] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
-| [ ] | `RenderPlayer.md` | 렌더 관련 Mixin 전체 |
+| [x] | `ModelPlayer.md` | `MixinPlayerEntityModelClient.java` |
+| [x] | `RenderPlayer.md` | `MixinPlayerEntityRenderer.java`, `MixinPlayerEntityModelClient.java` |
 | [ ] | `SmartRenderContext.md` | `SmartMovingContext.java` 또는 별도 컨텍스트 클래스 |
 | [ ] | `IModelPlayer.md` | 인터페이스 대응 확인 (구현 클래스 grep) |
 | [ ] | `IRenderPlayer.md` | 인터페이스 대응 확인 |
@@ -456,6 +456,40 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 신규 발견 미구현:
 - renderName() 미구현 — 타인 플레이어 이름 태그 높이 보정(heightOffset-1→d1-=0.2) + 크롤/스니킹 임시isSneaking 변경. 타인 플레이어 SM 상태 동기화 전체가 미구현인 상태에서 단독 구현 불가.
 - HUD exhaustion bar minFitnessForAction/ToStartAction 아이콘 구분 미구현 — SmartMovingClientState에 maxExhaustionForAction/ToStartAction 필드 없어 원본의 5종 아이콘 구분 불가. 단순화된 2종 아이콘(full/half)으로 대체됨.
+
+---
+
+### [2026-04-23] render/ModelPlayer.md
+
+대응 구현: MixinPlayerEntityModelClient.java
+
+불일치 없음:
+- PlayerAPI 없는 경로의 중개 클래스. 1.21.1에서 BipedEntityModel Mixin으로 완전 대체.
+- animate*() → SmartMovingModel.animate*() 위임: setAngles() TAIL inject로 대응 ✓
+- isStandard=true(vanilla 위임): inject에서 해당 SM 상태 없으면 아무것도 안 함 → vanilla 결과 유지 ✓
+- isStandard=false(SM 커스텀): inject에서 직접 각도 설정 ✓
+- superAnimate*() 경로: 불필요 (TAIL inject로 대체됨) ✓
+- getMovingModel(): 불필요 (Mixin이 직접 SmartMovingClientState 접근) ✓
+- factor 파라미터(모델 스케일): 1.21.1 setAngles() 파라미터에 없음 → N/A
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] render/RenderPlayer.md
+
+대응 구현: MixinPlayerEntityRenderer.java, MixinPlayerEntityModelClient.java
+
+불일치 없음:
+- PlayerAPI 없는 경로의 렌더 중개 클래스. 1.21.1에서 PlayerEntityRenderer Mixin으로 완전 대체.
+- doRender → renderPlayer(): setAngles() TAIL inject (SmartMovingClientState 직접 읽음) ✓
+- rotateCorpse → rotatePlayer(): setupTransforms() inject ✓
+- renderLivingAt → renderPlayerAt(): getPositionOffset() inject ✓
+- passSpecialRender → renderName(): renderLabelIfPresent() inject + MixinLivingEntityRenderer ✓
+- createModel(): 불필요 (Mixin 직접 접근) ✓
+- getPlayerModels() / allIModelPlayers: 불필요 ✓
+
+신규 발견 미구현: 없음
 
 ---
 
