@@ -265,6 +265,24 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
+     * canTriggerWalking — SM 클라이밍/잠수 중 걷기 트리거 억제.
+     * 원본: SmartMovingSelf.canTriggerWalking() (행 1469-1471): return !isClimbing && !isDiving
+     *
+     * 클라이밍/잠수 중 보행음·보행 파티클이 발생하지 않도록 false 반환.
+     * LivingEntity에 정의된 메서드 — PlayerEntity에 오버라이드 없음, LivingEntity Mixin에서 처리.
+     */
+    @Inject(method = "canTriggerWalking", at = @At("HEAD"), cancellable = true)
+    private void sm_canTriggerWalking(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isClimbing || sm.isDiving) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    /**
      * HorizontalAerodynamicDamping — 슬라이드→헤드점프 전환 직후 수평 감속 보정.
      * 원본: SmartMovingBase.landMotion() (행 751-755) — isAerodynamic && !onGround && !isSliding 시
      *       motionX/Z *= HorizontalAerodynamicDamping(0.999F)
