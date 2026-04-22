@@ -96,11 +96,11 @@
 | [x] | `SmartRenderUtilities.md` | `SmartMovingJumper.java`(getHorizontalCollisionangle 등) |
 | [x] | `RendererData.md` | N/A — bipedOuter fade/보간 시스템 전용 데이터 컨테이너. bipedOuter 없으므로 N/A |
 | [x] | `ModelPlayer.md` | N/A — SmartRenderModel 위임 래퍼 + PlayerAPI 없는 경로 중개 클래스. SmartRenderModel N/A |
-| [ ] | `RenderPlayer.md` | 렌더 관련 Mixin |
-| [ ] | `IModelPlayer.md` | 인터페이스 대응 확인 |
-| [ ] | `IRenderPlayer.md` | 인터페이스 대응 확인 |
-| [ ] | `playerapi/SmartRenderModelPlayerBase.md` | `MixinPlayerEntityModelClient.java` |
-| [ ] | `playerapi/SmartRenderRenderPlayerBase.md` | 렌더 Mixin |
+| [x] | `RenderPlayer.md` | N/A — SmartRenderRender 위임 래퍼 + PlayerAPI 없는 경로 중개 클래스. SmartRenderRender/3-layer model N/A |
+| [x] | `IModelPlayer.md` | N/A — SmartRenderModel←→구현체 브릿지 인터페이스. SmartRenderModel N/A이므로 N/A |
+| [x] | `IRenderPlayer.md` | N/A — SmartRenderRender←→구현체 브릿지 인터페이스. SmartRenderRender N/A이므로 N/A |
+| [x] | `playerapi/SmartRenderModelPlayerBase.md` | N/A — PlayerAPI ModelPlayerBase + IModelPlayer 어댑터. PlayerAPI/SmartRenderModel 둘 다 N/A |
+| [x] | `playerapi/SmartRenderRenderPlayerBase.md` | N/A — PlayerAPI RenderPlayerBase + IRenderPlayer 어댑터. PlayerAPI/SmartRenderRender 둘 다 N/A |
 
 ---
 
@@ -641,6 +641,22 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] smartrender/RenderPlayer.md + IModelPlayer.md + IRenderPlayer.md + playerapi/SmartRenderModelPlayerBase.md + playerapi/SmartRenderRenderPlayerBase.md
+
+대응 구현: N/A
+
+불일치 없음 (5개 파일 일괄):
+- `smartrender/RenderPlayer.md`: `RenderPlayer extends vanilla RenderPlayer implements IRenderPlayer`. doRender/rotateCorpse/preRenderCallback/handleRotationFloat/renderFirstPersonArm 전부 SmartRenderRender에 위임. SmartRenderRender + 3-layer model(main/chestplate/armor) 전체 N/A → 파일 N/A
+- `smartrender/IModelPlayer.md`: SmartRenderModel↔구현체(ModelPlayer/SmartRenderModelPlayerBase) 브릿지 인터페이스. super* 3개 + getter 16개(getOuter/getTorso 등 SR 전용 노드) + animate* 11개. SmartRenderModel N/A → 인터페이스 전체 N/A
+- `smartrender/IRenderPlayer.md`: SmartRenderRender↔구현체(RenderPlayer/SmartRenderRenderPlayerBase) 브릿지 인터페이스. createModel/initialize + super* 4개 + getter 6개(3-layer model 포함). SmartRenderRender + 3-layer model N/A → 인터페이스 전체 N/A
+- `playerapi/SmartRenderModelPlayerBase.md`: `ModelPlayerBase + IModelPlayer` 어댑터. PlayerAPI dynamic dispatch 패턴(animate* → modelPlayerAPI.dynamic() → dynamicVirtual*). SmartRenderModel lazy init + initialize() biped* 교체. PlayerAPI/SmartRenderModel 둘 다 N/A
+- `playerapi/SmartRenderRenderPlayerBase.md`: `RenderPlayerBase + IRenderPlayer` 어댑터. SmartRenderRender lazy init + createModel(기존 ModelBiped를 PlayerAPI 타입으로 캐스트). shadowSize=0.5F 하드코딩. getRenderModels() 참조 동등성 캐시. PlayerAPI/SmartRenderRender 둘 다 N/A
+- 공통 근거: PlayerAPI(1.7.10 전용) + SmartRender 모델 계층(bipedOuter/ModelRotationRenderer/3-layer) → 1.21.1 Mixin inject 패턴으로 완전 대체. 구조적 소멸.
+
+신규 발견 미구현: 없음
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -676,3 +692,8 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `smartrender/SmartRenderUtilities.md` | `wallUpJumpOrthogonalTolerance` 미구현 — 항상 90° 스냅. 원본: tolerance!=0 && abs(aligned)<5° 일 때만 스냅. | **처리 완료** — SmartMovingConfig.java: 필드+readFrom+writeTo 추가(default=5F); SmartMovingJumper.java: tolerance 체크 후 조건부 스냅 |
 | 2026-04-23 | `smartrender/RendererData.md` | 없음 — bipedOuter fade 시스템 전용 데이터 컨테이너. bipedOuter N/A → 전체 N/A | N/A |
 | 2026-04-23 | `smartrender/ModelPlayer.md` | 없음 — SmartRenderModel 위임 래퍼. SmartRenderModel/ModelRotationRenderer/bipedOuter 계열 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/RenderPlayer.md` | 없음 — SmartRenderRender 위임 래퍼 + 3-layer model(main/chestplate/armor). SmartRenderRender/3-layer 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/IModelPlayer.md` | 없음 — SmartRenderModel↔구현체 브릿지 인터페이스. SmartRenderModel/ModelRotationRenderer N/A → 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/IRenderPlayer.md` | 없음 — SmartRenderRender↔구현체 브릿지 인터페이스. SmartRenderRender/3-layer model N/A → 전체 N/A | N/A |
+| 2026-04-23 | `smartrender/playerapi/SmartRenderModelPlayerBase.md` | 없음 — PlayerAPI ModelPlayerBase + IModelPlayer 어댑터. PlayerAPI/SmartRenderModel 둘 다 N/A | N/A |
+| 2026-04-23 | `smartrender/playerapi/SmartRenderRenderPlayerBase.md` | 없음 — PlayerAPI RenderPlayerBase + IRenderPlayer 어댑터. PlayerAPI/SmartRenderRender 둘 다 N/A | N/A |
