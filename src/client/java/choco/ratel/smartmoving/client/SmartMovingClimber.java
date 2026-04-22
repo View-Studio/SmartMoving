@@ -301,10 +301,12 @@ public final class SmartMovingClimber {
                             else feetClimbing = feetClimbing.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, feetGap, gap);
                         }
                     } else if (state.getBlock() instanceof VineBlock) {
-                        boolean hasFace = (d[0] > 0 && Boolean.TRUE.equals(state.get(VineBlock.WEST)))
-                                       || (d[0] < 0 && Boolean.TRUE.equals(state.get(VineBlock.EAST)))
-                                       || (d[1] > 0 && Boolean.TRUE.equals(state.get(VineBlock.NORTH)))
-                                       || (d[1] < 0 && Boolean.TRUE.equals(state.get(VineBlock.SOUTH)));
+                        // 원본 Orientation.hasVineOrientation(): 탐색 방향 == vine face 방향
+                        // PZ(동쪽) → East, NZ(서쪽) → West, ZP(남쪽) → South, ZN(북쪽) → North
+                        boolean hasFace = (d[0] > 0 && Boolean.TRUE.equals(state.get(VineBlock.EAST)))
+                                       || (d[0] < 0 && Boolean.TRUE.equals(state.get(VineBlock.WEST)))
+                                       || (d[1] > 0 && Boolean.TRUE.equals(state.get(VineBlock.SOUTH)))
+                                       || (d[1] < 0 && Boolean.TRUE.equals(state.get(VineBlock.NORTH)));
                         if (hasFace) {
                             ClimbGap gap = new ClimbGap(); gap.state = state;
                             if (isHandsLevel) handsClimbing = handsClimbing.max(HandsClimbing.UP, handsGap, gap);

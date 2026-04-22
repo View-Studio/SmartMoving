@@ -136,8 +136,8 @@
 | [x] | `moving/ClimbGap.md` | `climbing/ClimbGap.java` |
 | [x] | `moving/FeetClimbing.md` | `climbing/FeetClimbing.java` |
 | [x] | `moving/HandsClimbing.md` | `climbing/HandsClimbing.java` |
-| [ ] | `moving/Button.md` | `SmartMovingKeys.java`, 키 처리 코드 |
-| [ ] | `moving/Orientation.md` | 사용처 grep으로 확인 |
+| [x] | `moving/Button.md` | `SmartMovingKeys.java`, 키 처리 코드 |
+| [x] | `moving/Orientation.md` | `SmartMovingClimber.java` (getOnLadderOrVine, handleClimbing) |
 | [ ] | `moving/Compat.md` | Compat 관련 구현 (있는 경우) |
 | [ ] | `moving/ISmartMovingClient.md` | 인터페이스 대응 확인 |
 | [ ] | `moving/ISmartMovingSelf.md` | 인터페이스 대응 확인 |
@@ -641,6 +641,49 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 
 ---
 
+### [2026-04-23] moving/Button.md
+
+대응 구현: `SmartMovingKeys.java`, 키 처리 코드 전체
+
+불일치 없음:
+- 원본 `Button`: LWJGL2 `Keyboard.isKeyDown(keyCode)` + `inGameHasFocus` + `allowUserInput` + StartPressed/StopPressed 에지 감지
+- 1.21.1 대응: Fabric `KeyBinding.isPressed()` / `KeyBinding.wasPressed()` — 에지 감지(`wasPressed()`), 지속 상태(`isPressed()`)로 완전 대체
+- grab/configToggle/speedIncrease/speedDecrease 4개 KeyBinding 등록 (`SmartMovingKeys.java`) ✓
+- StopPressed 패턴: `SmartMovingJumper.java` L317-319에서 `!isPressed()` 조건으로 직접 처리됨 ✓
+- LWJGL2 keyCode → GLFW 키코드 변환 (LCONTROL→GLFW_KEY_LEFT_CONTROL, F9→GLFW_KEY_F9 등) ✓
+- `inGameHasFocus` / `allowUserInput` 조건: 1.21.1 Fabric에서 KeyBinding.isPressed()가 내부적으로 처리 → N/A ✓
+- 결론: N/A (Button 래퍼 클래스 → Fabric KeyBinding API 직접 사용으로 구조적 대체)
+
+신규 발견 미구현: 없음
+
+---
+
+### [2026-04-23] moving/Orientation.md
+
+대응 구현: `SmartMovingClimber.java` (getOnLadderOrVine, handleClimbing 내 대각 탐색)
+
+발견한 불일치:
+- [오역] `handleClimbing()` 대각 탐색 vine 방향 판정 완전 반전 (L304-307)
+  - 원본 근거: `Orientation.hasVineOrientation()` — NZ(서쪽 접근) → West face, PZ(동쪽 접근) → East face, ZP(남쪽 접근) → South face, ZN(북쪽 접근) → North face
+  - 버그: d[0]>0(East 성분) → vine.WEST, d[0]<0(West 성분) → vine.EAST, d[1]>0(South 성분) → vine.NORTH, d[1]<0(North 성분) → vine.SOUTH (4방향과 반전)
+  - 수정: vine.EAST/WEST/SOUTH/NORTH로 올바르게 교체 (4방향 탐색 L133-139과 일치하게)
+
+불일치 없음:
+- `getOnLadderOrVine()` 4방향 vine 판정 (L133-139): dir=NORTH→vine.NORTH, dir=SOUTH→vine.SOUTH, dir=EAST→vine.EAST, dir=WEST→vine.WEST ✓
+- 사다리 방향 판정: `ladderFacing.getOpposite() == dir` ✓ (원본: 탐색 방향에서 붙은 사다리만)
+- vine 뒤 solid 블록 체크: `bx+dir.getOffsetX()` = vine block 너머 블록 (vine face 뒤) ✓
+- Orientation의 나머지 기능 (반-블록 단위 수직 위치, 펜스/트랩도어/계단/문, 호환 모드 블록)은 1.21.1에서 N/A:
+  - 1.7.10 블록 메타데이터 → BlockState property로 완전 교체
+  - BetterThanWolves/RopesPlus/ASGrapplingHook/LadderKit/Carpenter's Blocks 등 → 1.21.1 미존재
+  - 반-블록 단위 정밀 수직 탐색 → Y 블록 단위 정수 탐색으로 단순화
+  - Orientation 9방향 상수 → Direction enum (NORTH/SOUTH/EAST/WEST) 대체
+
+컴파일: BUILD SUCCESSFUL ✓
+
+신규 발견 미구현: 없음 (vine 방향 오역 수정 완료)
+
+---
+
 ### [2026-04-23] moving/FeetClimbing.md + moving/HandsClimbing.md
 
 대응 구현: `climbing/FeetClimbing.java`, `climbing/HandsClimbing.java`
@@ -790,3 +833,4 @@ Reflect.md  — 리플렉션 유틸. 불필요.
 | 2026-04-23 | `moving/ClimbGap.md` | 없음 — 데이터 컨테이너 6필드. Block+Meta→BlockState, Orientation→Direction 대응. canStand/mustCrawl/skipGaps ✓. copyFrom()은 잉여이나 FeetClimbing/HandsClimbing에서 실제 사용됨. | N/A |
 | 2026-04-23 | `moving/FeetClimbing.md` | `isUp()` 오역 — 원본: `SlowUpWithHoldWithoutHands\|\|SlowUpWithSinkWithoutHands\|\|FastUp` (ordinal≥4), 버그: `ordinal > BASE_HOLD` (ordinal≥2). `max()` SkipGaps 조건 누락. | **처리 완료** — FeetClimbing.java: isUp() 3개 enum 상수 비교로 수정; max() SkipGaps 조건 복원 |
 | 2026-04-23 | `moving/HandsClimbing.md` | `isUp()` ✓ (원본 `_value > BottomHold._value` = ordinal>3 대응). `max()` SkipGaps 조건 누락. | **처리 완료** — HandsClimbing.java: max() SkipGaps 조건 복원 |
+| 2026-04-23 | `moving/Orientation.md` | `handleClimbing()` 대각 탐색 vine 방향 완전 반전 — d[0]>0(East) → vine.WEST, d[1]>0(South) → vine.NORTH. 원본 `hasVineOrientation()`: 탐색방향==vine face 방향. | **처리 완료** — SmartMovingClimber.java L304-307: vine.EAST/WEST/SOUTH/NORTH로 올바르게 수정 |
