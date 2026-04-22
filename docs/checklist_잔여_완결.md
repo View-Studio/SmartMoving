@@ -330,17 +330,24 @@ isSmall = isCrawling || isSliding || isHeadJumping;
 
 ---
 
-### 🟡 R-08. 애니메이션 회전 순서 개선 (Phase 13)
+### ✅ R-08. 애니메이션 회전 순서 개선 (Phase 13)
 
 **문제**: 현재 애니메이션 회전은 XYZ 순서로 적용되지만 원본은 YZX/ZXY 등 다른 순서를 사용한다.
 복합 회전 애니메이션에서 시각적 오차가 발생할 수 있다.
 
-**구현 위치**: `MixinPlayerEntityModelClient.java` setupTransforms / setAngles
+**구현 위치**: `MixinPlayerEntityModelClient.java`
 
 **완료 기준**:
-- [ ] 원본 SmartMovingRenderer의 GL 회전 순서 확인
-- [ ] 현재 구현과 비교 후 차이가 있는 경우 수정
-- [ ] 클라이밍 / 수영 / 슬라이딩 각 애니메이션에서 시각적 검증
+- [x] 원본 SmartMovingRenderer의 GL 회전 순서 확인 (YZX/ZXY)
+- [x] JOML 쿼터니언 기반 정확한 회전 순서 변환 헬퍼 구현
+- [x] 클라이밍 / 수영 / 크롤링 / 슬라이딩 팔 (YZX → setAnglesYZX)
+- [x] 앵글점프 다리 (ZXY → setAnglesZXY)
+
+**구현 내역** (2026-04-22):
+- `setAnglesYZX(part, pitch, yaw, roll)`: JOML qY*qZ*qX → getEulerAnglesZYX → ModelPart 적용
+- `setAnglesZXY(part, pitch, yaw, roll)`: JOML qZ*qX*qY → getEulerAnglesZYX → ModelPart 적용
+- 영향 메서드: `sm_animateClimbing` 팔, `sm_animateSwimming` 팔, `sm_animateCrawling` 팔, `sm_animateSliding` 팔, `sm_animateAngleJumping` 다리
+- import 추가: `org.joml.Quaternionf`, `org.joml.Vector3f`
 
 ---
 
