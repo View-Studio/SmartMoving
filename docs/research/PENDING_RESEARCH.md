@@ -52,17 +52,17 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | B-02 | `PlayerEntity.getEntityPose()` 전체 — 어떤 조건에서 어떤 포즈를 반환하는지 | `PlayerEntity.java` | [x] → Yarn명: updatePose(method_7318). 우선순위: FALL_FLYING>SLEEPING>SWIMMING>SPIN_ATTACK>CROUCHING>STANDING. vanilla/LivingEntity_updatePose.md 및 PlayerEntity_pose_dimensions.md에 기재. |
 | B-03 | `LivingEntity.getPoses()` — 반환값 구조 및 사용 경로 (어디서 호출되는지) | `LivingEntity.java` | [x] → vehicle entity(Boat/Minecart/Horse/Pig/Strider) updatePassengerForDismount() 전용. PlayerEntity반환: [STANDING,CROUCHING,SWIMMING]. vanilla/EntityPose_system.md B-03 기재. |
 | B-04 | `LivingEntity.updatePose()` / `trySetPose()` — 포즈 전환 조건 전체, EntityPose 전환 시 calculateDimensions() 호출 여부 | `LivingEntity.java` | [x] → trySetPose 미존재. setPose→DataTracker→onTrackedDataSet→calculateDimensions 자동 호출 확인. vanilla/EntityPose_system.md B-04 및 PlayerEntity_pose_dimensions.md 기재. |
-| B-05 | `LivingEntity.getLeaningPitch()` / `updateLeaningPitch()` — 증가/감소 속도 정확한 수치 | `LivingEntity.java` | [ ] |
+| B-05 | `LivingEntity.getLeaningPitch()` / `updateLeaningPitch()` — 증가/감소 속도 정확한 수치 | `LivingEntity.java` | [x] → +0.09F / -0.09F, 범위 0.0~1.0, isInSwimmingPose() 기준. vanilla/LivingEntity_physics_misc.md B-05 기재. |
 | B-06 | `BipedEntityModel.animateArms()` 전체 코드 — 내부 로직, 파라미터 | `BipedEntityModel.java` | [ ] |
 | B-07 | `BipedEntityModel.setAngles()` — mp.onGround 파라미터가 float인지, 어떤 값이 전달되는지 | `BipedEntityModel.java` | [ ] |
 | B-08 | `ModelPart` — `xScale`, `yScale`, `zScale` 필드 존재 여부 및 렌더링에서의 사용 방식 | `ModelPart.java` | [ ] |
 | B-09 | `ModelPart.rotate(MatrixStack)` — 내부에서 pitch→yaw→roll 순서로 적용하는지 정확한 코드 | `ModelPart.java` | [ ] |
-| B-10 | `LivingEntity.travel()` — `handleFluidAcceleration()` 내 흐름 가속 크기 (0.014D 여부 확인) | `LivingEntity.java` | [ ] |
-| B-11 | `LivingEntity.travel()` — `reverseHandleMaterialAcceleration` 해당 코드 경로 (1.21.1에 존재하는지) | `LivingEntity.java` | [ ] |
-| B-12 | `EntityAttributes.GENERIC_GRAVITY` — 기본값 0.08D 여부, 어디서 초기화되는지 | `EntityAttributes.java` / `LivingEntity.java` | [ ] |
-| B-13 | `AbstractBlock` / `Block` — `getSlipperiness()` 해당 Yarn 메서드명 확인 | `AbstractBlock.java` 또는 `AbstractBlockState.java` | [ ] |
-| B-14 | `LivingEntity.isInsideWall()` — 현재 구현한 Mixin 대상이 맞는지 재확인, 크롤링 쿨다운 억제 로직 정확성 | `LivingEntity.java` 또는 `Entity.java` | [ ] |
-| B-15 | 수영 소리 vanilla 자동 재생 — travel() 또는 별도 경로에서 수영 소리가 자동 재생되는지, 우리와 중복 재생 가능성 | `LivingEntity.java` / `PlayerEntity.java` | [ ] |
+| B-10 | `LivingEntity.travel()` — `handleFluidAcceleration()` 내 흐름 가속 크기 (0.014D 여부 확인) | `LivingEntity.java` | [x] → `SPEED_IN_WATER = 0.014`. `checkWaterState()` → `updateMovementInFluid(FluidTags.WATER, 0.014)`. vanilla/LivingEntity_physics_misc.md B-10 기재. |
+| B-11 | `LivingEntity.travel()` — `reverseHandleMaterialAcceleration` 해당 코드 경로 (1.21.1에 존재하는지) | `LivingEntity.java` | [x] → 1.21.1에 존재하지 않음 확인. vanilla/LivingEntity_physics_misc.md B-11 기재. |
+| B-12 | `EntityAttributes.GENERIC_GRAVITY` — 기본값 0.08D 여부, 어디서 초기화되는지 | `EntityAttributes.java` / `LivingEntity.java` | [x] → 기본값 0.08, 범위 -1.0~1.0, Tracked=true. EntityAttributes.java register()에서 초기화. vanilla/LivingEntity_physics_misc.md B-12 기재. |
+| B-13 | `AbstractBlock` / `Block` — `getSlipperiness()` 해당 Yarn 메서드명 확인 | `AbstractBlock.java` 또는 `AbstractBlockState.java` | [x] → `Block.getSlipperiness()` (Yarn명). `this.slipperiness` 필드 반환. vanilla/LivingEntity_physics_misc.md B-13 기재. |
+| B-14 | `LivingEntity.isInsideWall()` — 현재 구현한 Mixin 대상이 맞는지 재확인, 크롤링 쿨다운 억제 로직 정확성 | `LivingEntity.java` 또는 `Entity.java` | [x] → Entity.java에 정의(method_5757), LivingEntity가 isSleeping() 체크 후 super 호출로 오버라이드. vanilla/LivingEntity_physics_misc.md B-14 기재. |
+| B-15 | 수영 소리 vanilla 자동 재생 — travel() 또는 별도 경로에서 수영 소리가 자동 재생되는지, 우리와 중복 재생 가능성 | `LivingEntity.java` / `PlayerEntity.java` | [x] → Entity.move() 내 스텝 처리 후 isTouchingWater()→playSwimSound(). onSwimmingStart()에서 입수 시 splash. PlayerEntity가 ENTITY_PLAYER_SWIM/SPLASH로 오버라이드. vanilla/LivingEntity_physics_misc.md B-15 기재. |
 | B-16 | `DataTracker` — 커스텀 엔트리 등록 방법 (TrackedDataHandlerRegistry, Mixin으로 추가하는 방법) | `DataTracker.java` / Fabric API | [ ] |
 | B-17 | `PlayerEntityRenderer.setupTransforms()` — `bodyYaw` 파라미터가 정확히 index 몇 번인지 (ModifyArg 용) | `PlayerEntityRenderer.java` | [ ] |
 | B-18 | `MatrixStack` — X/Y/Z 축 회전 API 전체 (`multiply(RotationAxis.POSITIVE_X.rotation(angle))` 외 다른 방법 있는지) | `MatrixStack.java` | [ ] |
@@ -266,7 +266,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/vanilla/LivingEntity_travel.md` (추가) / `docs/research/vanilla/LivingEntity_physics_misc.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → B-05: updateLeaningPitch() +0.09F/-0.09F, 0.0~1.0 범위. B-10: SPEED_IN_WATER=0.014 확인. B-11: 1.21.1에 reverseHandleMaterialAcceleration 없음. B-12: GENERIC_GRAVITY 기본값 0.08. B-13: Block.getSlipperiness() Yarn명 확인. B-14: isInsideWall() intermediary=method_5757 확인. B-15: Entity.move() 내 playSwimSound() 경로 확인. LivingEntity_physics_misc.md 신규 작성.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07
-- 다음 진행: **R-08** (vanilla LivingEntity 물리 미확인)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08
+- 다음 진행: **R-09** (vanilla BipedEntityModel 렌더링 미확인)
