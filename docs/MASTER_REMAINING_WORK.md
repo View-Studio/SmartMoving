@@ -215,7 +215,13 @@ sm.isClimbCrawling   = false;
 
 **원본 진입 조건** (`SmartMovingSelf.java:3047-3054` + `crawl_slide.md` wantCrawl/canCrawl 체인):
 ```
-wantCrawl = sneakKey가 방금 눌렸음(StartPressed) && 현재 서 있는 상태(not isCrawling)
+⚠️ 주의: wantCrawl의 트리거는 sneakKey(Shift)가 아닌 grabButton(LCTRL)이다.
+         정확한 원본: grabButton.StartPressed && (sneakToggled || sneakButton.Pressed) && sp.onGround
+
+wantCrawl = grabButton(LCTRL)이 방금 눌렸음(StartPressed)
+          && (sneakToggled || sneakKey(Shift)가 현재 눌려있음)
+          && sp.onGround
+          && 현재 크롤링 중이 아님(not isCrawling)
 canCrawl  = cfg.crawl
          && !isFlying
          && !isSwimming_sm && !isDiving && !isDipping
@@ -258,12 +264,16 @@ public boolean ignoreNextStopSneakButtonPressed;
 // ── 크롤링 진입/유지/해제 ────────────────────────────────────────
 if (cfg.crawl) {
     boolean sneakJustPressed  = SmartMovingKeys.grab.wasPressed()
-            // ↑ 원본은 sneakKey.StartPressed이지만 1.21.1에서 sneak의 StartPressed는
-            //   별도 추적이 필요. 아래 "스니크 StartPressed 구현" 참고.
+            // ↑ 원본은 grabButton.StartPressed (LCTRL 방금 눌림).
+            //   Shift(sneakKey)는 grab과 동시에 눌려있어야 하는 조건이지, 트리거가 아님.
+            //   grab.wasPressed() = 1.21.1의 StartPressed 등가.
             ;
     // [크롤링 중이 아닐 때] 진입 체크
     if (!isCrawling) {
-        boolean wantCrawl = sneakJustPressed
+        boolean sneakHeld = player.isSneaking() || sneakToggled; // sneakButton.Pressed || sneakToggled
+        boolean wantCrawl = sneakJustPressed   // grabButton.StartPressed (LCTRL 방금 누름)
+                && sneakHeld               // Shift도 눌려 있어야 함
+                && player.isOnGround()
                 && !isFlying && !isSwimming_sm && !isDiving && !isDipping
                 && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
                 && !isSliding && !isHeadJumping;
@@ -295,15 +305,12 @@ if (cfg.crawl) {
 }
 ```
 
-**스니크 StartPressed 구현** (sneakKey는 KeyBinding이므로 직접 StartPressed 없음):
+**grab(LCTRL) wasPressed() 사용** (1.21.1 표준 KeyBinding API):
 ```java
-// SmartMovingClientState에 추가
-private boolean prevSneakPressed = false;
-
-// tickEssential() 내:
-boolean sneakPressed    = mc.options.sneakKey.isPressed();
-boolean sneakJustPressed = sneakPressed && !prevSneakPressed;
-prevSneakPressed = sneakPressed;
+// SmartMovingClientState.tickEssential() 내:
+// SmartMovingKeys.grab은 KeyBinding — wasPressed()가 StartPressed 등가 (1틱 1회 소비)
+boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
+boolean sneakHeld       = player.isSneaking() || sneakToggled;
 ```
 
 **resetState()에 추가**:
@@ -770,7 +777,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 |------|-------|---------|
 | T-01 | 사다리에 측면 접근 후 LCTRL+W | 클라이밍 됨 |
 | T-02 | 사다리 클라이밍 후 공중으로 이동 | `isClimbing = false`로 전환됨 |
-| T-03 | 1블록 높이 공간에서 Shift키 | 엎드리기(크롤링) 진입 |
+| T-03 | 1블록 높이 공간에서 Shift 누른 채 LCTRL | 엎드리기(크롤링) 진입 |
 | T-04 | 크롤링 중 Shift 재입력 | 공간 있으면 일어섬 |
 | T-05 | 스프린트 중 헤드점프 착지 | 슬라이딩 전환 |
 | T-06 | 지상에서 A키 빠르게 두 번 | 왼쪽으로 살짝 점프 이동 |
@@ -799,12 +806,292 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [ ] IMPL-01 크롤링 진입/해제 전체
 [ ] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)
 [ ] IMPL-03 더블클릭 방향 점프 (카운터 + tryJump 방향 속도)
-[ ] IMPL-04 F9 토글 채팅 피드백
-[ ] IMPL-05 속도 키 클라이언트 처리
+[x] IMPL-04 F9 토글 채팅 피드백  ← 2026-04-22 완료
+[x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료
 [ ] IMPL-06 비행 물리 (리서치 선행 후)
 [ ] ANIM-01 isFlying head.pitch 보정
 [ ] ANIM-02 isFlying 정지 자세 초기화
 ```
+
+---
+
+---
+
+## ══════════════════════════════════════════
+## PART 7 — 상태별 원본 키 조건 완전 매핑
+## ══════════════════════════════════════════
+
+> **목적**: 각 이동 상태의 원본 진입/해제 키 조건을 1:1 대응표로 정리.  
+> 구현 전 반드시 이 표를 읽고 조건을 맞춰 구현한다.  
+> 출처: `docs/research/original/smartmoving/moving/SmartMovingSelf.md`  
+> 출처: `docs/research/mapping/crawl_slide.md`
+
+---
+
+### 7-1. 상태별 키 조건 요약표
+
+| 상태 | 진입 키 | 원본 조건 요약 | 1.21.1 구현 방법 | 현황 |
+|------|---------|--------------|-----------------|------|
+| 크롤링 (Crawling) | **LCTRL 방금 누름** + Shift 유지 | `grabButton.StartPressed && (sneakToggled \|\| sneakButton.Pressed) && onGround` | `SmartMovingKeys.grab.wasPressed() && player.isSneaking()` | ❌ 미구현 |
+| 슬라이딩 (Sliding) | ① 헤드점프 착지 + grabButton 유지 | `toSlidingOrCrawling() → isHeadJumping && onGround → grabButton.Pressed \|\| wasHeadJumping` | SmartMovingJumper 착지 시 전환 | ❌ 미구현 |
+| 슬라이딩 (Sliding) | ② Shift + Sprint | `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping` | tickEssential() 내 조건 체크 | ❌ 미구현 |
+| 다이빙 (Diving) | 자동 (물 깊이) | 수면 오프셋 ≥ 1.9 → `isDiving = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
+| 수영 (Swimming) | 자동 (물 깊이) | 수면 오프셋 1.4~1.9 → `isSwimming_sm = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
+| 물살짝잠김 (Dipping) | 자동 (물 깊이) | 수면 오프셋 < 1.4 → `isDipping = true` | SmartMovingSwimmer ✅ 이미 올바름 | ✅ 완료 |
+| 클라이밍 (Climbing) | **LCTRL 유지** + 클라이밍 가능 블록 | `grabButton.Pressed && onClimbable` | `SmartMovingKeys.grab.isPressed()` | ✅ 구현됨 (BUG-01 사다리 방향 버그 수정 필요) |
+| 천장 클라이밍 | **LCTRL 유지** + 천장 근접 | `grabButton.Pressed && !wantCrawlNotClimb && !isSneaking()` | SmartMovingClimber.handleCeilingClimbing() | ⚠️ 진입 조건 재확인 필요 |
+| 헤드점프 (HeadJump) | **LCTRL + Sprint** 중 Space | `grabButton.Pressed && sp.isSprinting()` → 점프 충전 → 발사 | SmartMovingJumper에 구현 여부 확인 필요 | ⚠️ 부분 구현 |
+| 방향 점프 (AngleJump) | **A/D/S 더블클릭** | `leftJumpCount/rightJumpCount/backJumpCount` 카운터 시스템 | IMPL-03 참고 | ❌ 미구현 |
+| 벽 점프 (WallJump) | **벽 충돌 + 더블클릭** | `horizontalCollision && continueWallJumping` | handleWallJumping() 확인 필요 | ⚠️ 부분 구현 |
+
+---
+
+### 7-2. 상태별 상세 원본 조건
+
+#### 7-2-A. 크롤링 (Crawling)
+
+**원본 소스**: `SmartMovingSelf.java updateEntityActionState()` 내 `toCrawling()` 경로
+
+```
+진입 트리거: grabButton.StartPressed  ← LCTRL이 방금 눌린 틱 1회
+진입 조건:   (sneakToggled || sneakButton.Pressed)  ← Shift가 켜져 있거나 눌려있음
+             && sp.onGround
+             && !isCrawling
+             && canCrawl (= cfg.crawl && !isFlying && !isSwimming_sm && !isDiving && !isDipping
+                           && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                           && !isSliding && !isHeadJumping)
+
+toCrawling() 실행 시:
+    isCrawling = true
+    crawlToggled = true
+    ignoreNextStopSneakButtonPressed = true
+
+해제 조건:
+    mustCrawl = !canChangeIntoPose(STANDING)
+    mustCrawl=true  → 강제 유지
+    mustCrawl=false && crawlToggled → grabButton.StartPressed 시 해제 (토글 해제)
+    mustCrawl=false && !crawlToggled → sneakButton.StopPressed 시 해제
+```
+
+**1.21.1 대응**:
+```java
+// 진입 트리거: SmartMovingKeys.grab.wasPressed() (= StartPressed)
+// 진입 조건 Shift: player.isSneaking() || sneakToggled
+// mustCrawl: !player.canChangeIntoPose(EntityPose.STANDING)
+// 해제 트리거: SmartMovingKeys.grab.wasPressed() (토글 해제)
+```
+
+**현재 버그**: IMPL-01 구현 명세의 sneakJustPressed 변수가 `SmartMovingKeys.grab.wasPressed()`로  
+이미 올바르게 수정됨(이 파일 내). 그러나 **`sneakHeld` 조건(Shift)이 반드시 함께 체크**되어야 함.
+
+---
+
+#### 7-2-B. 슬라이딩 (Sliding)
+
+**원본 소스**: `SmartMovingSelf.java toSlidingOrCrawling()` (lines 1607-1631)
+
+```
+① 헤드점프 착지 경로:
+   isHeadJumping && onGround && (isSprinting || sm.isFast)
+       → cfg.slide → isSliding = true
+       → !cfg.slide → toCrawling() or mustCrawl
+
+② 직접 진입 경로 (스프린트+스니크):
+   isSneaking && isSprinting && onGround
+   && !isClimbing && !isHeadJumping
+   && cfg.slide
+       → isSliding = true
+
+해제 조건:
+   SliderHandler.handleSliding():
+       속도가 최솟값 이하로 감소 → isSliding = false
+       또는 스니크 해제 → isSliding = false
+```
+
+**1.21.1 대응**:
+```java
+// ① SmartMovingJumper.resetHeightOffset() 착지 감지 후
+// ② tickEssential() 내: player.isSneaking() && player.isSprinting() && player.isOnGround()
+```
+
+---
+
+#### 7-2-C. 다이빙/수영/물살짝잠김 (Diving/Swimming/Dipping)
+
+**원본 소스**: `SmartMovingSelf.java handleSwimming()` (lines 229-576)
+
+```
+오프셋 계산: offset = getFluidHeightY() + 0.1625D  (눈 위치 기준)
+
+offset < 1.4   → isDipping = true  (발만 잠김)
+1.4 ≤ offset < 1.9 → isSwimming_sm = true  (수영)
+offset ≥ 1.9   → isDiving = true  (완전 잠김)
+
+→ 키 입력 없음. 완전 자동(물리 오프셋 기반).
+```
+
+**1.21.1 상태**: `SmartMovingSwimmer.updateSwimState()`에서  
+`OFFSET_SWIMMING=1.4F`, `OFFSET_DIVING=1.9F` 상수로 정확히 구현됨. **수정 불필요.**
+
+---
+
+#### 7-2-D. 클라이밍 (Climbing)
+
+**원본 소스**: `SmartMovingSelf.java handleClimbing()` 내 조건 체인
+
+```
+grabButton.Pressed  ← LCTRL 유지
+&& onClimbable      ← 사다리, 넝쿨 등 클라이밍 가능 블록
+&& !isCrawling      ← 크롤링 중이 아님
+→ isClimbing = true
+→ 이동 속도는 cfg.climbSpeed 기반
+
+또는 (auto 모드):
+cfg.autoLadder || cfg.autoVine → grabButton 없이 onClimbable이면 자동 클라이밍
+```
+
+**1.21.1 대응**:
+```java
+// SmartMovingKeys.grab.isPressed() (= Pressed, 유지 상태)
+```
+
+**현재 버그**: BUG-01 (사다리 방향 감지 playerFacing → dir 수정 필요)
+
+---
+
+#### 7-2-E. 천장 클라이밍 (Ceiling Climbing)
+
+**원본 소스**: `SmartMovingSelf.java handleCeilingClimbing()`
+
+```
+grabButton.Pressed  ← LCTRL 유지
+&& !wantCrawlNotClimb  ← (크롤링 의도 없음 = Shift 안 누름)
+&& !isSneaking()
+&& 머리 위 천장 블록 존재 (ceilingHeight 조건)
+&& cfg.ceilingClimbing
+→ isCeilingClimbing = true
+```
+
+**1.21.1 대응**:
+```java
+// SmartMovingKeys.grab.isPressed() && !player.isSneaking()
+// 천장 블록 존재 여부: SmartMovingClimber.getOnCeiling()
+```
+
+---
+
+#### 7-2-F. 헤드점프 (Head Jump)
+
+**원본 소스**: `SmartMovingSelf.java updateEntityActionState()` 점프 충전 분기
+
+```
+점프 충전 조건 (jump charge 시작):
+    grabButton.Pressed  ← LCTRL 유지
+    && sp.isSprinting()  ← 스프린트 중
+    && space 누름 (vanilla jump key)
+    && onGround
+    && cfg.headJump
+    → jumpCharge 카운터 증가 시작
+
+발동 조건:
+    jumpCharge >= cfg.jumpChargeCountMinimum
+    → 점프 발동: isHeadJumping = true
+    → 수직 속도 cfg.headJumpFactor 적용
+```
+
+**1.21.1 대응**:
+```java
+// SmartMovingKeys.grab.isPressed() && player.isSprinting()
+// 점프 키: MC 내부 jump 처리에서 감지 (vanilla jump event hooking)
+```
+
+---
+
+#### 7-2-G. 방향 점프 (Angle Jump: 왼쪽/오른쪽/뒤)
+
+**원본 소스**: `SmartMovingSelf.java` sideJump 더블클릭 카운터 (lines 2898-2961 참고)
+
+```
+카운터 방식:
+    매 틱: leftJumpCount > 0 → leftJumpCount--  (윈도우 감소)
+    A키 StartPressed:
+        leftJumpCount > 0  → angleJumpType = 6 (LEFT) + 점프 발동
+        leftJumpCount == 0 → leftJumpCount = 3  (3틱 윈도우 시작)
+    D키 StartPressed:
+        rightJumpCount > 0 → angleJumpType = 2 (RIGHT) + 점프 발동
+        rightJumpCount == 0 → rightJumpCount = 3
+    S키 StartPressed:
+        backJumpCount > 0  → angleJumpType = 4 (BACK) + 점프 발동
+        backJumpCount == 0 → backJumpCount = 3
+
+angleJumpType 테이블: ((360 - movementAngle) / 45) % 8
+    타입 2 → 오른쪽(270°), 타입 4 → 뒤(180°), 타입 6 → 왼쪽(90°)
+
+수평 속도 적용:
+    jumpX = -sin(angle), jumpZ = cos(angle)
+    getJumpMoving(currentVel, jumpX * cfg.angleJumpHorizontalFactor, ...) 사용
+```
+
+**1.21.1 대응**: IMPL-03 상세 명세 참고 (이 파일 내).
+
+---
+
+#### 7-2-H. 벽 점프 (Wall Jump)
+
+**원본 소스**: `SmartMovingSelf.java handleWallJumping()`
+
+```
+진입 조건:
+    horizontalCollision  ← 수평 방향 벽 충돌
+    && continueWallJumping  ← 이전 틱 벽점프 유지 플래그 (또는 첫 감지)
+    && grabButton.Pressed  ← LCTRL 유지
+    && cfg.wallJumping
+    → isWallJumping = true
+    → 수직 속도 cfg.wallJumpingFactor 적용
+
+해제 조건:
+    continueWallJumping = false  (벽에서 멀어짐, 또는 onGround)
+    → isWallJumping = false
+```
+
+**1.21.1 대응**:
+```java
+// player.horizontalCollision && SmartMovingKeys.grab.isPressed()
+// continueWallJumping: SmartMovingClientState 내 별도 플래그
+```
+
+**현재 상태**: `handleWallJumping()` 내 `sm.isWallJumping = true` 설정은 있으나  
+BUG-02(매 틱 미초기화)로 인해 `false`로 돌아오지 않는 버그 존재 → BUG-02 수정 시 함께 해결됨.
+
+---
+
+### 7-3. 원본과 현재 구현 불일치 목록
+
+| 항목 | 원본 키 | 현재 구현 | 수정 필요 항목 |
+|------|---------|---------|--------------|
+| 크롤링 진입 트리거 | LCTRL (grabButton.StartPressed) + Shift 유지 | 미구현 | IMPL-01 구현 시 반드시 grab.wasPressed() 사용 |
+| 슬라이딩 진입 | 없음 (isSliding = true 설정 코드 없음) | 미구현 | IMPL-02 구현 필요 |
+| 방향 점프 | A/D/S 더블클릭 카운터 | 미구현 | IMPL-03 구현 필요 |
+| 클라이밍 방향 감지 | 4방향 탐색 중 dir 기준 | playerFacing 오류 | BUG-01 수정 필요 |
+| 클라이밍 상태 리셋 | 매 틱 false 리셋 후 재평가 | 리셋 없음 | BUG-02 수정 필요 |
+
+---
+
+### 7-4. 키 바인딩 원본-현재 대응표
+
+| 원본 키 | 원본 변수 | 1.21.1 KeyBinding | wasPressed() | isPressed() |
+|---------|----------|------------------|--------------|-------------|
+| LCTRL (341) | `grabButton` | `SmartMovingKeys.grab` | grab.wasPressed() | grab.isPressed() |
+| Shift | `sneakButton` | `mc.options.sneakKey` | 수동 prev 추적 필요* | sneakKey.isPressed() |
+| F9 (298) | `configToggle` | `SmartMovingKeys.configToggle` | configToggle.wasPressed() | — |
+| O (79) | `speedIncreaseButton` | `SmartMovingKeys.speedIncrease` | speedIncrease.wasPressed() | — |
+| I (73) | `speedDecreaseButton` | `SmartMovingKeys.speedDecrease` | speedDecrease.wasPressed() | — |
+| A | `leftKey` | `mc.options.leftKey` | 수동 prev 추적 필요* | leftKey.isPressed() |
+| D | `rightKey` | `mc.options.rightKey` | 수동 prev 추적 필요* | rightKey.isPressed() |
+| S | `backKey` | `mc.options.backKey` | 수동 prev 추적 필요* | backKey.isPressed() |
+
+\* MC 이동 키(`sneakKey`, `leftKey` 등)는 `wasPressed()`가 없거나 소비되면 이동이 끊김.  
+   `prevPressed` 필드로 수동 rising-edge 추적 구현 필요. (IMPL-01, IMPL-03 명세 참고)
 
 ---
 
