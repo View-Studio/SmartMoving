@@ -793,18 +793,18 @@ grep -n "isFlying\|flying\|motionY\|flySpeed" \
 ### ANIM-01. isFlying 애니메이션 — head.pitch 보정 누락 🟡
 
 **선행 읽기 파일**:
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체, 현재 head.pitch 설정 코드 확인
-- [ ] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityRenderer.java` — sm_setupTransforms()에서 theta 계산 방식 확인 (theta 공식이 sm_animateFlying과 일치해야 함)
-- [ ] `docs/research/mapping/animation_system.md` — 비행 애니메이션 섹션 (bipedOuter.rotateAngleX, bipedHead.rotateAngleX 보정 공식)
-- [ ] `docs/research/original/smartrender/playerapi/SmartMovingRenderPlayerBase.md` — bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2 원본 코드 확인
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` — sm_animateFlying() 전체, 현재 head.pitch 설정 코드 확인
+- [x] `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityRenderer.java` — sm_setupTransforms()에서 theta 계산 방식 확인 (theta 공식이 sm_animateFlying과 일치해야 함)
+- [x] `docs/research/mapping/animation_system.md` — 비행 애니메이션 섹션 (bipedOuter.rotateAngleX, bipedHead.rotateAngleX 보정 공식)
+- [ ] `docs/research/original/smartrender/playerapi/SmartMovingRenderPlayerBase.md` — bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2 원본 코드 확인 (파일 없음 — animation_system.md C-09-2에서 원본 공식 확인 완료)
 
 **작업 단계 체크리스트**:
-- [ ] MixinPlayerEntityRenderer.sm_setupTransforms()에서 theta 계산 공식 읽기
-- [ ] MixinPlayerEntityModelClient.sm_animateFlying() 내 arm/leg 코드 이후에 head.pitch 보정 추가
-- [ ] theta 계산이 sm_setupTransforms()와 동일한지 검증 (currentVerticalAngle, currentSpeed 사용)
-- [ ] `./gradlew compileJava compileClientJava` 컴파일 통과 확인
+- [x] MixinPlayerEntityRenderer.sm_setupTransforms()에서 theta 계산 공식 읽기
+- [x] MixinPlayerEntityModelClient.sm_animateFlying() 내 arm/leg 코드 이후에 head.pitch 보정 추가
+- [x] theta 계산이 sm_setupTransforms()와 동일한지 검증 (currentVerticalAngle, currentSpeed 사용)
+- [x] `./gradlew compileJava` 컴파일 통과 확인
 - [ ] 인게임 비행 중 고개 기울기가 동체 각도의 절반으로 보정되는지 확인
-- [ ] PART 6 트래킹 [x] 체크
+- [x] PART 6 트래킹 [x] 체크
 
 **파일**: `MixinPlayerEntityModelClient.java`
 
@@ -971,7 +971,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 [x] IMPL-04 F9 토글 채팅 피드백  ← 2026-04-22 완료
 [x] IMPL-05 속도 키 클라이언트 처리  ← 2026-04-22 완료
 [x] IMPL-06 비행 물리 (pitch 기반 3D 이동)  ← 2026-04-22 완료
-[ ] ANIM-01 isFlying head.pitch 보정
+[x] ANIM-01 isFlying head.pitch 보정  ← 2026-04-22 완료
 [ ] ANIM-02 isFlying 정지 자세 초기화
 ```
 

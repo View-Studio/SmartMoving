@@ -117,7 +117,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isSliding) {
             sm_animateSliding(limbSwing, limbSwingAmount);
         } else if (flyingCreative) {
-            sm_animateFlying(limbSwing, limbSwingAmount, animationProgress);
+            sm_animateFlying(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
             sm_animateHeadJumping(sm);
         } else {
@@ -428,8 +428,14 @@ public abstract class MixinPlayerEntityModelClient {
      * 원본: SmartMovingModel.setRotationAngles() 9번 분기 (isFlying).
      * bipedOuter X 기울기는 setupTransforms에서 처리.
      * 원본 팔 회전 순서 XZY → 여기서는 XYZ 근사.
+     *
+     * ANIM-01: head.pitch 보정.
+     * setupTransforms @TAIL: matrices.multiply(POSITIVE_X.rotation(θ)) 전역 적용.
+     * θ = (Quarter - currentVerticalAngle) * walkFactor
+     * 원본: bipedHead.X = -bipedOuter.X / 2 = -θ/2 → world-space head X = θ/2
+     * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
-    private void sm_animateFlying(float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateFlying(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
         float distance    = limbSwing * 0.08f;
         float walkFactor  = smFactor(limbSwingAmount, 0f, 1f);
         float standFactor = smFactor(limbSwingAmount, 1f, 0f);
@@ -451,6 +457,11 @@ public abstract class MixinPlayerEntityModelClient {
                 + MathHelper.cos(totalTime * 0.15f) * SIXTYFOURTH * standFactor;
         rightLeg.roll  =  SIXTYFOURTH;
         leftLeg.roll   = -SIXTYFOURTH;
+
+        // ANIM-01: head pitch 보정 — setupTransforms theta의 절반 역보정
+        float speedFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
+        float theta = (QUARTER - sm.stats.currentVerticalAngle) * speedFactor;
+        head.pitch = -theta / 2f;
     }
 
     /**
