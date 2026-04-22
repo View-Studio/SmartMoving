@@ -364,7 +364,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/pose_strategy.md` (M-01~M-03 항목 업데이트)
 
-**완료**: [ ]
+**완료**: [x] → M-01: isCrawling setHeightOffset(-1F) 복수 경로 확인(fromSwimmingOrDiving() line ~511/~1382). M-02: isSliding setHeightOffset(-1) line ~2556 확인, height=0.8F→isSmall=true. M-03: isCeilingClimbing setHeightOffset 없음, resetHeightOffset() 확인→height=1.8F. M-04: SM 원본 player.height-0.18F=0.62F 확정. pose_strategy.md 섹션 3-3/7/8 업데이트 완료.
 
 ---
 
@@ -441,5 +441,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12
-- 다음 진행: **R-16** (isSliding/isCrawling/isCeilingClimbing hitbox 미확인 항목 보완)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-16
+- 다음 진행: **R-13** (중간 노드 대응 + 6-axis rotation 설계) 또는 **R-14** (Config 시스템) 또는 **R-15** (DataTracker 동기화)

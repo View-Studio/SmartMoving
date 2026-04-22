@@ -48,8 +48,16 @@ private void resetHeightOffset() {
 명시적 확인:
 - `isSwimming || isDiving` → `setHeightOffset(-1F)` (SmartMovingSelf.md line 475 확인)
 - `isHeadJumping = true; setHeightOffset(-1)` (SmartMovingSelf.md line 1567 확인)
-
-`isCrawling`의 setHeightOffset 적용 여부: [미확인 — SmartMovingSelf.md에서 직접 대응 코드를 찾지 못함. 단, SmartMovingSelf.md 2154줄 주석에서 "크롤링" 포함이라고 명시되어 있음. 추가 확인 필요]
+- **`isCrawling`** → `setHeightOffset(-1F)` 명시 호출 확인 (R-16 GitHub 원본 직접 확인)
+  - `fromSwimmingOrDiving()` 내 isCrawling=true 직후 매번 setHeightOffset(-1F) 호출
+  - 얕은 물 경로(line ~511): `setHeightOffset(-1F); isCrawling = true;`
+  - 깊은 물 경로(line ~1382): `isCrawling = true; setHeightOffset(-1F);`
+- **`isSliding`** → `setHeightOffset(-1)` 호출 확인 (R-16 GitHub 원본 직접 확인)
+  - 슬라이딩 진입(line ~2556): `setHeightOffset(-1); ... isSliding = true;`
+  - headJumping 착지 경로: headJumping의 heightOffset=-1이 그대로 유지됨
+- **`isCeilingClimbing`** → setHeightOffset **호출 없음** 확인 (R-16 GitHub 원본 직접 확인)
+  - `isCeilingClimbing = true` 직후 setHeightOffset 호출 없음
+  - 크롤링 충돌 시 오히려 `resetHeightOffset()` 호출 (line ~1171) → heightOffset = 0으로 리셋
 
 ### 1-3. `isSmall` 비트 정의 (SmartMovingSelf.md line 1953 확인됨)
 
@@ -68,17 +76,17 @@ public void setSmall(boolean isSmall)
 }
 ```
 
-### 1-4. 히트박스 크기 요약 (1.7.10 원본)
+### 1-4. 히트박스 크기 요약 (1.7.10 원본) — R-16 완료 후 업데이트
 
-| SM 상태 | width | height | 비고 |
+| SM 상태 | width | height | 근거 |
 |---------|-------|--------|------|
-| `isHeadJumping` | 0.6F | 0.8F | `setHeightOffset(-1)` 확인됨 (line 1567) |
-| `isSliding` | 0.6F | 0.8F | headJumping 착지 후 전환 → heightOffset 유지 추정 [미확인] |
-| `isCrawling` | 0.6F | 0.8F | SmartMovingSelf.md 2154줄 주석 근거 |
-| `isSwimming` | 0.6F | 0.8F | `setHeightOffset(-1F)` 확인됨 |
-| `isDiving` | 0.6F | 0.8F | `setHeightOffset(-1F)` 확인됨 |
-| `isCeilingClimbing` | — | — | [미확인 — setHeightOffset 호출 여부 미확인] |
-| `isClimbing` | 0.6F | 1.8F | setHeightOffset 미적용 (확인됨) |
+| `isHeadJumping` | 0.6F | 0.8F | `setHeightOffset(-1)` line 1567 (원본 확인) |
+| `isSliding` | 0.6F | 0.8F | `setHeightOffset(-1)` line ~2556 (R-16 원본 직접 확인) |
+| `isCrawling` | 0.6F | 0.8F | `setHeightOffset(-1F)` 복수 진입 경로 모두 확인 (R-16) |
+| `isSwimming` | 0.6F | 0.8F | `setHeightOffset(-1F)` line 475 (원본 확인) |
+| `isDiving` | 0.6F | 0.8F | `setHeightOffset(-1F)` line 475 (원본 확인) |
+| `isCeilingClimbing` | 0.6F | **1.8F** | setHeightOffset 호출 없음 (R-16 원본 직접 확인). 크롤링 충돌 시 resetHeightOffset() |
+| `isClimbing` | 0.6F | 1.8F | setHeightOffset 미적용 (원본 확인) |
 
 ---
 
@@ -189,7 +197,7 @@ private void smSuppressHeadJumpSwimmingPose(CallbackInfoReturnable<Boolean> cir)
 - 이 차이를 허용하거나, SLIDING 포즈에 0.8H 치수를 부여하는 대안 검토 필요
 
 **대안: SLIDING 포즈 + 0.8H 치수 (Mixin)**:
-- `getBaseDimensions()` Mixin에서 SLIDING → `EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.72F)` 반환
+- `getBaseDimensions()` Mixin에서 SLIDING → `EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F)` 반환
 - 렌더 영향 없음 (isInSwimmingPose() = false 유지)
 - SM 1.7.10 원본 히트박스와 정확히 일치
 
@@ -197,7 +205,7 @@ private void smSuppressHeadJumpSwimmingPose(CallbackInfoReturnable<Boolean> cir)
 
 - **isHeadJumping → EntityPose.SLIDING**
   - 이유: SM 1.7.10 원본 0.8H 히트박스 유지 + 렌더 충돌 없음
-  - `getBaseDimensions()` Mixin에서 SLIDING → `(0.6F, 0.8F, eyeHeight=0.72F)` 반환
+  - `getBaseDimensions()` Mixin에서 SLIDING → `(0.6F, 0.8F, eyeHeight=0.62F)` 반환 (SM 원본 공식: player.height - 0.18F = 0.8F - 0.18F = 0.62F)
 
 충돌:
 - vanilla `updatePose()`가 SLIDING을 자동으로 설정하지 않음 → SM이 직접 `setPose(SLIDING)` 필요
@@ -243,11 +251,17 @@ private void smGetBaseDimensions(EntityPose pose, CallbackInfoReturnable<EntityD
 }
 ```
 
-**히트박스 치수**: [미확인 — isSliding 시 SM 1.7.10 실제 height 값 확인 필요. 현재 0.8F 추정이나 코드 직접 확인 필요]
+**히트박스 치수**: **확인됨 (R-16)** — `setHeightOffset(-1)` 호출로 `height = 0.8F`. SLIDING 포즈 Mixin 0.8H 적용 확정.
 
 충돌:
 - vanilla `updatePose()`가 SLIDING을 설정하지 않음 → `updatePose()` Mixin에서 `isSliding` 시 SLIDING 강제 설정
-- SLIDING 포즈의 눈 높이: 미확인 → 임시값 0.72F 사용, 추후 검증 필요
+- SLIDING 포즈의 눈 높이: SM 원본은 `player.height - 0.18F` 공식 사용 (SmartMovingServerPlayerBase.md 확인) → 0.8F - 0.18F = **0.62F**
+
+```java
+// 최종 getBaseDimensions() Mixin 값 (R-16 수정)
+cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+// eyeHeight: SM 원본 공식 player.height - 0.18F = 0.8F - 0.18F = 0.62F
+```
 
 ---
 
@@ -287,6 +301,8 @@ private void smOverridePose(CallbackInfo ci) {
         this.setPose(EntityPose.SLIDING);    // 0.8H — leaningPitch 무관계
         ci.cancel();
     }
+    // isCeilingClimbing: vanilla updatePose() 그대로 실행 → STANDING(1.8H) 유지
+    // isClimbing: vanilla updatePose() 그대로 실행 → STANDING(1.8H) 유지
     // 그 외: vanilla updatePose() 정상 실행
 }
 ```
@@ -326,13 +342,13 @@ if (!this.world.isClient
 
 ## 7. 미확인 항목
 
-| ID | 미확인 내용 | 추가 필요 작업 |
-|----|------------|------------|
-| M-01 | `isCrawling` 상태에서 `setHeightOffset(-1F)` 명시적 호출 위치 (SmartMovingSelf.java 전체 코드에서 직접 확인 필요) | SmartMovingSelf.java 원본 GitHub에서 크롤링 진입/유지 코드 재확인 |
-| M-02 | `isSliding` 상태에서 실제 height 값 (서버 측 `isSmall` bit 확인 필요) | state 패킷 인코딩에서 isSliding과 isSmall 동시 true인지 확인 |
-| M-03 | `isCeilingClimbing` hitbox (setHeightOffset 호출 여부 미확인) | SmartMovingSelf.java에서 isCeilingClimbing 진입 시 heightOffset 처리 확인 |
-| M-04 | SLIDING 포즈의 눈 높이 (0.72F는 임시값) | SM 원본 렌더/카메라 코드에서 crawling/sliding 중 eye height 참고값 확인 |
-| M-05 | `updatePose()` `@HEAD` 취소 시 vanilla 크롤링 자동 발동(SWIMMING 강제) 억제 여부 확인 | `canChangeIntoPose(SWIMMING)` 체크와의 상호작용 테스트 필요 |
+| ID | 내용 | 확인 결과 |
+|----|------|----------|
+| M-01 | `isCrawling` 상태에서 `setHeightOffset(-1F)` 명시적 호출 위치 | **확인됨 (R-16)** — `fromSwimmingOrDiving()` 내 복수 경로 모두 setHeightOffset(-1F) 호출 (line ~511, ~1382) |
+| M-02 | `isSliding` 상태에서 실제 height 값 (isSmall bit 확인) | **확인됨 (R-16)** — `setHeightOffset(-1)` 직접 확인 (line ~2556), height=0.8F → isSmall=true |
+| M-03 | `isCeilingClimbing` hitbox (setHeightOffset 호출 여부) | **확인됨 (R-16)** — setHeightOffset 호출 없음, 크롤링 충돌 시 resetHeightOffset() → height=1.8F 유지 |
+| M-04 | SLIDING 포즈의 눈 높이 | **확인됨 (R-16)** — SM 원본 `player.height - 0.18F` 공식 적용 → 0.8F - 0.18F = **0.62F** |
+| M-05 | `updatePose()` `@HEAD` 취소 시 vanilla 크롤링 자동 발동 억제 여부 | **미확인** — `canChangeIntoPose(SWIMMING)` 체크와의 상호작용 테스트 필요 (구현 시 검증) |
 
 ---
 
@@ -343,7 +359,7 @@ if (!this.world.isClient
 | headJumping 포즈 설정 | `PlayerEntity.updatePose()` | `@HEAD cancellable=true` → `setPose(SLIDING)` | 설계 확정 |
 | sliding 포즈 설정 | `PlayerEntity.updatePose()` | `@HEAD cancellable=true` → `setPose(SLIDING)` | 설계 확정 |
 | crawling 포즈 설정 | `PlayerEntity.updatePose()` | `@HEAD cancellable=true` → `setPose(SWIMMING)` | 설계 확정 |
-| SLIDING 커스텀 치수 | `PlayerEntity.getBaseDimensions()` | `@HEAD cancellable=true` → `0.6×0.8` | 설계 확정, 수치 M-02 미확인 |
+| SLIDING 커스텀 치수 | `PlayerEntity.getBaseDimensions()` | `@HEAD cancellable=true` → `0.6×0.8, eyeHeight=0.62F` | 설계 확정 |
 | leaningPitch 억제 | `LivingEntity.isInSwimmingPose()` | `@RETURN cancellable=true` → isHeadJumping/isSliding 시 false | SLIDING 포즈로 불필요해짐 |
 
-**미확인(M-01~M-05) 해소 후 구현 시작 가능.**
+**M-01~M-04 확인 완료. M-05 (updatePose @HEAD 취소와 vanilla 크롤링 자동 발동 상호작용)는 구현 시 실제 테스트로 검증.**
