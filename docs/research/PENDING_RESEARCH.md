@@ -404,7 +404,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/mapping/animation_system.md` (M-06~M-11 해소 업데이트)
 
-**완료**: [ ]
+**완료**: [x] → M-06: rotationPointY * 0.0625 = /16 확인, 1.21.1 translate(pivot/16F) 패턴 동일. M-09: rotate() @HEAD 취소 시 3단계(translate+커스텀회전+scale) 수동 구현 필요. M-10: animateModel() 코드 직접 확인, setTransform 호출 없음, setAngles @TAIL 안전. M-11: bipedTorso.rotationPointY=3F → matrices.translate(0, 3F/16F, 0) X 회전 전 삽입. **R-13 C-08-2 오류(MatrixStack call 순서 전부 역순) 수정 완료.** animation_system.md C-08-2 섹션 수정 + R-17 섹션 추가.
 
 ---
 
@@ -464,5 +464,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-16
-- 다음 진행: **R-17** (ModelRotationRenderer.render() + setTransform 호출 시점 — M-06~M-11 해소) 또는 **R-14** (Config) 또는 **R-15** (DataTracker 동기화)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09, R-10, R-11, R-12, R-13, R-16, R-17
+- 다음 진행: **R-14** (Config 시스템 설계) 또는 **R-15** (DataTracker 동기화 설계)

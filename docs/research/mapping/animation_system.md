@@ -544,41 +544,71 @@ SmartMovingModel.setRotationAngles() 각 분기에서 명시적으로 `rotationO
 
 ---
 
-### C-08-2: MatrixStack 비표준 회전 순서 구현 방법 확정 (B-18 확인됨)
+### C-08-2: MatrixStack 비표준 회전 순서 구현 방법 확정 (B-18 + R-17 확인됨)
 
 ModelPart.rotate(MatrixStack)는 내부적으로 `Quaternionf().rotationZYX(roll, yaw, pitch)` 사용 (B-09 확인됨).
 적용 순서: **pitch(X) → yaw(Y) → roll(Z)** (= XYZ, 기본값).
 
-비표준 순서가 필요한 경우 → **해당 파트의 pitch/yaw/roll = 0F로 설정**, 그리고 `ModelPart.render()` 전에 MatrixStack에서 직접 회전 (B-18: `multiply(Quaternionf)` 가 유일한 회전 메서드):
+#### OpenGL post-multiply 규칙 (핵심)
+
+OpenGL `glRotatef`는 **post-multiply**: 현재 행렬 M에 회전 행렬 R을 오른쪽에 곱한다 (`M = M × R`).
+→ 마지막에 호출된 `glRotatef`가 vertex에 **가장 먼저** 적용된다.
+→ "YZX 회전" (vertex: Y→Z→X 순서 적용)이 필요하면, GL call 순서는 **X, Z, Y** (역순).
+
+`MatrixStack.multiply(Quaternionf)`도 동일한 post-multiply → **GL call 순서 = MatrixStack call 순서**.
+
+#### 비표준 회전 순서 MatrixStack 구현
+
+비표준 순서가 필요한 경우 → **해당 파트의 pitch/yaw/roll = 0F로 설정**, `ModelPart.render()` 전에 MatrixStack에서 직접 회전.
+
+| 회전 이름 | vertex 적용 순서 | GL/MatrixStack call 순서 | 사용 상태 |
+|----------|----------------|------------------------|---------|
+| YZX | Y→Z→X | **X, Z, Y** | isSwim arm, isCrawl, isSlide arm |
+| YXZ | Y→X→Z | **Z, X, Y** | isSwim head, isSlide body |
+| XZY | X→Z→Y | **Y, Z, X** | isFlying arm, isFalling arm |
+| ZXY | Z→X→Y | **Y, X, Z** | animateAngleJumping leg |
+| ZYX | Z→Y→X | **X, Y, Z** | ignoreSuperRotation shoulder |
 
 ```java
-// YZX: Y → Z → X 순서 (isSwim arm, isCrawl, isSlide arm)
-matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
-matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
-matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
-
-// YXZ: Y → X → Z 순서 (isSwim head, isSlide body)
-matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
-matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
-matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
-
-// XZY: X → Z → Y 순서 (isFlying arm, isFalling arm)
+// YZX: vertex 적용 순서 Y→Z→X, call 순서 X→Z→Y
 matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
 matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
 matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
 
-// ZXY: Z → X → Y 순서 (animateAngleJumping leg)
+// YXZ: vertex 적용 순서 Y→X→Z, call 순서 Z→X→Y
 matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
 matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
 matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
 
-// ZYX: Z → Y → X 순서 (ignoreSuperRotation shoulder)
+// XZY: vertex 적용 순서 X→Z→Y, call 순서 Y→Z→X
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
 matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+
+// ZXY: vertex 적용 순서 Z→X→Y, call 순서 Y→X→Z
 matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
 matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
+
+// ZYX: vertex 적용 순서 Z→Y→X, call 순서 X→Y→Z
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitch));
+matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yaw));
+matrices.multiply(RotationAxis.POSITIVE_Z.rotation(roll));
 ```
 
 **참고**: 라디안 값을 그대로 사용. SM의 모든 각도 상수(Half/Quarter 등)는 이미 라디안 단위.
+
+#### 검증 (R-17 확인됨)
+
+SmartRender `ModelRotationRenderer.rotate()` 원본 코드(GitHub) 직접 분석 결과:
+
+```
+YZX(3): glRotatef(X) → glRotatef(Z) → glRotatef(Y)  ✓ call 순서 X,Z,Y
+YXZ(2): glRotatef(Z) → glRotatef(X) → glRotatef(Y)  ✓ call 순서 Z,X,Y
+XZY(1): glRotatef(Y) → glRotatef(Z) → glRotatef(X)  ✓ call 순서 Y,Z,X
+ZXY(4): glRotatef(Y) → glRotatef(X) → glRotatef(Z)  ✓ call 순서 Y,X,Z
+ZYX(5): glRotatef(X) → glRotatef(Y) → glRotatef(Z)  ✓ call 순서 X,Y,Z
+```
 
 ---
 
@@ -608,7 +638,10 @@ private void smCustomRotate(MatrixStack matrices, CallbackInfo ci) {
 }
 ```
 
-**미확인 (M-09)**: `ModelPart.rotate()` @Inject 시 `pivot translate` + `scale` 처리 누락 위험. vanilla rotate()의 전체 코드는 translate → rotationZYX → scale 순서 (B-09 확인). Mixin 취소 시 scale(xScale, yScale, zScale)도 직접 처리해야 함.
+**확인됨 (M-09, R-17)**: `ModelPart.rotate()` @Inject(at=HEAD) 취소 시 수동으로 구현해야 할 3단계:
+1. `matrices.translate(this.pivotX / 16F, this.pivotY / 16F, this.pivotZ / 16F)`
+2. 커스텀 순서 회전 (위 표 참조)
+3. `if (xScale != 1.0F || yScale != 1.0F || zScale != 1.0F) matrices.scale(xScale, yScale, zScale)`
 
 ---
 
@@ -629,7 +662,7 @@ if (this.xScale != 1.0F || this.yScale != 1.0F || this.zScale != 1.0F) {
 // setTransform(ModelTransform) 시 1.0F로 리셋됨
 ```
 
-**미확인 (M-10)**: vanilla rendering pipeline에서 `ModelPart.setTransform()`이 언제 호출되는지 미확인. `animateModel()` 또는 다른 시점에서 호출되면 setAngles Mixin에서 설정한 yScale이 리셋될 수 있음. **setAngles @Inject(at=TAIL)에서 설정하면 setTransform 이후이므로 안전할 가능성이 높으나 코드 직접 확인 필요.**
+**확인됨 (M-10, R-17)**: vanilla rendering pipeline에서 `setTransform(ModelTransform)`은 `setAngles → render` 파이프라인 어디에서도 호출되지 않음. `animateModel()` 코드 직접 확인: `this.leaningPitch = entity.getLeaningPitch(ageInTicks); super.animateModel(...);` 뿐이며 setTransform 호출 없음. **setAngles @Inject(at=TAIL)에서 xScale/yScale/zScale을 설정해도 리셋되지 않음 → 안전.**
 
 ---
 
@@ -721,25 +754,28 @@ bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2F;            // -θ/2
 
 ---
 
-### C-09-3: bipedOuter.rotationPointY 대응 (M-06 미확인)
+### C-09-3: bipedOuter.rotationPointY 대응 (M-06 확인됨)
 
 SM isSlide에서:
 ```java
-bipedOuter.rotationPointY = 5F;  // pivot Y = 5 (1/16 단위 아닌 MC 단위)
+bipedOuter.rotationPointY = 5F;  // pivot Y = 5 (MC 모델 단위)
 bipedOuter.rotateAngleX = Quarter;
 ```
 
-**GL 렌더링 모델 분석 (A-15 계층 구조 + GL 규칙)**:
-GL11에서 `glTranslatef(0, 5/16F, 0)` → `glRotatef(Quarter*180/π, 1, 0, 0)` 순서 적용.
-결과: 전체 모델이 Y+0.3125 위치에서 X축으로 90° 회전.
+**확인됨 (M-06, R-17)**: `ModelRotationRenderer.preTransform(float f)` 원본 코드 직접 확인:
+```java
+GL11.glTranslatef(rotationPointX * f, rotationPointY * f, rotationPointZ * f);
+// f = 0.0625F = 1/16
+```
+→ `rotationPointY * 0.0625 = 5 * 0.0625 = 0.3125` 단위로 translate.
 
-**1.21.1 대응 (코드 미확인 — M-06)**:
+**1.21.1 대응 (확정)**:
 ```java
 // setupTransforms @Inject(at=TAIL) 내부:
-matrices.translate(0, 5F / 16F * entityScale, 0);  // pivotY translate
+matrices.translate(0, 5F / 16F, 0);  // rotationPointY / 16F
 matrices.multiply(RotationAxis.POSITIVE_X.rotation(Quarter));  // 이후 X 회전
 ```
-단, `ModelRotationRenderer.render()` 원본 코드에서 rotationPointY가 `/16`으로 나뉘는지 직접 확인하지 못함 → M-06.
+GL 코드: `glTranslatef(0, 5*0.0625, 0)` → `glRotatef(Quarter*RadiantToAngle, 1,0,0)` 순서 = 1.21.1 translate → multiply 순서와 동일.
 
 ---
 
@@ -762,22 +798,212 @@ isCrawl에서 최종 world-space 각도 계산 (bipedOuter.X = 0이므로 setupT
 
 ---
 
-### 미확인 항목 (R-13 신규)
+### 미확인 항목 (R-13 신규, R-17 해소)
 
-| ID | 미확인 내용 | 추가 필요 작업 |
-|----|------------|-------------|
-| M-06 | `ModelRotationRenderer.render()` 내 `rotationPointY` 처리 코드 — `/16` 적용 여부, glTranslate 순서 | SmartRender GitHub에서 ModelRotationRenderer.java 원본 확인 |
-| M-09 | ModelPart.rotate() @Inject(at=HEAD) 취소 시 pivotX/Y/Z translate와 xScale/yScale/zScale 처리 — 수동으로 모두 재구현해야 함 | rotate() 전체 코드(B-09 확인됨): translate → rotationZYX → scale. @HEAD 취소 시 3단계 전부 직접 구현 필요 |
-| M-10 | setTransform(ModelTransform) 호출 시점 — vanilla rendering pipeline에서 어느 단계에서 호출되어 xScale/yScale/zScale을 리셋하는지 | animateModel() 또는 model.reset() 코드에서 setTransform 호출 여부 확인 |
-| M-11 | isCrawl bipedTorso.rotationPointY = 3F — 상체 회전 중심이 Y=3으로 이동하는 효과의 1.21.1 대응 방법 | ModelRotationRenderer.render() 원본 코드 확인 후 setupTransforms translate로 대응 |
+| ID | 확인 결과 | 확인 시점 |
+|----|---------|---------|
+| M-06 | `preTransform(float f)`에서 `rotationPointY * f` (f=0.0625=1/16). 1.21.1: `matrices.translate(rotationPointY/16F, ...)` | R-17 |
+| M-09 | @HEAD 취소 시 3단계 수동: translate(pivot/16) → 커스텀 순서 회전 → scale(xScale,yScale,zScale) | R-17 |
+| M-10 | setTransform은 setAngles→render 파이프라인에서 호출 없음. setAngles @TAIL에서 xScale 설정 안전 | R-17 |
+| M-11 | bipedTorso.rotationPointY=3F → `matrices.translate(0, 3F/16F, 0)` X 회전 전 삽입 (preTransform과 동일 패턴) | R-17 |
 
 ---
 
-### 구현 우선순위 (C-08/C-09 결론)
+### 구현 우선순위 (C-08/C-09 결론, R-17 해소 반영)
 
 1. **setupTransforms Mixin 먼저** (bipedOuter.X/Y 대응): SM 상태별 body 기울기 + 방향 제어 확정
 2. **setAngles Mixin** (개별 파트 각도): 비표준 회전 순서 제외하고 먼저 XYZ 근사로 구현
-3. **ModelPart Mixin** (smRotationOrder): 비표준 회전 순서 지원 추가 (M-09 해소 후)
-4. **yScale** (M-10 해소 후): setTransform 호출 시점 확인 후 적용 위치 결정
+3. **ModelPart Mixin** (smRotationOrder): 비표준 회전 순서 지원 추가 (M-09 확인됨 → 구현 가능)
+4. **yScale** (M-10 확인됨): setAngles @TAIL에서 설정 안전 → 구현 가능
 
-미확인 항목(M-06, M-09, M-10, M-11)이 있으므로 **C-08/C-09 구현 시작 불가** (RESEARCH_RULES.md 규칙 5). 추가 리서치 청크 R-17 추가 필요.
+R-17 완료로 M-06/M-09/M-10/M-11 전부 해소. **C-08/C-09 구현 시작 가능** (리서치 완료).
+
+---
+
+## R-17 추가 — ModelRotationRenderer.render() 원본 확인 (M-06/M-09/M-10/M-11 해소)
+
+소스: SmartRender GitHub → `ModelRotationRenderer.java` raw (net.smart.render.model)  
+Fabric Loom 디컴파일 → `BipedEntityModel.animateModel()` / `ModelPart.setTransform()` 바이트코드 분석
+
+---
+
+### R-17-1: ModelRotationRenderer.preTransform() 원본 코드 (확인됨)
+
+```java
+public void preTransform(float f, boolean push)
+{
+    if (rotateAngleX != 0.0F || rotateAngleY != 0.0F || rotateAngleZ != 0.0F || ignoreSuperRotation)
+    {
+        if (push) GL11.glPushMatrix();
+        GL11.glTranslatef(rotationPointX * f, rotationPointY * f, rotationPointZ * f);
+        if (ignoreSuperRotation)
+        {
+            buffer.rewind();
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            buffer.get(array);
+            GL11.glLoadIdentity();
+            GL11.glTranslatef(array[12] / array[15], array[13] / array[15], array[14] / array[15]);
+        }
+        rotate(rotationOrder, rotateAngleX, rotateAngleY, rotateAngleZ);
+        GL11.glScalef(scaleX, scaleY, scaleZ);
+        GL11.glTranslatef(offsetX, offsetY, offsetZ);
+    }
+}
+```
+
+**f = 0.0625F = 1/16** (ModelRenderer 상속 기본값).  
+실행 순서: `translate(pivot * 1/16)` → `[ignoreSuperRotation 처리]` → `rotate(order, X, Y, Z)` → `scale(scaleX, scaleY, scaleZ)`
+
+#### M-06 확인됨 — rotationPointY / 16 처리
+
+`GL11.glTranslatef(rotationPointX * f, rotationPointY * f, rotationPointZ * f)` = `rotationPointY * 0.0625`.  
+→ 1.21.1 대응: `matrices.translate(rotationPointX / 16F, rotationPointY / 16F, rotationPointZ / 16F)`.  
+→ ModelPart.rotate()의 pivot 처리와 동일 패턴 (B-09 확인).
+
+**isSlide에서 `bipedOuter.rotationPointY = 5F`**:
+```java
+// setupTransforms @Inject(at=TAIL):
+matrices.translate(0F, 5F / 16F, 0F);   // = 0.3125
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(Quarter));
+```
+
+**isCrawl에서 `bipedTorso.rotationPointY = 3F`** (M-11 확인됨):
+```java
+// setupTransforms 또는 setAngles 직전에:
+matrices.translate(0F, 3F / 16F, 0F);   // = 0.1875
+matrices.multiply(RotationAxis.POSITIVE_X.rotation(Quarter - Thirtytwoth));
+// 그 다음 각 파트별 개별 각도 설정
+```
+
+---
+
+### R-17-2: ignoreSuperRotation 1.21.1 구현 (확인됨)
+
+원본 GL 코드:
+```java
+GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+// buffer.get(array) → array[12..15] = 4×4 column-major matrix 4번째 열
+// array[12]/array[15] = Tx/W = translation X (W=1 이면 그냥 array[12])
+GL11.glLoadIdentity();
+GL11.glTranslatef(array[12] / array[15], array[13] / array[15], array[14] / array[15]);
+```
+
+column-major 4×4에서 translation = (m[12], m[13], m[14]) (W=1 가정).
+
+**1.21.1 JOML Matrix4f 대응**:
+```java
+// MatrixStack.peek().getPositionMatrix() = Matrix4f (JOML, row-major)
+// JOML Matrix4f에서 translation = (m30, m31, m32) (column 3: m03/m13/m23이 아닌 m30/m31/m32)
+Matrix4f matrix = matrices.peek().getPositionMatrix();
+float transX = matrix.m30();
+float transY = matrix.m31();
+float transZ = matrix.m32();
+matrices.loadIdentity();   // MatrixStack.loadIdentity() — R-10에서 확인됨
+matrices.translate(transX, transY, transZ);
+```
+
+**주의**: JOML은 column-major 저장이지만 get()으로 읽을 때의 인덱스 순서가 GL array와 다름.  
+JOML `Matrix4f.m30()` = GL array[12] (translation X) — JOML API에서 `mCR()` = column C, row R.  
+m30 = column 3, row 0 = GL m[12]. m31 = m[13]. m32 = m[14]. 확인 필요 시 JOML 문서 참조.
+
+---
+
+### R-17-3: ModelPart.setTransform() 호출 시점 (M-10 확인됨)
+
+`BipedEntityModel.animateModel()` 전체:
+```java
+public void animateModel(T entity, float ageInTicks, float speed, float headYaw) {
+    this.leaningPitch = entity.getLeaningPitch(ageInTicks);
+    super.animateModel(entity, ageInTicks, speed, headYaw);
+}
+```
+`setTransform(ModelTransform)` 호출 없음.
+
+`LivingEntityRenderer.render()` 파이프라인 전체에서 setTransform 호출 위치 없음 (바이트코드 분석).  
+→ **setAngles @Inject(at=TAIL)에서 xScale/yScale/zScale을 설정해도 리셋되지 않음 — 구현 안전.**
+
+`setTransform(ModelTransform)` 내부:
+```java
+public void setTransform(ModelTransform rotationData) {
+    this.pivotX = rotationData.pivotX;  this.pivotY = rotationData.pivotY;  this.pivotZ = rotationData.pivotZ;
+    this.pitch  = rotationData.pitch;   this.yaw    = rotationData.yaw;     this.roll   = rotationData.roll;
+    this.xScale = 1.0f;  this.yScale = 1.0f;  this.zScale = 1.0f;  // ← 리셋
+}
+```
+이 메서드는 모델 파트 초기화/재사용 시에만 호출됨(렌더 파이프라인 외부).
+
+---
+
+### R-17-4: ModelPart.rotate() @HEAD 취소 시 수동 구현 방법 (M-09 확인됨)
+
+vanilla `ModelPart.rotate(MatrixStack)` 전체 (B-09 기반):
+```java
+public void rotate(MatrixStack matrices) {
+    matrices.translate(this.pivotX / 16.0F, this.pivotY / 16.0F, this.pivotZ / 16.0F);
+    if (this.pitch != 0.0F || this.yaw != 0.0F || this.roll != 0.0F) {
+        matrices.multiply(new Quaternionf().rotationZYX(this.roll, this.yaw, this.pitch));
+    }
+    if (this.xScale != 1.0F || this.yScale != 1.0F || this.zScale != 1.0F) {
+        matrices.scale(this.xScale, this.yScale, this.zScale);
+    }
+}
+```
+
+@HEAD 취소(cir.cancel()) 시 수동 구현해야 하는 3단계:
+```java
+@Inject(method = "rotate", at = @At("HEAD"), cancellable = true)
+private void smCustomRotate(MatrixStack matrices, CallbackInfo ci) {
+    if (this.smRotationOrder == 0) return;  // XYZ 기본: vanilla 그대로
+    ci.cancel();
+
+    // 1. pivot translate (vanilla와 동일)
+    matrices.translate(this.pivotX / 16F, this.pivotY / 16F, this.pivotZ / 16F);
+
+    // 2. 커스텀 회전 순서 (smRotationOrder 분기)
+    switch (this.smRotationOrder) {
+        case YZX -> {  // call 순서: X, Z, Y
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(this.pitch));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(this.roll));
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(this.yaw));
+        }
+        case YXZ -> {  // call 순서: Z, X, Y
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(this.roll));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(this.pitch));
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(this.yaw));
+        }
+        case XZY -> {  // call 순서: Y, Z, X
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(this.yaw));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(this.roll));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(this.pitch));
+        }
+        case ZXY -> {  // call 순서: Y, X, Z
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(this.yaw));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(this.pitch));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(this.roll));
+        }
+        case ZYX -> {  // call 순서: X, Y, Z
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(this.pitch));
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(this.yaw));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(this.roll));
+        }
+    }
+
+    // 3. scale (vanilla와 동일)
+    if (this.xScale != 1.0F || this.yScale != 1.0F || this.zScale != 1.0F) {
+        matrices.scale(this.xScale, this.yScale, this.zScale);
+    }
+}
+```
+
+---
+
+### R-17 전체 요약
+
+| 항목 | 확인 결과 |
+|------|---------|
+| M-06: rotationPointY 처리 | `rotationPointY * f` (f=1/16). 1.21.1: `translate(rotationPointY/16F)` |
+| M-09: rotate() 취소 시 수동 구현 | 3단계: translate(pivot/16) → 커스텀 순서 multiply → scale(xScale,yScale,zScale) |
+| M-10: setTransform 호출 시점 | animateModel()에 없음. setAngles @TAIL 설정 안전 |
+| M-11: bipedTorso.rotationPointY=3F | `matrices.translate(0, 3F/16F, 0)` X 회전 전 삽입 |
+| C-08-2 오류 수정 | R-13 MatrixStack call 순서 전부 역순 오류 → 수정 완료 |
+| ignoreSuperRotation | `matrix.m30/m31/m32()` 추출 → `loadIdentity()` → `translate()` |
