@@ -53,10 +53,10 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 | B-03 | `LivingEntity.getPoses()` — 반환값 구조 및 사용 경로 (어디서 호출되는지) | `LivingEntity.java` | [x] → vehicle entity(Boat/Minecart/Horse/Pig/Strider) updatePassengerForDismount() 전용. PlayerEntity반환: [STANDING,CROUCHING,SWIMMING]. vanilla/EntityPose_system.md B-03 기재. |
 | B-04 | `LivingEntity.updatePose()` / `trySetPose()` — 포즈 전환 조건 전체, EntityPose 전환 시 calculateDimensions() 호출 여부 | `LivingEntity.java` | [x] → trySetPose 미존재. setPose→DataTracker→onTrackedDataSet→calculateDimensions 자동 호출 확인. vanilla/EntityPose_system.md B-04 및 PlayerEntity_pose_dimensions.md 기재. |
 | B-05 | `LivingEntity.getLeaningPitch()` / `updateLeaningPitch()` — 증가/감소 속도 정확한 수치 | `LivingEntity.java` | [x] → +0.09F / -0.09F, 범위 0.0~1.0, isInSwimmingPose() 기준. vanilla/LivingEntity_physics_misc.md B-05 기재. |
-| B-06 | `BipedEntityModel.animateArms()` 전체 코드 — 내부 로직, 파라미터 | `BipedEntityModel.java` | [ ] |
-| B-07 | `BipedEntityModel.setAngles()` — mp.onGround 파라미터가 float인지, 어떤 값이 전달되는지 | `BipedEntityModel.java` | [ ] |
-| B-08 | `ModelPart` — `xScale`, `yScale`, `zScale` 필드 존재 여부 및 렌더링에서의 사용 방식 | `ModelPart.java` | [ ] |
-| B-09 | `ModelPart.rotate(MatrixStack)` — 내부에서 pitch→yaw→roll 순서로 적용하는지 정확한 코드 | `ModelPart.java` | [ ] |
+| B-06 | `BipedEntityModel.animateArms()` 전체 코드 — 내부 로직, 파라미터 | `BipedEntityModel.java` | [x] → handSwingProgress>0일 때만 실행. body.yaw 회전으로 팔 이동, pitch/yaw/roll 보정. Yarn: method_29353. vanilla/BipedEntityModel_detail.md B-06 기재. |
+| B-07 | `BipedEntityModel.setAngles()` — mp.onGround 파라미터가 float인지, 어떤 값이 전달되는지 | `BipedEntityModel.java` | [x] → onGround 파라미터 없음. 시그니처: (LivingEntity, float×5). f=limbPos, g=limbSpeed, h=age+tickDelta, i=headYaw(deg), j=headPitch(deg). Yarn: method_17087. 스니킹은 sneaking 필드로 처리. vanilla/BipedEntityModel_detail.md B-07 기재. |
+| B-08 | `ModelPart` — `xScale`, `yScale`, `zScale` 필드 존재 여부 및 렌더링에서의 사용 방식 | `ModelPart.java` | [x] → xScale/yScale/zScale 모두 존재(기본값 1.0F). rotate()에서 1.0F 아닐 때 matrices.scale() 적용. field_37938/37939/37940. vanilla/BipedEntityModel_detail.md B-08 기재. |
+| B-09 | `ModelPart.rotate(MatrixStack)` — 내부에서 pitch→yaw→roll 순서로 적용하는지 정확한 코드 | `ModelPart.java` | [x] → Quaternionf().rotationZYX(roll, yaw, pitch) 사용. 적용 순서: pitch(X)→yaw(Y)→roll(Z). method_22703. vanilla/BipedEntityModel_detail.md B-09 기재. |
 | B-10 | `LivingEntity.travel()` — `handleFluidAcceleration()` 내 흐름 가속 크기 (0.014D 여부 확인) | `LivingEntity.java` | [x] → `SPEED_IN_WATER = 0.014`. `checkWaterState()` → `updateMovementInFluid(FluidTags.WATER, 0.014)`. vanilla/LivingEntity_physics_misc.md B-10 기재. |
 | B-11 | `LivingEntity.travel()` — `reverseHandleMaterialAcceleration` 해당 코드 경로 (1.21.1에 존재하는지) | `LivingEntity.java` | [x] → 1.21.1에 존재하지 않음 확인. vanilla/LivingEntity_physics_misc.md B-11 기재. |
 | B-12 | `EntityAttributes.GENERIC_GRAVITY` — 기본값 0.08D 여부, 어디서 초기화되는지 | `EntityAttributes.java` / `LivingEntity.java` | [x] → 기본값 0.08, 범위 -1.0~1.0, Tracked=true. EntityAttributes.java register()에서 초기화. vanilla/LivingEntity_physics_misc.md B-12 기재. |
@@ -286,7 +286,7 @@ PROGRESS.md의 파일 체크는 "해당 파일을 읽었다"는 표시이지,
 
 **결과 기록 위치**: `docs/research/vanilla/BipedEntityModel_detail.md` (신규)
 
-**완료**: [ ]
+**완료**: [x] → B-06: animateArms() 전체 코드 확인(handSwingProgress>0 조건, body.yaw 기반). B-07: setAngles() onGround 파라미터 없음, 5개 float 파라미터 확인(limbPos/Speed/animProgress/headYaw/headPitch). B-08: xScale/yScale/zScale 모두 존재, 기본값 1.0F. B-09: rotationZYX(roll,yaw,pitch) = pitch→yaw→roll 순 적용. BipedEntityModel_detail.md 신규 작성.
 
 ---
 
@@ -419,5 +419,5 @@ R-06 + R-11 완료 후: R-15 (DataTracker 동기화)
 
 ## 현재 진행 상태
 
-- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08
-- 다음 진행: **R-09** (vanilla BipedEntityModel 렌더링 미확인)
+- 완료된 청크: R-01, R-02, R-03, R-04, R-05, R-06, R-07, R-08, R-09
+- 다음 진행: **R-10** (vanilla MatrixStack + bodyYaw ModifyArg)
