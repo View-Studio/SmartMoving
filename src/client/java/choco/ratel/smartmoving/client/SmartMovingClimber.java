@@ -66,7 +66,7 @@ public final class SmartMovingClimber {
      *   - isSmall=true: player.getY() - 1 블록까지 추가 탐색
      *
      * 사다리 판정:
-     *   LadderBlock.FACING.getOpposite() == playerFacing → 해당 방향으로 클라이밍 가능
+     *   LadderBlock.FACING.getOpposite() == dir → 탐색 방향(dir)에서 붙은 사다리인지 확인
      *
      * 넝쿨 판정:
      *   해당 방향의 VineBlock.DIR property = true
@@ -111,9 +111,9 @@ public final class SmartMovingClimber {
                 // ── 사다리 판정 ──────────────────────────────────────────
                 if (state.getBlock() instanceof LadderBlock) {
                     Direction ladderFacing = state.get(LadderBlock.FACING);
-                    // 사다리 방향의 반대가 플레이어 정면과 일치하면 클라이밍 가능
-                    // 예: 플레이어 EAST → 사다리 FACING=WEST (서쪽 벽에 붙은 사다리)
-                    if (ladderFacing.getOpposite() == playerFacing) {
+                    // 탐색 방향(dir)에서 접근할 수 있는 사다리인지 확인
+                    // 예: dir=EAST 탐색 → 사다리 FACING=WEST(동쪽 벽에 붙음) → getOpposite()=EAST == dir
+                    if (ladderFacing.getOpposite() == dir) {
                         ClimbGap gap = new ClimbGap();
                         gap.state = state;
                         gap.direction = dir;

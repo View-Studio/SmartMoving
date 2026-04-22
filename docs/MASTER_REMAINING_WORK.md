@@ -801,7 +801,7 @@ grep -n "speedIncrease.wasPressed\|speedDecrease.wasPressed" \
 > 완료 즉시 `[ ]` → `[x]`
 
 ```
-[ ] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)
+[x] BUG-01  사다리 감지 방향 수정 (SmartMovingClimber.java:116)  ← 2026-04-22 완료
 [ ] BUG-02  클라이밍 매 틱 리셋 (MixinLivingEntityClient)
 [ ] IMPL-01 크롤링 진입/해제 전체
 [ ] IMPL-02 슬라이딩 진입 (헤드점프 착지 + 스프린트+스니크)
