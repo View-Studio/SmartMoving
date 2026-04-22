@@ -25,6 +25,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinServerPlayerEntity {
 
     /**
+     * 3-1-B: crawlingCooldown 카운트다운 (beforeOnUpdate 해당).
+     * 크롤링 종료 후 10틱간 isInsideWall() 억제 타이머를 매 틱 감소한다.
+     * 원본: SmartMovingServer.beforeOnUpdate() → if (crawlingCooldown > 0) crawlingCooldown--
+     */
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void sm_beforeTick(CallbackInfo ci) {
+        SmartMovingServer sm = SmartMovingServer.get((ServerPlayerEntity)(Object)this);
+        if (sm.crawlingCooldown > 0) sm.crawlingCooldown--;
+    }
+
+    /**
      * 3-4: isSneaking() 오버라이드.
      * forceIsSneaking이 null이 아닐 때만 강제 반환값을 덮어쓴다.
      * null이면 vanilla 동작 그대로 유지.

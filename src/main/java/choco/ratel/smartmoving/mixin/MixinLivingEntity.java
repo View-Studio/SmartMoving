@@ -1,9 +1,13 @@
 package choco.ratel.smartmoving.mixin;
 
 import choco.ratel.smartmoving.server.SmartMovingServer;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+
+import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -74,6 +78,36 @@ public abstract class MixinLivingEntity {
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.isCrawling || sm.isCrawlClimbing) {
             cir.setReturnValue(false);
+        }
+    }
+
+    /**
+     * 3-7: afterOnLivingUpdate() — isSmall 시 아이템 습득 범위 Y+0.25F 확장.
+     * 크롤링 중 바닥에 가까워 기본 AABB로 닿지 않는 아이템을 획득할 수 있도록 보정.
+     * 원본: SmartMovingServer.afterOnLivingUpdate() / SmallSizeItemGrabHeight = 0.25F
+     *
+     * 알고리즘:
+     *   offsetBox  = playerBox + (1, 0.25, 1) — Y방향 0.25 확장
+     *   standardBox = offsetBox.expand(0, -0.25, 0) — Y 원상복구
+     *   offsetBox에만 있고 standardBox에는 없는 엔티티 → onPlayerCollision
+     */
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void sm_afterTickMovement(CallbackInfo ci) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+        if (!sm.isSmall) return;
+        if (player.getHealth() <= 0) return;
+
+        Box offsetBox = player.getBoundingBox().expand(1.0, SmartMovingServer.SMALL_SIZE_ITEM_GRAB_HEIGHT, 1.0);
+        List<Entity> offsetEntities = player.getWorld().getOtherEntities(player, offsetBox);
+        if (offsetEntities.isEmpty()) return;
+
+        Box standardBox = offsetBox.expand(0.0, -SmartMovingServer.SMALL_SIZE_ITEM_GRAB_HEIGHT, 0.0);
+        List<Entity> standardEntities = player.getWorld().getOtherEntities(player, standardBox);
+
+        for (Entity entity : offsetEntities) {
+            if (standardEntities.contains(entity)) continue;
+            if (!entity.isRemoved()) entity.onPlayerCollision(player);
         }
     }
 

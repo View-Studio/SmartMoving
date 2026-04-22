@@ -20,6 +20,9 @@ import java.util.UUID;
  */
 public final class SmartMovingServer {
 
+    /** 크롤링 중 아이템 습득 Y방향 확장 범위. 원본: SmartMovingServer.SmallSizeItemGrabHeight = 0.25F */
+    public static final double SMALL_SIZE_ITEM_GRAB_HEIGHT = 0.25;
+
     // ── 3-1 서버 상태 필드 ────────────────────────────────────────
 
     /** afterOnUpdate()에서 낙하 거리 리셋 여부 (isClimbing 계열이 true인 동안 유지) */
@@ -107,7 +110,7 @@ public final class SmartMovingServer {
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
         isSliding         = ((bits >> 22) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
-        isCrawling        = ((bits >> 13) & 1) != 0;
+        setCrawling(((bits >> 13) & 1) != 0);
         isSmall           = ((bits >> 15) & 1) != 0;
         isSneakButtonPressed = ((bits >> 33) & 1) != 0;
 
@@ -115,6 +118,18 @@ public final class SmartMovingServer {
         resetFallDistance     = isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping;
         // 3-2: floatingTick 리셋 조건 (벽점프 제외 — 벽점프는 순간적이라 kick 위험 없음)
         resetTicksForFloatKick = isClimbing || isCrawlClimbing || isCeilingClimbing;
+    }
+
+    // ── 3-1-A: 크롤링 상태 전환 + cooldown 설정 ──────────────────────
+
+    /**
+     * 크롤링 상태를 갱신하고, 종료 시 crawlingCooldown을 10으로 설정한다.
+     * 원본: SmartMovingServer.setCrawling(boolean)
+     * cooldown 중에는 isInsideWall()이 false를 반환하여 크롤링 출구 벽 충돌 오판 방지.
+     */
+    public void setCrawling(boolean crawling) {
+        if (!crawling && isCrawling) crawlingCooldown = 10;
+        isCrawling = crawling;
     }
 
     // ── 3-9: 낙하 거리 리셋 ──────────────────────────────────────
