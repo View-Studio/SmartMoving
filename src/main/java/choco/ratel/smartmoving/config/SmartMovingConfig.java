@@ -484,19 +484,9 @@ public class SmartMovingConfig {
      */
     public int toggler = -2;
 
-    /**
-     * 원본 SmartMovingConfig._configKeyName (SmartMovingConfig.md L620):
-     *   `_configKeyName = String(...).defaults(Value((String)null).e("Easy").m("Medium").h("Hard"))`.
-     * 각 config key 별 표시 이름. 1.21.1 근사: Property key-scoped defaults 시스템을
-     * `Map<String,String>` 으로 단순화. Map 에 없는 key (예: Creative "c") 는 빈 문자열 반환 —
-     * 원본 `_configKeyName.value` 가 "c" key 일 때 비어 있어 `logConfigState` 에서 `"with key X"`
-     * 분기로 빠지는 동작과 등가.
-     */
-    public final java.util.Map<String, String> configKeyName = java.util.Map.of(
-            "e", "Easy",
-            "m", "Medium",
-            "h", "Hard"
-    );
+    // H-18 (세션 23): configKeyName Map 삭제. 2상태 토글(configKeys={null}) 에서 currentKey
+    // 는 항상 null 이므로 "Easy"/"Medium"/"Hard" 라벨 표시 경로 전부 제거됨. Medium/Hard
+    // 프리셋 복원 시(`focus_09_difficulty_presets.md` 후속) 재도입.
 
     // ── gameType 상수 (원본 SmartMovingConfig L630-L633) ────────────────────
     /** 원본 `Unknown = -1`. initializeForGameIfNeccessary 캐시 초기값 및 default 분기 트리거. */

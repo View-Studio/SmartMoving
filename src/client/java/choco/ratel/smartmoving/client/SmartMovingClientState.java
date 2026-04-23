@@ -512,38 +512,13 @@ public final class SmartMovingClientState {
         if (SmartMovingKeys.configToggle.wasPressed()) {
             if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE) {
                 SmartMovingConfig.INSTANCE.toggle();
-                // 원본 SmartMovingOptions.writeClientConfigMessageToChat(false) (L560-L584) 1:1.
-                //   Config.enabled=false                                            → "...disabled"
-                //   name = _configKeyName.value (Map.getOrDefault 근사); isEmpty → null
-                //   unnamed && keyCount==1                                          → "...enabled"
-                //   name!=null (named)                                              → "...named" + name
-                //   name==null (unnamed) + keyCount>1                               → "...unnamed" + currentKey
+                // H-18 (세션 23): 2갈래 단순화. 2상태 토글(disabled↔enabled) 기준이므로
+                // 원본 4갈래(named/unnamed/enabled/disabled) 분기 불필요. configKeyName /
+                // CONFIG_KEY_ENABLED 등 잉여 코드 전부 H-19 에서 제거 예정.
                 SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
-                Text msg;
-                if (!cfg.enabled) {
-                    msg = Text.translatable("smartmoving.message.config.client.disabled");
-                } else {
-                    String currentKey = cfg.getCurrentKey();
-                    // H-17 (세션 22): currentKey==null NPE 방어.
-                    // configKeyName = Map.of(...) 는 ImmutableMap — null key 조회 시 NPE.
-                    // 2상태 토글(configKeys={null}) 환경에서 currentKey=null 경로 필수.
-                    // 원본 `_configKeyName.value` 는 Property 시스템에서 빈 문자열 반환 → 1.21.1 근사.
-                    String name = currentKey == null
-                            ? ""
-                            : cfg.configKeyName.getOrDefault(currentKey, "");
-                    if (name.isEmpty()) name = null;
-                    boolean unnamed = name == null;
-                    if (unnamed) name = currentKey;
-                    int keyCount = cfg.configKeys.length;
-                    if (SmartMovingConfig.CONFIG_KEY_ENABLED.equals(name)
-                            || (unnamed && keyCount == 1)) {
-                        msg = Text.translatable("smartmoving.message.config.client.enabled");
-                    } else if (unnamed) {
-                        msg = Text.translatable("smartmoving.message.config.client.unnamed", name);
-                    } else {
-                        msg = Text.translatable("smartmoving.message.config.client.named", name);
-                    }
-                }
+                Text msg = Text.translatable(cfg.enabled
+                        ? "smartmoving.message.config.client.enabled"
+                        : "smartmoving.message.config.client.disabled");
                 if (player != null) player.sendMessage(msg);
             } else {
                 ClientPlayNetworking.send(new SmartMovingNetwork.ConfigChangePayload());

@@ -267,20 +267,20 @@ public final class SmartMovingServer {
 
     /**
      * 원본: SmartMovingServerOptions.logConfigState(config, username, reconfig)
-     *       (SmartMovingServerOptions.md L80-L113) 1:1 이식.
+     *       (SmartMovingServerOptions.md L80-L113).
+     *
+     * H-18 (세션 23) 2갈래 단순화: 포커스 #5 "disabled↔enabled 2상태" 결정 후 `currentKey`
+     * 는 항상 null (configKeys={null}). 원본 3갈래 분기 중 `currentKey==null` 경로만 살아
+     * 있으므로 `default server configuration` 한 줄로 단순화. 나머지 2갈래 (with key /
+     * named) 는 Medium/Hard/Creative 프리셋 복원 시(`focus_09_difficulty_presets.md` 후속)
+     * 재도입.
      *
      * globalConfig=true 경로:
      *   reconfig=false → "Smart Moving overrides client configurations" 먼저 출력.
-     *   enabled=true + currentKey==null          → "... default server configuration [by X]"
-     *   enabled=true + configName=="" (Creative) → "... server configuration with key \"c\" [by X]"
-     *   enabled=true + configName!=""            → "... server configuration \"Medium\" [by X]"
-     *   enabled=false                             → "... disabled [by X]"
+     *   enabled=true  → "... default server configuration [by X]"
+     *   enabled=false → "... disabled [by X]"
      * globalConfig=false:
      *   → "Smart Moving allows client configurations"
-     *
-     * configName 원본: `config._configKeyName.value` — Property key-scoped defaults 기반.
-     *   e/m/h → "Easy"/"Medium"/"Hard", c → "" (defaults 부재).
-     *   1.21.1 근사: `configKeyName.getOrDefault(currentKey, "")`.
      */
     static void logConfigState(SmartMovingConfig config, String username, boolean reconfig) {
         String message = "Smart Moving ";
@@ -288,20 +288,8 @@ public final class SmartMovingServer {
             if (!reconfig) LOGGER.info("{}overrides client configurations", message);
             String postfix = getPostfix(username);
             if (config.enabled) {
-                String currentKey = config.getCurrentKey();
                 String action = reconfig ? "changed to " : "uses ";
-                if (currentKey == null) {
-                    LOGGER.info("{}{}default server configuration{}", message, action, postfix);
-                } else {
-                    String configName = config.configKeyName.getOrDefault(currentKey, "");
-                    if (configName.isEmpty()) {
-                        LOGGER.info("{}{}server configuration with key \"{}\"{}",
-                                message, action, currentKey, postfix);
-                    } else {
-                        LOGGER.info("{}{}server configuration \"{}\"{}",
-                                message, action, configName, postfix);
-                    }
-                }
+                LOGGER.info("{}{}default server configuration{}", message, action, postfix);
             } else {
                 LOGGER.info("{}disabled{}", message, postfix);
             }

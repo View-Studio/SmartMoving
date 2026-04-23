@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | ✅ **재완료 (2026-04-24, 세션 22)** — H-15/H-16 수정 완료 |
-| 현재 단계 | ✅ H-0~H-17 + G-5 완료 (H-17: disabled→enabled NPE 긴급 수정) / ⏳ 사용자 인게임 재검증 |
+| 현재 단계 | ✅ H-0~H-17 + G-5 완료 / ⏳ **H-18~H-21 진행 (잉여 코드 정리)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -796,6 +796,120 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       원본 `_configKeyName.value` 는 Property 시스템에서 null 미반환 (빈 문자열) — 1.21.1
       ImmutableMap 근사의 한계. 서버측 `SmartMovingServer.logConfigState` 는 이미
       `if (currentKey == null)` 분기로 안전 처리되어 있어 수정 불필요.
+
+#### H-18 ~ H-20: 잉여 코드 정리 (세션 23 — 2026-04-24)
+
+**배경**: H-15 에서 `initializeForGameIfNeccessary` 호출만 제거하고 4상태 라벨 순환 코드
+자체는 "잉여지만 무해"로 유지했으나, H-17 NPE 가 이 잉여 때문에 발생 — 사용자 결정으로
+지금 정리. 3단계 분할로 회귀 최소화.
+
+**제거 대상 완전 목록** (grep 으로 호출처 확인 후 단계별 제거):
+
+##### H-18: 활성 경로 정리 (버그 매복 제거 — 우선)
+
+코드 파일:
+- `SmartMovingClientState.java` L506-L544 configToggle 블록의 4갈래 채팅 피드백
+- `SmartMovingServer.java` L285-L310 logConfigState 의 3갈래 분기
+- `src/main/resources/assets/smartmoving/lang/en_us.json` 번역 키
+- `SmartMovingConfig.java` `configKeyName` Map 필드
+
+변경:
+1. **클라 4갈래 → 2갈래**: configToggle 키 처리 블록을 단순화
+   ```java
+   msg = Text.translatable(cfg.enabled
+           ? "smartmoving.message.config.client.enabled"
+           : "smartmoving.message.config.client.disabled");
+   ```
+   H-17 의 null 가드도 함께 제거 (configKeyName 조회 자체 없음).
+2. **서버 3갈래 → 1갈래**: `logConfigState` 의 enabled 분기에서 `currentKey`/`configName`
+   탐색 로직 전부 삭제. `"default server configuration"` 한 줄로 단순화.
+3. **lang 파일**: `smartmoving.message.config.client.named` / `.unnamed` 키 삭제.
+   `.enabled` / `.disabled` 유지.
+4. **`configKeyName` Map 필드** (SmartMovingConfig L263-L273) 선언 삭제.
+
+검증:
+- `grep "configKeyName"` 결과 → 모든 참조 제거되어야 함 (0건)
+- `grep ".named\|.unnamed"` (translatable key) → 0건
+
+##### H-19: 호출 없는 메서드/상수 정리
+
+코드 파일:
+- `SmartMovingConfig.java` 메서드 4개 + 상수 2개
+
+변경:
+1. **메서드 삭제**:
+   - `getKey(int index)` (원본 L99-L104)
+   - `getNextKey(String key)` (원본 L106-L118)
+   - `hasKey(String key)` (원본 L145-L156)
+   - `setCurrentKey(String key)` (원본 L120-L136)
+2. **상수 삭제**:
+   - `CONFIG_KEY_ENABLED` ("enabled")
+   - `CONFIG_KEY_DISABLED` ("disabled")
+3. **유지**:
+   - `DEFAULT_KEYS` (toggle() 내부에서 참조 가능성) — 실제 참조 확인 후 결정
+   - `configKeys` 필드 (toggle() 순환에 필요) — **유지**
+   - `toggler` 필드 (toggle() 상태) — **유지**
+   - `toggle()` / `setKeys(String[])` / `updateToggler()` / `getCurrentKey()` — **유지**
+     (getCurrentKey 는 H-18 정리 후에도 다른 호출처가 있을 수 있어 확인 필요)
+
+검증:
+- `grep "getKey\b\|getNextKey\|hasKey\|setCurrentKey"` → config 내부 참조 0건
+- `grep "CONFIG_KEY_ENABLED\|CONFIG_KEY_DISABLED"` → 0건
+- `grep "getCurrentKey"` → H-18 이후 0건 목표, 있으면 해당 호출 정리
+
+##### H-20: gameType 시스템 전체 정리 (dead code)
+
+코드 파일:
+- `SmartMovingConfig.java` gameType 관련 필드/상수/메서드
+- `readFrom`/`writeTo` 6개 키 처리
+
+변경:
+1. **메서드 삭제**:
+   - `initializeForGameIfNeccessary(int currentGameType)`
+   - `resetForNewGame()`
+2. **필드 삭제**:
+   - `gameType` (private int, default -1)
+   - `survivalConfigKeys`, `survivalDefaultConfigKey`
+   - `creativeConfigKeys`, `creativeDefaultConfigKey`
+   - `adventureConfigKeys`, `adventureDefaultConfigKey`
+3. **상수 삭제**:
+   - `GAME_TYPE_UNKNOWN`, `GAME_TYPE_SURVIVAL`, `GAME_TYPE_CREATIVE`, `GAME_TYPE_ADVENTURE`
+4. **readFrom 6키 제거**:
+   - `move.config.survival.keys` + `.keys.default`
+   - `move.config.creative.keys` + `.keys.default`
+   - `move.config.adventure.keys` + `.keys.default`
+5. **writeTo 동일 6키 제거**
+6. **헬퍼 `getCsvArray`/`csvJoin`** — 다른 CSV 필드(playerSpeedExponents 등)에서 사용 여부
+   확인 후 제거/유지 결정
+
+검증:
+- `grep "initializeForGameIfNeccessary\|resetForNewGame"` → 0건
+- `grep "survivalConfigKeys\|creativeConfigKeys\|adventureConfigKeys"` → 0건
+- `grep "GAME_TYPE_"` → 0건
+- `grep "move.config.survival\|move.config.creative\|move.config.adventure"` → 0건
+- **세이브 파일 호환**: 기존 `smart_moving_options.properties` 에 해당 키가 있어도
+  단순히 무시됨 (getBool/getCsvArray 호출 자체 없음). 역호환 문제 없음.
+
+**통합 검증 (H-18~H-20 완료 후)**:
+- `./gradlew clean build` BUILD SUCCESSFUL
+- `grep "// TODO\|// \[미확인\]"` 0건
+- H-13 §14 "H 섹션 회귀 감사" 재실행 (변경 3종 → 변경 4종: speedUser/exhaustion/허기패킷/잉여정리)
+- configToggle 키 인게임 테스트: disabled ↔ enabled 여러 번 왕복 → 크래시 0
+
+- [x] H-18. **활성 경로 정리** — 4가지 변경 완료:
+      (1) `SmartMovingClientState` configToggle 채팅 피드백 4갈래 → 2갈래 (cfg.enabled 삼항)
+      (2) `SmartMovingServer.logConfigState` 3갈래 → 1갈래 (default server configuration 만)
+      (3) `en_us.json` `.named` / `.unnamed` 키 삭제 (.enabled / .disabled 유지)
+      (4) `SmartMovingConfig.configKeyName` Map 필드 삭제
+      `grep configKeyName` 확인: 주석/javadoc 참조만 남음 (코드 참조 0). 빌드 ✓
+- [ ] H-19. **호출 없는 메서드/상수 정리** — `getKey`/`getNextKey`/`hasKey`/`setCurrentKey`
+      메서드 4개 + `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 상수 2개 삭제. `DEFAULT_KEYS`/
+      `configKeys`/`toggler`/`toggle()`/`setKeys()`/`updateToggler()`/`getCurrentKey()` 유지.
+- [ ] H-20. **gameType 시스템 전체 정리** — `initializeForGameIfNeccessary`/`resetForNewGame`
+      메서드 + `gameType` 필드 + `GAME_TYPE_*` 4상수 + 게임타입별 6필드 + readFrom/writeTo
+      6키 전부 삭제. `getCsvArray`/`csvJoin` 헬퍼는 다른 참조 확인 후 결정.
+- [ ] H-21. **통합 빌드 + 회귀 감사 재실행** — clean build + §14 "H 섹션 회귀 감사" 확장
+      (변경 3종 → 4종). checklist_original_audit.md 에 H-18~H-20 정리 기록 추가.
 - [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:
       - `ClientState.handleExhaustion` 말미: `hungerIncrease != lastHungerIncrease` →
         `float delta = hungerIncrease - lastHungerIncrease; if (delta != 0F) send(delta);`.

@@ -21,8 +21,6 @@
 
   "smartmoving.message.config.client.enabled": "Smart Moving enabled",
   "smartmoving.message.config.client.disabled": "Smart Moving disabled",
-  "smartmoving.message.config.client.named": "Smart Moving set to '%s'",
-  "smartmoving.message.config.client.unnamed": "Smart Moving set to key '%s'",
 
   "smartmoving.message.speed.client.change": "Smart Moving speed changed to %s%%.",
   "smartmoving.message.speed.client.reset": "Smart Moving speed reset to 100%%."
