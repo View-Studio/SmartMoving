@@ -91,16 +91,21 @@ public final class SmartMovingSwimmer {
 
     /**
      * 수중 이동 물리를 직접 처리한다. vanilla travel() 물속 분기를 완전 대체.
-     * 원본: SmartMovingSelf.handleSwimming(moveForward, moveStrafing, speedFactor, isLiquidClimbing)
+     * 원본: SmartMovingSelf.handleSwimming(moveForward, moveStrafing, speedFactor,
+     *                                      wasSwimming, wasDiving, isLiquidClimbing, wasJumpingOutOfWater)
      *
      * @param jumping jump 키가 현재 눌려있는 상태 (LivingEntity.jumping)
+     * @param wasSwimming superMoveEntityWithHeading 진입 시 isSwimming 스냅샷(원본 L97).
+     * @param wasDiving   동일 시점 isDiving 스냅샷(원본 L99).
      * @return SM이 처리했으면 true (호출자가 travel() cancel)
      */
     public static boolean handleSwimming(
             ClientPlayerEntity player,
             SmartMovingClientState sm,
             Vec3d movementInput,
-            boolean jumping) {
+            boolean jumping,
+            boolean wasSwimming,
+            boolean wasDiving) {
 
         // ── SwimCrawlWater 전환 (원본: handleSwimming L274-279, L416-432, R-06) ──────
         // wasHeightOffset = heightOffset (크롤링 hitbox 오프셋 캡처).
@@ -136,6 +141,29 @@ public final class SmartMovingSwimmer {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (sm.isDiving && !cfg.dive) return false;
         if ((sm.isSwimming_sm || sm.isDipping) && !cfg.swim) return false;
+
+        // ── 원본 SmartMovingSelf L226-L246 (isFakeShallowWaterSneaking = true 설정 경로) ──
+        // 원본:
+        //   couldStandUp = playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5
+        //   swimDown = sneak && _swimDownOnSneak
+        //   wantShallowSwim = couldStandUp && (wasSwimming || wasDiving)
+        //   (Orientation.getClimbingOrientations/isTunnelAhead 로 정제)
+        //   if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false; isFakeShallowWaterSneaking=true; }
+        //
+        // 1.21.1 간소화:
+        //   couldStandUp = dippingDepth>=0 && dippingDepth<=1.5F (수심 기반 근사)
+        //   Orientation.isTunnelAhead 검사 생략 — 1.21.1 Orientation 시스템 미이식.
+        boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
+        boolean wantShallowSwim = couldStandUp && (wasSwimming || wasDiving);
+        // swimDown 지역 변수는 diving 분기에서 diveDown 과 분리되어 사용 — 여기서는 설정 블록만.
+        if (wasSwimming && wantShallowSwim
+                && player.isSneaking() && cfg.swimDownOnSneak) {
+            sm.isFakeShallowWaterSneaking = true;
+            // 원본 L244: swimDown=false — handleSwimming 내부 이후 로직에서 sneak-down 억제에
+            //   사용. 1.21.1 는 isSwimming 분기의 수직 속도에 swimDown 이 영향 주지 않으므로 불필요.
+        } else {
+            sm.isFakeShallowWaterSneaking = false;
+        }
 
         float moveForward = (float) movementInput.z;
         float moveStrafe  = (float) movementInput.x;
