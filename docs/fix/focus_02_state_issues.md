@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 43 — B Phase 2 착수) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + B-2 / B-30 / B-44a 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 44 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + B-2/B-30/B-44a/B-32/B-40 완료 + Config.fallingDistanceMinimum 추가 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -738,11 +738,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       B-35 전환 후처리 범위.
 
 #### B-32. `canCrawl` 공식 원본 5-AND 복원 (A-5 발견 — 1:1 원칙 위배)
-- [ ] B-32. ClientState L669-L672 조건 원본 L2434-L2439 로 정정:
-      `!isSwimming_sm && !isDiving && (!isDipping || (dippingDepth + heightOffset) <
-      SwimCrawlWaterTopBorder) && !isClimbing && fallDistance < _fallingDistanceMinimum`
-      — 9-AND 잉여 조건 (isCrawlClimbing / isCeilingClimbing / isSliding / isHeadJumping /
-      isFlying) 제거.
+- [x] B-32. ✅ **세션 44 완료** — ClientState IMPL-01 `canCrawl` 공식 원본 L2434-L2439 로
+      정정. 잉여 5조건 (`!isCrawlClimbing && !isCeilingClimbing && !isSliding &&
+      !isHeadJumping && !isFlying`) 제거 + `player.fallDistance < cfg.fallingDistanceMinimum`
+      추가. 전제 작업: `SmartMovingConfig.fallingDistanceMinimum = 3F` 필드 추가 (원본 L348).
 
 #### B-33. 메인 공식 재작성 — 매 틱 재계산 구조 (A-5 발견)
 - [ ] B-33. IMPL-01 (L661-L693) 진입/해제 이원화 → 원본 매 틱 공식으로 전환:
@@ -786,10 +785,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       → crawling** 서브 분기 ClientState fromSwimmingOrDiving 에 추가 (현재 2분기만 이식).
 
 #### B-40. `toCrawling()` 헬퍼 메서드 신설 + 호출 지점 정리 (A-5 발견)
-- [ ] B-40. 원본 L3047-L3054 함수 이식 — `boolean toCrawling()` (ClientState 메서드):
-      `{ isCrawling = true; if (cfg.crawlToggle) crawlToggled = true;
-         ignoreNextStopSneakButtonPressed = true; return true; }`
-      기존 inline 3줄 (IMPL-01 L674-L677) + B-35/B-36 에서 사용.
+- [x] B-40. ✅ **세션 44 완료** — 원본 L3047-L3054 `toCrawling()` 메서드 이식
+      (`SmartMovingClientState` 에 public 메서드 추가). 공식:
+      `isCrawling=true; if (cfg.crawlToggle && cfg.enabled) crawlToggled=true;
+      ignoreNextStopSneakButtonPressed=true; return true;`
+      기존 IMPL-01 inline 3줄 → `toCrawling()` 호출로 교체. **cfg.enabled 가드 포함 —
+      기존 inline 은 누락했었음 (§16 세션 44 기록)**.
+      호출 지점 다른 5곳 (L2566/L2760/L2767/L2812/L2835/L2860) 은 B-35/B-36 이식 시 추가.
 
 #### B-41. `wantCrawlNotClimb` 갱신 블록 이식 (A-5 발견)
 - [ ] B-41. 원본 L2452-L2461 이식 — grab.StartPressed + !wasCrawling 등 4-AND 조건.
@@ -814,6 +816,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       대응). B-33 (A-5 메인 공식 재작성) 수정 시 함께 조정.
 - [ ] B-44c. `wasClimbCrawling = isClimbCrawling` 저장 L562 → isClimbCrawling 공식 직전
       (원본 L2786 대응). B-18 (A-3 isClimbCrawling 이식) 수정 시 함께 조정.
+
+#### B-45. `isSneakToggleEnabled()` / `isCrawlToggleEnabled()` Config 헬퍼 신설 + 호출 정리 (세션 44 발견)
+- [ ] B-45a. `SmartMovingConfig` 에 `isSneakToggleEnabled()` / `isCrawlToggleEnabled()`
+      헬퍼 2개 추가 (원본 `SmartMovingOptions.md` L449-L468 — AND 패턴:
+      `_toggle && enabled`).
+- [ ] B-45b. ClientState 의 `cfg.sneakToggle ? ... : ...` / `cfg.crawlToggle ? ... : ...`
+      호출 지점 전수 헬퍼 교체 (L784 sneakContinueInput, L789 wantSneak_, 기타).
 
 #### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
@@ -1685,6 +1694,58 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 함. 또는 **B-40 (toCrawling 헬퍼)** — 단독 가능 (기존 inline 3줄을 헬퍼로 추출).
 또는 **B-32 (canCrawl 5-AND 복원)** — 단순 조건 축소 (9-AND → 5-AND).
 
+### 세션 44 — 2026-04-24 — B Phase 2 계속: B-32 + B-40 + Config 필드 1
+
+**진행한 작업**:
+- 원본 `Options.isCrawlToggleEnabled()` / `isSneakToggleEnabled()` 공식 확인
+  (`SmartMovingOptions.md` L449-L468) — 둘 다 **AND 패턴** (`_toggle.value && enabled`)
+- 원본 `Config._fallingDistanceMinimum` 기본값 3F 확인 (`SmartMovingConfig.md` L348)
+- `SmartMovingConfig` 에 `fallingDistanceMinimum = 3F` 필드 추가 — B-32 전제
+- **B-32 canCrawl 5-AND 복원** (`ClientState.tickEssential` IMPL-01):
+  * 기존 9-AND 잉여 5조건 (`!isCrawlClimbing && !isCeilingClimbing && !isSliding &&
+    !isHeadJumping && !isFlying`) 제거 — 원본에 없는 잉여 조건 (1:1 원칙)
+  * `player.fallDistance < cfg.fallingDistanceMinimum` 추가 (원본 L2439)
+  * 결과: 원본 5-AND 공식 그대로 — `!swim && !dive && (!dipping || border) && !climbing
+    && fallDistance < minimum`
+  * 기존 "1.21.1 근사" 주석 제거
+- **B-40 toCrawling() 헬퍼 신설**:
+  * `ClientState` 에 public `toCrawling()` 메서드 추가 (원본 L3047-L3054)
+  * 공식: `isCrawling = true; if (cfg.crawlToggle && cfg.enabled) crawlToggled = true;
+    ignoreNextStopSneakButtonPressed = true; return true;`
+  * IMPL-01 진입 시 inline 3줄 → `toCrawling()` 호출 교체
+  * **cfg.enabled 가드 포함** — 기존 inline 에서 누락된 부분 (원본 `Options.isCrawlToggleEnabled()
+    = _crawlToggle.value && enabled` AND 패턴 준수)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 44 기준)**:
+- [근거] 원본 L2434-L2439 canCrawl + L3047-L3054 toCrawling + L348 _fallingDistanceMinimum
+  직접 read ✓
+- [근거] 원본 `Options.isCrawlToggleEnabled()` 공식 (AND 패턴) 확보 ✓
+- [대응] B-32: 9-AND → 5-AND 원본 1:1 ✓
+- [대응] B-40: toCrawling 본체 + 호출 전환 + cfg.enabled 가드 추가 ✓
+- [분기] canCrawl 5-AND (`!swim`/`!dive`/`!dipping||border`/`!climbing`/`fallDistance`) ✓
+- [상수] `0.65F` SwimCrawlWaterTopBorder / `3F` fallingDistanceMinimum 원본 값 ✓
+- [타이밍] canCrawl 는 여전히 !isCrawling 진입 분기에서만 평가 — 메인 공식 구조는 B-33 에서 처리 ✓
+- [근사] 기존 "1.21.1 근사" 주석 제거 — 실제 근사 아닌 잉여였음 ✓
+- [신규] §16 신규 발견: `isCrawlToggleEnabled()` 호출 지점 중 inline `cfg.crawlToggle` 만
+  있고 `cfg.enabled` 체크 누락한 곳이 여럿 (B-40 에서 일부 해소, 나머지는 별도 원자 필요)
+- [회귀] compileJava 성공 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 44 기준)**:
+- ✅ B-2 / B-44a / B-30 — 세션 43
+- ✅ B-32 / B-40 / Config.fallingDistanceMinimum — 세션 44
+- ⏳ B-1c~f / B-3a~b / B-16 / B-17 / B-18 / B-23 / B-33 등 ~35+ 원자
+
+**다음 작업 권고**:
+- **B-1a 후속: Config.isRunningEnabled() / isJumpingEnabled() / isFlyingEnabled() /
+  isCrawlingEnabled() / isClimbExhaustionEnabled 등 Config 헬퍼** — 원본 공식 맞춰 일괄 이식.
+  1:1 원칙 상 각 헬퍼별 OR/AND 패턴 확인 필수.
+- **B-3b (wouldIsSneaking 정정)** — `!player.isSprinting()` → `!wantSprint`. 다만
+  `wantSprint` 필드 + 계산 블록 (B-3a) 선행 필요.
+- **B-17 / B-18 (isCrawlClimbing / isClimbCrawling 공식 이식)** — B-15 의존 필드 완성됨 →
+  규모 큰 공식 이식 가능.
+
 ---
 
 ## 16. 신규 발견
@@ -1867,6 +1928,41 @@ R-11 섹션 (SmartMovingSelf.md L2508 이후) 에 원본 전수 덤프 + 1.21.1 
 - 3순위: B-12 (waterMovementTicks 증분) — B-10b 완료 후
 - 4순위: B-9 (메인 분류 재작성) — 가장 큰 작업, 여러 세션 분할
 - 5순위: B-7/B-8/B-11/B-13 — 순차 진행
+
+### 세션 44 B-40 — isCrawlToggleEnabled() 누락 (다중 호출 지점)
+
+**발견**: B-40 toCrawling 이식 중 원본 `Options.isCrawlToggleEnabled() = _crawlToggle
+&& enabled` (AND 패턴) 재확인. 1.21.1 의 다른 호출 지점들이 `cfg.enabled` 체크 누락
+상태:
+
+1. `ClientState.java` L784-L786 sneakContinueInput 계산:
+   ```java
+   boolean sneakContinueInput = cfg0.sneakToggle  // cfg.enabled 체크 없음
+       ? (sneakToggled || sneakKeyStartPressed)
+       : sneakPressedRaw;
+   ```
+   원본 공식: `Options.isSneakToggleEnabled()` = `sneakToggle && enabled`.
+
+2. `ClientState.java` L931-L932 R-09 블록 진입:
+   ```java
+   boolean isSneakToggleEnabled = cfg.sneakToggle && cfg.enabled;  // 이건 맞음 ✓
+   boolean isCrawlToggleEnabled = cfg.crawlToggle && cfg.enabled;  // 이것도 맞음 ✓
+   ```
+
+3. `ClientState.java` L789-L790 (R-09 블록 내 `wantSneak_`):
+   ```java
+   boolean wantSneak_ = cfg.sneakToggle  // cfg.enabled 체크 없음 (B-4 범위)
+   ```
+
+**권고 원자 신설 (B-45)**:
+- ClientState L784 sneakContinueInput 및 기타 모든 `cfg.sneakToggle ? ... : ...` 또는
+  `cfg.crawlToggle ? ... : ...` 위치를 `isSneakToggleEnabled()` / `isCrawlToggleEnabled()`
+  헬퍼로 감싸기. Config 에 2 헬퍼 신설.
+
+**교훈**: A-7 매핑 테이블 §6.7 Config 섹션 재검토 필요 — `isSneakToggleEnabled` /
+`isCrawlToggleEnabled` 도 (공식 확정 AND 패턴) 매핑 기록 추가.
+
+---
 
 ### 세션 39 B-2/B-3a/B-8 — Config.isSneakingEnabled 매핑 오류 정정
 

@@ -821,18 +821,20 @@ public final class SmartMovingClientState {
             if (cfg.crawl) {
                 boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
                 if (!isCrawling) {
-                    // 원본 L1805-L1809 canCrawl = !swim && !dive && (!dipping || shallow)
-                    //                             && !climbing && fallDistance < minimum.
-                    // 1.21.1 근사: crawlClimbing/ceilingClimbing/sliding/headJumping/flying 도 제외.
-                    boolean canCrawl = !isSwimming_sm && !isDiving
+                    // B-32 (세션 44): 원본 L2434-L2439 canCrawl 5-AND 완전 복원. 잉여
+                    //   (!isCrawlClimbing && !isCeilingClimbing && !isSliding && !isHeadJumping
+                    //    && !isFlying) 제거 — 원본에 없는 조건 (1:1 원칙).
+                    //   원본 공식 그대로: !swim && !dive && (!dipping || border) && !climbing
+                    //                    && fallDistance < _fallingDistanceMinimum.
+                    //   border 상수 SwimCrawlWaterTopBorder = 0.65F (원본 SmartMovingContext).
+                    boolean canCrawl = !isSwimming_sm
+                            && !isDiving
                             && (!isDipping || dippingDepth < 0.65F)
-                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
-                            && !isSliding && !isHeadJumping && !isFlying;
+                            && !isClimbing
+                            && player.fallDistance < cfg.fallingDistanceMinimum;
                     if (canCrawl && (wantCrawl || mustCrawl)) {
-                        isCrawling = true;
-                        // 원본: Options.isCrawlToggleEnabled() 게이트 — _crawlToggle 기본값 false(홀드)
-                        if (SmartMovingConfig.Config.crawlToggle) crawlToggled = true;
-                        ignoreNextStopSneakButtonPressed = true;
+                        // B-40 (세션 44): 원본 L3047-L3054 toCrawling() 헬퍼 호출로 치환.
+                        toCrawling();
                     }
                 } else {
                     // wantCrawl/mustCrawl 은 위 pre-compute 블록에서 확정 — mustCrawl 은 canCrawl 게이트 포함.
@@ -1150,6 +1152,26 @@ public final class SmartMovingClientState {
      */
     public boolean isRunning(ClientPlayerEntity player) {
         return player.isSprinting() && !isFast && (player.isOnGround() || vanilla());
+    }
+
+    /**
+     * 원본 SmartMovingSelf L3047-L3054 `private boolean toCrawling()`:
+     *   isCrawling = true;
+     *   if(Options.isCrawlToggleEnabled()) crawlToggled = true;
+     *   ignoreNextStopSneakButtonPressed = true;
+     *   return true;
+     * `Options.isCrawlToggleEnabled() = _crawlToggle.value && enabled` (원본
+     * SmartMovingOptions L465-L468) — AND 패턴.
+     * 호출 지점 (원본): L2349 / L2566 / L2760 / L2767 / L2812 / L2835 / L2860 — 여러 전환 블록.
+     * 1.21.1 현재는 IMPL-01 진입 시 1회만 호출. B-35/B-36 이식 시 다른 위치에서도 사용 예정.
+     * B-40 (세션 44).
+     */
+    public boolean toCrawling() {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        isCrawling = true;
+        if (cfg.crawlToggle && cfg.enabled) crawlToggled = true;
+        ignoreNextStopSneakButtonPressed = true;
+        return true;
     }
 
     /**

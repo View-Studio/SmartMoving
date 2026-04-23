@@ -457,6 +457,16 @@ public class SmartMovingConfig {
      */
     public boolean sprintEnableStanding = false;
 
+    /**
+     * 원본 `SmartMovingConfig.java` L348:
+     *   `public final Property<Float> _fallingDistanceMinimum = Positive("move.fall.distance.minimum").defaults(3F);`
+     * 기본값 3F. 사용처:
+     *   - canCrawl (원본 L2439) `sp.fallDistance < _fallingDistanceMinimum` — 크롤 진입 차단
+     *   - isSliding fallDistance 분기 (원본 L2569) — 슬라이드 해제 + 크롤 전환
+     * B-32 (세션 44).
+     */
+    public float fallingDistanceMinimum = 3F;
+
     // ── 활성화 플래그 ──────────────────────────────────────────
     /**
      * SM 활성화 상태. 원본 SmartMovingProperties.enabled (L33).
