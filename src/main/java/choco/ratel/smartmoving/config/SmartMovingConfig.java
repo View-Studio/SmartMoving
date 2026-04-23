@@ -26,7 +26,17 @@ public class SmartMovingConfig {
 
     // ── Global Speed ────────────────────────────────────────────
     public float speedFactor = 1F;
-    public boolean speedUser = true;
+    /**
+     * 원본 `_speedUser` L96 = `Creative("move.speed.user").defaults(true, _pre_sm_3_2)`.
+     * `Creative(key)` 팩토리 = `Modified(key).defaults(Value(false).c(true))`.
+     *   → 난이도별: default=false, Easy=false, Medium=false, Hard=false, Creative=true.
+     *   → SM 3.2 이후: Creative 에서만 true, 나머지(Easy 포함) 전부 false.
+     * 버전 폴백 `_pre_sm_3_2`: SM 3.1 이하에서는 전 난이도 true 고정.
+     * Easy 1:1 → **false** (세션 17 정정, 기존 `true` 는 오역).
+     * 소비처: `getUserSpeedFactor()` L580 — `!speedUser || speedUserFactor==1F || exponent==0`
+     *   조기 반환 1F. Easy=false 면 사용자 속도 조정 기능 전체 OFF.
+     */
+    public boolean speedUser = false;
     public float speedUserFactor = 0.2F;
     public int speedUserExponent = 0;
     /**

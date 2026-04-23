@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-5 완료 (Config 필드 29개 전부 이식) / ⏳ **H-6 진행 (speedUser 정정)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-6 완료 (Config 29필드 + speedUser 정정) / ⏳ **H-7 진행 (getFactor 메서드 이식)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -720,8 +720,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `exhaustionLossHungerFactor` (L417, Easy=0.02F, default=0.05F, Hard=0.08F). 둘 다
       난이도 체인 있음 (Easy 값 채택). javadoc 에 소비처 SmartMovingSelf L863/L893 명시.
       readFrom/writeTo 포함.
-- [ ] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). javadoc 에
-      "Creative 전용 true, Easy 포함 그 외 false (원본 `Creative(move.speed.user)` 팩토리)" 명시.
+- [x] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). `SmartMovingConfig.java`
+      L29 필드에 javadoc 확장: 원본 L96 `Creative("move.speed.user").defaults(true, _pre_sm_3_2)`,
+      Creative 팩토리 의미 (Creative 전용 true, 나머지 false), 버전 폴백 `_pre_sm_3_2`,
+      소비처 `getUserSpeedFactor()` L580 명시. 기존 이식 오역(true) 정정.
 - [ ] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
       `SmartMovingClientConfig.md` L365-L413 1:1. 전처리 5줄 (isClimbing |= /
       actionOverGound / airBorne / isStanding / isSneaking) + 1단계 hunger/exhaustion
@@ -1719,6 +1721,35 @@ swimming/diving/dipping/normal` 각 쌍. ⚠️ 2단계는 `Exhaustion` 정타. 
 
 **다음 작업**: H-6 — `speedUser` 기본값 `true → false` 정정 (Easy 1:1). javadoc 에
 "Creative 전용 true, Easy 포함 그 외 false (원본 Creative 팩토리)" 명시.
+
+### 세션 17 — 2026-04-24 — H-6 (speedUser Easy 1:1 정정)
+
+**진행한 작업**:
+- `SmartMovingConfig.speedUser` 기본값 `true → false` 정정.
+- javadoc 확장: 원본 L96 `Creative("move.speed.user").defaults(true, _pre_sm_3_2)` 명시.
+  - Creative 팩토리 의미: Creative 전용 true, Easy 포함 나머지 false (SM 3.2 기준).
+  - 버전 폴백 `_pre_sm_3_2`: SM 3.1 이하 전 난이도 true 고정.
+  - 소비처: `getUserSpeedFactor()` L580 — `!speedUser || factor==1F || exponent==0` 조기
+    반환 1F. Easy=false 면 사용자 속도 조정 기능 전체 OFF.
+- 기존 이식 오역(true) 정정 — 이전 세션에서 `_pre_sm_3_2` 폴백만 보고 true 유지한 것
+  추정. 실제 SM 3.2 기준은 false.
+
+**완료 전 검증 체크리스트 (H-6 기준)**:
+- [근거] §5.4 P-7 + 원본 L96 `Creative(key)` 팩토리 정의 확인 ✓
+- [대응] 원본 Creative 팩토리 Easy=false ↔ 구현 false 1:1 ✓
+- [분기] Creative 팩토리 난이도별 값(false/false/false/false/true) 전부 javadoc 기록 ✓
+- [상수] default=false 원본과 일치 ✓
+- [타이밍] 해당 없음 (필드 초기값만)
+- [근사] 해당 없음 (완전 재현)
+- [신규] 없음
+- [회귀] `getUserSpeedFactor()` 의 `!speedUser` 조기 반환이 활성화 — 속도 조정 키 UI 는
+  그대로 작동하나 실제 factor=1F 유지. 기존 속도 조정 기능 사용자는 config 에서
+  수동 true 로 복원 필요 (Easy 1:1 의 의도된 결과).
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-7 — `SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식. 원본
+SmartMovingClientConfig.java L554-L595 (§5.4 에 본체 임베드). 전처리 5줄 + 1단계 6분기
++ 2단계 7분기. 파라미터 14개 중 일부는 ClientState 에서 현재 제공되는지 확인 필요.
 
 ---
 
