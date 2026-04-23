@@ -71,6 +71,10 @@ public abstract class MixinLivingEntityClient {
         // [10-1] 점프 판정 — 수영 체크 전 매 틱 실행
         SmartMovingJumper.handleJumping(player, sm);
 
+        // 원본 SmartMovingSelf.superMoveEntityWithHeading L100: 진입 직후 isSwimming||isDiving 스냅샷.
+        // handleSwimming 종료 후 수영/잠수 해제 전환을 fromSwimmingOrDiving 이 감지하려면 pre-snapshot 필수.
+        boolean wasShortInWater = sm.isSwimming_sm || sm.isDiving;
+
         // [8-1] 매 틱 수영 상태 3분류 갱신
         SmartMovingSwimmer.updateSwimState(player, sm);
 
@@ -79,6 +83,11 @@ public abstract class MixinLivingEntityClient {
             ci.cancel();
             return;
         }
+
+        // 원본 handleLand L648: `!handledSwimming && !grabButton.Pressed` 조건에서 호출.
+        // 1.21.1 은 handleSwimming=false 도달 시점이 원본 `!handledSwimming` 대응 — 여기서 호출.
+        // grab 분기(원본 L1354 landMotionPost)는 현재 단일 호출 지점으로 통합(효과 동일).
+        sm.fromSwimmingOrDiving(player, wasShortInWater);
 
         // [9-4] 슬라이딩 처리 — SM이 처리하면 vanilla travel() 취소
         if (SmartMovingSlider.handleSliding(player, sm)) {

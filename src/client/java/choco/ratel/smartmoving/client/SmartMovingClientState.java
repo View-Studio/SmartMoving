@@ -887,6 +887,60 @@ public final class SmartMovingClientState {
         return player.getWorld().isSpaceEmpty(player, standBox);
     }
 
+    /**
+     * 원본 SmartMovingSelf L1363-L1391 `fromSwimmingOrDiving(wasShortInWater)` 1:1 이식.
+     *
+     * 수영/잠수 종료 후 육상 전환 시 머리 위 공간 부족 판정:
+     *   - 고체 천장 < 플레이어 높이 → 작은 구멍 크롤링 (isCrawling=true, heightOffset=-1)
+     *   - 액체 천장 < 플레이어 높이 → 물 아래 크롤링 (contextContinueCrawl=true 추가)
+     *
+     * 원본 get*PlayerSolidBetween / get*PlayerLiquidBetween 은 AABB 범위 내
+     * 고체/액체 Y 경계 계산 — 1.21.1 은 canStandUp(고체) / hasLiquidAbove(액체) 로 근사.
+     *
+     * 호출: sm_travel_client 내 handleSwimming 반환 false 분기 (원본 handleLand L648).
+     */
+    public void fromSwimmingOrDiving(ClientPlayerEntity player, boolean wasShortInWater) {
+        boolean isShortInWater = isSwimming_sm || isDiving;
+        if (wasShortInWater && !isShortInWater && !player.isSleeping()) {
+            if (!canStandUp(player)) {
+                // 고체 천장 — 작은 구멍 크롤링
+                isCrawling = true;
+                isDipping = false;
+                heightOffset = -1F;
+            } else if (hasLiquidCeiling(player)) {
+                // 액체 천장 — 물 아래 크롤링 (원본 L1385-L1389)
+                isCrawling = true;
+                contextContinueCrawl = true;
+                isDipping = false;
+                heightOffset = -1F;
+            }
+        }
+    }
+
+    /**
+     * bounding box 위쪽 ~1.1m 범위에 액체 블록이 있는지 검사.
+     * 원본 getMinPlayerLiquidBetween(bb.maxY, bb.maxY + 1.1) 근사.
+     */
+    private static boolean hasLiquidCeiling(ClientPlayerEntity player) {
+        Box bb = player.getBoundingBox();
+        int minX = (int) Math.floor(bb.minX);
+        int maxX = (int) Math.floor(bb.maxX);
+        int minY = (int) Math.floor(bb.maxY);
+        int maxY = (int) Math.floor(bb.maxY + 1.1D);
+        int minZ = (int) Math.floor(bb.minZ);
+        int maxZ = (int) Math.floor(bb.maxZ);
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (!player.getWorld().getFluidState(new net.minecraft.util.math.BlockPos(x, y, z)).isEmpty()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     // ── R-01: sendStatePacket() ───────────────────────────────────────
 
     /**
