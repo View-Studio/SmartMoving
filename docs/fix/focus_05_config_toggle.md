@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2/H-3/H-4 완료 / ⏳ **H-5 진행 (기타 2필드)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-5 완료 (Config 필드 29개 전부 이식) / ⏳ **H-6 진행 (speedUser 정정)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -716,8 +716,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       정타 / `ceilClimbing` 축약 원본 유지. swim/dive/dip HungerGain default=1.5F, 나머지는
       PF 기본 1F. `ceilClimbing` 키 순서 이상 (`climb.gain.ceiling` / `climb.ceiling.loss`)
       원본 그대로. `dipping` 키는 `dip` 축약 사용 원본 그대로. readFrom/writeTo 포함.
-- [ ] H-5. **기타 필드 2개**: `alwaysHungerGain` (Easy 0F) + `exhaustionLossHungerFactor`
-      (Easy 0.02F). readFrom/writeTo.
+- [x] H-5. **기타 필드 2개** — `alwaysHungerGain` (L439, Easy=default=0F, Hard=0.005F) +
+      `exhaustionLossHungerFactor` (L417, Easy=0.02F, default=0.05F, Hard=0.08F). 둘 다
+      난이도 체인 있음 (Easy 값 채택). javadoc 에 소비처 SmartMovingSelf L863/L893 명시.
+      readFrom/writeTo 포함.
 - [ ] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). javadoc 에
       "Creative 전용 true, Easy 포함 그 외 false (원본 `Creative(move.speed.user)` 팩토리)" 명시.
 - [ ] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
@@ -1690,6 +1692,33 @@ swimming/diving/dipping/normal` 각 쌍. ⚠️ 2단계는 `Exhaustion` 정타. 
 
 **다음 작업**: H-5 — 기타 2필드 (`alwaysHungerGain` 0F / `exhaustionLossHungerFactor` 0.02F)
 이식. `handleExhaustion` 허기 공식에서 직접 참조. readFrom/writeTo.
+
+### 세션 16 (계속) — 2026-04-24 — H-5 (기타 2필드)
+
+**진행한 작업**:
+- factor 2단계 섹션 뒤에 "handleExhaustion 기타 필드" 섹션 신설.
+- `alwaysHungerGain = 0F` (Easy=default=0F, 원본 L439 `Positive(...).defaults(Value(0F).h(0.005F))`).
+- `exhaustionLossHungerFactor = 0.02F` (Easy=0.02F, 원본 L417 `PositiveFactor(...)
+  .defaults(Value(0.05F).e(0.02F).h(0.08F))` — **난이도 체인 있음**, Easy 채택).
+- javadoc 에 각 필드 소비처 명시:
+  - `alwaysHungerGain` → `handleExhaustion` L863 hungerIncrease 상시 증가
+  - `exhaustionLossHungerFactor` → L893 exhaustion 감소분 연동 허기 증가
+- readFrom/writeTo 에 2키 추가.
+- **Config 필드 29개 전부 이식 완료** (H-3 13 + H-4 14 + H-5 2).
+
+**완료 전 검증 체크리스트 (H-5 기준)**:
+- [근거] §5.4 #28(alwaysHungerGain) + #29(exhaustionLossHungerFactor) 참조 ✓
+- [대응] 원본 2개 ↔ 구현 2개 1:1 ✓
+- [분기] exhaustionLossHungerFactor 난이도 체인 Easy 값 적용 ✓
+- [상수] 0F / 0.02F 원본과 일치 ✓
+- [타이밍] 해당 없음 (필드 선언)
+- [근사] 없음
+- [신규] 없음
+- [회귀] 없음 (신규 필드)
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-6 — `speedUser` 기본값 `true → false` 정정 (Easy 1:1). javadoc 에
+"Creative 전용 true, Easy 포함 그 외 false (원본 Creative 팩토리)" 명시.
 
 ---
 

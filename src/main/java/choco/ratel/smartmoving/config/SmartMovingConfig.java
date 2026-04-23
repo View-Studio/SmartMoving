@@ -404,6 +404,30 @@ public class SmartMovingConfig {
      */
     public float normalExhaustionLossFactor = 1F;
 
+    // ── handleExhaustion 기타 필드 (원본 SmartMovingSelf L849-L916 허기 공식) ─────
+
+    /**
+     * 원본 `_alwaysHungerGain` L439 = `Positive("move.hunger.always.gain")
+     *   .defaults(Value(0F).h(0.005F)).defaults(0F, _pre_sm_1_5)`.
+     * 난이도별: default=0F, Easy=0F, Hard=0.005F. 버전 폴백 `_pre_sm_1_5` → 0F 고정.
+     * Easy 1:1 → 0F (default = Easy).
+     * 소비처: `SmartMovingSelf.handleExhaustion` L863 —
+     *   `hungerIncrease += _alwaysHungerGain.value + relevantMovementFactor * 0.0001F * hungerGainFactor`.
+     * 매 틱 상시 허기 증가 (Easy 에선 0 → 상시 증가 없음, Hard 에선 0.005 누적).
+     */
+    public float alwaysHungerGain = 0F;
+
+    /**
+     * 원본 `_exhaustionLossHungerFactor` L417 = `PositiveFactor("move.exhaustion.hunger.factor")
+     *   .defaults(Value(0.05F).e(0.02F).h(0.08F)).defaults(0.05F, _pre_sm_1_5)`.
+     * 난이도별: default=0.05F, Easy=**0.02F**, Hard=0.08F. 버전 폴백 `_pre_sm_1_5` → 0.05F 고정.
+     * Easy 1:1 → 0.02F 채택.
+     * 소비처: `SmartMovingSelf.handleExhaustion` L893 —
+     *   `hungerIncrease += _exhaustionLossHungerFactor.value * exhaustionLoss`.
+     * exhaustion 감소분 × 이 factor 만큼 허기 추가 증가.
+     */
+    public float exhaustionLossHungerFactor = 0.02F;
+
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;
     public boolean slide = true;
@@ -726,6 +750,9 @@ public class SmartMovingConfig {
         dippingExhaustionLossFactor   = getFloat(p, "move.exhaustion.dip.loss.factor",       dippingExhaustionLossFactor);
         normalHungerGainFactor        = getFloat(p, "move.hunger.normal.gain.factor",        normalHungerGainFactor);
         normalExhaustionLossFactor    = getFloat(p, "move.exhaustion.normal.loss.factor",    normalExhaustionLossFactor);
+        // handleExhaustion 기타 (원본 SmartMovingSelf L863/L893). Easy 값 default.
+        alwaysHungerGain              = getFloat(p, "move.hunger.always.gain",               alwaysHungerGain);
+        exhaustionLossHungerFactor    = getFloat(p, "move.exhaustion.hunger.factor",         exhaustionLossHungerFactor);
     }
 
     private void writeTo(Properties p) {
@@ -847,6 +874,9 @@ public class SmartMovingConfig {
         p.setProperty("move.exhaustion.dip.loss.factor",         String.valueOf(dippingExhaustionLossFactor));
         p.setProperty("move.hunger.normal.gain.factor",          String.valueOf(normalHungerGainFactor));
         p.setProperty("move.exhaustion.normal.loss.factor",      String.valueOf(normalExhaustionLossFactor));
+        // handleExhaustion 기타 (원본 SmartMovingSelf L863/L893).
+        p.setProperty("move.hunger.always.gain",                 String.valueOf(alwaysHungerGain));
+        p.setProperty("move.exhaustion.hunger.factor",           String.valueOf(exhaustionLossHungerFactor));
     }
 
     /** getUserSpeedFactor() 공식: (1 + speedUserFactor)^speedUserExponent */
