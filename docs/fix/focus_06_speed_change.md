@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1 완료 (헬퍼 정비) / ⏳ **B-2 진행 (Land 이동 User 배율)** |
+| 현재 단계 | ✅ A + B-1 + B-6 완료 (헬퍼 정비 + Creative 게이트) / ⏳ **B-2 진행 (Land 이동, 옵션 A)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -255,6 +255,20 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       지점에서 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
       원본 Self L2045 1:1. 현재 getMaxHorizontalMotion 자체가 이식됐는지도 확인.
 
+- [x] B-6. **Creative 전용 게이트 이식 (세션 26)** — 4곳 완료:
+      (a) `Mover.isCreative(player)` private 헬퍼 신설 — `MinecraftClient.getInstance().
+          interactionManager.getCurrentGameMode() == GameMode.CREATIVE` (`ClientPlayerEntity`
+          에 직접 필드 없어 `MinecraftClient` 경유).
+      (b) `Mover.getConfigSpeedFactor(player, cfg)` 시그니처 변경 + Creative 게이트:
+          `speedFactor × (isCreative ? getUserSpeedFactor() : 1F)`. speedFactor 는 전역
+          (원본 `_speedFactor` 는 Creative 무관), userSpeedFactor 만 Creative 게이트.
+      (c) `Flyer.handleFlying` 인라인 계산 → `Mover.getCombinedSpeedFactor(player, cfg)` 경유.
+      (d) `ClientState.tickEssential` speedIncrease/Decrease 키 블록 감싸기: `cfg.enabled &&
+          cfg.speedUser && isCreative` 일 때만 패킷 전송.
+      (e) `SmartMovingServer.processSpeedChangePacket` 에 `isCreative` 체크 추가 —
+          `!speedUser || !isCreative` 면 0 응답 (기존 `!speedUser` 확장).
+      빌드 ✓. `getCombinedSpeedFactor` / `getSpeedFactor` 도 시그니처 변경 반영.
+
 ### C. 클라이언트/서버 동기화 경로 정합
 - [ ] C-1. 서버 `processSpeedChangePacket` 이 `changeSingleSpeed` 로 서버측 개인값 갱신 후, 해당 플레이어에게 `broadcastConfig` 또는 **개인 Config 재전송** 호출 여부 확인
 - [ ] C-2. 클라이언트 `SpeedChangePayload` 수신 시 `Config.changeSpeed()` 호출 대상(`INSTANCE` vs `SERVER_CONFIG`)이 원본 동작과 맞는지 재확인 + 수정
@@ -405,6 +419,50 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 (Mixin inject on movementInput vs GENERIC_MOVEMENT_SPEED attribute modifier) 중 선택 +
 구현. **사용자와 방향 확인 후 진행 권장** (attribute 방식이 vanilla 친화적이나 side effect
 가능성, Mixin 방식이 원본 Self L119 구조에 더 가까움).
+
+### 세션 26 — 2026-04-24 — B-6 (Creative 전용 게이트 신설)
+
+**사용자 요구사항 (세션 26)**: "스피드 배율 적용은 크리에이티브 모드에서만 적용하고
+나머지 게임모드에서는 적용 안 되게" — 원본 `_speedUser = Creative("move.speed.user")`
+팩토리 의미 정확히 재현 요청.
+
+**현재 상태 확인**: `grep` 결과 Creative 감지 로직 **0건** (포커스 #5 H-20 에서 gameType
+시스템 전체 삭제되며 누락). `cfg.speedUser` 정적 boolean 만 있고 런타임 gameMode 체크 없음.
+
+**이식 (4+1 곳)**:
+1. `Mover.isCreative(player)` private 헬퍼 신설.
+   `MinecraftClient.getInstance().interactionManager.getCurrentGameMode() == GameMode.CREATIVE`.
+   `ClientPlayerEntity` 에 `interactionManager` 필드 직접 없음 확인 후 `MinecraftClient` 경유.
+2. `Mover.getConfigSpeedFactor(player, cfg)` 시그니처 변경 (player 파라미터 추가).
+   `return cfg.speedFactor * (isCreative ? cfg.getUserSpeedFactor() : 1F);`
+   speedFactor 는 전역(원본 `_speedFactor` Creative 무관), userSpeedFactor 만 Creative 게이트.
+3. `Mover.getCombinedSpeedFactor` / `getSpeedFactor` 도 player 전달 수정.
+4. `Flyer.handleFlying L55` 인라인 계산 → `Mover.getCombinedSpeedFactor(player, cfg)` 경유.
+5. `ClientState.tickEssential` speedIncrease/Decrease 키 블록:
+   `cfg.enabled && cfg.speedUser && isCreative` 가드 추가 — 원본 `isUserSpeedEnabled() &&
+   !isUserSpeedAlwaysDefault()` L2326 1:1.
+6. `SmartMovingServer.processSpeedChangePacket` — `!cfg.speedUser || !isCreative` 면 0 응답.
+
+**빌드 실패/정정**: `player.interactionManager` 직접 접근 오류 → `MinecraftClient.getInstance()
+.interactionManager` 로 정정. 두 번째 빌드 성공.
+
+**완료 전 검증 체크리스트 (B-6 기준)**:
+- [근거] 원본 `_speedUser = Creative("move.speed.user")` 팩토리 정의 (세션 14 A-1 에서 확인) ✓
+- [근거] 원본 `isUserSpeedEnabled() = enabled && _speedUser.value` (Config L487-L491) + Creative
+  팩토리 의미(`Value(false).c(true)`) 조합으로 Creative 게이트 확정 ✓
+- [대응] 원본 게이트 1개 → 1.21.1 게이트 3층 (factor 계산 / 클라 키 / 서버 응답) 1:1 ✓
+- [분기] `isCreative` 체크가 3곳 모두 동일 의미 — gameMode==CREATIVE ✓
+- [상수] 해당 없음
+- [타이밍] 클라 키 → 서버 응답 → factor 계산 세 타이밍 모두 Creative 체크 일관 적용
+- [근사] 해당 없음 (원본 완전 재현)
+- [신규] `Mover.getConfigSpeedFactor` 시그니처 변경 — 외부 호출처 없음 확인 (Climber 는
+  getCombinedSpeedFactor 경유, dead code getSpeedFactor 는 호출 없음)
+- [회귀] 기존 Easy (speedUser=false) 는 동작 변화 없음. Creative 에서 speedUser=true
+  수동 설정 시 정상 작동. 다른 게임모드에서 수동 true 설정해도 게이트로 차단.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-2 — Land 이동 User 배율 이식 (옵션 A: Mixin inject on movementInput).
+사용자 결정 옵션 A 로 확정.
 
 ---
 

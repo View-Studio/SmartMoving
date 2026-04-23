@@ -48,13 +48,14 @@ public class SmartMovingFlyer {
         float moveForward = (float) movementInput.z;
         float moveStrafe  = (float) movementInput.x;
 
-        // speedFactor = getConfigSpeedFactor() × getPotionSpeedFactor()
-        // getConfigSpeedFactor  = cfg.speedFactor × getUserSpeedFactor()
-        // getPotionSpeedFactor  ≈ player.getMovementSpeed() × 10F / (sprinting ? 1.3F : 1F)
-        //   → 기본값: 0.1F × 10F / 1F = 1.0F (포션 효과 자동 반영)
-        float configFactor = cfg.speedFactor * cfg.getUserSpeedFactor();
-        float potionFactor = player.getMovementSpeed() * 10F / (player.isSprinting() ? 1.3F : 1F);
-        float flyingSpeed  = configFactor * potionFactor * 0.05F * cfg.flyingSpeedFactor;
+        // B-6 (세션 26): Mover.getCombinedSpeedFactor 헬퍼 경유로 변경 — Creative 게이트 적용.
+        // 원본 `SmartMovingSelf.handleAlternativeFlying` L622 `moveFlying(..., speedFactor *
+        // 0.05F * _flyingSpeedFactor, ...)` 에서 speedFactor 는 Self L119 의 지역변수
+        // (`getConfigSpeedFactor * getPotionSpeedFactor * getNonSlowInputSpeedFactor` 포함) 인데,
+        // 비행 경로는 isSprinting 영향만 받고 NonSlowInput 이 1F 가 되는 경우가 일반적이라
+        // getCombinedSpeedFactor 로 근사. 엄밀 1:1 재확인 필요 시 getSpeedFactor 사용 고려.
+        float combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        float flyingSpeed    = combinedFactor * 0.05F * cfg.flyingSpeedFactor;
 
         // 원본: moveFlying(moveUpward, moveStrafing, moveForward, speed, Options._flyControlVertical)
         moveFlying(player, moveUpward, moveStrafe, moveForward, flyingSpeed, cfg.flyControlVertical);

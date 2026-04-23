@@ -527,14 +527,25 @@ public final class SmartMovingClientState {
 
         // IMPL-05: 속도 키 처리 (원본: speedIncreaseButton/speedDecreaseButton StartPressed → changeSpeed)
         // 서버에 SpeedChangePayload 전송 → 서버가 권한 확인 후 결과를 S2C로 돌려줌
-        if (SmartMovingKeys.speedIncrease.wasPressed()) {
-            if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
-                ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(1, null));
+        // B-6 (세션 26): Creative 전용 게이트. 원본 `isUserSpeedEnabled() = enabled &&
+        // _speedUser.value` 에서 `_speedUser` 가 Creative 때만 true 이므로 Creative 아니면
+        // 키 입력 자체가 차단됨. 원본 SmartMovingSelf L2326 `if(Config.isUserSpeedEnabled()
+        // && !Config.isUserSpeedAlwaysDefault() && ...)` 와 등가.
+        boolean userSpeedEnabled = SmartMovingConfig.Config.enabled
+                && SmartMovingConfig.Config.speedUser
+                && MinecraftClient.getInstance().interactionManager != null
+                && MinecraftClient.getInstance().interactionManager.getCurrentGameMode()
+                        == net.minecraft.world.GameMode.CREATIVE;
+        if (userSpeedEnabled) {
+            if (SmartMovingKeys.speedIncrease.wasPressed()) {
+                if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
+                    ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(1, null));
+                }
             }
-        }
-        if (SmartMovingKeys.speedDecrease.wasPressed()) {
-            if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
-                ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(-1, null));
+            if (SmartMovingKeys.speedDecrease.wasPressed()) {
+                if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {
+                    ClientPlayNetworking.send(new SmartMovingNetwork.SpeedChangePayload(-1, null));
+                }
             }
         }
 

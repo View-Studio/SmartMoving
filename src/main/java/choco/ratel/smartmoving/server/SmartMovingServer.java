@@ -337,7 +337,12 @@ public final class SmartMovingServer {
      * 관리자 자발적 전역 변경(원본 changeSpeed + logSpeedState)은 별도 서버 커맨드 이식 시 추가.
      */
     public static void processSpeedChangePacket(ServerPlayerEntity player, int difference) {
-        if (!SmartMovingConfig.Config.speedUser) {
+        // B-6 (세션 26): Creative 전용 게이트. 원본 `isUserSpeedEnabled() = enabled &&
+        // _speedUser.value` 에서 `_speedUser` 가 Creative 팩토리라 Creative 에서만 true.
+        // Creative 아니면 서버가 0 응답 → 클라 "no rights" 메시지 → 기능 거부. 원본 1:1.
+        boolean isCreative = player.interactionManager.getGameMode()
+                == net.minecraft.world.GameMode.CREATIVE;
+        if (!SmartMovingConfig.Config.speedUser || !isCreative) {
             ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(0, null));
             return;
         }
