@@ -376,7 +376,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 ### C. `SmartMovingConfig` 메서드 이식
 - [ ] C-1. `toggle()` 재구현 — 원본 L325-L332 1:1
 - [ ] C-2. `setKeys(String[])` 이식 — 원본 L345-L355 1:1
-- [ ] C-3. `updateToggler()` 헬퍼 — `enabled = (toggler != -1)`
+- [x] C-3. `updateToggler()` 헬퍼 — `enabled = (toggler != -1)` (원본 `update()` L163-L172
+      의 Property 루프는 1.21.1 Property 부재로 N/A, enabled 파생만 이식). **의존 순서상
+      C-1 보다 먼저 진행** — C-1 `toggle()` 이 `updateToggler()` 호출 예정.
 - [ ] C-4. `getCurrentKey()` — toggler == -1 시 null
 - [ ] C-5. `getNextKey(String)` — A-1 확보 후 1:1 이식
 - [ ] C-6. `hasKey(String)` — configKeys 검색
@@ -624,6 +626,40 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 **다음 작업**: C-1 — `toggle()` 재구현. 현재 `enabled = !enabled; save();` 를 원본
 `SmartMovingProperties.toggle()` L81-L88 (`toggler++; if (toggler == length) toggler = -1; update();`)
 으로 교체.
+
+### 세션 5 — 2026-04-23 — C-3 (순서 조정)
+
+**진행한 작업**:
+- **순서 조정**: §10 문서상 순서는 C-1 먼저지만, 의존 관계상 `toggle()` 이 `updateToggler()`
+  호출에 의존 → C-3 을 먼저 진행. (이전 세션 종료 메시지에 예고됨)
+- C-3: `SmartMovingConfig.updateToggler()` private 메서드 추가.
+  - 원본 `SmartMovingProperties.update()` L163-L172 1:1 근사:
+      ```
+      protected void update() {
+          List<Property<?>> properties = getProperties();
+          Iterator<Property<?>> it = properties.iterator();
+          String currentKey = getCurrentKey();
+          while (it.hasNext()) it.next().update(currentKey);  // ← Property 부재로 N/A
+          enabled = toggler != -1;
+      }
+      ```
+  - 1.21.1 Property 계층 부재 → Property 루프 생략, `enabled = toggler != -1;` 만 이식.
+  - 호출처: toggle / setKeys / setCurrentKey / load 등 toggler 변경 직후 (다음 작업들에서 삽입).
+  - 현재는 아직 호출 없음 → IDE `unused method` 경고 가능. C-1/C-2/C-4 이식 시 호출 연결.
+
+**완료 전 검증 체크리스트 (C-3 기준)**:
+- [근거] `SmartMovingProperties.md` L163-L172 원본 코드 임베드 확인 ✓
+- [대응] 원본 `update()` 의 ②(enabled 파생) ↔ 구현 `updateToggler()` 1:1. ①(Property 루프)는
+  구조적 N/A — javadoc 에 명시 ✓
+- [분기] 해당 없음 (단순 할당)
+- [상수] 해당 없음
+- [타이밍] 호출처(toggle/setKeys/setCurrentKey/load) 는 후속 작업에서 연결
+- [근사] "1.21.1: Property 계층 부재 → ① 는 N/A" 주석 달림 ✓
+- [신규] 없음
+- [회귀] 없음 (아직 호출 없음)
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-1 — `toggle()` 재구현 (toggler++ 순환 + updateToggler() 호출 + save()).
 
 ---
 

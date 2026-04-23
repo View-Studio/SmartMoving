@@ -584,6 +584,26 @@ public class SmartMovingConfig {
         return (float) Math.pow(1F + speedUserFactor, speedUserExponent);
     }
 
+    /**
+     * 원본 SmartMovingProperties.update() (L163-L172) 1:1 근사 이식.
+     *
+     * 원본:
+     *   protected void update() {
+     *       List<Property<?>> properties = getProperties();
+     *       Iterator<Property<?>> iterator = properties.iterator();
+     *       String currentKey = getCurrentKey();
+     *       while (iterator.hasNext())
+     *           iterator.next().update(currentKey);   // ① Property key-scoped 값 재계산
+     *       enabled = toggler != -1;                   // ② enabled 파생
+     *   }
+     *
+     * 1.21.1: Property 계층 부재 → ① 는 N/A (단일 필드 값 구조). ② 만 이식.
+     * 호출: toggle() / setKeys() / setCurrentKey() / load() 등 toggler 변경 이후.
+     */
+    private void updateToggler() {
+        enabled = toggler != -1;
+    }
+
     public void toggle() {
         enabled = !enabled;
         save();
