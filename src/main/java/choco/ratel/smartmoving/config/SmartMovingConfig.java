@@ -687,6 +687,61 @@ public class SmartMovingConfig {
         return configKeys[toggler];
     }
 
+    /**
+     * 원본 SmartMovingProperties.getKey(int index) (L99-L104) 1:1.
+     *
+     *   public String getKey(int index) {
+     *       if (keys[index] == null)
+     *           return Enabled;     // "enabled" (null key → 표시용 "enabled" 문자열)
+     *       return keys[index];
+     *   }
+     *
+     * `_defaultKeys[0] == null` 이면 getKey(0) = "enabled" 반환. 실제 key 배열({"e","m","h"} 등)
+     * 에서는 해당 문자열 그대로.
+     */
+    public String getKey(int index) {
+        if (configKeys[index] == null) return CONFIG_KEY_ENABLED;
+        return configKeys[index];
+    }
+
+    /**
+     * 원본 SmartMovingProperties.getNextKey(String key) (L106-L118) 1:1.
+     *
+     *   public String getNextKey(String key) {
+     *       if (key == null || key.equals("disabled"))
+     *           return getKey(0);
+     *       int index;
+     *       for (index = 0; index < keys.length; index++)
+     *           if (key.equals(keys[index])) break;
+     *       index++;
+     *       if (index < keys.length)
+     *           return keys[index];
+     *       return Disabled;
+     *   }
+     *
+     * 동작:
+     *   key == null || "disabled"       → getKey(0) ({null}→"enabled", {"c"}→"c", {"e","m","h"}→"e")
+     *   keys 내에서 key 의 다음 인덱스 → 해당 값 반환 (null 일 수도 있음, {null} 케이스)
+     *   마지막 또는 미매칭                → "disabled"
+     *
+     * 예시:
+     *   keys={"e","m","h"}: "e"→"m", "m"→"h", "h"→"disabled", "disabled"→"e", null→"e"
+     *   keys={"c"}        : "c"→"disabled", "disabled"→"c"
+     *   keys={null}       : null→"enabled", "enabled"→"disabled", "disabled"→"enabled"
+     */
+    public String getNextKey(String key) {
+        if (key == null || key.equals(CONFIG_KEY_DISABLED))
+            return getKey(0);
+        int index;
+        for (index = 0; index < configKeys.length; index++)
+            if (key.equals(configKeys[index]))
+                break;
+        index++;
+        if (index < configKeys.length)
+            return configKeys[index];
+        return CONFIG_KEY_DISABLED;
+    }
+
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
     }

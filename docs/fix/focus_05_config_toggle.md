@@ -391,7 +391,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       (= `"disabled"`) 반환, null 은 `keys[toggler]==null` (DEFAULT_KEYS 케이스, 단순 on/off
       enabled) 인 경우에만. 원본 1:1 로 이식: `toggler==-1 → CONFIG_KEY_DISABLED`,
       `configKeys[toggler]` 반환. toggler==-2 센티넬 방어 코드 포함 (F 섹션 이식 전 과도기용).
-- [ ] C-5. `getNextKey(String)` — A-1 확보 후 1:1 이식
+- [x] C-5. `getNextKey(String)` — 원본 L106-L118 1:1 + 의존 `getKey(int)` L99-L104 함께 이식.
+      두 메서드는 연계 동작(getNextKey 가 getKey(0) 호출)이므로 단일 원자 단위로 묶음.
+      `key==null \|\| "disabled"` → `getKey(0)` / keys 매칭 다음 인덱스 / 마지막·미매칭 → "disabled".
 - [ ] C-6. `hasKey(String)` — configKeys 검색
 
 ### D. 서버 로그 4상태 확장
@@ -772,6 +774,44 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [빌드] `./gradlew build` ✓
 
 **다음 작업**: C-5 — `getNextKey(String key)` (원본 L106-L118).
+
+### 세션 6 (계속) — 2026-04-23 — C-5 (+ getKey)
+
+**진행한 작업**:
+- C-5: `getNextKey(String)` + 의존 `getKey(int)` 함께 이식 (원본 L106-L118 + L99-L104).
+  두 메서드는 연계 동작(getNextKey → getKey(0) 호출) — 단일 원자 단위로 묶음.
+  `getKey(int)` 는 §10 에 별도 체크박스 없지만 C-5 내 포함.
+- 원본 1:1:
+    ```java
+    public String getKey(int index) {
+        if (configKeys[index] == null) return CONFIG_KEY_ENABLED;
+        return configKeys[index];
+    }
+    public String getNextKey(String key) {
+        if (key == null || key.equals(CONFIG_KEY_DISABLED))
+            return getKey(0);
+        int index;
+        for (index = 0; index < configKeys.length; index++)
+            if (key.equals(configKeys[index])) break;
+        index++;
+        if (index < configKeys.length) return configKeys[index];
+        return CONFIG_KEY_DISABLED;
+    }
+    ```
+- 동작 예시 javadoc 에 기록 (키 배열별 전이표).
+
+**완료 전 검증 체크리스트 (C-5 기준)**:
+- [근거] `SmartMovingProperties.md` L99-L118 원본 임베드 확인 ✓
+- [대응] 원본 getKey 3줄 + getNextKey 13줄 ↔ 구현 동일 수준 1:1 ✓
+- [분기] null/disabled 조기 반환, for 매칭, 마지막 분기 전부 재현 ✓
+- [상수] `CONFIG_KEY_ENABLED` / `CONFIG_KEY_DISABLED` 사용 ✓
+- [타이밍] 호출처 없음 (C-7 setCurrentKey 또는 toggle 의 후속 이식에서 참조 가능)
+- [근사] 해당 없음
+- [신규] 없음
+- [회귀] 신규 메서드만 — 영향 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-6 — `hasKey(String)` (원본 L145-L156).
 
 ---
 
