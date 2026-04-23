@@ -536,6 +536,23 @@ public class SmartMovingConfig {
         return sprintExhaustion && enabled;
     }
 
+    // ── B-24 (세션 53) — isHeadJumping 해제 엣지 handleCrash Config 필드 ───────────
+
+    /**
+     * 원본 `SmartMovingConfig.java` L395:
+     *   `_headFallDamageStartDistance = Positive(...).values(2F, 1F, 3F);`
+     * 기본값 2F. 사용처: `handleCrash(startDistance, factor)` (원본 L2538) — 헤드점프 해제
+     * 엣지 + 자유 클라이밍 낙하 데미지 시작 거리.
+     */
+    public float headFallDamageStartDistance = 2F;
+
+    /**
+     * 원본 `SmartMovingConfig.java` L396:
+     *   `_headFallDamageFactor = IncreasingFactor(...).defaults(2F);`
+     * 기본값 2F. 사용처: handleCrash 낙하 데미지 배율.
+     */
+    public float headFallDamageFactor = 2F;
+
     // ── 활성화 플래그 ──────────────────────────────────────────
     /**
      * SM 활성화 상태. 원본 SmartMovingProperties.enabled (L33).

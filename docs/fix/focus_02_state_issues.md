@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 52 — B Phase 2 계속 / B-4 간소 매핑 제거) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/b1/B-3a/b/B-1c~f/B-4 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 53 — B Phase 2 계속 / B-24 해제 엣지) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/b1/B-3a/b/B-1c~f/B-4/B-24 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -697,10 +697,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       B-24 (해제 엣지 후처리) 자리는 주석으로 확보.
 
 #### B-24. 해제 엣지 후처리 이식 (A-4 발견)
-- [ ] B-24. 원본 L2535-L2540 이식 — `wasHeadJumping && !isHeadJumping && onGround` 시:
-      - `handleCrash(_headFallDamageStartDistance, _headFallDamageFactor)` 호출
-      - `restoreFromFlying = true` 설정 → standupIfPossible 트리거
-      의존: B-22a + B-23 선행.
+- [x] B-24. ✅ **세션 53 완료** — 원본 L2535-L2540 이식:
+      - Config 2필드 신설: `headFallDamageStartDistance=2F` / `headFallDamageFactor=2F`
+        (원본 L395-L396)
+      - ClientState `restoreFromFlying` boolean 필드 + resetState 리셋
+      - ClientState `handleCrash(player, startDistance, factor)` public static 메서드
+        (원본 L2232-L2243 — Climber 버전 동치)
+      - B-23 자리에 `wasHeadJumping && !isHeadJumping && onGround → handleCrash +
+        restoreFromFlying=true` 로직 추가
+      - standupIfPossible 은 미이식 (별도 B-N) — restoreFromFlying 필드 설정은 선행 가능.
 
 #### B-25. `isSliding` 직접 진입 6-AND 조건 복원 (A-4 발견)
 - [ ] B-25. ClientState L699 `wantSlide` 조건 원본 L2553 으로 정정:
@@ -2150,6 +2155,60 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   (`headFallDamageStartDistance=2F` / `Factor=2F`) + `restoreFromFlying` 필드 +
   `handleCrash` 공유 가시성 변경 + B-23 자리에 로직 추가.
 - **B-18** (isClimbCrawling + climbIntoCount) — B-16 선행. 규모 큼.
+
+### 세션 53 — 2026-04-24 — B Phase 2 B-24 (isHeadJumping 해제 엣지 handleCrash)
+
+**진행한 작업**:
+- `SmartMovingConfig` Config 2 필드 추가 (원본 L395-L396):
+  * `headFallDamageStartDistance = 2F` (Positive defaults values 2F/1F/3F — 기본 2F)
+  * `headFallDamageFactor = 2F` (IncreasingFactor defaults 2F)
+- `SmartMovingClientState` 에 B-24 필드/메서드 추가:
+  * `restoreFromFlying` boolean 필드 + resetState 리셋 (원본 L1461 대응 — 정확
+    선언 위치는 리서치 미확인이나 SmartMovingSelf 필드로 존재)
+  * `handleCrash(player, startDistance, factor)` public static 메서드
+    (원본 L2232-L2243 — Climber private 버전 동치, 복사 이식)
+- B-23 재평가 블록 뒤 자리에 해제 엣지 로직 이식 (원본 L2535-L2540):
+  `if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
+       handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
+       restoreFromFlying = true;
+   }`
+- `restoreFromFlying = true` 설정은 standupIfPossible 트리거 — 1.21.1 미이식이나
+  필드 값 설정 자체는 정확 동작. B-N 후속 standupIfPossible 이식 시 자동 연결.
+- **R-13 세션 34 A-4 불일치 #2 해소** (handleCrash + restoreFromFlying 미이식).
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 53 기준)**:
+- [근거] 원본 L395-L396 Config 필드 + L2232-L2243 handleCrash + L2535-L2540 해제 엣지
+  전수 read (R-13.3) ✓
+- [근거] Climber L489 handleCrash 이식본 확인 — ClientState 복사 동치 ✓
+- [대응] Config 2필드 기본값 2F/2F 원본 동일 ✓
+- [대응] handleCrash 공식 원본 1:1 (`fallDistance > startDistance` → 데미지) ✓
+- [대응] 해제 엣지 조건 `wasHeadJumping && !isHeadJumping && onGround` 원본 그대로 ✓
+- [분기] 3-AND 조건 + handleCrash 내부 fallDistance 판정 ✓
+- [상수] 2F 원본 Positive defaults ✓
+- [타이밍] B-23 재평가 뒤 isAerodynamic 리셋 뒤 위치 — 원본 L2533→L2535 순서 복원 ✓
+- [근사] 없음 — `restoreFromFlying` 필드 설정은 standupIfPossible 미이식이나 값 설정
+  자체는 정확 ✓
+- [신규] 없음
+- [회귀] compileJava 성공 — 기존 Climber handleCrash 호출 영향 없음 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**R-13 A-4 불일치 현황**:
+- ✅ #1 매 틱 재평가 5-AND (B-23 세션 46)
+- ✅ #2 해제 엣지 후처리 handleCrash+restoreFromFlying (B-24 세션 53)
+- ⏳ #3~#13 (직접 진입 조건/부수 동작/fallDistance/isSliding 등)
+
+**Phase 2 진행 상황 (세션 53 기준)**:
+- ✅ 세션 43-52: 18 원자
+- ✅ 세션 53: **B-24**
+- ⏳ 잔여 ~21 원자
+
+**다음 작업 권고**:
+- **B-48** (isGroundSprinting 전환 후처리) — Options 필드 이식 필요. 중간 규모.
+- **B-18** (isClimbCrawling + climbIntoCount 카운터) — B-16 선행.
+- **B-29** (toSlidingOrCrawling 조건 정정) — `grabPressed || wasHeadJumping` 로 정정.
+  wasHeadJumping 이식됨 → 가능.
+- **B-27** (isSliding fallDistance 분기 이식) — 단일 공식. 가능.
 
 ---
 

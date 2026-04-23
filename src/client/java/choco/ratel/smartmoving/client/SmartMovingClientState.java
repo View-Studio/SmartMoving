@@ -177,6 +177,16 @@ public final class SmartMovingClientState {
      */
     public int collidedHorizontallyTickCount;
 
+    /**
+     * 원본 SmartMovingSelf `restoreFromFlying` — standupIfPossible 트리거 플래그.
+     * 설정 위치: L2200 (standupIfPossible 내부), L2539 (isHeadJumping 해제 엣지),
+     *           L2543 (flying 착지 전 tryLanding).
+     * 사용처: L2543 `if(restoreFromFlying || tryLanding) standupIfPossible(...)`.
+     * 1.21.1 standupIfPossible 미이식 — 필드 설정만 이식, 소비는 별도 B-N.
+     * B-24 (세션 53).
+     */
+    public boolean restoreFromFlying;
+
     /** 크롤링 상태 */
     public boolean isCrawling;
 
@@ -1030,9 +1040,14 @@ public final class SmartMovingClientState {
             // 원본 L2532-L2533: !isHeadJumping 시 isAerodynamic 리셋 (재평가 뒤 위치로 이동)
             if (!isHeadJumping) isAerodynamic = false;
 
-            // B-24 (미이식): 원본 L2535-L2540 `wasHeadJumping && !isHeadJumping && onGround` →
-            //   handleCrash(_headFallDamageStartDistance, _headFallDamageFactor) + restoreFromFlying.
-            //   별도 원자로 분리. 현재는 B-23 재평가만 이식.
+            // B-24 (세션 53): 원본 L2535-L2540 해제 엣지 후처리.
+            //   wasHeadJumping && !isHeadJumping && onGround → handleCrash + restoreFromFlying=true
+            // ※ restoreFromFlying 은 standupIfPossible 트리거 — 1.21.1 standupIfPossible 미이식
+            //   이라 현재는 필드 설정만. B-N 후속: standupIfPossible 이식 시 자동 연결.
+            if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
+                handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
+                restoreFromFlying = true;
+            }
 
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
             // 슬라이딩 중 낙하거리가 0.05F 초과 → 헤드점프 + 공기역학 모드 전환
@@ -1325,6 +1340,7 @@ public final class SmartMovingClientState {
         wantSprint              = false;
         isGroundSprinting       = false;
         collidedHorizontallyTickCount = 0;
+        restoreFromFlying       = false;
         // B Phase 1 (세션 40) 등반 9 필드 리셋
         isVineOnlyClimbing      = false;
         isVineAnyClimbing       = false;
@@ -1381,6 +1397,23 @@ public final class SmartMovingClientState {
      */
     public boolean isRunning(ClientPlayerEntity player) {
         return player.isSprinting() && !isFast && (player.isOnGround() || vanilla());
+    }
+
+    /**
+     * 원본 SmartMovingSelf L2232-L2243 `private void handleCrash(float startDistance, float factor)`:
+     *   if(sp.fallDistance >= 2.0F) sp.addStat(...);
+     *   if(sp.fallDistance >= startDistance)
+     *       sp.attackEntityFrom(DamageSource.fall, (int)Math.ceil((fallDistance - startDistance) * factor));
+     * 호출처 (원본): L1081 handleClimbing 내부 + L2538 isHeadJumping 해제 엣지.
+     * 1.21.1: Climber L489 에 private static 이식됨 (free climb 용). B-24 에서 ClientState 에도
+     * 추가 — isHeadJumping 해제 엣지 용. 두 복사본 모두 원본 L2232-L2243 동치.
+     * B-24 (세션 53).
+     */
+    public static void handleCrash(ClientPlayerEntity player, float startDistance, float factor) {
+        if (player.fallDistance > startDistance) {
+            float damage = (player.fallDistance - startDistance) * factor;
+            player.damage(player.getDamageSources().fall(), damage);
+        }
     }
 
     /**
