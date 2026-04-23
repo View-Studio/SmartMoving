@@ -134,6 +134,12 @@ public class SmartMovingConfig {
     public float flyingSpeedFactor = 1.0F;
     // 원본: Options._flyControlVertical — pitch 방향 3D 이동 활성화 여부 (기본값 true)
     public boolean flyControlVertical = true;
+    /**
+     * 원본: _diveControlVertical = Unmodified("move.dive.control.vertical").singular()
+     * 기본값 true. 잠수 중 pitch 방향 3D 이동 활성화 여부.
+     * SmartMovingSelf.handleSwimming (isDiving 분기) 에서 moveFlying 5-인자 treeDimensional 파라미터로 전달.
+     */
+    public boolean diveControlVertical = true;
 
     // ── Crawl edge protection ──────────────────────────────────
     // 원본: SmartMovingConfig._crawlOverEdge = Unmodified("move.crawl.edge") → 기본값 true
@@ -365,6 +371,7 @@ public class SmartMovingConfig {
         slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
         flyingSpeedFactor        = getFloat(p,  "move.fly.speed.factor",          flyingSpeedFactor);
         flyControlVertical       = getBool(p,   "move.fly.control.vertical",      flyControlVertical);
+        diveControlVertical      = getBool(p,   "move.dive.control.vertical",     diveControlVertical);
         flyCloseToGround         = getBool(p,   "move.fly.ground.close",          flyCloseToGround);
         flyWhileOnGround         = getBool(p,   "move.fly.ground.collide",        flyWhileOnGround);
         fly                      = getBool(p,   "move.fly",                       fly);
@@ -446,6 +453,7 @@ public class SmartMovingConfig {
         p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
         p.setProperty("move.fly.speed.factor",           String.valueOf(flyingSpeedFactor));
         p.setProperty("move.fly.control.vertical",       String.valueOf(flyControlVertical));
+        p.setProperty("move.dive.control.vertical",      String.valueOf(diveControlVertical));
         p.setProperty("move.fly.ground.close",           String.valueOf(flyCloseToGround));
         p.setProperty("move.fly.ground.collide",         String.valueOf(flyWhileOnGround));
         p.setProperty("move.fly",                        String.valueOf(fly));

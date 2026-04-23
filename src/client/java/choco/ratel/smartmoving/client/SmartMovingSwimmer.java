@@ -202,9 +202,14 @@ public final class SmartMovingSwimmer {
                 motionYDiff = 0.01D - 0.1D * speedFactor;
             }
 
-            Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
+            // 원본 SmartMovingSelf.md L476:
+            //   moveFlying((float)motionYDiff, strafe, forward, 0.02F * speedFactor, _diveControlVertical.value)
+            // moveUpward 파라미터에 motionYDiff 를 전달 → 5-인자 diffMY 에 포함되어 반환됨.
+            // treeDimensional=true 이면 pitch 반영 수직 이동도 추가.
+            Vec3d fly = moveFlying(player, (float) motionYDiff, moveStrafe, moveForward,
+                    BASE_SWIM_SPEED * speedFactor, cfg.diveControlVertical);
             motionX += fly.x;
-            motionY += motionYDiff;
+            motionY += fly.y; // moveUpward(=motionYDiff) 이미 fly.y 에 포함 — 별도 가산 금지
             motionZ += fly.z;
             motionX *= DAMPING_DIVING;
             motionY *= DAMPING_DIVING;
@@ -229,31 +234,61 @@ public final class SmartMovingSwimmer {
         return true;
     }
 
-    // ── moveFlying (수평 전용, treeDimensional=false) ────────────────────────
+    // ── moveFlying (원본 SmartMovingBase.md L77-114 — 5-인자 버전 1:1) ──────
 
     /**
-     * 원본: SmartMovingBase.moveFlying(moveStrafing, moveForward, speedFactor)
+     * 원본 SmartMovingBase.moveFlying(moveUpward, strafe, forward, speed, treeDimensional)
+     * 1:1 이식. 기존 4-인자 버전(수평 전용)의 정규화 누락 [오역] 도 함께 복원.
      *
-     * 비표준 total 공식: total = sqrt(sqrt(x²+z²))
-     * → 대각선 이동 시 표준보다 약한 보정 (의도적 비대칭, 원본 그대로 유지)
+     * 1단계: 수평 방향 벡터 (YAW 기반) — 정규화 하한 1.0F 포함
+     *   total = sqrt(strafe² + forward²); if (total < 0.01) skip; if (total < 1.0) total = 1.0
+     *   factor 기반 strafe/forward 성분 × (cos, -sin, sin, cos) 조합
      *
-     * @return 추가할 속도 증분 (y=0)
+     * 2단계: 피치 기반 수직 보정 (treeDimensional=true 시)
+     *   rotation = toRadians(pitch); horizFactor = cos; vertFactor = -sin * signum(forward)
+     *
+     * 3단계: 최종 모션 합산
+     *   diffMY = sqrt(diffMXForward² + diffMZForward²) * vertFactor + moveUpward
+     *
+     * 4단계: 비대칭 total 공식 sqrt(sqrt(dx²+dz²) + dy²) 로 factor 적용
      */
-    private static Vec3d moveFlying(ClientPlayerEntity player, float strafe, float forward, float speed) {
-        float yawRad = (float) Math.toRadians(player.getYaw());
-        float sin = (float) Math.sin(yawRad);
-        float cos = (float) Math.cos(yawRad);
+    private static Vec3d moveFlying(ClientPlayerEntity player, float moveUpward,
+                                     float strafe, float forward, float speed, boolean treeDimensional) {
+        float diffMXStrafing = 0F, diffMXForward = 0F, diffMZStrafing = 0F, diffMZForward = 0F;
+        float total = (float) Math.sqrt(strafe * strafe + forward * forward);
+        if (total >= 0.01F) {
+            if (total < 1.0F) total = 1.0F;
+            float strafeFactor  = strafe  / total;
+            float forwardFactor = forward / total;
+            float yawRad = (float) Math.toRadians(player.getYaw());
+            float sin = (float) Math.sin(yawRad);
+            float cos = (float) Math.cos(yawRad);
+            diffMXStrafing =  strafeFactor  * cos;
+            diffMXForward  = -forwardFactor * sin;
+            diffMZStrafing =  strafeFactor  * sin;
+            diffMZForward  =  forwardFactor * cos;
+        }
 
-        double dx = strafe * cos - forward * sin;
-        double dz = forward * cos + strafe * sin;
+        float rotation = treeDimensional ? (float) Math.toRadians(player.getPitch()) : 0F;
+        float horizFactor = (float) Math.cos(rotation);
+        float vertFactor  = (float) (-Math.sin(rotation) * Math.signum(forward));
 
-        double horLen = Math.sqrt(dx * dx + dz * dz);
-        double total  = Math.sqrt(horLen); // sqrt(sqrt(x²+z²)) — SM 비표준 공식
+        float diffMX = diffMXForward * horizFactor + diffMXStrafing;
+        float diffMY = (float) Math.sqrt(diffMXForward * diffMXForward + diffMZForward * diffMZForward)
+                       * vertFactor + moveUpward;
+        float diffMZ = diffMZForward * horizFactor + diffMZStrafing;
 
-        if (total > 0.01D) {
-            double factor = speed / total;
-            return new Vec3d(dx * factor, 0, dz * factor);
+        // 비대칭 total 공식 — 원본 주의 사항: sqrt(sqrt(x²+z²) + y²), NOT sqrt(x²+y²+z²)
+        float total2 = (float) Math.sqrt(Math.sqrt(diffMX * diffMX + diffMZ * diffMZ) + diffMY * diffMY);
+        if (total2 > 0.01F) {
+            float factor = speed / total2;
+            return new Vec3d(diffMX * factor, diffMY * factor, diffMZ * factor);
         }
         return Vec3d.ZERO;
+    }
+
+    /** 4-인자 wrapper (수평 전용) — moveUpward=0, treeDimensional=false. */
+    private static Vec3d moveFlying(ClientPlayerEntity player, float strafe, float forward, float speed) {
+        return moveFlying(player, 0F, strafe, forward, speed, false);
     }
 }
