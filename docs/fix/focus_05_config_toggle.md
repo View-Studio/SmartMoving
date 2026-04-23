@@ -380,7 +380,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       SmartMovingOptions.toggle() override (L500-L531) 에서 saveToOptionsFile 호출 — 1.21.1
       통합 계층에서 여기 유지. SmartMovingOptions.toggle() 의 추가 동작(_configChat 메시지,
       gameType 별 defaultConfigKey 갱신) 은 별도 원자 작업으로 분리 예정 (C-7 후보).
-- [ ] C-2. `setKeys(String[])` 이식 — 원본 L345-L355 1:1
+- [x] C-2. `setKeys(String[])` 이식 — 원본 `SmartMovingProperties.setKeys()` L90-L97 1:1
+      (리서치 L345-L355). null/empty → DEFAULT_KEYS, toggler=0, updateToggler() 호출.
+      save() 는 원본에도 없어 호출 안 함. 호출처는 F 섹션 `initializeForGameIfNeccessary` 예정.
 - [x] C-3. `updateToggler()` 헬퍼 — `enabled = (toggler != -1)` (원본 `update()` L163-L172
       의 Property 루프는 1.21.1 Property 부재로 N/A, enabled 파생만 이식). **의존 순서상
       C-1 보다 먼저 진행** — C-1 `toggle()` 이 `updateToggler()` 호출 예정.
@@ -701,6 +703,38 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 중간 상태에서는 토글이 예상대로 작동 안 함. F 완료 시점에 정상화.
 
 **다음 작업**: C-2 — `setKeys(String[])` 이식 (원본 L90-L97).
+
+### 세션 5 (계속) — 2026-04-23 — C-2
+
+**진행한 작업**:
+- C-2: `SmartMovingConfig.setKeys(String[])` 신규 메서드 추가.
+  - 원본 `SmartMovingProperties.setKeys()` L90-L97 1:1:
+      ```java
+      public void setKeys(String[] keys) {
+          if (keys == null || keys.length == 0) keys = DEFAULT_KEYS;
+          this.configKeys = keys;
+          this.toggler = 0;
+          updateToggler();
+      }
+      ```
+  - null/empty 방어 → `DEFAULT_KEYS` ({null}) 로 fallback (단순 on/off 모드).
+  - `toggler = 0` 재설정 (원본 L95 `toggler = 0; update();`).
+  - save() 호출은 원본에도 없음 — 생략.
+  - 호출처는 F 섹션 `initializeForGameIfNeccessary(gameType)` 이식 시
+    gameType 별 keys 배열 전달로 연결 예정.
+
+**완료 전 검증 체크리스트 (C-2 기준)**:
+- [근거] `SmartMovingProperties.md` L90-L97 원본 임베드 확인 ✓
+- [대응] 원본 4줄 ↔ 구현 4줄 1:1 ✓
+- [분기] `keys == null || keys.length == 0` 조건 그대로 ✓
+- [상수] `DEFAULT_KEYS` (= 원본 `_defaultKeys`) 사용 ✓
+- [타이밍] 호출처 F 섹션에서 연결 예정
+- [근사] 해당 없음
+- [신규] 없음
+- [회귀] 신규 메서드 추가만이라 영향 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-4 — `getCurrentKey()` (toggler == -1 시 null, 그 외 `configKeys[toggler]`).
 
 ---
 

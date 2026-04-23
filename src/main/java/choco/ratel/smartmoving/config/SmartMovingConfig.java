@@ -634,6 +634,29 @@ public class SmartMovingConfig {
         save();
     }
 
+    /**
+     * 원본 SmartMovingProperties.setKeys(String[]) (L90-L97) 1:1 이식.
+     *
+     * 원본:
+     *   public void setKeys(String[] keys) {
+     *       if (keys == null || keys.length == 0)
+     *           keys = _defaultKeys;          // 단순 on/off 모드 ({null})
+     *       this.keys = keys;
+     *       toggler = 0;                      // 항상 첫 key 로 초기화
+     *       update();
+     *   }
+     *
+     * 호출: initializeForGameIfNeccessary(gameType) 에서 게임타입별 keys 배열 전달 (F 섹션).
+     * `save()` 호출은 원본 setKeys 에 없음 — 생략.
+     */
+    public void setKeys(String[] keys) {
+        if (keys == null || keys.length == 0)
+            keys = DEFAULT_KEYS;
+        this.configKeys = keys;
+        this.toggler = 0;
+        updateToggler();
+    }
+
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
     }
