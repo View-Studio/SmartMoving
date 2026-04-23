@@ -1,7 +1,15 @@
-# Focus #5 — 옵션토글 4단계 순환 (disabled / easy / medium / hard)
+# Focus #5 — 옵션토글 2상태 + enabled = 원본 Easy 1:1
 
 > 진입점: [`playtest_fixes.md`](playtest_fixes.md) → 현재 포커스 #5.
 > 이 문서 + playtest_fixes.md 2개만 열고 작업한다.
+
+> **🔄 방향 전환 (세션 13, 2026-04-23, 사용자 결정)**:
+> 원본 `disabled → easy → medium → hard` 4상태 순환 이식은 **포기**. 대신
+> `disabled ↔ enabled` 2상태로 단순화하되, **enabled 상태 = 원본 Easy 프리셋을
+> 1:1 로 가져온다**. Property 시스템 전체 이식 없이 Easy 에서 반환되는 값만 필드
+> 기본값에 반영하는 방식. 기존 B~F 구현(4상태 라벨 순환 기계)은 `configKeys={null}`
+> 단일 key 구조에서 자동으로 2상태로만 동작 — 잉여 코드이나 해가 없어 유지. 실제
+> 작업은 **§10 H 섹션 (Easy 프리셋 완전 이식)** 으로 이동.
 
 ---
 
@@ -9,53 +17,79 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 완료 / ⏳ G-2 사용자 수동 검증 대기 / G-5 대기 |
-| 잔여 섹션 | G-2(수동 테스트, **사용자 몫**) + G-5(포커스 전환, G-2 후) |
-| 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 / checklist_original_audit.md L1096 에도 명시 정정 |
-| 컴파일 상태 | ✅ 빌드 성공 (G-1 확인) / 회귀 감사 통과 (G-3) |
+| 상태 | 🟡 진행 중 (방향 전환 후 재착수) |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 완료 (라벨 순환 — 유지) / ⏳ **H 섹션 진행 중 (Easy 프리셋 이식)** |
+| 잔여 섹션 | H (Easy 프리셋 리서치 + 이식) + G-2(수동 테스트, 사용자 몫) + G-5(포커스 전환) |
+| 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 사용자 지적으로 정정) |
+| 컴파일 상태 | ✅ 빌드 성공 (G-1/H 시작 전) |
 
 ---
 
 ## 2. 증상 — 원본 vs 현재
 
-### 원본 (1.7.10)
+### 원본 (1.7.10) — 전체 동작
 
-`configToggle` 키바인딩 또는 `/smoving config toggle` 커맨드 → **4상태 순환**:
-```
-disabled → easy(e) → medium(m) → hard(h) → disabled → ...
-```
+1. `configToggle` 키 → **4상태 순환**: `disabled → easy(e) → medium(m) → hard(h) → disabled → ...`
+2. 각 key 는 **단순 라벨이 아니라** 여러 config 필드 기본값을 바꾸는 실질적 프리셋:
+   - `_baseExhautionLossFactor = Value(1F).e(1.2F).h(0.8F)` — Easy 는 소진 1.2배 빠른 회복
+   - `_exhaustionLossHungerFactor = Value(0.05F).e(0.02F).h(0.08F)` — Easy 는 허기 전환 낮음
+   - `_baseHungerGainFactor = Value(1F).e(0.8F).h(1.2F)` — Easy 는 허기 느리게 증가
+   - `Creative(key) = Value(false).c(true)` 팩토리 — Creative 전용 true
+   - `Hard(key) = Value(false).h(true)` 팩토리 — Hard 전용 true
+   - `Medium(key) = Value(true).e(false)` 팩토리 — Easy 에서만 false (나머지는 true)
 
-### 현재 1.21.1 구현
+### 사용자 결정 (세션 13)
 
-```java
-// SmartMovingConfig.toggle()
-public void toggle() {
-    enabled = !enabled;   // ← 2상태(on/off)만
-    save();
-}
-```
+- 4상태 순환 이식은 **포기** — Property 시스템 전체 이식 비용 대비 실익 낮음
+- 대신 **`disabled ↔ enabled` 2상태** + **enabled = 원본 Easy 1:1**
+- 즉 1.21.1 의 고정 프리셋은 **원본 Easy key 가 반환하는 값** 과 같아야 함
 
-### 이전 판단 오류 (내 오판 기록)
+### 이전 판단 오류 (누적 기록)
 
-이전 세션에서 **"단일 config key 시스템(1.21.1 'default' key 단순 on/off 토글)이
-원본 `toggler==0 ↔ -1` 순환과 기능 동등"** 이라고 판단했지만 **틀렸음**.
-
-원본은 `configKeys = {"e", "m", "h"}` 길이 3 배열 + `toggler` 순환으로 4상태를
-구현하며, 단일 key(`{"c"}` creative) 때만 on/off 등가. 게임타입이 survival 또는
-adventure(기본)이면 4상태.
+1. **세션 1-2 오판 (정정 완료)**: "단일 key=on/off 가 원본 toggler 0↔-1 순환과 기능 동등"
+   — 실제로는 Easy/Medium/Hard 3단계 순환. 세션 3~11 에서 라벨 순환 이식으로 정정.
+2. **세션 5-11 오판 (세션 13 정정)**: §7.1 "Property 시스템 key 별 값 차별화는
+   1.21.1 구조상 N/A 권장" — 실제로는 Property 시스템을 **이식하지 않는 것이지**
+   "N/A" 가 아님. Easy/Medium/Hard 가 바꾸는 값은 이식 가능. 포커스 #5 범위 외로
+   제외한 것은 **내 결정 실수**였음. 사용자 확인 없이 범위를 축소했고, "원본 특징
+   그대로 가져왔나?" 질문으로 드러남. 세션 13 부터 H 섹션으로 Easy 1:1 이식.
 
 ---
 
-## 3. 재현 케이스 표
+## 3. 재현 케이스 표 (세션 13 재정의)
 
-| # | 시나리오 | 원본 기대 | 현재 실제 | 원본 라인 근거 |
-|---|---------|---------|----------|--------------|
-| 1 | Survival 월드 진입 + configToggle 키 누름 × 1회 | `disabled → easy` 메시지 | `enabled=true` 토글 (on/off) | `SmartMovingProperties.md` L325-L332 |
-| 2 | easy 상태에서 configToggle 키 × 1회 | `easy → medium` | `enabled=false` | 동일 |
-| 3 | medium 상태에서 configToggle 키 × 1회 | `medium → hard` | `enabled=true` | 동일 |
-| 4 | hard 상태에서 configToggle 키 × 1회 | `hard → disabled` | `enabled=false` | 동일 |
-| 5 | Creative 월드 + configToggle 키 | `disabled ↔ creative(c)` 2상태 | 동일 (우연히 맞음) | `_creativeConfigKeys={"c"}` 길이 1 |
+### 토글 동작 (단순화)
+
+| # | 시나리오 | 1.21.1 목표 동작 |
+|---|---------|-----------------|
+| 1 | 월드 진입 | 채팅: "Smart Moving enabled" (toggler=0, key=null, configKeys={null}) |
+| 2 | configToggle 키 × 1 | "Smart Moving disabled" (toggler=-1) |
+| 3 | × 1 (재진입) | "Smart Moving enabled" (toggler=0) |
+
+### 프리셋 값 (원본 Easy 1:1) ⚠️ **완전 추출 필요**
+
+아래는 리서치 파일에서 `.e()` 로 확인된 14개. 원본 `SmartMovingConfig.java` 전체
+소스 WebFetch 로 누락 없이 재확인 필요 (H-1).
+
+| # | 원본 필드 | default | **Easy** | 1.21.1 대응 | 현재 1.21.1 값 | 조치 |
+|---|---------|---------|---------|------------|---------------|------|
+| P-1 | `_baseExhautionLossFactor` | 1F | **1.2F** | 미구현 | N/A | 신규 추가 (default 1.2F) |
+| P-2 | `_exhaustionLossHungerFactor` | 0.05F | **0.02F** | 미구현 | N/A | 신규 추가 (default 0.02F) |
+| P-3 | `_baseHungerGainFactor` | 1F | **0.8F** | 미구현 | N/A | 신규 추가 (default 0.8F) |
+| P-4 | `_speedUser` (Creative 팩토리) | false (Easy) | **false** | `speedUser` | `true` ⚠️ | **기본값 정정 true→false** |
+| P-5 | `_lavaLikeWater` (Creative) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
+| P-6 | `_climbExhaustion` (Hard) | false (Easy) | **false** | `climbExhaustion` | `false` ✓ | 이미 일치 |
+| P-7 | `_ceilingClimbExhaustion` (Hard) | false (Easy) | **false** | `ceilingClimbExhaustion` | `false` ✓ | 이미 일치 |
+| P-8 | `_runExhaustion` (Hard) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
+| P-9 | `_climbJumpExhaustion` (Hard) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
+| P-10 | `_sprintExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+| P-11 | `_wallJumpExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+| P-12 | `_jumpChargeExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+| P-13 | `_jumpSlideExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+| P-14 | `_hungerGain` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+
+**리스크**: 위 필드 중 "값만 있고 소비처가 없는" dead field 가능성. H-1 (소비처 확인)
+에서 각각 grep 필요. 소비처 없는 필드는 포커스 #5 범위 외 (후속 포커스).
 
 ---
 
@@ -173,25 +207,38 @@ SmartMoving 1.7.10 원본에서 다음 정보를 덤프. 원본 Java 코드 그�
 
 ---
 
-## 7. 구조적 차이 / 근사 이식 지점
+## 7. 구조적 차이 / 근사 이식 지점 (세션 13 재정의)
 
-### 7.1. 불가능/의미 없는 부분
+### 7.1. 범위 외 (사용자 결정에 의해 포기)
 
-- **key 별 값 차별화** (`_swim.e=true / _swim.m=true / _swim.h=false` 같은 **값 변동**):
-  1.21.1 단일 `java.util.Properties` 구조 유지. `toggler` 는 "이름표 라벨" 수준으로만
-  동작. 실제 `_swim` 필드는 여전히 단일 boolean.
-- **Property 시스템 전체 재구현**: 본 포커스 범위 초과. 이식하지 않음.
+- **gameType 별 Medium/Hard/Creative 런타임 전환**: 4상태 순환 포기로 배제. 사용자는
+  항상 Easy 프리셋으로 고정된 1.21.1 를 사용. Medium/Hard 값은 리서치 문서상 기록만
+  유지되고 코드에 이식되지 않음 (필요해지면 후속 포커스).
+- **Property<T> 시스템 클래스군** (`net.smart.properties.Property`/`Value`/`Configurable`/
+  `IValue`): 전체 이식 대신 "Easy 에서 반환되는 값을 필드 기본값에 직접 작성" 전략.
+  버전 폴백(`defaults(x, _pre_sm_1_5)`) 은 수동 해석 후 이식 버전(`SM_VERSION = "1.0"` —
+  실질적으로 3.2 기준) 에 해당하는 값만 선택.
 
-### 7.2. 근사 이식
+### 7.2. 1.21.1 에서는 잉여 (유지되지만 동작 안 함)
 
-- `_configKeyName` 의 Property 기반 key-scoped defaults (`Value(null).e("Easy").m("Medium").h("Hard")`)
-  → 1.21.1 `Map<String,String> configKeyName = Map.of("e","Easy","m","Medium","h","Hard","c","Creative")`
-- `initializeForGameIfNeccessary(gameType)` 의 Property 기반 switch → 단순 if/else
+세션 3~11 에서 이식한 4상태 라벨 순환 기계 전체:
+- `configKeys` 필드 — `DEFAULT_KEYS = {null}` 로 초기화되어 있어 2상태로만 순환. 원본
+  4갈래 분기는 코드에 있지만 `configKeys.length == 1` 이라 하나로 귀결 (잉여지만 무해).
+- `survivalConfigKeys` / `survivalDefaultConfigKey` 등 게임타입별 6필드 + readFrom/writeTo.
+  `initializeForGameIfNeccessary` 호출되어도 `setKeys(DEFAULT_KEYS)` 와 동등. 잉여.
+- `configKeyName` Map (`{"e":"Easy","m":"Medium","h":"Hard"}`) — 현재 configKeys 에 `null`
+  만 있으므로 참조 안 됨. 잉여.
+- `getKey` / `getNextKey` / `hasKey` / `setCurrentKey` 등 — 2상태 전이에서는 쓰이지 않음.
+  잉여지만 무해.
 
-### 7.3. 완전 재현 지점
+→ **§17 후속 "잉여 제거"** 로 별도 정리. 포커스 #5 내에서는 손대지 않음 (코드 안정성
+우선, 방향 전환으로 이미 변경 포인트 많음).
 
-- `toggle()` 순환 로직 (toggler++/length/-1 wrap) — **완전 재현 가능**
-- 4상태 출력(disabled/easy/medium/hard) — **완전 재현 가능**
+### 7.3. 완전 재현 지점 (H 섹션 목표)
+
+- Easy 프리셋 값 — 원본에서 Easy 가 반환하는 모든 필드 값을 1.21.1 필드 기본값에
+  1:1 이식. 리서치 파일 기반 `.e()` 식별 + 원본 소스 WebFetch 로 누락 제로 검증 (H-1).
+- `toggle()` 2상태 순환 — 이미 `configKeys={null}` 로 `0 ↔ -1` 동작.
 
 ---
 
@@ -436,16 +483,45 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       조건으로 서버 설정 덮어쓰기 방지. `client.interactionManager.getCurrentGameMode().getId()`
       로 gameType 주입. tick 폴링으로 gameType 변경 감지 — 별도 이벤트 훅 불필요.
 
-### G. 검증
+### G. 검증 (4상태 라벨 순환 — 유지되지만 잉여)
 - [x] G-1. `./gradlew build` 성공 — F 섹션 완료 시점 + G 세션 재실행 모두 통과
-- [ ] G-2. 재현 케이스 표 모든 행 검증 (수동 테스트) — **사용자 확인 대기** (인게임 실행 필요)
-- [x] G-3. 회귀 방지 감사 (§14) — TODO/미확인 0건, `INSTANCE.toggle()` 2호출처 의미 적합,
-      `cfg.enabled` 31참조 의미 일치. **구조적 누락** 2건 (toggler 서버→클라 동기화 / SERVER_CONFIG
-      에서 getCurrentKey 항상 -2 경로) §16/§17 기록 — 회귀는 아니지만 후속 필요.
-- [x] G-4. `checklist_original_audit.md` 신규 발견 표에 "4상태 토글 복원" 기록 — 포커스 #5
-      전체 요약 (B/C/D/E/F 섹션 작업 내용) + 잔여(§17 후속) 기록. 이전 L1092 의 "단일 key=
-      on/off 등가" 오판 명시적 정정 포함.
-- [ ] G-5. `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신 — G-2 완료 후
+- [~] G-2. 재현 케이스 표 검증 — **재정의됨** (§3 세션 13 재작성). H 완료 후 재검증.
+- [x] G-3. 회귀 방지 감사 (§14) — 4상태 라벨 순환 관점. 회귀 0건.
+- [x] G-4. `checklist_original_audit.md` "4상태 토글 복원" 기록 완료.
+- [~] G-5. `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신 — H 섹션 완료 + G-2 재검증 후
+
+### H. Easy 프리셋 완전 이식 (세션 13 신설 — 사용자 결정)
+
+**방향**: 2상태 토글(disabled↔enabled) + enabled 상태 = 원본 Easy 1:1 프리셋. 원본에서
+Easy key 가 반환하는 **모든** 필드 값을 1.21.1 의 필드 기본값에 이식. 누락 0 원칙.
+
+- [x] H-0. **방향 전환 문서화** — §1/§2/§3/§7/§10 재정의 + §15 세션 13 로그 + §16 세션
+      13 오판 정정 + §17 잔여 재정의. 코드 변경 없음.
+- [ ] H-1. **Easy 반환값 완전 추출 (리서치)** — Agent WebFetch 로 원본
+      `SmartMovingConfig.java` 전체 소스 + `net.smart.properties.Property.java` +
+      `net.smart.properties.Value.java` + `net.smart.properties.Configurable.java` 확보
+      후 `docs/research/original/smartmoving/properties/` 에 덤프. 리서치 파일 안에서
+      모든 `.e(...)` / Creative/Hard/Medium 팩토리 호출 / `_pre_sm_*` 버전 폴백 rule
+      을 빠짐없이 추출. §3 의 14개 필드가 완전한지 재검증 — 새 필드 발견 시 §3 확장.
+- [ ] H-2. **각 필드 소비처 확인 (dead field 방지)** — H-1 에서 확정된 전체 목록
+      각각에 대해 `grep` 으로 1.21.1 소비처 존재 여부 확인. 소비처 없는 필드는
+      포커스 #5 범위 외 (해당 시스템 이식 후속 포커스에서 함께). §3 표에 "소비처 있음/
+      없음" 컬럼 추가 후 분류.
+- [ ] H-3. **Float 값 차이 필드 이식** (P-1~P-3, 소비처 있는 것만) — `baseExhautionLossFactor`
+      등. 각 필드 신규 선언 + default Easy 값 + readFrom/writeTo + javadoc 에 원본
+      `Value(d).e(v).h(v2)` 전체 key 별 값 기록.
+- [ ] H-4. **Creative 팩토리 필드 이식** (P-4 `speedUser` 정정 / P-5 `lavaLikeWater`
+      신규, 소비처 있는 것만) — `speedUser` 는 기본값 `true → false` 정정. javadoc 에
+      "Creative 에서만 true, Easy 포함 그 외 false" 명시.
+- [ ] H-5. **Hard 팩토리 필드 이식** (P-6~P-9, 소비처 있는 것만) — 신규 또는 기본값
+      확인. Hard 에서만 true.
+- [ ] H-6. **Medium 팩토리 필드 이식** (P-10~P-14, 소비처 있는 것만) — Easy 에서만
+      false, 나머지 true. default = false (Easy 1:1). javadoc 에 "원본 default true,
+      Easy 에서 false. 1.21.1 고정 Easy 이므로 false." 명시.
+- [ ] H-7. **H-1 에서 추가 발견된 필드 이식** (있다면) — 신규 원자 작업으로 분해.
+- [ ] H-8. **빌드 + 회귀 감사 재수행** — H 섹션이 기존 이식에 회귀 일으키지 않는지 확인.
+- [ ] H-9. **checklist_original_audit.md 에 H 섹션 결과 기록** — "Easy 프리셋 1:1 이식"
+      추가. H-1 에서 추가 발견된 필드 있으면 각각 신규 발견 행으로 추가.
 
 ---
 
@@ -1150,9 +1226,63 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
 
 **다음 작업**: G-2 (사용자 수동 테스트 대기). 통과 확인 후 G-5 (포커스 #6 전환).
 
+### 세션 13 — 2026-04-23 — 🔄 방향 전환 (H-0 착수)
+
+**배경 — 사용자 지적**:
+> "텍스트 로는 잘 뜨는데, 각 easy, medium, hard 일때의 원본의 특징을 그대로
+> 가져왔나?"
+
+답: **안 가져옴**. 현재 4상태 라벨 순환은 채팅 표시만 바뀌고 실제 수치(소진/허기/
+속도 등) 는 변동 없음. §7.1 에서 "Property 시스템은 1.21.1 구조상 N/A 권장" 으로
+내가 일방적으로 배제한 결정이었음. 감사 규칙 4 "미확인 차단" + 원칙 1:1 번역 위반.
+
+**사용자 결정**: 4상태 순환 이식은 포기. `disabled ↔ enabled` 2상태 + enabled =
+원본 Easy 프리셋 1:1. 추가 지시: "절대 누락 안되게 기록하고, 작업 진행하고, 작업
+하면서도 꾸준히 기록을 업데이트해가면서 작업해."
+
+**H-0 에서 한 일** (이 원자 작업):
+- §1 진행 상황 갱신 — 방향 전환 명시, H 섹션 신설, 이전 판단 오류 2건 누적 기록.
+- §2 증상 재작성 — 원본 Easy 가 바꾸는 필드 6개 + 팩토리 3종 제시. 사용자 결정
+  본문 명시. 이전 판단 오류 2건 (세션 1-2 / 세션 5-11) 명시.
+- §3 재현 케이스 재정의 — 토글 동작 3행 단순화 + 프리셋 값 14필드 표 추가.
+- §7 구조적 차이 재정의 — §7.1 "1.21.1 구조상 N/A" 오판 삭제, "사용자 결정으로
+  범위 외" 로 정정. §7.2 "잉여지만 유지" 항목 추가 (기존 4상태 라벨 순환 코드
+  보존 방침). §7.3 에 H 섹션 목표 명시.
+- §10 H 섹션 신설 — H-0 ~ H-9 원자 작업 분해.
+- §10 G 섹션 재라벨 — "4상태 라벨 순환 (유지되지만 잉여)" 명시.
+- 세션 13 로그 기록 (이 항목).
+
+**완료 전 검증 체크리스트 (H-0 기준)**:
+- [근거] 세션 12 G-3 감사 + 사용자 세션 13 지적 기반 ✓
+- [대응] 문서 방향 전환만 — 코드 대응 해당 없음
+- [분기] 해당 없음
+- [상수] 해당 없음
+- [타이밍] 해당 없음
+- [근사] 해당 없음
+- [신규] §7.1 오판 정정 기록, H 섹션 9개 원자 작업 신설
+- [회귀] 코드 변경 없음 — 회귀 0건
+- [빌드] 코드 변경 없음, 빌드 불필요 (이전 빌드 성공 유지)
+
+**다음 작업**: H-1 — Agent WebFetch 로 원본 `SmartMovingConfig.java` 전체 + Property
+시스템 클래스 확보. Easy 반환값 완전 추출. 새 필드 발견 시 §3 확장.
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 13 (2026-04-23) — 방향 전환 + §7.1 오판 정정
+
+- **§7.1 "Property 시스템 key 별 값 차별화는 1.21.1 구조상 N/A 권장" 오판 정정**:
+  실제로는 "N/A" 가 아니라 "이식하지 않은 것". 포커스 #5 시작 시 내가 사용자 확인
+  없이 범위 축소 결정을 했고, "원본 특징 그대로 가져왔나?" 사용자 질문에서 드러남.
+  사용자 결정: enabled = 원본 Easy 1:1 이식. §10 H 섹션 신설.
+- **dead field 리스크 — H-2 에서 확인 필요**: `runExhaustion` / `sprintExhaustion` /
+  `wallJumpExhaustion` / `jumpChargeExhaustion` / `jumpSlideExhaustion` /
+  `climbJumpExhaustion` / `hungerGain` / `baseHungerGainFactor` /
+  `exhaustionLossHungerFactor` / `baseExhautionLossFactor` / `alwaysHungerGain` /
+  `lavaLikeWater` — 이 필드들은 소진/허기/라바 시스템 소비처가 1.21.1 에 있는지
+  불명확. H-2 에서 `grep` 으로 소비처 존재 여부 확인. 없으면 필드만 추가해도
+  동작 영향 0 — 해당 시스템 이식 후속 포커스에서 본격 이식.
 
 ### 세션 12 (2026-04-23) — G-3 회귀 감사 중 발견
 
@@ -1216,16 +1346,23 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
 
 ### 이 포커스 범위 초과 — 새 포커스 후보
 
-- **key 별 값 차별화** (`_swim.e=true / _swim.h=false`): Property 시스템 전체 이식 필요 →
-  별도 포커스 후보이지만 1.21.1 구조상 N/A 권장.
+- ~~**key 별 값 차별화**: Property 시스템 전체 이식~~ — **세션 13 사용자 결정으로 포커스
+  #5 내 처리**. Easy 1:1 이식으로 대체 (H 섹션).
+- **Medium/Hard 프리셋 런타임 전환**: 현재 사용자 결정은 Easy 고정. Medium/Hard 에서
+  값이 다른 필드들(`_baseExhautionLossFactor` Medium=1F/Hard=0.8F 등) 의 런타임
+  토글은 구현 안 함. 필요 시 `focus_09_difficulty_presets.md` 로 분리. Property<T>
+  시스템 전체 이식 또는 프리셋 룩업 테이블 방식 중 선택.
+- **4상태 라벨 순환 잉여 코드 정리** (세션 13 방향 전환 후): `configKeys` 6필드
+  (`survivalConfigKeys` 등) + `configKeyName` Map + `getKey`/`getNextKey`/`hasKey`/
+  `setCurrentKey` + `initializeForGameIfNeccessary` 체인 — 모두 `configKeys={null}`
+  단일 key 구조에서 잉여. 코드 안정성 우선으로 현재 유지. 별도 포커스
+  `focus_10_config_toggle_cleanup.md` 로 제거 작업 분리 가능.
 - **`_survivalDefaultConfigUserKeys` 플레이어별 config key 맵**: `writeToProperties(player, toggle)`
-  ↔ `getPlayerConfigurationKey` — 이 포커스 완료 후 `focus_07_player_config_key.md` 로 분리 가능.
-- **gamemode 변경 이벤트 훅** (survival↔creative 전환 시 setKeys 재호출): tick 폴링으로
-  충분 (F-3 에서 해결) — 이벤트 훅 불필요.
-- **`toggler` / 현재 key 영속화 + 서버→클라 동기화** (세션 12 발견): 두 가지 묶음.
-  (1) 파일 저장 시 현재 key 를 gameType 별 defaultConfigKey 에 기록 (원본 Options.toggle
-      override 의 L500-L531 동작) — 다음 로드 시 `setCurrentKey(defaultConfigKey)` 로 복원.
-  (2) `toArray()` 에 현재 key 또는 toggler 포함 → 서버→클라 라벨 동기화.
-  Options.toggle 추가 동작 (§16 세션 5) 과 묶어서 `focus_08_toggle_persistence.md` 로 분리 가능.
-- **`_configChatInit` / `_speedChatInit` 채팅 초기화** (세션 11 발견): `initializeForGameIfNeccessary`
-  끝의 채팅 초기화 블록. 현재 미이식. 별도 속성 `_configChatInit` 등도 신설 필요.
+  ↔ `getPlayerConfigurationKey` — 4상태 시스템 부재로 의미 없음. Medium/Hard 전환 포커스
+  와 묶어서.
+- **gamemode 변경 이벤트 훅**: tick 폴링으로 해결 (F-3). 이벤트 훅 불필요.
+- **`toggler` / 현재 key 영속화 + 서버→클라 동기화** (세션 12 발견): 2상태 시스템에서는
+  `move.enabled` boolean 하나로 충분. 세션 13 방향 전환 후 필요 없음. 4상태 복원 시에만
+  의미 있음 → Medium/Hard 전환 포커스에 편입.
+- **`_configChatInit` / `_speedChatInit` 채팅 초기화** (세션 11 발견): 별도 소규모 포커스
+  또는 speed 포커스(#6) 와 묶어서.
