@@ -128,6 +128,26 @@ public final class SmartMovingClientState {
     /** 로프 슬라이딩 상태 */
     public boolean isRopeSliding;
 
+    /**
+     * 원본: SmartMovingSelf.isJumping (bit 8 of State 패킷).
+     * 일반 점프/공중 상태. 애니메이션(isDive)에서 수직각 0 적용 조건.
+     * 로컬 플레이어는 sendStatePacket 에서 즉석 계산, 원격 플레이어는 processStatePacket 에서 갱신.
+     */
+    public boolean isJumping;
+
+    /**
+     * 원본: SmartMovingSelf.doFallingAnimation (bit 16 of State 패킷).
+     * 낙하 애니메이션 플래그. 원격 플레이어 추락 애니메이션에 사용.
+     */
+    public boolean doFallingAnimation;
+
+    /**
+     * 원본: SmartMovingSelf.isLevitating (bit 19 of State 패킷).
+     * 로프 등 부양 상태. SM 1.21.1 로프 미구현이므로 로컬은 항상 false.
+     * 애니메이션(isDive)에서 Quarter-Sixteenth 수직각 적용 조건.
+     */
+    public boolean isLevitating;
+
     // ── R-01: State 패킷 인코딩용 클라이밍 타입 필드 ─────────────────────────
     /** 현재 발 클라이밍 타입 (FeetClimbing.ordinal()). getOnLadderOrVine() 결과 저장. */
     public int actualFeetClimbType;
@@ -309,6 +329,7 @@ public final class SmartMovingClientState {
     public void processStatePacket(long bits) {
         actualFeetClimbType  = (int) (bits & 0xF);           // bits 0-3
         actualHandsClimbType = (int) ((bits >> 4) & 0xF);    // bits 4-7
+        isJumping         = ((bits >>  8) & 1) != 0;   // 원본 SmartMovingOther bit 8 _isJumping
         isDiving          = ((bits >>  9) & 1) != 0;
         isDipping         = ((bits >> 10) & 1) != 0;
         isSwimming_sm     = ((bits >> 11) & 1) != 0;
@@ -316,8 +337,10 @@ public final class SmartMovingClientState {
         isCrawling        = ((bits >> 13) & 1) != 0;
         isClimbing        = ((bits >> 14) & 1) != 0;
         isSmall           = ((bits >> 15) & 1) != 0;
+        doFallingAnimation = ((bits >> 16) & 1) != 0;  // 원본 bit 16 _doFallingAnimation
         isFlying          = ((bits >> 17) & 1) != 0;   // doFlyingAnimation bit
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
+        isLevitating      = ((bits >> 19) & 1) != 0;   // 원본 bit 19 isLevitating
         isHeadJumping     = ((bits >> 20) & 1) != 0;
         isSliding         = ((bits >> 21) & 1) != 0;
         angleJumpType     = (int) ((bits >> 22) & 0x7);
@@ -600,10 +623,17 @@ public final class SmartMovingClientState {
     public void sendStatePacket(ClientPlayerEntity player) {
         if (!ClientPlayNetworking.canSend(SmartMovingNetwork.StatePayload.ID)) return;
 
+        // 로컬 플레이어 인스턴스 필드 갱신 — sendStatePacket 호출 시점에 즉석 계산된 값을
+        // 자신의 상태 필드에도 반영하여 로컬 렌더/애니메이션(isDive 분기 등)에서 참조 가능하게 한다.
+        isJumping          = !player.isOnGround() && !isClimbing && !isSwimming_sm && !isDiving && !isDipping;
+        doFallingAnimation = !player.isOnGround() && player.getVelocity().y < -0.1D
+                              && !isClimbing && !isSwimming_sm && !isDiving;
+        isLevitating       = false; // 로프 미구현
+
         SmartMovingState s = new SmartMovingState();
         s.actualFeetClimbType  = actualFeetClimbType;
         s.actualHandsClimbType = actualHandsClimbType;
-        s.isJumping            = !player.isOnGround() && !isClimbing && !isSwimming_sm && !isDiving && !isDipping;
+        s.isJumping            = isJumping;
         s.isDiving             = isDiving;
         s.isDipping            = isDipping;
         s.isSwimming           = isSwimming_sm;
@@ -611,11 +641,10 @@ public final class SmartMovingClientState {
         s.isCrawling           = isCrawling;
         s.isClimbing           = isClimbing;
         s.isSmall              = isSmall;
-        s.doFallingAnimation   = !player.isOnGround() && player.getVelocity().y < -0.1D
-                                  && !isClimbing && !isSwimming_sm && !isDiving;
+        s.doFallingAnimation   = doFallingAnimation;
         s.doFlyingAnimation    = isFlying;
         s.isCeilingClimbing    = isCeilingClimbing;
-        s.isLevitating         = false; // 로프 미구현
+        s.isLevitating         = isLevitating;
         s.isHeadJumping        = isHeadJumping;
         s.isSliding            = isSliding;
         s.angleJumpType        = angleJumpType;

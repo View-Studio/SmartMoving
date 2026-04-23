@@ -129,9 +129,21 @@ public class MixinPlayerEntityRenderer {
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
         }
 
-        // SM 잠수(isDiving): bipedOuter.rotateAngleX = Quarter - currentVerticalAngle (근사)
+        // SM 잠수(isDiving): 원본 SmartMovingModel.md L542 —
+        //   bipedOuter.rotateAngleX = isLevitate ? Quarter - Sixteenth
+        //                           : (isJump ? 0F : Quarter - currentVerticalAngle)
         if (sm.isDiving) {
-            float tiltAngle = (float) Math.PI / 2f; // Quarter (전방 수평)
+            float tiltAngle;
+            if (sm.isLevitating) {
+                // Quarter - Sixteenth ≈ 7π/16 (살짝 덜 수평)
+                tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f;
+            } else if (sm.isJumping) {
+                // 점프 중 잠수: 수직각 0 (정자세)
+                tiltAngle = 0f;
+            } else {
+                // 일반 잠수: Quarter - currentVerticalAngle (수직각 반영)
+                tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+            }
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
         }
 
