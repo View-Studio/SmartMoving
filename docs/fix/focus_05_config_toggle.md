@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2 완료 / ⏳ **H-3 ~ H-14 실이식 (12개 원자)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2/H-3 완료 / ⏳ **H-4 진행 (factor 2단계 14필드)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -705,15 +705,11 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 #### H-3 ~ H-14: Easy 실제 사용 코드 경로 이식 (세션 15 재정의)
 
-- [ ] H-3. **factor 1단계 Config 필드 13개 추가** (§5.4 재확인 후 수정: 12→13). 정확한 필드명:
-      `baseExhautionLossFactor` (Easy 1.2F) / `baseHungerGainFactor` (Easy 0.8F) /
-      `fallExhautionLossFactor` (default 2.5F, hunger 쪽 하드코딩 0F — 필드 없음) /
-      `sprintingHungerGainFactor` (PF 기본 1F) / `sprintingExhautionLossFactor` (0F) /
-      `runningHungerGainFactor` (10F) / `runningExhautionLossFactor` (0.5F) /
-      `sneakingHungerGainFactor` (1F) / `sneakingExhautionLossFactor` (1.5F) /
-      `standingHungerGainFactor` (0F) / `standingExhautionLossFactor` (2F) /
-      `walkingHungerGainFactor` (1F) / `walkingExhautionLossFactor` (1F). ⚠️ `Exhaution`
-      오타 유지 (원본 1:1). readFrom/writeTo 포함. up() 하한은 근사(단순 default).
+- [x] H-3. **factor 1단계 Config 필드 13개 추가** — `SmartMovingConfig.java` 에
+      "Exhaustion/Hunger factor 1단계" 섹션 신설 (Perspective/Misc 사이). 13개 필드 선언
+      + Easy 값 default + 각 필드 javadoc 에 원본 라인/defaults/버전 폴백/up() 하한 기록.
+      readFrom/writeTo 에 13키 추가 (원본 키 이름 그대로 — `Exhaution` 오타 유지).
+      base 2개만 난이도 체인 (Easy 1.2F / 0.8F) 적용. airBorne hunger 필드 없음 (원본 0F 하드코딩).
 - [ ] H-4. **factor 2단계 Config 필드 14개 추가** (§5.4 참조). `climbing/crawling/ceilClimbing/
       swimming/diving/dipping/normal` 각 `HungerGainFactor` + `ExhaustionLossFactor` 쌍.
       ⚠️ 2단계는 `Exhaustion` 정타 (원본 1:1). `ceilClimbing` 축약(`ceilingClimbing` 아님).
@@ -1632,6 +1628,39 @@ dead 19개는 "소진/허기/라바 시스템 이식" 별도 포커스 `focus_11
 
 **다음 작업**: H-3 이식 착수 — `SmartMovingConfig.java` 에 1단계 13필드 선언 + readFrom/
 writeTo. 개별 필드 원자 단위 나누지 않고 1단계 전체 한 커밋 (동일 성격).
+
+### 세션 16 — 2026-04-24 — H-3 (factor 1단계 13필드 이식)
+
+**진행한 작업**:
+- `SmartMovingConfig.java` Perspective/Misc 사이에 "Exhaustion/Hunger factor 1단계"
+  섹션 신설. 13개 필드 선언 + readFrom/writeTo.
+- 각 필드 javadoc: 원본 라인 번호 / `PositiveFactor(key).defaults(Value(...))` 전체 /
+  난이도 체인 / up() 하한 / 버전 폴백 `_pre_sm_*` / `_sm_*` 전부 기록.
+- **Easy 1:1 값 적용**:
+  - `baseExhautionLossFactor = 1.2F` (Easy 난이도 체인)
+  - `baseHungerGainFactor = 0.8F` (Easy 난이도 체인)
+  - 나머지 11개는 원본 최상위 defaults 값 (난이도 무관)
+- **원본 오타 유지** (1:1 호환): 필드명과 config 키 양쪽에 `Exhaution` 오타 그대로.
+- **원본 키 이름 그대로** (과거 세이브 호환, `.key(..., _pre_sm_1_3)` 알리어스는 이식
+  안 함 — 신규 포트 기준이라 최상위 키만):
+  - `move.hunger.sprint.gain.factor` / `move.hunger.run.gain.factor` /
+    `move.hunger.sneak.gain.factor` / `move.hunger.walk.gain.factor` (원본 최상위)
+- **airBorne hunger 필드 없음** — 원본 `getFactor` L565 `0F` 하드코딩. H-7 에서 동일 처리.
+
+**완료 전 검증 체크리스트 (H-3 기준)**:
+- [근거] focus_05 §5.4 factor 필드 27개 테이블 참조 (1단계 13개) ✓
+- [대응] 원본 13개 ↔ 구현 13개 1:1 매핑 ✓
+- [분기] 난이도 체인 base 2개에만 Easy 값 적용 / 나머지 11개 default ✓
+- [상수] Easy 1.2F / 0.8F / default 값 전부 §5.4 와 일치 ✓
+- [타이밍] 해당 없음 (필드 선언만)
+- [근사] up() 하한은 단순 default 근사 — javadoc 에 "근사" 명시 ✓
+- [신규] 없음
+- [회귀] 기존 readFrom/writeTo 다른 필드 처리 불변 ✓
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-4 — factor 2단계 Config 필드 14개 추가. `climbing/crawling/ceilClimbing/
+swimming/diving/dipping/normal` 각 쌍. ⚠️ 2단계는 `Exhaustion` 정타. `ceilClimbing` 축약.
+§5.4 #14-#27 참조.
 
 ---
 

@@ -208,6 +208,110 @@ public class SmartMovingConfig {
     // 원본: _perspectiveSprintFactor = Float.defaults(1.5F)
     public float perspectiveSprintFactor = 1.5F;
 
+    // ── Exhaustion/Hunger factor 1단계 (원본 getFactor L563-L575 이동속도 배율) ──
+    // 원본 SmartMovingConfig.java 의 Property<Float> factor 필드들을 1.21.1 에 단순 필드로 이식.
+    // Easy 1:1 원칙: 난이도 체인 `.e(x).h(y)` 이 있는 base 2개는 Easy 값을 default 로. 나머지는
+    // 원본 최상위 defaults(Value(x)) 값. 원본 `Value(default).e(...).h(...)` 전체 key 별 값은
+    // javadoc 에 기록. ⚠️ 1단계는 `Exhaution` 오타 — 원본 필드명/키 그대로 유지 (1:1 호환).
+    // up() 동적 하한 종속성은 Property 시스템 부재로 단순 default 근사 — config 편집 시 원본의
+    // 하한 체크는 작동 안 함.
+
+    /**
+     * 원본 `_baseExhautionLossFactor` L399 = `PositiveFactor("move.exhaustion.loss.factor")
+     *   .defaults(Value(1F).e(1.2F).h(0.8F)).defaults(1F, _pre_sm_1_5)`.
+     * 난이도별: default=1F, Easy=**1.2F**, Hard=0.8F. 버전 폴백 `_pre_sm_1_5` → 1F 고정.
+     * Easy 1:1 → 1.2F 채택.
+     */
+    public float baseExhautionLossFactor = 1.2F;
+
+    /**
+     * 원본 `_baseHungerGainFactor` L423 = `PositiveFactor("move.hunger.gain.factor")
+     *   .defaults(Value(1F).e(0.8F).h(1.2F)).defaults(1F, _pre_sm_1_5)`.
+     * 난이도별: default=1F, Easy=**0.8F**, Hard=1.2F. 버전 폴백 _pre_sm_1_5 → 1F.
+     * Easy 1:1 → 0.8F 채택.
+     */
+    public float baseHungerGainFactor = 0.8F;
+
+    /**
+     * 원본 `_fallExhautionLossFactor` L406 = `PositiveFactor("move.exhaustion.fall.loss.factor")
+     *   .up(2.5F, _standingExhautionLossFactor)`.
+     * default=2.5F. 난이도 체인 없음. up() 하한 = `_standingExhautionLossFactor` 값 이상 — 근사.
+     * ⚠️ airBorne + hunger 대응 필드 **없음** — `getFactor` L565 에서 `0F` 하드코딩.
+     */
+    public float fallExhautionLossFactor = 2.5F;
+
+    /**
+     * 원본 `_sprintingHungerGainFactor` L425 = `PositiveFactor("move.hunger.sprint.gain.factor")
+     *   .key("move.hunger.gain.sprint.factor", _pre_sm_1_3)`.
+     * default=PF 기본(1F). 난이도 체인 없음. _pre_sm_1_3 키이명(과거 세이브 호환).
+     */
+    public float sprintingHungerGainFactor = 1F;
+
+    /**
+     * 원본 `_sprintingExhautionLossFactor` L401 = `PositiveFactor("move.exhaustion.sprint.loss.factor")
+     *   .defaults(0F)`.
+     * default=0F. 난이도 체인 없음.
+     */
+    public float sprintingExhautionLossFactor = 0F;
+
+    /**
+     * 원본 `_runningHungerGainFactor` L426 = `PositiveFactor("move.hunger.run.gain.factor")
+     *   .key("move.hunger.gain.run.factor", _pre_sm_1_3).defaults(10F)`.
+     * default=10F. 난이도 체인 없음. ⚠️ 필드명 `running`, 키는 `run`.
+     */
+    public float runningHungerGainFactor = 10F;
+
+    /**
+     * 원본 `_runningExhautionLossFactor` L402 = `PositiveFactor("move.exhaustion.run.loss.factor")
+     *   .up(0.5F, _sprintingExhautionLossFactor)`.
+     * default=0.5F. 난이도 체인 없음. up() 하한 = `_sprintingExhautionLossFactor` 값 이상 — 근사.
+     */
+    public float runningExhautionLossFactor = 0.5F;
+
+    /**
+     * 원본 `_sneakingHungerGainFactor` L428 = `PositiveFactor("move.hunger.sneak.gain.factor")
+     *   .key("move.hunger.gain.sneak.factor", _pre_sm_1_3)`.
+     * default=PF 기본(1F). 난이도 체인 없음.
+     */
+    public float sneakingHungerGainFactor = 1F;
+
+    /**
+     * 원본 `_sneakingExhautionLossFactor` L404 = `PositiveFactor("move.exhaustion.sneak.loss.factor")
+     *   .up(1.5F, _walkingExhautionLossFactor).defaults(1F, _sm_1_1)`.
+     * default=1.5F. 난이도 체인 없음. up() 하한 = `_walkingExhautionLossFactor` 값 이상 — 근사.
+     * 버전 폴백 `_sm_1_1` → 1F.
+     */
+    public float sneakingExhautionLossFactor = 1.5F;
+
+    /**
+     * 원본 `_standingHungerGainFactor` L429 = `PositiveFactor("move.hunger.stand.gain.factor")
+     *   .defaults(0F)`.
+     * default=0F. 난이도 체인 없음.
+     */
+    public float standingHungerGainFactor = 0F;
+
+    /**
+     * 원본 `_standingExhautionLossFactor` L405 = `PositiveFactor("move.exhaustion.stand.loss.factor")
+     *   .up(2F, _sneakingExhautionLossFactor.maximum(1F))`.
+     * default=2F. 난이도 체인 없음. up() 하한 = `_sneakingExhautionLossFactor` 값을 최대 1F 로
+     * 클램프한 값 이상 — 근사.
+     */
+    public float standingExhautionLossFactor = 2F;
+
+    /**
+     * 원본 `_walkingHungerGainFactor` L427 = `PositiveFactor("move.hunger.walk.gain.factor")
+     *   .key("move.hunger.gain.walk.factor", _pre_sm_1_3)`.
+     * default=PF 기본(1F). 난이도 체인 없음.
+     */
+    public float walkingHungerGainFactor = 1F;
+
+    /**
+     * 원본 `_walkingExhautionLossFactor` L403 = `PositiveFactor("move.exhaustion.walk.loss.factor")
+     *   .up(1F, _runningExhautionLossFactor)`.
+     * default=1F. 난이도 체인 없음. up() 하한 = `_runningExhautionLossFactor` 값 이상 — 근사.
+     */
+    public float walkingExhautionLossFactor = 1F;
+
     // ── Misc ────────────────────────────────────────────────────
     public boolean fly = true;
     public boolean slide = true;
@@ -500,6 +604,20 @@ public class SmartMovingConfig {
         perspectiveSpeedFactorMax= getFloat(p,  "move.perspective.speed.factor.max", perspectiveSpeedFactorMax);
         perspectiveRunFactor     = getFloat(p,  "move.perspective.run.factor",    perspectiveRunFactor);
         perspectiveSprintFactor  = getFloat(p,  "move.perspective.sprint.factor", perspectiveSprintFactor);
+        // Exhaustion/Hunger factor 1단계 (원본 getFactor L563-L575). ⚠️ Exhaution 오타 유지.
+        baseExhautionLossFactor       = getFloat(p, "move.exhaustion.loss.factor",       baseExhautionLossFactor);
+        baseHungerGainFactor          = getFloat(p, "move.hunger.gain.factor",           baseHungerGainFactor);
+        fallExhautionLossFactor       = getFloat(p, "move.exhaustion.fall.loss.factor",  fallExhautionLossFactor);
+        sprintingHungerGainFactor     = getFloat(p, "move.hunger.sprint.gain.factor",    sprintingHungerGainFactor);
+        sprintingExhautionLossFactor  = getFloat(p, "move.exhaustion.sprint.loss.factor", sprintingExhautionLossFactor);
+        runningHungerGainFactor       = getFloat(p, "move.hunger.run.gain.factor",       runningHungerGainFactor);
+        runningExhautionLossFactor    = getFloat(p, "move.exhaustion.run.loss.factor",   runningExhautionLossFactor);
+        sneakingHungerGainFactor      = getFloat(p, "move.hunger.sneak.gain.factor",     sneakingHungerGainFactor);
+        sneakingExhautionLossFactor   = getFloat(p, "move.exhaustion.sneak.loss.factor", sneakingExhautionLossFactor);
+        standingHungerGainFactor      = getFloat(p, "move.hunger.stand.gain.factor",     standingHungerGainFactor);
+        standingExhautionLossFactor   = getFloat(p, "move.exhaustion.stand.loss.factor", standingExhautionLossFactor);
+        walkingHungerGainFactor       = getFloat(p, "move.hunger.walk.gain.factor",      walkingHungerGainFactor);
+        walkingExhautionLossFactor    = getFloat(p, "move.exhaustion.walk.loss.factor",  walkingExhautionLossFactor);
     }
 
     private void writeTo(Properties p) {
@@ -592,6 +710,20 @@ public class SmartMovingConfig {
         p.setProperty("move.perspective.speed.factor.max", String.valueOf(perspectiveSpeedFactorMax));
         p.setProperty("move.perspective.run.factor",     String.valueOf(perspectiveRunFactor));
         p.setProperty("move.perspective.sprint.factor",  String.valueOf(perspectiveSprintFactor));
+        // Exhaustion/Hunger factor 1단계 (원본 getFactor L563-L575). ⚠️ Exhaution 오타 유지.
+        p.setProperty("move.exhaustion.loss.factor",         String.valueOf(baseExhautionLossFactor));
+        p.setProperty("move.hunger.gain.factor",             String.valueOf(baseHungerGainFactor));
+        p.setProperty("move.exhaustion.fall.loss.factor",    String.valueOf(fallExhautionLossFactor));
+        p.setProperty("move.hunger.sprint.gain.factor",      String.valueOf(sprintingHungerGainFactor));
+        p.setProperty("move.exhaustion.sprint.loss.factor",  String.valueOf(sprintingExhautionLossFactor));
+        p.setProperty("move.hunger.run.gain.factor",         String.valueOf(runningHungerGainFactor));
+        p.setProperty("move.exhaustion.run.loss.factor",     String.valueOf(runningExhautionLossFactor));
+        p.setProperty("move.hunger.sneak.gain.factor",       String.valueOf(sneakingHungerGainFactor));
+        p.setProperty("move.exhaustion.sneak.loss.factor",   String.valueOf(sneakingExhautionLossFactor));
+        p.setProperty("move.hunger.stand.gain.factor",       String.valueOf(standingHungerGainFactor));
+        p.setProperty("move.exhaustion.stand.loss.factor",   String.valueOf(standingExhautionLossFactor));
+        p.setProperty("move.hunger.walk.gain.factor",        String.valueOf(walkingHungerGainFactor));
+        p.setProperty("move.exhaustion.walk.loss.factor",    String.valueOf(walkingExhautionLossFactor));
     }
 
     /** getUserSpeedFactor() 공식: (1 + speedUserFactor)^speedUserExponent */
