@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-6 완료 (Config 29필드 + speedUser 정정) / ⏳ **H-7 진행 (getFactor 메서드 이식)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-7 완료 (Config 29필드 + speedUser + getFactor 메서드) / ⏳ **H-8 진행 (ClientState 신규 필드)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -724,10 +724,13 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       L29 필드에 javadoc 확장: 원본 L96 `Creative("move.speed.user").defaults(true, _pre_sm_3_2)`,
       Creative 팩토리 의미 (Creative 전용 true, 나머지 false), 버전 폴백 `_pre_sm_3_2`,
       소비처 `getUserSpeedFactor()` L580 명시. 기존 이식 오역(true) 정정.
-- [ ] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
-      `SmartMovingClientConfig.md` L365-L413 1:1. 전처리 5줄 (isClimbing |= /
-      actionOverGound / airBorne / isStanding / isSneaking) + 1단계 hunger/exhaustion
-      배율 + 2단계 행동 배율. 총 2단계 × 6+7 분기.
+- [x] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
+      SmartMovingClientConfig.java L554-L595 1:1. 전처리 6줄 (isClimbing |= /
+      isCrawling |= / actionOverGound / airBorne / isStanding / isSneaking) +
+      base factor + 1단계 6분기 (airBorne/sprinting/running/sneaking/standing/walking) +
+      2단계 7분기 (climbing/crawling/ceilClimbing/swimming/diving/dipping/normal).
+      airBorne+hunger 는 0F 하드코딩, L589/L591 normal 중복 전부 재현. javadoc 에 본체
+      원본 pseudo 코드 포함.
 - [ ] H-8. **`SmartMovingClientState` 신규 필드 2개** — `hungerIncrease` /
       `lastHungerIncrease`. `resetState()` 에서 초기화.
 - [ ] H-9. **`SmartMovingClientState.handleExhaustion(player)` 축소판 이식** — 원본
@@ -1750,6 +1753,42 @@ swimming/diving/dipping/normal` 각 쌍. ⚠️ 2단계는 `Exhaustion` 정타. 
 **다음 작업**: H-7 — `SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식. 원본
 SmartMovingClientConfig.java L554-L595 (§5.4 에 본체 임베드). 전처리 5줄 + 1단계 6분기
 + 2단계 7분기. 파라미터 14개 중 일부는 ClientState 에서 현재 제공되는지 확인 필요.
+
+### 세션 17 (계속) — 2026-04-24 — H-7 (getFactor 메서드 이식)
+
+**진행한 작업**:
+- `SmartMovingConfig.getFactor(hunger, onGround, isStanding, isStill, isSneaking, isRunning,
+  isSprinting, isClimbing, isClimbCrawling, isCeilingClimbing, isDipping, isSwimming,
+  isDiving, isCrawling, isCrawlClimbing)` 신규 public 메서드 추가 (getUserSpeedFactor 뒤).
+- 원본 SmartMovingClientConfig.java L554-L595 1:1:
+  - 전처리 6줄 (isClimbing |= isClimbCrawling / isCrawling |= isCrawlClimbing /
+    actionOverGound / airBorne / isStanding 재할당 / isSneaking 재할당)
+  - base factor: `hunger ? baseHungerGainFactor : baseExhautionLossFactor`
+  - 1단계 6분기 (airBorne / isSprinting / isRunning / isSneaking / isStanding / else=walking)
+  - 2단계 7분기 (isClimbing / isCrawling / isCeilingClimbing / isSwimming / isDiving /
+    isDipping / onGround / else=normal 중복)
+- **원본 규칙 완전 재현**:
+  - airBorne + hunger = 0F 하드코딩 (L565) — 필드 없음
+  - L589/L591 `onGround` 와 `else` 모두 `normal*` 참조 (의도 중복)
+  - `isStanding = actionOverGound ? isStill : isStanding` (L560)
+  - `isSneaking &= !isStanding` (L561)
+- javadoc 에 원본 본체 pseudo 코드 + L 번호 + 주의사항 전부 기록.
+- **파라미터 14개 중 ClientState 에서 아직 없는 것**: `isStanding` / `isStill` / `isRunning` —
+  H-9 (handleExhaustion 호출부) 에서 local 계산 또는 파생식으로 제공 예정.
+
+**완료 전 검증 체크리스트 (H-7 기준)**:
+- [근거] §5.4 getFactor 본체 L554-L595 원본 임베드 참조 ✓
+- [대응] 원본 42라인 ↔ 구현 42라인 1:1 (들여쓰기/주석 포함) ✓
+- [분기] 전처리 6 + base 1 + 1단계 6 + 2단계 7 = 20개 코드 경로 전부 재현 ✓
+- [상수] airBorne+hunger `0F` 리터럴 / normal 중복 복사 ✓
+- [타이밍] 호출처는 H-9 에서 연결
+- [근사] 해당 없음 (완전 재현 가능 영역)
+- [신규] 없음
+- [회귀] 신규 public 메서드 — 기존 호출자 없음 → 영향 0
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-8 — `SmartMovingClientState` 에 `hungerIncrease` / `lastHungerIncrease`
+필드 신규 추가 + `resetState()` 에 초기화 추가.
 
 ---
 

@@ -897,6 +897,84 @@ public class SmartMovingConfig {
     }
 
     /**
+     * 원본 `SmartMovingClientConfig.getFactor(hunger, 14상태)` L554-L595 1:1 이식.
+     * 허기/소진 배율 2단계 공식. 호출자는 `handleExhaustion` L862(hunger=true) /
+     * L888(hunger=false) 에서 현재 이동/행동 상태를 전달.
+     *
+     * **원본 본체** (focus_05 §5.4 참조, SmartMovingClientConfig.java L554-L595):
+     *
+     * <pre>
+     * isClimbing |= isClimbCrawling;
+     * isCrawling |= isCrawlClimbing;
+     * boolean actionOverGound = isClimbing || isCeilingClimbing || isDiving || isSwimming;
+     * boolean airBorne = !onGround && !actionOverGound;
+     * isStanding = actionOverGound ? isStill : isStanding;
+     * isSneaking = isSneaking & !isStanding;
+     *
+     * float factor = hunger ? _baseHungerGainFactor : _baseExhautionLossFactor;
+     * // 1단계 — 이동속도 배율 (airBorne / sprinting / running / sneaking / standing / walking)
+     * // ⚠️ airBorne + hunger 는 0F 하드코딩 (대응 필드 없음)
+     * // 2단계 — 행동 배율 (climbing / crawling / ceilClimbing / swimming / diving / dipping / normal)
+     * // ⚠️ L589 onGround + L591 else 모두 normal 참조 (의도된 중복)
+     * </pre>
+     *
+     * 파라미터 순서는 원본과 동일(14개 boolean).
+     *
+     * @param hunger true → hunger gain 배율, false → exhaustion loss 배율
+     * @return 배율값 (base × 1단계 × 2단계)
+     */
+    public float getFactor(boolean hunger, boolean onGround, boolean isStanding, boolean isStill,
+            boolean isSneaking, boolean isRunning, boolean isSprinting,
+            boolean isClimbing, boolean isClimbCrawling, boolean isCeilingClimbing,
+            boolean isDipping, boolean isSwimming, boolean isDiving,
+            boolean isCrawling, boolean isCrawlClimbing) {
+        // 원본 L556-L561 전처리
+        isClimbing |= isClimbCrawling;
+        isCrawling |= isCrawlClimbing;
+        boolean actionOverGound = isClimbing || isCeilingClimbing || isDiving || isSwimming;
+        boolean airBorne = !onGround && !actionOverGound;
+        isStanding = actionOverGound ? isStill : isStanding;
+        isSneaking = isSneaking & !isStanding;
+
+        // 원본 L563 base factor
+        float factor = hunger ? baseHungerGainFactor : baseExhautionLossFactor;
+
+        // 원본 L564-L575 1단계 — 이동속도 배율
+        if (airBorne)
+            factor *= hunger ? 0F : fallExhautionLossFactor;           // ⚠️ hunger=0F 하드코딩 (원본 L565)
+        else if (isSprinting)
+            factor *= hunger ? sprintingHungerGainFactor : sprintingExhautionLossFactor;
+        else if (isRunning)
+            factor *= hunger ? runningHungerGainFactor : runningExhautionLossFactor;
+        else if (isSneaking)
+            factor *= hunger ? sneakingHungerGainFactor : sneakingExhautionLossFactor;
+        else if (isStanding)
+            factor *= hunger ? standingHungerGainFactor : standingExhautionLossFactor;
+        else
+            factor *= hunger ? walkingHungerGainFactor : walkingExhautionLossFactor;
+
+        // 원본 L577-L592 2단계 — 행동 배율
+        if (isClimbing)
+            factor *= hunger ? climbingHungerGainFactor : climbingExhaustionLossFactor;
+        else if (isCrawling)
+            factor *= hunger ? crawlingHungerGainFactor : crawlingExhaustionLossFactor;
+        else if (isCeilingClimbing)
+            factor *= hunger ? ceilClimbingHungerGainFactor : ceilClimbingExhaustionLossFactor;
+        else if (isSwimming)
+            factor *= hunger ? swimmingHungerGainFactor : swimmingExhaustionLossFactor;
+        else if (isDiving)
+            factor *= hunger ? divingHungerGainFactor : divingExhaustionLossFactor;
+        else if (isDipping)
+            factor *= hunger ? dippingHungerGainFactor : dippingExhaustionLossFactor;
+        else if (onGround)
+            factor *= hunger ? normalHungerGainFactor : normalExhaustionLossFactor;
+        else
+            factor *= hunger ? normalHungerGainFactor : normalExhaustionLossFactor;  // L591 의도된 중복
+
+        return factor;
+    }
+
+    /**
      * 원본 SmartMovingProperties.update() (L163-L172) 1:1 근사 이식.
      *
      * 원본:
