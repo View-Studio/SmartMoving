@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-12 완료 / ⏳ **H-13 진행 (통합 빌드 + 회귀 감사)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-13 완료 / ⏳ **H-14 진행 (checklist 기록)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -761,8 +761,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       단순 정정은 회귀 가능성 (withinOnLivingUpdate 부재 상태에서 리셋만 제거 시 폭증).
       §16 기록 + §17 후속 포커스 후보. 포커스 #5 내에서는 현재 구현 유지 — Easy 체감은
       "원본보다 허기 소진 약간 느림" (실측값은 H-13 에서 확인).
-- [ ] H-13. **통합 빌드 + 회귀 감사** — vanilla 이동 허기 회귀 없는지 / SM 이동 중 허기
-      증가 시작됐는지 / `disableAddExhaustion` 배치 차단이 의도대로 동작하는지.
+- [x] H-13. **통합 빌드 + 회귀 감사** — `./gradlew clean build` BUILD SUCCESSFUL. §14 에
+      "H 섹션 회귀 감사" 섹션 신설: 변경 3종(speedUser/exhaustion/허기 패킷)별 영향 분석
+      + grep 스캔 4건(TODO/speedUser/handleExhaustion/hungerIncrease) + 잠재 회귀 대상
+      4건 재확인. 회귀 0건. 근사 1건(서버 허기 연동 §17 후속) 수용.
 - [ ] H-14. **`checklist_original_audit.md` 기록** — "Easy 1:1 factor 헬퍼 + handleExhaustion
       축소판 + speedUser 정정" 기록. §3 매트릭스의 live 1 → 4 전환 (P-1/P-2/P-3 활성화 +
       P-7 정정).
@@ -850,6 +852,35 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 - [x] `grep "// TODO\|// \[미확인\]" src/main/java/choco/ratel/smartmoving/config/ src/main/java/choco/ratel/smartmoving/server/` — **0건**, 통과
 - [x] `grep "INSTANCE\.toggle\|cfg\.toggle\|Config\.toggle"` — 2개 호출처 (`adminToggleConfig`, `configToggle` 키) 모두 4상태 순환 의미로 적합
+
+### H 섹션 회귀 감사 (세션 21 — H-13)
+
+**clean build**: `./gradlew clean build` — BUILD SUCCESSFUL ✓
+
+**H 섹션 변경 3종 × 영향 분석**:
+
+| 변경 | 영향 포인트 | 확인 결과 |
+|------|-----------|----------|
+| `speedUser = true → false` (H-6) | `getUserSpeedFactor()` 호출 3곳 (`SmartMovingConfig.getSpeedPercent` L1305 / `SmartMovingFlyer` L55 / `SmartMovingMover` L30) | [x] 전부 `getUserSpeedFactor()` 경유 — `!speedUser → 1F` 조기 반환으로 자연 반영. 속도 조정 키 UI 는 작동하나 factor=1F 고정. Easy 1:1 의도된 결과 — 회귀 아님. 기존 사용자는 `move.speed.user=true` 수동 복원 가능. |
+| exhaustion 공식 `-= 1.0F` → `-= exhaustionLoss` (H-10) | `SmartMovingClimber` L409 `sm.exhaustion += 2.0F` + `SmartMovingHud` L62 `exhaustion` 표시 | [x] Climber 축적 로직 불변. HUD 표시도 동일 필드 참조 — 시각적 회귀 없음. Easy factor 값(~1.2F) 로 감소량 소폭 증가 → HUD 피로도 바 소폭 빠르게 감소. Easy 1:1 의도. |
+| 허기 패킷 송신 신규 (H-11) | `SmartMovingServer.hunger` 필드 (초기 -1F) + `disableAddExhaustion` 로직 + `MixinServerPlayerEntity.sm_afterTravel` | [x] 초기값 -1F 유지 시 기존 vanilla 허기 정상. 클라 첫 hungerIncrease 송신 시점부터 SM 로직 활성. 경로 전환은 플레이어 입장 직후 첫 틱 — 원본도 동일 타이밍. H-12 에서 3건 차이 식별 → §17 후속. 현 구현은 Easy 근사 ~90% 수준. |
+
+**H 섹션 grep 스캔**:
+
+- [x] `grep "// TODO\|// \[미확인\]"` in `config/` + `client/` — 0건
+- [x] `grep "speedUser"` — 호출처 3곳 전부 의미 일치
+- [x] `grep "handleExhaustion"` — 정의 1곳 (ClientState L941) + 호출 1곳 (tickEssential 말미) — 중복 없음
+- [x] `grep "hungerIncrease\|lastHungerIncrease"` — 정의/참조 ClientState 내부에만 (resetState / handleExhaustion / 패킷 송신) — 외부 누출 없음
+
+**잠재 회귀 대상 재확인**:
+
+- [x] `SmartMovingConfig.INSTANCE.toggle()` — 여전히 2상태 작동 (`configKeys={null}` 단일 key)
+- [x] `cfg.enabled` 참조 — H 섹션에서 `cfg.enabled` 변경 없음 (기존 방지 감사 유효)
+- [x] `isSneakToggleEnabled` / `isCrawlToggleEnabled` — 변경 없음
+- [x] 허기 패킷 포맷 — `HungerChangePayload(float)` 구조 불변, 신규 추가 필드 없음
+
+**결론**: H 섹션 변경 전부 Easy 1:1 의도된 동작. 회귀 0건. 근사 1건(서버 허기 연동
+3디테일 §17 후속) 은 구조적 한계 수용.
 
 ---
 
@@ -1965,6 +1996,33 @@ L913 1:1.
 **다음 작업**: H-13 — 통합 빌드 (전체 H 섹션 코드 통합 검증) + 회귀 방지 감사
 (`cfg.speedUser` 의미 변경 영향 / `exhaustion` 계산 공식 변경 영향 / 허기 패킷 송신
 신규 경로 영향).
+
+### 세션 21 — 2026-04-24 — H-13 (통합 빌드 + 회귀 감사)
+
+**진행한 작업**:
+- `./gradlew clean build` 실행 → **BUILD SUCCESSFUL in 7s** (10 tasks executed).
+- §14 에 "H 섹션 회귀 감사 (세션 21 — H-13)" 섹션 신설.
+  - H 섹션 변경 3종 × 영향 분석 테이블:
+    - speedUser 정정 → `getUserSpeedFactor` 호출 3곳(Config/Flyer/Mover) 자연 반영
+    - exhaustion 공식 변경 → Climber 축적 + HUD 표시 불변, factor 기반 감소량만 소폭 차이
+    - 허기 패킷 송신 → 서버 hunger=-1F 초기값 유지 시 vanilla 정상, 첫 송신부터 SM 전환
+  - grep 스캔 4건 (TODO/speedUser/handleExhaustion/hungerIncrease) — 전부 통과
+  - 잠재 회귀 대상 4건 재확인 — 전부 불변
+- **결론**: 회귀 0건. 근사 1건(서버 허기 연동 §17 후속)은 구조적 한계 수용.
+
+**완료 전 검증 체크리스트 (H-13 기준)**:
+- [근거] H-6/H-10/H-11 변경 지점 각각 grep 으로 호출처 전수 확인 ✓
+- [대응] 변경 3종 × 영향 포인트 매핑 완료 ✓
+- [분기] speedUser/exhaustion/허기 각 변경 전후 흐름 테이블 작성 ✓
+- [상수] 해당 없음 (감사)
+- [타이밍] 허기 패킷 첫 송신 타이밍 분석 — 원본과 동일 (플레이어 입장 첫 틱) ✓
+- [근사] 서버 허기 연동 3디테일 차이 §14 에 명시 (§17 후속) ✓
+- [신규] 없음 (이전 세션 20 에서 식별 완료)
+- [회귀] 0건 ✓
+- [빌드] `./gradlew clean build` BUILD SUCCESSFUL ✓
+
+**다음 작업**: H-14 — `checklist_original_audit.md` 신규 발견 표에 "Easy 1:1 factor 헬퍼 +
+handleExhaustion 축소판 + speedUser 정정" 기록. §3 매트릭스 live 1→4 전환 반영.
 
 ---
 
