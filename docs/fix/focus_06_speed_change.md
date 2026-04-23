@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 완료 / [~] B-5 범위 초과 (§17 후속) / ⏳ **C 단계 (동기화 정합)** |
+| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 + C-1/C-2 완료 / [~] B-5 §17 이동 / ⏳ **D 단계 (검증 + 포커스 전환)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -290,8 +290,19 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       빌드 ✓. `getCombinedSpeedFactor` / `getSpeedFactor` 도 시그니처 변경 반영.
 
 ### C. 클라이언트/서버 동기화 경로 정합
-- [ ] C-1. 서버 `processSpeedChangePacket` 이 `changeSingleSpeed` 로 서버측 개인값 갱신 후, 해당 플레이어에게 `broadcastConfig` 또는 **개인 Config 재전송** 호출 여부 확인
-- [ ] C-2. 클라이언트 `SpeedChangePayload` 수신 시 `Config.changeSpeed()` 호출 대상(`INSTANCE` vs `SERVER_CONFIG`)이 원본 동작과 맞는지 재확인 + 수정
+- [x] C-1. 서버 `processSpeedChangePacket` 흐름 검증 완료. `Creative 체크 → INSTANCE.
+      changeSingleSpeed(username, difference) → save() → 응답 전송` 정합. `broadcastConfig`
+      미호출은 의도된 설계 (개인 경로, 관리자 전역 `adminChangeSpeed` 만 broadcast).
+      원본 `setPlayerSpeedExponent` 패턴과 일치. 코드 변경 불필요.
+- [x] C-2. 클라 `SpeedChangePayload` 수신 대상 검증 완료. `SmartMovingConfig.Config.
+      changeSpeed(difference)` 호출 대상:
+      - 싱글: `Config == INSTANCE` → `INSTANCE.speedUserExponent += difference`
+      - 멀티(globalConfig): `Config == SERVER_CONFIG` → `SERVER_CONFIG.speedUserExponent +=`
+      양쪽 모두 `getUserSpeedFactor()` 호출 시 클라측 로컬 상태 반영.
+      **이중 상태 확인**: 클라 `speedUserExponent` 필드 (로컬 factor 계산용) + 서버 `INSTANCE.
+      playerSpeedExponents[username]` Map (저장/재전송용) — 다음 서버→클라 재전송 시
+      `toArray(username)` 이 개인 맵 값으로 `move.speed.user.exponent` 치환해 덮어씀 →
+      일관성 유지. 정합, 코드 변경 불필요.
 
 ### D. 검증
 - [ ] D-1. `./gradlew build` 성공
@@ -643,6 +654,42 @@ sprintFactor / `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeed
 **다음 작업**: C 단계 (서버-클라 Config 동기화 정합). `processSpeedChangePacket` 이
 `changeSingleSpeed` 로 서버측 개인값 갱신 후 클라에 재전송 여부 / `SERVER_CONFIG` 경로
 상태 확인.
+
+### 세션 28 (계속) — 2026-04-24 — C-1/C-2 (동기화 정합 검증)
+
+**진행한 작업**:
+- **C-1**: 서버 `processSpeedChangePacket` 흐름 코드 리뷰.
+  - Creative 체크(B-6) → `INSTANCE.changeSingleSpeed(username, difference)` → `save()` →
+    `SpeedChangePayload(difference, null)` 응답 전송
+  - `broadcastConfig` 미호출은 의도된 설계 (개인 경로 — 관리자 전역 `adminChangeSpeed`
+    만 broadcast). 원본 `setPlayerSpeedExponent` 패턴과 일치.
+  - 코드 변경 불필요.
+- **C-2**: 클라 `SpeedChangePayload` 수신 경로 (`SmartMovingClient.java` L82-L95) 리뷰.
+  - `Config.changeSpeed(difference)` 호출 대상이 싱글 `INSTANCE` / 멀티 `SERVER_CONFIG`
+    자동 분기. 양쪽 모두 클라 측 `speedUserExponent` 필드 갱신 → `getUserSpeedFactor`
+    반영.
+  - 이중 상태 확인 결과 정합:
+    - 클라 `speedUserExponent` 필드: 로컬 factor 계산 (`getUserSpeedFactor` 참조)
+    - 서버 `INSTANCE.playerSpeedExponents[username]` Map: 파일 저장 / 재전송
+    - 다음 서버→클라 재전송 시 `toArray(username)` 이 `move.speed.user.exponent` 를
+      개인 맵 값으로 치환 → 클라 `SERVER_CONFIG` 덮어써도 값 일치 → 일관성 유지
+  - 코드 변경 불필요.
+
+**완료 전 검증 체크리스트 (C 단계 기준)**:
+- [근거] 원본 §5.2 B `SmartMovingComm.processSpeedChangePacket` ✓
+- [근거] 원본 `setPlayerSpeedExponent` 패턴 (개인 맵, 로그 없음, broadcast 없음) ✓
+- [대응] 원본 서버 처리 ↔ 1.21.1 `processSpeedChangePacket` 일치 ✓
+- [분기] Creative 체크(B-6) + speedUser 체크 + difference 전송/응답 분기 ✓
+- [상수] 해당 없음
+- [타이밍] 싱글: 클라 changeSpeed 즉시 반영 / 멀티: 클라 changeSpeed + 서버 재전송 덮어쓰기
+  (값 일치) → 원본과 일치
+- [근사] 해당 없음
+- [신규] 없음
+- [회귀] 코드 변경 없음 — 기존 동작 유지
+- [빌드] 해당 없음 (검증)
+
+**다음 작업**: D 단계 (검증 + 포커스 전환) — D-1 clean build / D-2 수동 테스트(사용자 몫) /
+D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
 
 ---
 
