@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 37 — **A 단계 100% 완료**) |
-| 현재 단계 | A-0~A-7 + B-0 완료 — §6 매핑 테이블 통합 / ⏳ **B 단계 Phase 1 (필드 선언 일괄)** |
+| 상태 | 🟡 진행 중 (세션 38 — B Phase 1 일부) |
+| 현재 단계 | A 완료 + B-22a/b/d + B-10a/b/c + B-31b/c (필드 선언 8건) 완료 / ⏳ **Phase 1 잔여 (B-22c / B-31a / B-1a / B-2 헬퍼 / B-3a 헬퍼 / B-8 헬퍼 / B-15a~f 등반 9건)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -593,14 +593,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       - ※ 규모 매우 큼 — 세션 여러 회 분할 권장 (B-9a~g 서브원자 신설 가능)
 
 #### B-10. 미이식 필드 4건 ClientState 이식 + 갱신 로직 (A-2 발견)
-- [ ] B-10a. `isShallowDiveOrSwim` 필드 ClientState 추가 + `couldStandUp && (isDiving ||
-      isSwimming_sm)` 공식 갱신 (원본 L507)
-- [ ] B-10b. `isJumpingOutOfWater` 필드 추가 + wantJumpOutOfWater + waterMovementTicks>10
-      조건 이식 (원본 L486-L487)
-- [ ] B-10c. `isStillSwimmingJump` 필드 추가 + useStandard 경로 false 리셋 이식
-      (원본 L550)
-- [ ] B-10d. `isLevitating` 필드 추가 + `diving && !diveUp && !diveDown && moveStrafe==0
-      && moveForward==0` 공식 이식 (원본 L474/L505)
+- [~] B-10a. **필드만 이식 완료 (세션 38)** — `isShallowDiveOrSwim` 필드 ClientState 추가.
+      공식 갱신 (`couldStandUp && (isDiving || isSwimming_sm)` 원본 L507) 은 B-9 수정 시 이식.
+- [~] B-10b. **필드만 이식 완료 (세션 38)** — `isJumpingOutOfWater` 필드 추가. 조건 이식
+      (wantJumpOutOfWater + waterMovementTicks>10 원본 L486-L487) 은 B-12 수정 시.
+- [~] B-10c. **필드만 이식 완료 (세션 38)** — `isStillSwimmingJump` 필드 추가. false 리셋
+      (useStandard 경로 원본 L550) 은 B-9 수정 시.
+- [ ] B-10d. `isLevitating` **필드는 이미 L179 에 존재** — 공식 이식 `diving && !diveUp &&
+      !diveDown && moveStrafe==0 && moveForward==0` 원본 L474/L505 만 남음. B-9 범위로 이전.
 
 #### B-11. 얕은 물 특수 분기 이식 (A-2 발견)
 - [ ] B-11. 원본 L513-L536 이식 — `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
@@ -668,11 +668,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 - [ ] B-21. 원본 L1485 resetClimbing 에서 false 설정. B-14 완료 후 자동 해결.
 
 #### B-22. 미이식 필드 4건 이식 (A-4 발견)
-- [ ] B-22a. `wasHeadJumping` 필드 추가 (이전 틱 저장용) — ClientState 필드
-- [ ] B-22b. `wasRunning` 필드 추가 — 엣지 판정용
+- [x] B-22a. ✅ **세션 38 완료** — `wasHeadJumping` 필드 추가 + resetState 리셋.
+- [x] B-22b. ✅ **세션 38 완료** — `wasRunning` 필드 추가 + resetState 리셋.
 - [ ] B-22c. `isRunning` 필드 추가 (현재 로컬 변수 → 필드 승격) + `isRunning()` override
-      이식 (원본 L3241 `isSprinting() && !isFast && (onGround || vanilla())`)
-- [ ] B-22d. `isStanding` 필드 추가 — 원본 L1419 + 갱신 공식 L2734
+      이식 (원본 L3241 `isSprinting() && !isFast && (onGround || vanilla())`) — 별도
+      세션 (로컬→필드 승격은 handleExhaustion 수정 포함).
+- [x] B-22d. ✅ **세션 38 완료** — `isStanding` 필드 추가 + resetState 리셋. 갱신 공식
+      L2734 은 B-30 범위.
 
 #### B-23. `isHeadJumping` 매 틱 재평가 5-AND 공식 이식 (A-4 발견)
 - [ ] B-23. 원본 L2524-L2530 tickEssential 에 이식:
@@ -723,9 +725,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 
 #### B-31. 미이식 필드 3건 이식 (A-5 발견)
 - [ ] B-31a. `wasCrawling` 필드 ClientState 추가 (wasCrawling_st 와 구분 — tickEssential
-      이전 틱 저장 전용, L2441 대응)
-- [ ] B-31b. `wantCrawlNotClimb` 필드 + L2452-L2461 갱신 블록
-- [ ] B-31c. `initializeCrawling` 필드 + 관련 로직
+      이전 틱 저장 전용, L2441 대응). **B-33 메인 공식 재작성 시 wasCrawling_st 와 용도
+      통합 검토**.
+- [~] B-31b. **필드만 이식 완료 (세션 38)** — `wantCrawlNotClimb` 필드 추가. L2452-L2461
+      갱신 블록은 B-41 범위.
+- [~] B-31c. **필드만 이식 완료 (세션 38)** — `initializeCrawling` 필드 추가. 관련 로직은
+      B-35 전환 후처리 범위.
 
 #### B-32. `canCrawl` 공식 원본 5-AND 복원 (A-5 발견 — 1:1 원칙 위배)
 - [ ] B-32. ClientState L669-L672 조건 원본 L2434-L2439 로 정정:
@@ -1377,6 +1382,48 @@ updateEntityActionState L2347-L3044 전체 크롤 관련 + R-09 블록 (L2966-L3
 
 한 세션에 Phase 1 의 2~3 원자 묶어서 진행 가능 — 의존 없는 독립 필드들 (B-22a~d /
 B-10a~d / B-15a~f 등) 은 병렬 가능.
+
+### 세션 38 — 2026-04-24 — B Phase 1 일부 — 독립 필드 8건 이식
+
+**진행한 작업**:
+- `SmartMovingClientState.java` 에 미이식 필드 8개 일괄 추가 + resetState 리셋 8개:
+  * L54-L59  `wasHeadJumping` (B-22a) — isHeadJumping 매 틱 재평가 이전 틱 저장
+  * L118-L126 `isStanding` (B-22d) — horizontalSpeedSquare < 0.0005 결과
+  * L128-L133 `wasRunning` (B-22b) — R-09 종료부 저장, sliding 직접 진입 조건
+  * L236-L253 `isShallowDiveOrSwim` (B-10a) — couldStandUp && (isDiving || isSwimming)
+  * L255-L262 `isJumpingOutOfWater` (B-10b) — 수면 탈출 점프 진행 조건
+  * L264-L270 `isStillSwimmingJump` (B-10c) — 수영 점프 hold 상태
+  * L288-L295 `wantCrawlNotClimb` (B-31b) — wouldWantClimb 조건에 사용
+  * L297-L304 `initializeCrawling` (B-31c) — 크롤 초기화 플래그
+- `isLevitating` 은 **L179 에 이미 존재** 확인 → B-10d 는 갱신 로직만 (B-9 범위로 이전)
+- resetState (L896-L935) 에 8개 false 리셋 추가
+- 각 필드에 원본 위치 + 의존 원자 + 용도 상세 주석
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 38 기준)**:
+- [근거] §6 매핑 테이블 (A-7 세션 37) + R-10~R-15 참조 ✓
+- [근거] 원본 SmartMovingSelf 필드 선언 위치 전수 grep ✓
+- [대응] 8 필드 원본 선언 ↔ 1.21.1 이식 위치 1:1 주석 ✓
+- [분기] 각 필드 사용처 (tickEssential / R-09 / isSliding 직접 진입 / handleSwimming /
+  landMotionPost) 주석 기록 ✓
+- [상수] 기본값 false — 원본 public 필드 선언과 동일 ✓
+- [타이밍] 필드 선언만 — 갱신 공식은 후속 B-N 에서 ✓
+- [근사] 없음 (순수 필드 선언)
+- [신규] B-10d (isLevitating) 는 필드 기존 존재 확인 → 상태 [~] 로 부분 완료 처리
+- [회귀] compileJava 성공 — 기존 코드 영향 없음 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**다음 작업 — Phase 1 잔여**:
+- **B-22c** `isRunning` 필드 승격 (로컬 → 필드) + `isRunning()` override (handleExhaustion
+  수정 포함 — 별도 세션)
+- **B-31a** `wasCrawling` 필드 추가 (wasCrawling_st 와 용도 구분 검토)
+- **B-1a** `Config._sprintEnableStanding` (`SmartMovingConfig` 수정)
+- **B-2** 헬퍼 `Config.isSneakingEnabled()` 메서드 신설
+- **B-3a** 헬퍼 `Config.isSprintingEnabled()` 메서드 신설
+- **B-8** 헬퍼 `Config.isSwimmingEnabled() / isDivingEnabled()` 메서드 신설
+- **B-15a~f** 등반 9 필드 (isNeighborClimbing / hasClimbGap / hasNeighborClimbGap /
+  hasNeighborClimbCrawlGap / isVineOnlyClimbing / isVineAnyClimbing / isClimbingStill /
+  handsEdgeBlock / feetEdgeBlock)
 
 ---
 

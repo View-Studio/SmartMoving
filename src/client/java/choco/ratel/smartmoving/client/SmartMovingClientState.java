@@ -49,6 +49,14 @@ public final class SmartMovingClientState {
     /** 헤드점프 상태 */
     public boolean isHeadJumping;
 
+    /**
+     * 원본 SmartMovingSelf L2524 `wasHeadJumping = isHeadJumping` — isHeadJumping 매 틱
+     * 재평가 5-AND 공식 직전 저장. wasHeadJumping && !isHeadJumping && onGround 해제
+     * 엣지 후처리(handleCrash + restoreFromFlying) 및 toSlidingOrCrawling 조건에 사용.
+     * B-23 / B-24 / B-29 의존.
+     */
+    public boolean wasHeadJumping;
+
     /** 벽점프 상태 */
     public boolean isWallJumping;
 
@@ -114,6 +122,23 @@ public final class SmartMovingClientState {
      * C-15: tickEssential()에서 매 틱 계산.
      */
     public boolean isFast;
+
+    /**
+     * 원본 SmartMovingSelf L1419 + L2734 갱신 공식:
+     *   isStanding = horizontalSpeedSquare < 0.0005
+     *   (horizontalSpeedSquare = motionX² + motionZ²)
+     * getJumpSpeed / handleExhaustion Config.getFactor / jumpChargeCondition 등에서 참조.
+     * B-30 공식 이식 의존.
+     */
+    public boolean isStanding;
+
+    /**
+     * 원본 SmartMovingSelf L3043 `wasRunning = isRunning` — R-09 블록 종료부 저장.
+     * isSliding 직접 진입 조건 `(isGroundSprinting || (wasRunning && !isRunning && onGround))`
+     * 및 tryJump 파라미터에 사용.
+     * B-25 / B-26 / B-43 의존.
+     */
+    public boolean wasRunning;
 
     /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
@@ -215,6 +240,31 @@ public final class SmartMovingClientState {
     public boolean isFakeShallowWaterSneaking;
 
     /**
+     * 원본 SmartMovingSelf L1436 / L507 갱신:
+     *   isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)
+     * handleSwimming 얕은 물 특수 분기 (L513-L536) 및 grab.StartPressed 수영/걷기 전환
+     * (L2839) 에 사용. B-10a / B-11 / B-36 의존.
+     */
+    public boolean isShallowDiveOrSwim;
+
+    /**
+     * 원본 SmartMovingSelf L1435 / L487 갱신:
+     *   isJumpingOutOfWater = wantJumpOutOfWater && (waterMovementTicks > 10 || onGround
+     *                                                || wasJumpingOutOfWater)
+     * 수면 탈출 점프 진행 조건. handleSwimming L500 `motionY = 0.30000001192092896D` 설정에 사용.
+     * B-10b / B-12 의존.
+     */
+    public boolean isJumpingOutOfWater;
+
+    /**
+     * 원본 SmartMovingSelf L1438 / L550 갱신:
+     *   useStandard 경로에서 isStillSwimmingJump = false
+     * grab.StartPressed 수영 전환 (L2844) 에서 true 설정 — 수영 점프 hold 상태.
+     * B-10c / B-36 의존.
+     */
+    public boolean isStillSwimmingJump;
+
+    /**
      * 원본 SmartMovingSelf L1797-L1802/L2419-L2432 `wantCrawl` = isCrawlingEnabled && wouldWantCrawl.
      * wouldWantSneak 조건(L2584)에 `&& !wantCrawl` 로 사용. IMPL-01 크롤링 진입 조건과 동일 값.
      */
@@ -225,6 +275,23 @@ public final class SmartMovingClientState {
      * wouldWantSneak 조건(L2585)에 `&& !mustCrawl` 로 사용. IMPL-01 크롤링 유지 강제 조건과 동일.
      */
     public boolean mustCrawl;
+
+    /**
+     * 원본 SmartMovingSelf `wantCrawlNotClimb` (L2452-L2461 갱신):
+     *   wantCrawlNotClimb = wantCrawlNotClimb || (grab.StartPressed && !wasCrawling &&
+     *                       onGround && <추가 조건>) ...
+     * wouldWantClimb 조건(L1822) `!wantCrawlNotClimb` 및 wantClimbCeiling (L1837) 에 사용.
+     * B-31b / B-41 의존.
+     */
+    public boolean wantCrawlNotClimb;
+
+    /**
+     * 원본 SmartMovingSelf `initializeCrawling` (L2399 / L2822 / L2831 / L2834).
+     * 크롤링 초기화 진입 시 setHeightOffset(-1F) + move(0,-1D,0) 처리에 분기 조건으로 사용.
+     * mustCrawl 계산 시 crawlStandUpBottom 계산의 `initializeCrawling ? 0D : 1D` 오프셋에도 사용.
+     * B-31c / B-35 의존.
+     */
+    public boolean initializeCrawling;
 
     /**
      * 원본 SmartMovingSelf L3077 `private boolean contextContinueCrawl`.
@@ -932,6 +999,15 @@ public final class SmartMovingClientState {
         isAerodynamic = false;
         dippingDepth = -1F;
         multiPlayerInitialized  = 0;
+        // B Phase 1 (세션 38) 추가 필드 리셋
+        wasHeadJumping          = false;
+        isStanding              = false;
+        wasRunning              = false;
+        isShallowDiveOrSwim     = false;
+        isJumpingOutOfWater     = false;
+        isStillSwimmingJump     = false;
+        wantCrawlNotClimb       = false;
+        initializeCrawling      = false;
     }
 
     private static boolean canStandUp(ClientPlayerEntity player) {
