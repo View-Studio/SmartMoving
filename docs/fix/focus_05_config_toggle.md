@@ -17,8 +17,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 **재개 (2026-04-24, 세션 22)** — 인게임 테스트 2건 문제 발견 (4상태 스위칭 잔존 / 허기 폭주) |
-| 현재 단계 | ✅ H-0~H-14 + G-5 완료 / ⏳ **H-15 (2상태 복원) + H-16 (허기 delta) 진행** |
+| 상태 | ✅ **재완료 (2026-04-24, 세션 22)** — H-15/H-16 수정 완료 |
+| 현재 단계 | ✅ H-0~H-16 + G-5 완료 / ⏳ 사용자 인게임 재검증 → 통과 시 포커스 #6 재전환 |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -786,24 +786,18 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `configKeys = DEFAULT_KEYS = {null}` 초기값 유지 → `toggle()` 이 2상태(0 ↔ -1)
       로만 순환. F 섹션 메서드는 코드상 유지 (후속 포커스
       `focus_10_config_toggle_cleanup.md` 에서 잉여 일괄 정리). 빌드 ✓
-- [ ] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 측 `handleExhaustion` 말미 송신
-      로직을 **delta 전송** 으로 변경:
-      ```
-      float delta = hungerIncrease - lastHungerIncrease;
-      if (delta != 0F) {
-          ClientPlayNetworking.send(new HungerChangePayload(delta));
-          lastHungerIncrease = hungerIncrease;
-      }
-      ```
-      서버 수신자 (`SmartMoving.java` L108): `sm.hunger = payload.hunger()` →
-      `sm.hunger += payload.hunger()` 누적으로 변경. `MixinServerPlayerEntity` TAIL 구조
-      (`addExhaustion + sm.hunger = 0F` 리셋) 는 유지. 결과: 매 틱 정확히 delta 만
-      addExhaustion → 원본 체감 일치.
-      원본 엄격 1:1 주의: 원본 클라는 hungerIncrease 누적값 전체 전송 + 서버 덮어쓰기.
-      하지만 원본 서버 `addMovementStat` 흐름의 `withinOnLivingUpdate` 스킵 로직과
-      조합되어 결과적으로는 delta 적용과 근사. 1.21.1 에서는 `withinOnLivingUpdate` 이식
-      대신 delta 전송으로 동일 결과 달성 — §17 `focus_11_server_hunger_sync.md` 후속
-      포커스가 원본 구조 완전 복원 시 이 우회 해제 가능.
+- [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:
+      - `ClientState.handleExhaustion` 말미: `hungerIncrease != lastHungerIncrease` →
+        `float delta = hungerIncrease - lastHungerIncrease; if (delta != 0F) send(delta);`.
+      - `SmartMoving.java` L106-L109 서버 수신자:
+        `sm.hunger = payload.hunger()` → `sm.hunger < 0F` 이면 첫 수신으로 덮어쓰기,
+        아니면 `sm.hunger += payload.hunger()` 누적.
+      - `MixinServerPlayerEntity.sm_afterTravel` TAIL 구조 (addExhaustion + sm.hunger=0F 리셋) 유지.
+      - 결과: 매 틱 정확히 delta 만 addExhaustion → 원본 체감 일치.
+      - 원본 엄격 1:1 주의: 원본은 클라가 hungerIncrease 누적값 전체 전송하지만 서버
+        `withinOnLivingUpdate` 스킵 로직으로 결과적으로 delta 근사. 1.21.1 는 해당 플래그
+        미이식이라 클라 측 delta 전송으로 동등 결과. §17 `focus_11_server_hunger_sync.md`
+        후속에서 withinOnLivingUpdate 이식 시 이 우회 해제 가능.
 
 ---
 

@@ -1032,11 +1032,20 @@ public final class SmartMovingClientState {
         //       SmartMovingPacketStream.sendHungerChange(SmartMovingComm.instance, hungerIncrease);
         //       lastHungerIncrease = hungerIncrease;
         //   }
-        // 1.21.1: ClientPlayNetworking.send(HungerChangePayload). 서버 수신: SmartMoving.java L106-L109
-        // 에서 sm.hunger 갱신 → MixinServerPlayerEntity:50 에서 vanilla addExhaustion(sm.hunger) 연동.
-        if (hungerIncrease != lastHungerIncrease) {
+        //
+        // ⚠️ H-16 (세션 22) 폭주 수정: 원본은 누적값 hungerIncrease 전체를 전송하지만,
+        // 1.21.1 서버측 `MixinServerPlayerEntity.sm_afterTravel` 이 매 틱 `addExhaustion
+        // (sm.hunger) + sm.hunger = 0F` 로 리셋하는 구조라 누적값을 그대로 보내면 매 틱
+        // 전체 누적이 addExhaustion 에 적용됨 (5초 내 ~12 food 소비). 원본은
+        // `withinOnLivingUpdate` 스킵 로직으로 해결. 1.21.1 는 해당 플래그 미이식이라
+        // **delta 전송** (`hungerIncrease - lastHungerIncrease`) 로 동등 결과 달성.
+        // 서버 수신자는 sm.hunger += payload.hunger() 누적 (H-16 동반 수정).
+        // 완전한 원본 구조 복원은 `focus_11_server_hunger_sync.md` 후속에서 withinOnLivingUpdate
+        // 이식 + 이 delta 우회 해제.
+        float delta = hungerIncrease - lastHungerIncrease;
+        if (delta != 0F) {
             if (ClientPlayNetworking.canSend(SmartMovingNetwork.HungerChangePayload.ID)) {
-                ClientPlayNetworking.send(new SmartMovingNetwork.HungerChangePayload(hungerIncrease));
+                ClientPlayNetworking.send(new SmartMovingNetwork.HungerChangePayload(delta));
             }
             lastHungerIncrease = hungerIncrease;
         }
