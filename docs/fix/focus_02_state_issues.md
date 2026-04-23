@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 29 — A-0 감사 계획 수립) |
-| 현재 단계 | A-1 완료 (isSlow/isFast 3건 불일치 발견) / ⏳ **A-2 (수중 3상태)** 또는 **B-1/B-2/B-3 선행 수정** |
+| 상태 | 🟡 진행 중 (세션 30 — 1:1 원칙 재확인 + §10 B 원자 분해) |
+| 현재 단계 | A-0/A-1 완료 + §10 B 원자 분해 완료 / ⏳ **B-0 (리서치 보강)** 또는 **A-2 (수중 3상태)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -189,24 +189,73 @@
 
 ### B. 각 필드별 불일치 수정 (A-N 매핑 결과 기반)
 
-- [ ] B-1. **`isFast` 공식 교체** (A-1 발견) — 원본 6갈래 OR 이식. 선행 필요:
-      - `isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` / `isDiveSprinting` /
-        `isCeilingSprinting` / `isFlyingSprinting` 6개 로컬 변수 신설
-      - `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed` 의존
-        필드 1.21.1 이식 여부 확인 (미이식 시 별도 원자)
-      - `standing = onGround && !isSliding && !isCrawling` 신설
-      - `Config._sprintEnableStanding` 필드 확인/이식
-      - 원본 L2688-L2695 isClimbSprinting 중복 포함 1:1 보존
-- [ ] B-2. **`isSlow` 공식 정정** (A-1 발견) — `isSlow = wantSneak && wouldIsSneaking`.
-      `wantSneak = cfg.sneak && cfg.enabled && wouldWantSneak` 추가. `Config.isSneakingEnabled()`
-      대응은 `cfg.sneak && cfg.enabled` — 기존 `sneakContinueInput` 중복 제거.
-- [ ] B-3. **`wouldIsSneaking` 에서 `wantSprint` 이식** (A-1 발견) — 원본 L2595-L2615 6조건
-      OR 공식 이식. `wantSprint` 필드 + 계산 블록 신설. 의존 필드 전체 확인:
-      `Config.isSprintingEnabled()` / `sprintButton` / `moveForwardButtonPressed` /
-      `moveButtonPressed` / `jumpButton` / `disabled` / `isFlying` / `isSliding` /
-      `isClimbing` / `isSwimming_sm` / `isDiving` 등. vanilla `player.isSprinting()` 로 단순
-      대체된 부분 정정.
-- [ ] B-N. (A-2 ~ A-6 추가 발견에 따라 동적 추가)
+> **원칙 (세션 30 재확인)**: 근사/간소/대체 매핑 금지. 원본 코드 100% 이식. 의존 필드도
+> 원본 선언·계산을 그대로. 1.21.1 컨벤션(`MinecraftClient` / `KeyBinding` 등) 으로의
+> 표면 매핑만 허용, 로직 구조는 원본 1:1. 컨텍스트 압박 시 각 원자를 더 쪼개도 됨.
+
+#### B-0. 원본 리서치 보강 (B-1/B-3 선행 필수)
+- [ ] B-0. Agent WebFetch 로 `SmartMovingSelf.java` 에서 다음 블록 전수 덤프 →
+      `docs/research/original/smartmoving/moving/SmartMovingSelf.md` 임베드 + §5 에도 인용:
+      - `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed`
+        필드 선언 + 계산 블록 (모든 사용처 포함)
+      - 6 Sprint 변종 (`isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` /
+        `isDiveSprinting` / `isCeilingSprinting` / `isFlyingSprinting`) 필드 선언 +
+        계산 블록
+      - `standing` / `disabled` 필드 선언 + 사용처
+      - `wantSprint` 계산 블록 L2595-L2615 주변 20줄 맥락 포함
+      - `isFast` / `isSlow` / `wouldIsSneaking` 계산 블록 L2688-L2719 전체
+
+#### B-1. `isFast` 공식 6갈래 OR 이식 (원자 6개 분해)
+- [ ] B-1a. `Config._sprintEnableStanding` 1.21.1 `SmartMovingConfig` 이식 확인
+      (원본 `SmartMovingConfig.java` L313 `Unmodified("move.sprint.enable.ground")`).
+      필드 grep → 미이식 시 신설 + `SmartMovingProperties` 확장.
+- [ ] B-1b. Button 클래스 ↔ 1.21.1 KeyBinding 매핑 테이블 §6 에 작성:
+      `sprintButton` / `jumpButton` / `grabButton` / `sneakButton` /
+      `moveForwardButton` / `moveBackwardButton` / `moveLeftButton` / `moveRightButton` —
+      각 `.Pressed` / `.StartPressed` / `.StopPressed` 의 1.21.1 대응 (`isPressed()` /
+      `wasPressed()` / `SmartMovingKeys.*` 엣지 검출 필드). 기존 구현 grep 으로 확인.
+- [ ] B-1c. `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed`
+      4 판정 ClientState 이식 — 원본 선언 + 계산 블록 1:1.
+- [ ] B-1d. 6 Sprint 변종 (`isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` /
+      `isDiveSprinting` / `isCeilingSprinting` / `isFlyingSprinting`) ClientState 이식
+      — 원본 선언 + 계산 블록 1:1.
+- [ ] B-1e. `standing = onGround && !isSliding && !isCrawling` 로컬 변수 이식
+      (`tickEssential` isFast 계산 직전).
+- [ ] B-1f. `SmartMovingClientState.tickEssential` L653 `isFast` 공식 6갈래 OR 로 교체
+      (원본 `SmartMovingSelf` L2688-L2695, `isClimbSprinting` 중복 1:1 보존).
+
+#### B-2. `isSlow` 공식 정정 (단일 원자)
+- [ ] B-2. `SmartMovingClientState.tickEssential` L650-L651 정정 (원본 L2588-L2590 / L2718):
+      - `wantSneak = Config.isSneakingEnabled() && wouldWantSneak` 신설
+      - `Config.isSneakingEnabled()` 1.21.1 매핑은 `cfg.sneak && cfg.enabled` 로 원자 B-2
+        범위 내 헬퍼 메서드 신설 (Config 에 `boolean isSneakingEnabled()`)
+      - `isSlow = wantSneak && wouldIsSneaking`
+      - 기존 `sneakContinueInput` 중복 곱 제거
+      - ※ `wouldIsSneaking` 은 B-3b 에서 처리 — B-2 는 `isSlow` 우변만 교체
+
+#### B-3. `wantSprint` 신설 + `wouldIsSneaking` 정정 (원자 2개 분해)
+- [ ] B-3a. `wantSprint` 필드 + 6조건 OR 계산 블록 이식 (원본 `SmartMovingSelf` L2595-L2615).
+      의존 필드 전수 확인 + 미이식 시 신설:
+      - `Config.isSprintingEnabled()` 1.21.1 매핑 (`cfg.sprint && cfg.enabled`) 헬퍼 메서드
+      - `sprintButton.Pressed` (B-1b 매핑 결과 사용)
+      - `moveForwardButtonPressed` / `moveButtonPressed` / `jumpButton` (B-1b 매핑)
+      - `disabled` (ClientState 또는 Config 필드 존재 여부 확인)
+      - `isFlying` / `isSliding` / `isClimbing` / `isSwimming_sm` / `isDiving`
+        (ClientState 기존 필드)
+- [ ] B-3b. `SmartMovingClientState.tickEssential` L650 `wouldIsSneaking` 정정:
+      `wouldWantSneak && !wantSprint && !isClimbing` (원본 L2712). vanilla `isSprinting()`
+      단순 대체 제거.
+
+#### B-4. R-09 토글 블록 `wantSneak_/wantSprint_` 간소 매핑 제거 (§16 세션 30 신규)
+- [ ] B-4. `SmartMovingClientState.tickEssential` L788-L792 "간소 매핑" 주석 + 로컬 변수
+      `wantSneak_` / `wantSprint_` 를 B-2/B-3 에서 확정된 필드(`wantSneak` / `wantSprint`)로
+      교체. 원본 L2986 참조. 간소 매핑 주석 제거.
+
+#### B-5. `SmartMovingSwimmer.java` L159 "1.21.1 간소화" 원본 대조 (§16 세션 30 신규)
+- [ ] B-5. `SmartMovingSwimmer.java` L159 간소화 지점 원본 `handleSwimming` 과 side-by-side
+      대조 → 불일치면 정정 원자 추가 (B-5a~). 1:1 이면 주석만 제거.
+
+#### B-N. A-2~A-6 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -336,6 +385,60 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 - 기본 추천: **옵션 A** — A-1 불일치가 크고 의존 필드 많아 B-1 부터 단계적 수정 필요.
   B-1 의존 필드 (canHorizontallySprint 등) 가 미이식이면 규모 더 커짐 — 먼저 확인.
 
+### 세션 30 — 2026-04-24 — 1:1 원칙 재확인 + §10 B 원자 분해
+
+**배경**: 사용자 지시 — "이제부터는 진짜로 무조건 1:1 번역이 되어야 된다. 컨텍스트
+터질 것 같으면 작업을 쪼개서 파일 체크리스트를 수정하면 되잖아. 상태와 관련된 모든
+코드와 원본 리서치를 그대로 1:1 번역." → 세션 29 말미 내가 제안한 "B-2 경량 먼저"
+하이브리드 절충안 철회. 근사·간소·대체 매핑 전부 금지 재확인.
+
+**진행한 작업**:
+- B-1/B-3 의존 필드 1.21.1 grep 전수 확인:
+  * `isGroundSprinting` — Jumper 로컬 변수 1곳만 (ClientState 필드 아님)
+  * `isClimbSprinting` / `isSwimSprinting` / `isDiveSprinting` / `isCeilingSprinting` /
+    `isFlyingSprinting` — 전부 미이식
+  * `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed` —
+    전부 미이식
+  * `Config._sprintEnableStanding` — 1.21.1 Config 미이식
+  * `wantSprint` — 주석에만 존재 (계산 블록 없음)
+  * `standing` — 미이식
+- 리서치 파일 상태 확인:
+  * `docs/research/original/smartmoving/moving/SmartMovingSelf.md` 에 `wantSprint` /
+    `isGroundSprinting` / `sprintButton` / `_sprintEnableStanding` 관련 블록 일부 존재
+  * `can*` 4 판정은 리서치에도 미수록 → B-0 원자로 Agent WebFetch 덤프 선행
+- "간소 매핑" 주석 2건 발견 (§16 세션 30):
+  * `SmartMovingClientState.java` L788 — R-09 토글 블록 `wantSneak_/wantSprint_`
+  * `SmartMovingSwimmer.java` L159 — 수영 상태 "1.21.1 간소화"
+  → §10 B-4 / B-5 원자 추가
+- §10 B 단계 재구성:
+  * B-0 신설 — 원본 리서치 보강 (Agent WebFetch)
+  * B-1 → B-1a~f 6원자 분해 (Config 필드 → Button 매핑 → can* → 6 Sprint 변종 →
+    standing → isFast)
+  * B-2 단일 유지 (isSlow — Config.isSneakingEnabled 헬퍼 신설 포함)
+  * B-3 → B-3a~b 2원자 (wantSprint 신설 → wouldIsSneaking 정정)
+  * B-4 R-09 간소 매핑 제거
+  * B-5 Swimmer 간소화 원본 대조
+  * B-N 동적 추가 (A-2~A-6 발견분)
+- §1 진행 상황 + §16 신규 발견 갱신.
+
+**완료 전 검증 체크리스트 (세션 30 기준 — 문서 재구성)**:
+- [근거] 1.21.1 grep 으로 의존 필드 미이식 전수 확인 ✓
+- [근거] 리서치 파일 기존 수록 범위 grep 확인 ✓
+- [대응] 원본 관련 코드 전부 1:1 이식 원칙 명시 (§10 B 도입부) ✓
+- [분기] B-1 6원자 / B-3 2원자로 분해 — 각 원자 의존 필드 명시 ✓
+- [상수] `_sprintEnableStanding` = `"move.sprint.enable.ground"` 기본값 원본 참조 명시 ✓
+- [타이밍] 계산 순서 (Sprint 변종 → standing → isFast / wantSprint → wouldIsSneaking →
+  isSlow) 원자 순서에 반영 ✓
+- [근사] 근사 매핑 금지 명시, B-4/B-5 로 기존 간소 매핑 제거 원자 추가 ✓
+- [신규] §16 "간소 매핑" 2건 등록 ✓
+- [회귀] 코드 변경 없음 (문서만)
+- [빌드] 해당 없음
+
+**다음 작업 선택지 (세션 30 기준)**:
+- **권고 순서**: B-0 (리서치 보강) → A-2~A-6 병행 감사 → A-7 매핑 → B-1a~f → B-2 →
+  B-3a~b → B-4 → B-5 → C. A-2~A-6 에서 수중/등반 필드의 sprint 의존 교차 발견 가능.
+- 또는 B-0 → B-1a~f → B-2 → B-3a~b 먼저 완결 후 A-2~A-6 감사. 사용자 판단.
+
 ---
 
 ## 16. 신규 발견
@@ -379,6 +482,24 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 
 **수정 범위**: §10 B-1 (isFast) / B-2 (isSlow) / B-3 (wouldIsSneaking + wantSprint) 3건.
 각 B-N 은 의존 필드 신설 포함이라 적당한 규모.
+
+### 세션 30 — "간소 매핑" 주석 2건 발견 (B-4 / B-5)
+
+1:1 번역 원칙 재확인 중 1.21.1 코드 grep 으로 발견:
+
+1. **`SmartMovingClientState.java` L788** — R-09 토글 블록
+   - 주석: `// 원본 L2986: wantSneak/wantSprint 참조. 간소 매핑: wantSneak=sneakContinueInput,
+     wantSprint=isSprinting.`
+   - 로컬 변수 `wantSneak_` (L789-L791) + `wantSprint_` (L792) 가 원본 `wantSneak` (Config
+     게이트 포함 6조건) / `wantSprint` (Config 게이트 포함 6조건 OR) 과 다른 간소 매핑.
+   - 수정: B-4 — B-2/B-3 완료 후 확정된 필드로 교체.
+
+2. **`SmartMovingSwimmer.java` L159** — 수영 상태 판정 관련
+   - 주석: `// 1.21.1 간소화:` — 어떤 부분이 간소화되었는지 원본 대조 필요.
+   - 수정: B-5 — A-2 (수중 3상태) 감사 시 함께 대조, 간소화 부분 원자 분해.
+
+**원칙 (세션 30)**: 1:1 번역 절대 원칙 — 근사·간소·대체 매핑 전부 금지. 의존 필드 규모
+크면 체크리스트 쪼개서 여러 세션 분산 (§10 B-1a~f 선례). 컨텍스트 압박 ≠ 축약 허용 근거.
 
 ---
 
