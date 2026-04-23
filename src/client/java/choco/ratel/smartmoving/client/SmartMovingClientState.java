@@ -214,6 +214,18 @@ public final class SmartMovingClientState {
      */
     public boolean isFakeShallowWaterSneaking;
 
+    /**
+     * 원본 SmartMovingSelf L1797-L1802/L2419-L2432 `wantCrawl` = isCrawlingEnabled && wouldWantCrawl.
+     * wouldWantSneak 조건(L2584)에 `&& !wantCrawl` 로 사용. IMPL-01 크롤링 진입 조건과 동일 값.
+     */
+    public boolean wantCrawl;
+
+    /**
+     * 원본 SmartMovingSelf L1792-L1794 `mustCrawl` = 머리 위 공간 부족 여부.
+     * wouldWantSneak 조건(L2585)에 `&& !mustCrawl` 로 사용. IMPL-01 크롤링 유지 강제 조건과 동일.
+     */
+    public boolean mustCrawl;
+
     /** 원본 L2717 `wasSneaking = isSlow` (이전 틱 isSlow 저장, willStartSneak/willStopSneak 조건용). */
     public boolean wasSneaking;
 
@@ -491,8 +503,38 @@ public final class SmartMovingClientState {
             wasCrawling_st = isCrawling;
             wasClimbCrawling = isClimbCrawling;
 
+            // ── wantCrawl / mustCrawl pre-compute (원본 L2419-L2432 + L1792-L1794) ────
+            // 원본에서 이 값들은 wouldWantSneak 계산 앞에 확정되며, 1.21.1 도 동일 순서로 이식.
+            // `player.isSneaking()` 은 sm_isSneaking override 가 isSlow 를 참조하여 순환 가능 →
+            // 원본처럼 **raw sneakKey + sneakToggled** 사용(원본 L1801: `sneakToggled || sneakButton.Pressed`).
+            // IMPL-01 의 실제 isCrawling 전환 로직은 이 필드 값을 재사용.
+            boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
+            SmartMovingConfig cfg0 = SmartMovingConfig.Config;
+            boolean grabJustPressed0 = SmartMovingKeys.grab.wasPressed();
+            if (cfg0.crawl && cfg0.enabled) {
+                if (!isCrawling) {
+                    wantCrawl = grabJustPressed0
+                            && (sneakPressedRaw || sneakToggled)
+                            && player.isOnGround()
+                            && !isFlying && !isSwimming_sm && !isDiving && !isDipping
+                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                            && !isSliding && !isHeadJumping;
+                    mustCrawl = !canStandUp(player)
+                            && !isSwimming_sm && !isDiving
+                            && (!isDipping || dippingDepth < 0.65F);
+                } else {
+                    // 원본 wouldWantCrawl L1800: `isCrawling && (inputContinueCrawl || contextContinueCrawl)`
+                    // 이미 크롤링 중이면 유지 의미로 wantCrawl=true 근사.
+                    wantCrawl = true;
+                    mustCrawl = !canStandUp(player) && (!isDipping || dippingDepth < 0.65F);
+                }
+            } else {
+                wantCrawl = false;
+                mustCrawl = false;
+            }
+
             // C-15: isSlow / isFast / isFlying 매 틱 계산
-            // 원본 L2576-L2586 sneakContinueInput + wouldWantSneak + L2711-2719 wouldIsSneaking/isSlow 1:1 이식.
+            // 원본 L2576-L2586 sneakContinueInput + wouldWantSneak + L2711-2719 wouldIsSneaking/isSlow 1:1.
             //   sneakContinueInput = isSneakToggleEnabled ? (sneakToggled || sneakStartPressed) : sneakPressed
             //   wouldWantSneak = !flying && !sliding && !headJumping
             //                    && !(diving && diveDownOnSneak)
@@ -502,12 +544,6 @@ public final class SmartMovingClientState {
             //                    && (!isCrawlingEnabled || !grabPressed)
             //   wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing
             //   isSlow = wantSneak && wouldIsSneaking (wantSneak 은 sneakContinueInput 로 매핑)
-            //
-            // 잔여: wantCrawl/mustCrawl 참조는 현재 IMPL-01 크롤링 블록 내부 로컬 변수라 순서 문제.
-            //   원본은 L2419 wouldWantCrawl 이 L2577 wouldWantSneak 보다 앞에 계산됨 — 1.21.1 은
-            //   IMPL-01 블록이 isSlow 다음에 위치하여 접근 불가. 리팩토링 후속. 현재는 두 조건 생략.
-            boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
-            SmartMovingConfig cfg0 = SmartMovingConfig.Config;
             boolean sneakContinueInput = cfg0.sneakToggle
                     ? (sneakToggled || sneakKeyStartPressed)
                     : sneakPressedRaw;
@@ -520,7 +556,8 @@ public final class SmartMovingClientState {
                     && !(isDiving && cfg0.diveDownOnSneak)
                     && !(isSwimming_sm && cfg0.swimDownOnSneak && !isFakeShallowWaterSneaking)
                     && sneakContinueInput
-                    // && !wantCrawl && !mustCrawl   // ← 후속 (순서 리팩토링 필요)
+                    && !wantCrawl
+                    && !mustCrawl
                     && (!crawlingEnabled0 || !grabPressed0);
             wouldIsSneaking = wouldWantSneak && !player.isSprinting() && !isClimbing;
             isSlow = sneakContinueInput && wouldIsSneaking;
@@ -533,23 +570,11 @@ public final class SmartMovingClientState {
             // wasCollidedHorizontally: 이전 틱 물리 결과 (HEAD에서 캡처 → 원본 beforeOnUpdate)
             wasCollidedHorizontally = player.horizontalCollision;
 
-            // IMPL-01: 크롤링 진입/유지/해제
-            // 원본 트리거: grabButton.StartPressed && (sneakToggled || sneakButton.Pressed) && onGround
+            // IMPL-01: 크롤링 진입/유지/해제 — wantCrawl/mustCrawl 필드는 isSlow 계산 앞에서 이미 확정됨.
             SmartMovingConfig cfg = SmartMovingConfig.Config;
             if (cfg.crawl) {
                 boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
                 if (!isCrawling) {
-                    boolean wantCrawl = grabJustPressed
-                            && player.isSneaking()
-                            && player.isOnGround()
-                            && !isFlying && !isSwimming_sm && !isDiving && !isDipping
-                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
-                            && !isSliding && !isHeadJumping;
-                    // 원본 canCrawl: !isSwimming && !isDiving && (!isDipping || dippingDepth < 0.65F)
-                    // mustCrawl도 canCrawl 게이트 적용 — 수영 중 mustCrawl이 크롤링을 강제하지 않도록
-                    boolean mustCrawl = !canStandUp(player)
-                            && !isSwimming_sm && !isDiving
-                            && (!isDipping || dippingDepth < 0.65F);
                     if (wantCrawl || mustCrawl) {
                         isCrawling = true;
                         // 원본: Options.isCrawlToggleEnabled() 게이트 — _crawlToggle 기본값 false(홀드)
@@ -557,9 +582,7 @@ public final class SmartMovingClientState {
                         ignoreNextStopSneakButtonPressed = true;
                     }
                 } else {
-                    // 원본 canCrawl 게이트: 수심이 0.65F 이상이면 mustCrawl 해제 → 수영 전환 허용
-                    boolean mustCrawl = !canStandUp(player)
-                            && (!isDipping || dippingDepth < 0.65F);
+                    // wantCrawl/mustCrawl 은 위 pre-compute 블록에서 확정 — mustCrawl 은 canCrawl 게이트 포함.
                     if (mustCrawl) {
                         // 공간 부족 — 강제 유지
                     } else if (crawlToggled) {
@@ -775,6 +798,8 @@ public final class SmartMovingClientState {
         crawlToggled = false;
         sneakToggled = false;
         isFakeShallowWaterSneaking = false;
+        wantCrawl = false;
+        mustCrawl = false;
         ignoreNextStopSneakButtonPressed = false;
         wasSneaking = false;
         wasCrawling_st = false;
