@@ -394,7 +394,8 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] C-5. `getNextKey(String)` — 원본 L106-L118 1:1 + 의존 `getKey(int)` L99-L104 함께 이식.
       두 메서드는 연계 동작(getNextKey 가 getKey(0) 호출)이므로 단일 원자 단위로 묶음.
       `key==null \|\| "disabled"` → `getKey(0)` / keys 매칭 다음 인덱스 / 마지막·미매칭 → "disabled".
-- [ ] C-6. `hasKey(String)` — configKeys 검색
+- [x] C-6. `hasKey(String)` — 원본 L145-L156 1:1. `Enabled`/`Disabled` 특수 분기 +
+      배열 내 null 포함 검색. 호출처는 `setCurrentKey(String)` 이식 시 유효성 체크로 연결 예정.
 
 ### D. 서버 로그 4상태 확장
 - [ ] D-1. `SmartMovingServer.logConfigState` 의 `currentKey==null` / `configName==""` / `configName!=""` 3갈래 분기 복원
@@ -812,6 +813,45 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [빌드] `./gradlew build` ✓
 
 **다음 작업**: C-6 — `hasKey(String)` (원본 L145-L156).
+
+### 세션 7 — 2026-04-23 — C-6
+
+**진행한 작업**:
+- C-6: `SmartMovingConfig.hasKey(String)` 신규 메서드 추가.
+- 원본 `SmartMovingProperties.hasKey()` L145-L156 1:1:
+    ```java
+    public boolean hasKey(String key) {
+        if (CONFIG_KEY_ENABLED.equals(key))
+            return configKeys[0] == null;
+        if (CONFIG_KEY_DISABLED.equals(key))
+            return true;
+        for (int i = 0; i < configKeys.length; i++)
+            if (key == null && configKeys[i] == null
+                    || key != null && key.equals(configKeys[i]))
+                return true;
+        return false;
+    }
+    ```
+- 분기 3갈래:
+    - `"enabled"` → `configKeys[0] == null` (DEFAULT_KEYS 단순 on/off 모드 판정)
+    - `"disabled"` → 항상 true
+    - 그 외 → 배열 탐색 (null 포함 동치 비교)
+- 호출처 없음 (C-7 예정 `setCurrentKey(String)` 에서 유효성 체크로 참조). 신규 메서드만 — 회귀 영향 없음.
+
+**완료 전 검증 체크리스트 (C-6 기준)**:
+- [근거] `SmartMovingProperties.md` L145-L156 원본 임베드 확인 ✓
+- [대응] 원본 11줄 ↔ 구현 11줄 1:1 (중괄호/들여쓰기 포함 동등) ✓
+- [분기] 세 분기(Enabled/Disabled/배열 탐색) 그대로 ✓
+- [상수] `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 사용 ✓
+- [타이밍] 호출처 없음 — C-7(setCurrentKey) 이식 시 연결
+- [근사] 해당 없음 (완전 재현)
+- [신규] 없음
+- [회귀] 신규 메서드만 — 영향 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-7 (신규 등록 필요) — `setCurrentKey(String)` 이식 + Options.toggle()
+override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
+또는 D 섹션 진입(`SmartMovingServer.logConfigState` 4상태 분기 복원) 중 선택.
 
 ---
 

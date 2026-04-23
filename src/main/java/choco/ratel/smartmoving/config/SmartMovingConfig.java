@@ -742,6 +742,37 @@ public class SmartMovingConfig {
         return CONFIG_KEY_DISABLED;
     }
 
+    /**
+     * 원본 SmartMovingProperties.hasKey(String key) (L145-L156) 1:1 이식.
+     *
+     *   public boolean hasKey(String key) {
+     *       if (Enabled.equals(key))
+     *           return keys[0] == null;     // {null} (DEFAULT_KEYS) 일 때만 true
+     *       if (Disabled.equals(key))
+     *           return true;                 // "disabled" 는 항상 유효
+     *       for (int i = 0; i < keys.length; i++)
+     *           if (key == null && keys[i] == null || key != null && key.equals(keys[i]))
+     *               return true;
+     *       return false;
+     *   }
+     *
+     * 동작:
+     *   "enabled"  → configKeys[0]==null 일 때만 true (DEFAULT_KEYS 단순 on/off 모드)
+     *   "disabled" → 항상 true
+     *   그 외      → configKeys 내 존재 여부 (null 도 비교)
+     */
+    public boolean hasKey(String key) {
+        if (CONFIG_KEY_ENABLED.equals(key))
+            return configKeys[0] == null;
+        if (CONFIG_KEY_DISABLED.equals(key))
+            return true;
+        for (int i = 0; i < configKeys.length; i++)
+            if (key == null && configKeys[i] == null
+                    || key != null && key.equals(configKeys[i]))
+                return true;
+        return false;
+    }
+
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
     }
