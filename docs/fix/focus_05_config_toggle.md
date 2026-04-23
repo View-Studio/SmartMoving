@@ -10,7 +10,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 |
-| 현재 단계 | ⏳ A. 원본 소스 확보 (WebFetch 대기) |
+| 현재 단계 | ✅ A 완료 (리서치 파일만으로 충분) / ⏳ B-1 대기 |
 | 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 |
 | 컴파일 상태 | (수정 전) 정상 |
 
@@ -354,9 +354,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 ## 10. 원자 단위 작업 목록
 
 ### A. 원본 소스 확보 (WebFetch)
-- [ ] A-1. Agent WebFetch — `Property.java` 의 `setCurrentKey` / `getCurrentKey` / `getNextKey` / `hasKey` / `update` 덤프
-- [ ] A-2. Agent WebFetch — `SmartMovingOptions.java` 의 `toggle()` override / `initializeForGameIfNeccessary()` 덤프
-- [ ] A-3. 확보된 코드를 리서치 파일(`SmartMovingProperties.md` / `SmartMovingOptions.md`)에 추가
+- [x] A-1. ~~Agent WebFetch — `Property.java`~~ → **리서치 파일 `SmartMovingProperties.md` L15-L174 에 전체 소스 이미 완전 임베드 확인**. `setCurrentKey`/`getCurrentKey`/`getNextKey`/`hasKey`/`update`/`toggle`/`setKeys` 본체, `_defaultKeys`/`keys`/`toggler`/`enabled` 필드 전부 존재. WebFetch 불필요.
+- [x] A-2. ~~Agent WebFetch — `SmartMovingOptions.java`~~ → **리서치 파일 `SmartMovingOptions.md` L500-L531(toggle override), L840-L889(initializeForGameIfNeccessary) 에 완전 임베드 확인**. `SmartMovingConfig.md` L630-L633 에 `Survival=0`/`Creative=1`/`Adventure=2`/`Unknown=-1` 상수도 확보됨. WebFetch 불필요.
+- [x] A-3. 리서치 파일 이미 완전 — 보완 불필요.
 
 ### B. `SmartMovingConfig` 필드 추가
 - [ ] B-1. `configKeys` 필드 (String[], default `{"e","m","h"}`)
@@ -488,11 +488,42 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 **다음 작업**: A-1 / A-2 — Agent WebFetch 로 원본 `Property.java` / `SmartMovingOptions.java` 코드 확보
 
+### 세션 2 — 2026-04-23
+
+**진행한 작업**:
+- Agent WebFetch 시도 → Agent 가 `net.smart.properties.Property` 를 봤으나 실제 대상은
+  `net.smart.moving.config.SmartMovingProperties` (별개 클래스). 혼동 확인.
+- 리서치 파일 재검증:
+  - `SmartMovingProperties.md` L15-L174 전체 소스 임베드 확인 — `toggle`/`setKeys`/
+    `getCurrentKey`/`getNextKey`/`setCurrentKey`/`hasKey`/`update`/`_defaultKeys`/`toggler`/`keys` 모두 존재
+  - `SmartMovingOptions.md` L500-L531 `toggle()` override 확인
+  - `SmartMovingOptions.md` L840-L889 `initializeForGameIfNeccessary()` 확인
+  - `SmartMovingConfig.md` L630-L633 gameType 상수 `Survival=0` / `Creative=1` / `Adventure=2` / `Unknown=-1` 확인
+- 결론: A-1 / A-2 / A-3 추가 WebFetch 불필요. 리서치 파일만으로 B 단계 진입 가능.
+- A-1 / A-2 / A-3 [x] 처리.
+
+**완료 전 검증 체크리스트 (A 섹션 기준)**:
+- [근거] 원본 코드 리서치 파일 존재 확인 ✓
+- [근거] 출처 URL 리서치 파일 상단 명시 ✓
+- 나머지 항목은 "리서치 확인" 작업이라 해당 없음
+
+**다음 작업**: B-1 — `SmartMovingConfig` 에 `configKeys` / `toggler` / `currentConfigKey` /
+`configKeyName` 필드 추가.
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
 
-_(비어있음 — 작업 진행하며 기록)_
+### 세션 2 (2026-04-23) — 리서치/Agent 혼동 주의
+
+- **`net.smart.properties.Property` ≠ `net.smart.moving.config.SmartMovingProperties`**:
+  서로 다른 클래스. Agent WebFetch 시 경로 혼동 가능성 있음. SmartMovingProperties
+  는 SmartMoving 전용 추상 클래스로 `toggle`/`setKeys`/`toggler`/`keys` 를 정의.
+  `net.smart.properties.Property` 는 단일 Property 래퍼로 `update(key)`/`getCurrentKey()`
+  (version source 기반) 등 전혀 다른 API.
+- **교훈**: WebFetch 프롬프트 작성 시 패키지 전체 경로 명시 필수. 리서치 파일의
+  "소스" URL 이 이미 있으므로 리서치 파일 먼저 확인하면 Agent 호출 불필요한 경우가 많음.
+- **영향**: 추후 포커스에서도 리서치 파일 우선 확인 원칙 재강조.
 
 ---
 
