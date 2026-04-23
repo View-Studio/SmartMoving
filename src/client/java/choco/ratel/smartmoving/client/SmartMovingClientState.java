@@ -1165,18 +1165,18 @@ public final class SmartMovingClientState {
                     willStopCrawl |= willStopCrawlStartSneak;
                 }
 
-                // 원본 L2986: wantSneak/wantSprint 참조. 간소 매핑: wantSneak=sneakContinueInput, wantSprint=isSprinting.
-                // B-45b (세션 45): cfg.enabled AND 가드 포함 헬퍼 치환. (본 블록은 B-4 간소 매핑 제거 범위)
-                boolean wantSneak_ = cfg.isSneakToggleEnabled()
-                        ? (sneakToggled || sneakKeyStartPressed)
-                        : MinecraftClient.getInstance().options.sneakKey.isPressed();
-                boolean wantSprint_ = player.isSprinting();
+                // B-4 (세션 52): 원본 L2990 간소 매핑 제거 — wantSneak_/wantSprint_ 로컬
+                //   (간소 매핑) → B-2 wantSneak / B-3a wantSprint 실제 값 사용.
+                //   wantSneak 은 L835 else 블록 직계 지역 변수 (이 블록과 동일 스코프).
+                //   wantSprint 은 public 필드 (L1415 원본 대응). 둘 다 B-2/B-3a 에서
+                //   원본 공식 1:1 이식 완료.
 
                 boolean willStopSneak = false;
                 if (isSneakToggleEnabled) {
                     if (isCrawling && !willStopCrawlStartSneak)
                         willStopSneak = true;
-                    if (wantSneak_ && wantSprint_ && sneakKeyStartPressed && sneakToggled) {
+                    // 원본 L2990: `wantSneak && wantSprint && sneakButton.StartPressed && sneakToggled`
+                    if (wantSneak && wantSprint && sneakKeyStartPressed && sneakToggled) {
                         willStopSneak = true;
                         ignoreNextStopSneakButtonPressed = true;
                     }

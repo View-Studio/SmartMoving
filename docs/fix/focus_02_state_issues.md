@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 51 — **B-1 isFast 체인 완성 / A-1 불일치 전부 해소**) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b/B-1c~f 완료 / ⏳ **B Phase 2 잔여 (B-17b2/B-18/B-24/B-16/B-33/B-N 등)** |
+| 상태 | 🟡 진행 중 (세션 52 — B Phase 2 계속 / B-4 간소 매핑 제거) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/b1/B-3a/b/B-1c~f/B-4 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -558,9 +558,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (SM 복합) 으로 정정. A-1 불일치 3번 해소.
 
 #### B-4. R-09 토글 블록 `wantSneak_/wantSprint_` 간소 매핑 제거 (§16 세션 30 신규)
-- [ ] B-4. `SmartMovingClientState.tickEssential` L788-L792 "간소 매핑" 주석 + 로컬 변수
-      `wantSneak_` / `wantSprint_` 를 B-2/B-3 에서 확정된 필드(`wantSneak` / `wantSprint`)로
-      교체. 원본 L2986 참조. 간소 매핑 주석 제거.
+- [x] B-4. ✅ **세션 52 완료** — R-09 블록 L1170-L1173 지역 변수 `wantSneak_/wantSprint_`
+      제거, B-2 `wantSneak` / B-3a `wantSprint` 필드 사용 (원본 L2990 1:1 복원).
+      "간소 매핑" 주석 제거. wantSneak 는 else 블록 직계 지역 변수 (L835) 로 R-09
+      동일 스코프 내 접근 가능.
 
 #### B-5. `SmartMovingSwimmer.java` L159 "1.21.1 간소화" 원본 대조 (§16 세션 30 신규)
 - [ ] B-5. `SmartMovingSwimmer.java` L159 간소화 지점 원본 `handleSwimming` 과 side-by-side
@@ -2104,6 +2105,51 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-18** (isClimbCrawling + climbIntoCount 카운터) — B-16 (isClimbHolding) 선행 필요.
 - **B-17b2** (isCrawlClimbing 전환 3분기) — wantClimbUp/Down 필드 승격 + move() API.
 - **B-24** (isHeadJumping 해제 엣지 handleCrash) — Config 필드 2개 신설 + handleCrash 공유.
+
+### 세션 52 — 2026-04-24 — B Phase 2 B-4 (R-09 간소 매핑 제거)
+
+**진행한 작업**:
+- R-09 블록 L1168-L1173 간소 매핑 주석 + 지역 변수 `wantSneak_` / `wantSprint_` 제거
+- L1179 조건을 원본 L2990 1:1 으로 복원:
+  `wantSneak && wantSprint && sneakKeyStartPressed && sneakToggled`
+  * `wantSneak` — L835 else 블록 직계 지역 변수 (B-2 세션 43, `cfg0.isSneakingEnabled() &&
+    wouldWantSneak`)
+  * `wantSprint` — public 필드 (B-3a 세션 49, 원본 L2595-L2615 6조건 OR)
+  * 둘 다 R-09 블록과 동일 스코프 (else 블록 내) 접근 가능
+- 기존 "간소 매핑" 주석 제거 — 1:1 복원 완료 명시
+- §16 세션 30 신규 발견 **#1 해소** (R-09 L788 간소 매핑)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 52 기준)**:
+- [근거] 원본 L2990 `wantSneak && wantSprint && sneakButton.StartPressed && sneakToggled`
+  직접 read (R-15.5 표 8번째 항목) ✓
+- [근거] B-2 wantSneak / B-3a wantSprint 이식 완료 확인 ✓
+- [대응] 원본 L2990 1:1 (지역 변수 + public 필드 각각 원본 구조 반영) ✓
+- [분기] sneakStartPressed + sneakToggled 엣지 조건 그대로 ✓
+- [상수] 없음
+- [타이밍] R-09 블록 내 wantSneak 스코프 검증 완료 ✓
+- [근사] 제거됨 — 간소 매핑 → 1:1 원본 복원 ✓
+- [신규] 없음
+- [회귀] compileJava 성공 — 기존 `sneakToggled + sneakStartPressed` 조건 동치성 확인 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**§16 세션 30 신규 발견 해소 현황**:
+- ✅ **#1 R-09 L788 간소 매핑 주석** (B-4 세션 52)
+- ⏳ #2 Swimmer L159 "1.21.1 간소화" (B-5 — B-9 메인 분류 재작성 시 해소 예정)
+
+**Phase 2 진행 상황 (세션 52 기준)**:
+- ✅ 세션 43-51: 17 원자 (B-2/B-44a/B-30/B-32/B-40/B-45/B-23/B-17a/b1/B-3a/b/B-1c~f)
+- ✅ 세션 52: **B-4** (R-09 간소 매핑 제거 — §16 #1 해소)
+- ⏳ 잔여 ~22 원자
+
+**다음 작업 권고**:
+- **B-48** (isGroundSprinting 전환 후처리) — 원본 L2697-L2709. 중간 규모 + Options 필드
+  선행. `wasRunningWhenSprintStarted` 필드 + `Options._runOnSprintRelease` /
+  `_walkOnSprintRelease` + `isStandupSprintingOrRunning()` 메서드.
+- **B-24** (isHeadJumping 해제 엣지 handleCrash) — Config 2 필드
+  (`headFallDamageStartDistance=2F` / `Factor=2F`) + `restoreFromFlying` 필드 +
+  `handleCrash` 공유 가시성 변경 + B-23 자리에 로직 추가.
+- **B-18** (isClimbCrawling + climbIntoCount) — B-16 선행. 규모 큼.
 
 ---
 
