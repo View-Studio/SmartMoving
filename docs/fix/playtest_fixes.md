@@ -8,14 +8,21 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #6  — increase/decrease 작동 안 됨
+항목 #2  — 스마트무빙 상태 이상
 ```
 
-작업 문서: [`focus_06_speed_change.md`](focus_06_speed_change.md)
+작업 문서: [`focus_02_state_issues.md`](focus_02_state_issues.md)
 
-> **포커스 #5 최종 완료 (2026-04-24, 세션 23)**: 세션 22 재개로 H-15/H-16 수정 +
-> H-17 NPE 긴급 수정 + H-18~H-21 잉여 코드 정리. 사용자 인게임 재검증 대기.
-> 회귀 0건. Easy 1:1 체감 ~90% (서버 허기 동기화 3디테일은 `focus_11_server_hunger_sync.md` 후속).
+> **포커스 #6 완료 (2026-04-24, 세션 28)**: A 단계(호출처 감사) → B-1/B-2/B-3/B-4/B-6
+> (헬퍼 정비 + Land/Swim/Climb/Creative 게이트) → C-1/C-2 (동기화 정합) →
+> D-1/D-3 (빌드 + 회귀 감사). 사용자 인게임 테스트 속도 조정 정상 작동 확인.
+> B-5 (점프 max 수평) 는 `focus_12_max_horizontal_motion.md` 로 분리.
+> 배율 미세 차이는 `focus_13_movement_factor_system.md` 로 분리 (4단계 factor 시스템).
+> 회귀 0건.
+
+> **포커스 #5 최종 완료 (2026-04-24, 세션 23)**: H-15/H-16 수정 + H-17 NPE + H-18~H-21
+> 잉여 정리. 회귀 0건. Easy 1:1 체감 ~90% (서버 허기 동기화 3디테일은
+> `focus_11_server_hunger_sync.md` 후속).
 
 ---
 
@@ -46,8 +53,8 @@
 | 순서 | 번호 | 제목 | 작업 문서 | 상태 | 선행 의존 |
 |------|------|------|----------|------|----------|
 | 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24, 세션 23) | 없음 |
-| 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | 🟡 진행 중 | #5 완료 |
-| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02](focus_02_state_issues.md) | ⚪ 대기 (재현 케이스) | 없음 |
+| 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ✅ 완료 (2026-04-24, 세션 28) | #5 완료 |
+| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02](focus_02_state_issues.md) | 🟡 진행 중 (재현 케이스 수집) | 없음 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 (재현 케이스) | #2 (상태 값 확정 후 전환 조건 검증) |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |

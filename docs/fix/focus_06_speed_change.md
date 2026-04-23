@@ -8,9 +8,9 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A+B(5)+C+D-1/D-3 완료 / [~] B-5 §17 이동 / ⏳ D-2(사용자 몫) + D-4(포커스 #2 전환) |
-| 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
+| 상태 | ✅ **완료 (2026-04-24, 세션 28)** — D-2 사용자 검증 통과 |
+| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 + C-1/C-2 + D-1~D-4 완료 / [~] B-5 §17 `focus_12` 이동 |
+| 핵심 잔여 §17 | (1) `focus_12_max_horizontal_motion.md` (B-5) / (2) `focus_13_movement_factor_system.md` (배율 미세차) |
 | 선행 의존 | #5 완료 (세션 23) |
 
 ---
@@ -306,12 +306,16 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 
 ### D. 검증
 - [x] D-1. `./gradlew clean build` — BUILD SUCCESSFUL in 7s ✓
-- [ ] D-2. 재현 케이스 T-1~T-5 수동 테스트 (이동 거리 측정) — **사용자 몫**
+- [x] D-2. 재현 케이스 수동 테스트 — 사용자 검증 결과 **속도 정상 작동**. 다만 "배율 느낌
+      살짝 다름" 피드백 → 원인 분석(§16 세션 28) 결과 `getNonSlowInputSpeedFactor` /
+      `getSlowInputSpeedFactor` land 경로 미반영으로 판정. 포커스 #6 정의("getUserSpeedFactor
+      누락 곱셈 복원") 범위 초과 — `focus_13_movement_factor_system.md` (§17 신규 후보) 로 이동.
+      본 포커스 목표(User 배율 적용) 는 달성.
 - [x] D-3. 회귀 방지 감사 (§14) — grep `// TODO / [미확인]` 0건. `getUserSpeedFactor` /
       `getCombinedSpeedFactor` 호출처 50건(6파일) 전부 의도된 위치 확인. 기본 상태
       (`!speedUser` or `!Creative`) 에서 configFactor=1F → vanilla 동작 불변. `adminChangeSpeed`
       / `changeSingleSpeed` / `playerSpeedExponents` Map 불변. **회귀 0건**.
-- [ ] D-4. `playtest_fixes.md` "현재 포커스" → `#2` 갱신 (D-2 통과 후)
+- [x] D-4. `playtest_fixes.md` "현재 포커스" → `#2` 갱신.
 
 ---
 
@@ -734,6 +738,47 @@ D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
 
 **다음 작업**: D-2 (사용자 인게임 수동 테스트) — 통과 시 D-4 포커스 #2 전환.
 
+### 세션 28 (계속) — 2026-04-24 — D-2/D-4 (포커스 #6 완료 + #2 전환)
+
+**진행한 작업**:
+- **D-2** 사용자 인게임 테스트 결과 수신:
+  - "속도가 이제 잘 바뀌긴 하는데 원본이랑 배율 느낌이 살짝 다른 거 같음"
+  - 속도 조정 기능 자체는 **정상 작동** — 포커스 #6 본래 목표 달성
+  - 배율 미세 차이는 원인 분석 후 §17 후속으로 분리
+- **배율 차이 원인 분석** (§16 세션 28 D-2 기록):
+  - 원본 `speedFactor = getConfigSpeedFactor × getPotionSpeedFactor × getNonSlowInputSpeedFactor
+    × getSlowInputSpeedFactor` (4단계)
+  - 1.21.1 `getMovementSpeed` inject 는 `getConfigSpeedFactor` 만 곱 → NonSlow/Slow 미반영
+  - 체감: `cfg.sprintFactor`(1.5) / `cfg.runFactor`(1.3) / `cfg.sneakFactor` / `cfg.crawlFactor`
+    land 경로 미반영. vanilla 자체 스프린트 modifier(1.3) 만 적용.
+  - `Mover.getSpeedFactor` 4단계 완전 헬퍼는 이식됐으나 호출처 0건 — 활용 시 vanilla
+    sneakSpeedAttr / 스프린트 modifier 와 중첩 위험
+- **§17 `focus_13_movement_factor_system.md` 신규 후보 등록** — 4단계 factor 전체 이식
+  + vanilla 중첩 방지 접근 2안 비교.
+- **D-4 포커스 전환** — `playtest_fixes.md` "현재 포커스" #6 → #2 갱신.
+
+**완료 전 검증 체크리스트 (D-2/D-4 기준)**:
+- [근거] 사용자 인게임 테스트 결과 + 원본 Self L119 4단계 공식 분석 ✓
+- [대응] 포커스 #6 본래 목표(User 배율 적용) 달성 확인 ✓
+- [분기] 잔여 차이 원인 2건 식별 (NonSlow + Slow) → §17 focus_13 로 분리 ✓
+- [상수] 해당 없음
+- [타이밍] 해당 없음
+- [근사] `getMovementSpeed` inject 는 `getConfigSpeedFactor` 만 → 원본 4단계 대비 근사
+  (현재는 2단계). §17 후속에서 완전 이식 가능.
+- [신규] `focus_12` + `focus_13` 후속 2건 등록 ✓
+- [회귀] 코드 변경 없음 (문서만)
+- [빌드] 해당 없음
+
+**포커스 #6 최종 결론**:
+- User 배율 적용 경로 5곳 이식 완료 (Land B-2 / Swim B-3 / Climb 3갈래 B-4 / Fly B-1 /
+  Creative 게이트 B-6)
+- 서버-클라 동기화 정합 확인 (C-1/C-2)
+- 회귀 0건 (D-3) + clean build (D-1)
+- 잔여 §17 후속 2건: focus_12 (점프 max 수평) / focus_13 (4단계 factor)
+- Easy 1:1 체감: 속도 조정 기능 자체는 1:1, 배율 미세차는 후속 포커스에서 완성
+
+**다음 포커스**: #2 (스마트무빙 상태 이상) — `focus_02_state_issues.md`.
+
 **사용자 검증 요청** — 포커스 #5 H-6 에서 `speedUser=false` 로 정정됨. 테스트 준비:
 1. `config/smart_moving_options.properties` 에서 `move.speed.user=true` 수동 편집
 2. Creative 모드로 전환
@@ -744,6 +789,25 @@ D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
 ---
 
 ## 16. 신규 발견
+
+### 세션 28 D-2 후 "배율 미세 차이" 발견
+
+사용자 인게임 테스트: 속도 조정 키 정상 작동 확인, 다만 원본 대비 "배율 느낌이 살짝
+다름". 원인 분석:
+
+- **`getNonSlowInputSpeedFactor` / `getSlowInputSpeedFactor` land 경로 미적용**.
+  원본 Self L119 `speedFactor = getConfigSpeedFactor × getPotionSpeedFactor ×
+  getNonSlowInputSpeedFactor(얼음/sprint/run factor)` + 이후 `getSlowInputSpeedFactor`
+  (crawl/sneak/ceiling/useItem factor) 곱. 1.21.1 `getMovementSpeed` inject 는
+  `getConfigSpeedFactor` 만 곱 → run/sprint/sneak/crawl factor 미반영.
+- `Mover.getSpeedFactor` (4단계 완전 헬퍼) 는 이식됐으나 호출처 0건 — B-2 에서
+  `getConfigSpeedFactor` 만 사용. 4단계로 교체 시 User 배율 + 포션 + NonSlow + Slow
+  전부 반영되지만 vanilla 자체 스프린트 modifier / sneakSpeed 와 중첩 위험.
+- 체감:
+  - 스프린트 시 원본 1.5배 vs 1.21.1 1.3배 (vanilla 기본) — `cfg.sprintFactor` 미반영
+  - `cfg.runFactor` / `cfg.sneakFactor` / `cfg.crawlFactor` 사용자 변경 불가 (land 경로)
+- 해결 범위: 포커스 #6 정의("getUserSpeedFactor 누락 곱셈 복원") 초과 — 별도 포커스
+  `focus_13_movement_factor_system.md` 후속. §17 등록.
 
 ### 세션 28 B-5 범위 초과 발견
 
@@ -773,6 +837,14 @@ D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
 
 - `isUserSpeedEnabled()` 가 완전 1:1 인지 — 원본 `enabled && _speedUser.value` vs 1.21.1 `cfg.speedUser && cfg.enabled` (순서만 다름, 의미 동등 추정)
 - 속도 표시 UI(HUD 등)에 속도% 게이지 같은 원본 기능이 있는지 확인 — 없으면 별도 포커스
+- **`focus_13_movement_factor_system.md` 신규 후보** (세션 28 D-2 발견) — land 경로에
+  `getNonSlowInputSpeedFactor` / `getSlowInputSpeedFactor` 미반영 문제. 원본 Self L119
+  의 4단계 factor 전체(`getConfigSpeedFactor × getPotionSpeedFactor × NonSlow × Slow`)
+  를 land 경로에 적용. 후보 접근:
+  1. `MixinLivingEntityClient.sm_getMovementSpeed` 에서 `Mover.getSpeedFactor` 로 교체
+     (4단계) — vanilla 의 sneakSpeedAttr / 스프린트 modifier 와 중첩 위험 → 정밀 검증 필요
+  2. vanilla attribute modifier 를 SM 이 동적 추가/제거로 일관성 관리
+  세션 28 사용자 테스트에서 "배율 느낌 살짝 다름" 체감으로 확인됨 (스프린트 1.3 vs 1.5 등).
 - **`focus_12_max_horizontal_motion.md` 신규 후보** (세션 28 발견) — B-5 범위 초과로 분리.
   원본 Self L2045 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
   에 대응하는 상위 시스템 3종 신규 이식:
