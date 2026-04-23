@@ -657,6 +657,36 @@ public class SmartMovingConfig {
         updateToggler();
     }
 
+    /**
+     * 원본 SmartMovingProperties.getCurrentKey() (L138-L143) 1:1 이식.
+     *
+     * 원본:
+     *   public String getCurrentKey() {
+     *       if (toggler == -1)
+     *           return Disabled;        // "disabled"
+     *       return keys[toggler];
+     *   }
+     *
+     * 반환값:
+     *   toggler == -1                    → CONFIG_KEY_DISABLED ("disabled")
+     *   toggler >= 0 && keys[toggler]==null → null (DEFAULT_KEYS {null} 케이스, 단순 on/off)
+     *   toggler >= 0 && keys[toggler]!=null → 해당 key 이름 ("e"/"m"/"h"/"c")
+     *
+     * logConfigState 분기 (원본 L352-L366):
+     *   currentKey == null   → "default server configuration"  (단순 on/off enabled 상태)
+     *   currentKey == "disabled" 는 enabled==false 분기에서 필터 (원본 L368 `disabled`)
+     *   그 외 → configKeyName[currentKey] 참조하여 "Easy"/"Medium"/"Hard" 또는 "with key \"c\"" 출력
+     *
+     * 주의: toggler == -2 (초기 센티넬) 상태에서 호출 시 `configKeys[-2]` 예외 방지 위해 방어 코드
+     *   — 원본은 load() 가 반드시 호출 후에만 사용되므로 -2 케이스 미정의. 1.21.1 은 F 섹션
+     *   이식 전 과도기 상태에서 발생 가능 → null 반환 (단순 on/off enabled 처리).
+     */
+    public String getCurrentKey() {
+        if (toggler == -1) return CONFIG_KEY_DISABLED;
+        if (toggler < 0 || configKeys == null || toggler >= configKeys.length) return null;
+        return configKeys[toggler];
+    }
+
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
     }

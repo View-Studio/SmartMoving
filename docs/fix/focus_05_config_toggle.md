@@ -386,7 +386,11 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] C-3. `updateToggler()` 헬퍼 — `enabled = (toggler != -1)` (원본 `update()` L163-L172
       의 Property 루프는 1.21.1 Property 부재로 N/A, enabled 파생만 이식). **의존 순서상
       C-1 보다 먼저 진행** — C-1 `toggle()` 이 `updateToggler()` 호출 예정.
-- [ ] C-4. `getCurrentKey()` — toggler == -1 시 null
+- [x] C-4. `getCurrentKey()` — **§10 정정**: 원래 "toggler == -1 시 null" 은 오기. 원본
+      `SmartMovingProperties.getCurrentKey()` (L138-L143) 는 toggler==-1 시 `Disabled`
+      (= `"disabled"`) 반환, null 은 `keys[toggler]==null` (DEFAULT_KEYS 케이스, 단순 on/off
+      enabled) 인 경우에만. 원본 1:1 로 이식: `toggler==-1 → CONFIG_KEY_DISABLED`,
+      `configKeys[toggler]` 반환. toggler==-2 센티넬 방어 코드 포함 (F 섹션 이식 전 과도기용).
 - [ ] C-5. `getNextKey(String)` — A-1 확보 후 1:1 이식
 - [ ] C-6. `hasKey(String)` — configKeys 검색
 
@@ -735,6 +739,39 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [빌드] `./gradlew build` ✓
 
 **다음 작업**: C-4 — `getCurrentKey()` (toggler == -1 시 null, 그 외 `configKeys[toggler]`).
+
+### 세션 6 — 2026-04-23 — C-4
+
+**진행한 작업**:
+- C-4: `SmartMovingConfig.getCurrentKey()` 신규 메서드 추가.
+- **§10 문구 정정**: 원래 "toggler == -1 시 null" 은 오기. 원본 1:1:
+    ```java
+    public String getCurrentKey() {
+        if (toggler == -1) return CONFIG_KEY_DISABLED;  // "disabled" (null 아님)
+        if (toggler < 0 || configKeys == null || toggler >= configKeys.length) return null;
+        return configKeys[toggler];
+    }
+    ```
+- 반환값 의미 (javadoc 명시):
+    - `toggler == -1` → `"disabled"` (비활성 상태)
+    - `toggler >= 0 && keys[toggler] == null` → null (DEFAULT_KEYS {null}, 단순 on/off enabled)
+    - `toggler >= 0 && keys[toggler] != null` → "e"/"m"/"h"/"c" 등 key 이름
+- toggler == -2 (센티넬, F 이식 전 과도기) 방어 코드 추가 — 원본은 load() 후만 호출 가정이라
+  미정의. 1.21.1 과도기에는 null (단순 on/off) 반환.
+- 기존 호출자 없음 → 회귀 영향 없음 (D 섹션 서버 로그 4상태 분화에서 첫 소비).
+
+**완료 전 검증 체크리스트 (C-4 기준)**:
+- [근거] `SmartMovingProperties.md` L138-L143 원본 임베드 확인 ✓
+- [대응] 원본 3줄 ↔ 구현 3줄(+방어 1줄) 1:1 ✓
+- [분기] toggler == -1 분기 그대로 + 센티넬/범위 방어 ✓
+- [상수] `CONFIG_KEY_DISABLED = "disabled"` (= 원본 `Disabled`) 사용 ✓
+- [타이밍] 호출처는 D 섹션 logConfigState, E 섹션 채팅 피드백에서 연결
+- [근사] toggler==-2 방어 코드는 근사 (원본 미정의 케이스) — javadoc 명시 ✓
+- [신규] 없음
+- [회귀] 신규 메서드 추가만 — 영향 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-5 — `getNextKey(String key)` (원본 L106-L118).
 
 ---
 
