@@ -17,11 +17,11 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 — **사용자 재결정 대기** |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2 완료 / ⏳ H-2 결과 공유 → A/B/C 3안 중 선택 |
-| 이식 대상 | 20개 필드 식별 완료, **live 1 / dead 19** (H-2 매트릭스) |
-| 잔여 섹션 | H-3~H-9 (범위는 사용자 결정에 따라) + G-2(수동 테스트) + G-5(포커스 전환) |
-| 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 사용자 지적으로 정정) |
+| 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2 완료 / ⏳ **H-3 ~ H-14 실이식 (12개 원자)** |
+| 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
+| 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
+| 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
 | 컴파일 상태 | ✅ 빌드 성공 (H 코드 변경 전) |
 
 ---
@@ -578,39 +578,82 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] G-4. `checklist_original_audit.md` "4상태 토글 복원" 기록 완료.
 - [~] G-5. `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신 — H 섹션 완료 + G-2 재검증 후
 
-### H. Easy 프리셋 완전 이식 (세션 13 신설 — 사용자 결정)
+### H. Easy 완벽 1:1 (세션 15 재정의 — 범위 확정)
 
-**방향**: 2상태 토글(disabled↔enabled) + enabled 상태 = 원본 Easy 1:1 프리셋. 원본에서
-Easy key 가 반환하는 **모든** 필드 값을 1.21.1 의 필드 기본값에 이식. 누락 0 원칙.
+**최종 범위** (사용자 세션 15 결정): Easy 플레이 중 **실제로 코드 경로가 진입하는** 것만
+이식. Easy 에서 게이트가 false 라 진입 안 하는 경로는 배제.
+
+**Easy 에서 실제 사용** (이식):
+- `Config.getFactor(hunger, 14상태)` 공용 헬퍼 전체
+- `handleExhaustion` 축소판: 허기 증가 공식 + exhaustion 감소 + 허기 연동
+- Config factor 1단계 필드 12개 (이동속도 배율) + 2단계 필드 14개 (행동 배율) + 기타 4개
+- `speedUser` Easy 정정 (true → false)
+- 허기 패킷 (클라→서버) + 서버 `addExhaustion(sm.hunger)` 연동
+
+**Easy 에서 절대 미사용** (배제):
+- 라바 수영 (`_lavaLikeWater`), Creative levitate 속도 (`_runFactorLevitate`/`_sprintFactorLevitate`)
+- 14종 점프 피로 전체 (`getJumpExhaustionGain`/`Stop`/`isJumpExhaustionEnabled`)
+- 클라이밍/천장/스프린트 피로 축적 (Hard 전용 게이트 7개)
+- Exhaustion 관련 game field boolean 12개 (Easy 에서 false 라 if 진입 안 함)
+- `getMaxExhaustion` 150회 순회 (max = 0 상수)
+- `_baseExhautionGainFactor` + 클라이밍/천장 획득 계수들
 
 - [x] H-0. **방향 전환 문서화** — §1/§2/§3/§7/§10 재정의 + §15 세션 13 로그 + §16 세션
       13 오판 정정 + §17 잔여 재정의. 코드 변경 없음.
-- [x] H-1. **Easy 반환값 완전 추출 (리서치)** — Agent WebFetch 로 원본
-      `SmartMovingConfig.java` 전체 소스 확보. `docs/research/original/smartmoving/properties/`
-      에 `Property.md` / `Value.md` / `Properties.md` 이미 존재 확인. §3 테이블 14 →
-      **20개로 확장** (Float P-1~P-6, Creative P-7~P-8, Hard P-9~P-13, Medium P-14~P-20).
-      `_old_*` 4개 + `climbExhaustion` / `ceilingClimbExhaustion` (이미 일치) +
-      `_configKeyName` (이미 이식) 제외. 원본 키 오타 `"move.jump.walkexhaustion"` 확인.
-- [x] H-2. **각 필드 소비처 확인 (dead field 방지)** — 20개 × 원본 소비처(리서치 grep)
-      × 1.21.1 소비처(소스 grep) 전수 매트릭스 작성. 결과: **live 1 / dead 19**.
-      `speedUser` (P-7) 만 즉시 효과. 나머지 19개는 `Config.getFactor` 헬퍼 + 허기/
-      소진 축적 루프 + 라바 수영 분기 등 **공통 미이식 시스템 3종** 이식이 선행
-      되어야 동작 의미 있음. **사용자 재확인 필요** — 포커스 #5 범위 결정.
-- [ ] H-3. **Float 값 차이 필드 이식** (P-1~P-3, 소비처 있는 것만) — `baseExhautionLossFactor`
-      등. 각 필드 신규 선언 + default Easy 값 + readFrom/writeTo + javadoc 에 원본
-      `Value(d).e(v).h(v2)` 전체 key 별 값 기록.
-- [ ] H-4. **Creative 팩토리 필드 이식** (P-4 `speedUser` 정정 / P-5 `lavaLikeWater`
-      신규, 소비처 있는 것만) — `speedUser` 는 기본값 `true → false` 정정. javadoc 에
-      "Creative 에서만 true, Easy 포함 그 외 false" 명시.
-- [ ] H-5. **Hard 팩토리 필드 이식** (P-6~P-9, 소비처 있는 것만) — 신규 또는 기본값
-      확인. Hard 에서만 true.
-- [ ] H-6. **Medium 팩토리 필드 이식** (P-10~P-14, 소비처 있는 것만) — Easy 에서만
-      false, 나머지 true. default = false (Easy 1:1). javadoc 에 "원본 default true,
-      Easy 에서 false. 1.21.1 고정 Easy 이므로 false." 명시.
-- [ ] H-7. **H-1 에서 추가 발견된 필드 이식** (있다면) — 신규 원자 작업으로 분해.
-- [ ] H-8. **빌드 + 회귀 감사 재수행** — H 섹션이 기존 이식에 회귀 일으키지 않는지 확인.
-- [ ] H-9. **checklist_original_audit.md 에 H 섹션 결과 기록** — "Easy 프리셋 1:1 이식"
-      추가. H-1 에서 추가 발견된 필드 있으면 각각 신규 발견 행으로 추가.
+- [x] H-1. **Easy 반환값 완전 추출** — Agent WebFetch 로 원본 `SmartMovingConfig.java`
+      전체 소스(654L) 확보. §3 테이블 14→20 확장. `_old_*` 4개 제외. 원본 키 오타 확인.
+- [x] H-2. **각 필드 소비처 매트릭스** — live 1 / dead 19. 공통 미이식 시스템 3종 식별.
+      **사용자 결정**: 세션 15 에서 본안(Easy 에서 실제 쓰이는 것만 이식) 채택.
+
+#### H-3 ~ H-14: Easy 실제 사용 코드 경로 이식 (세션 15 재정의)
+
+- [ ] H-3. **factor 1단계 Config 필드 12개 추가** — 이동속도 배율. `_baseExhautionLossFactor`
+      (Easy=1.2F) / `_baseHungerGainFactor` (Easy=0.8F) / `_fallExhautionLossFactor` /
+      `_sprintingHungerGainFactor` / `_sprintingExhautionLossFactor` / `_runHungerGainFactor` /
+      `_runExhautionLossFactor` / `_sneakingHungerGainFactor` / `_sneakingExhautionLossFactor` /
+      `_standingHungerGainFactor` / `_standingExhautionLossFactor` / `_walkingHungerGainFactor` /
+      `_walkingExhautionLossFactor`. 각 필드 Easy 값 default + readFrom/writeTo + javadoc 에
+      원본 Value defaults 전체 기록. **원본 `SmartMovingConfig.java` 실제 라인 확인 필요
+      (추가 Agent WebFetch).**
+- [ ] H-4. **factor 2단계 Config 필드 14개 추가** — 행동 배율. `_climbingHungerGainFactor` /
+      `_climbingExhaustionLossFactor` / `_crawlingHungerGainFactor` / `_crawlingExhaustionLossFactor` /
+      `_ceilingClimbingHungerGainFactor` / `_ceilingClimbingExhaustionLossFactor` /
+      `_swimmingHungerGainFactor` / `_swimmingExhaustionLossFactor` / `_divingHungerGainFactor` /
+      `_divingExhaustionLossFactor` / `_dippingHungerGainFactor` / `_dippingExhaustionLossFactor` /
+      `_normalHungerGainFactor` / `_normalExhaustionLossFactor`. **원본 라인 확인 필요.**
+- [ ] H-5. **기타 필드 2개** (H-3/H-4 에 포함 안 된 것): `_alwaysHungerGain` (Easy=0F) +
+      `_exhaustionLossHungerFactor` (Easy=0.02F). readFrom/writeTo.
+- [ ] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). javadoc 에
+      "Creative 전용 true, Easy 포함 그 외 false (원본 `Creative(move.speed.user)` 팩토리)" 명시.
+- [ ] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
+      `SmartMovingClientConfig.md` L365-L413 1:1. 전처리 5줄 (isClimbing |= /
+      actionOverGound / airBorne / isStanding / isSneaking) + 1단계 hunger/exhaustion
+      배율 + 2단계 행동 배율. 총 2단계 × 6+7 분기.
+- [ ] H-8. **`SmartMovingClientState` 신규 필드 2개** — `hungerIncrease` /
+      `lastHungerIncrease`. `resetState()` 에서 초기화.
+- [ ] H-9. **`SmartMovingClientState.handleExhaustion(player)` 축소판 이식** — 원본
+      SmartMovingSelf.md L849-L916 중 Easy 에서 실행되는 부분만:
+      (1) `horizontalMovement`/`movement`/`relevantMovementFactor` 계산
+      (2) `hungerGainFactor = Config.getFactor(true, ...)`
+      (3) `hungerIncrease += _alwaysHungerGain + relevantMovementFactor * 0.0001F * hungerGainFactor`
+      (4) `exhaustionLossFactor = Config.getFactor(false, ...)` + `exhaustionLoss = 1F * factor`
+      (5) `exhaustion -= exhaustionLoss` (클램프 0 이상)
+      (6) `hungerIncrease += _exhaustionLossHungerFactor * exhaustionLoss`
+      (7) `if (exhaustion == 0) maxExhaustionForAction = NaN` (해당 필드 없으면 (7) 생략)
+      Easy 에서 진입 안 하는 블록 (클라이밍/천장/스프린트/점프 피로) 은 전부 **제외**.
+- [ ] H-10. **`tickEssential` 호출 삽입** — `handleExhaustion(player)` 호출 위치:
+      원본 `SmartMovingSelf.onLivingUpdate` 에서 호출. 1.21.1 대응은 tickEssential 말미
+      (상태 캡처 이후) 적절.
+- [ ] H-11. **허기 패킷 (클라→서버)** — 기존 `HungerPayload` 확인 + 클라 측 변경
+      감지(`hungerIncrease != lastHungerIncrease`) 후 전송 로직 추가. 원본
+      `SmartMovingPacketStream.sendHungerChange` 1:1.
+- [ ] H-12. **서버 `addExhaustion(sm.hunger)` 연동 검증** — 기존 구조 이미 이식됨
+      (`MixinServerPlayerEntity:50`). 클라 전송 활성 후 정상 작동 확인.
+- [ ] H-13. **통합 빌드 + 회귀 감사** — vanilla 이동 허기 회귀 없는지 / SM 이동 중 허기
+      증가 시작됐는지 / `disableAddExhaustion` 배치 차단이 의도대로 동작하는지.
+- [ ] H-14. **`checklist_original_audit.md` 기록** — "Easy 1:1 factor 헬퍼 + handleExhaustion
+      축소판 + speedUser 정정" 기록. §3 매트릭스의 live 1 → 4 전환 (P-1/P-2/P-3 활성화 +
+      P-7 정정).
 
 ---
 
@@ -1421,6 +1464,46 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
 **다음 작업**: **사용자 결정 대기**. 선택지 3안(§16 세션 14 하단) 중 하나 확정 후
 H-3~H-6 진행 범위 재정의. 내 추천: **B안** (speedUser 정정만 포커스 #5 내에서 처리,
 dead 19개는 "소진/허기/라바 시스템 이식" 별도 포커스 `focus_11_exhaustion_hunger_system.md`).
+
+### 세션 15 — 2026-04-23 — 범위 확정 (본안 채택) + H 섹션 재정의
+
+**사용자 결정**: "엄격하게 Easy 에서는 절대 사용 안 하는 기능만 빼고 번역".
+
+**범위 확정 근거**:
+- Easy 플레이 중 **실제로 코드 경로가 진입하는 것만** 이식 → B안 보다 넓고 C안 보다 좁음
+- Easy 에서 게이트 false 라 진입 안 하는 경로는 **전부 배제** (14종 점프 피로 / 클라이밍·천장·스프린트 피로 / 라바 수영 / Creative levitate)
+- 최종 이식 대상: `Config.getFactor` + `handleExhaustion` 축소판 + Config 필드 29개 + 허기 패킷 + speedUser 정정
+
+**§10 H 섹션 재정의**:
+- 기존 H-3~H-9 (C안 기반 "팩토리별 필드 이식") → **H-3~H-14 (본안 기반 "시스템별 구조 이식 + 필드 추가")**
+- H-3/H-4/H-5: Config 필드 29개 추가 (factor 1단계 12 + 2단계 14 + 기타 3)
+- H-6: speedUser 정정
+- H-7: getFactor 메서드 이식
+- H-8/H-9/H-10: ClientState 필드 + handleExhaustion + 호출
+- H-11/H-12: 허기 패킷 + 서버 연동
+- H-13/H-14: 빌드/회귀 + checklist
+
+**명시 배제** (§10 H 헤더에 기재):
+- 14종 점프 피로 전체, 클라이밍/천장/스프린트 피로 축적, 라바 수영, Creative 전용
+- `getJumpExhaustionGain`/`Stop`/`isJumpExhaustionEnabled`/`getMaxExhaustion`
+
+**진행 방침** (사용자 지시):
+- 진행 중 꾸준히 문서 업데이트 + 문서 참고하며 작업
+- Easy 1:1 완벽 유지 (한 필드라도 누락 시 신규 발견 기록 + 즉시 수정)
+
+**완료 전 검증 체크리스트 (H-0 확장 / 세션 15)**:
+- [근거] H-2 매트릭스 결과 + 원본 코드 경로 분석 ✓
+- [대응] §10 H 섹션 재구성 ✓
+- [분기] 이식 vs 배제 기준 명확 (게이트 진입 여부) ✓
+- [상수] 해당 없음 (범위 확정 단계)
+- [타이밍] 해당 없음
+- [근사] 해당 없음
+- [신규] "원본 SmartMovingConfig.java 실제 라인 확인 필요" — H-3/H-4 진입 시 추가 Agent WebFetch
+- [회귀] 문서만 변경 — 코드 영향 없음
+- [빌드] 해당 없음
+
+**다음 작업**: H-3 진입. 원본 `SmartMovingConfig.java` 에서 factor 1단계 필드 12개의
+실제 라인 + Value defaults 전체 확인 후 `SmartMovingConfig.java` 에 이식.
 
 ---
 
