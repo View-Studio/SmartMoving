@@ -202,8 +202,11 @@ public final class SmartMovingServer {
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.initialized) return;
         sm.initialized = true;
+        // 원본: SmartMovingServerOptions.writeToProperties(player, toggle=false) → 플레이어별 속도 치환.
+        // playerSpeedExponents 에 해당 username 값이 있으면 move.speed.user.exponent 가 개인값으로 교체됨.
+        String username = player.getName().getString();
         String[] lines = SmartMovingConfig.INSTANCE.globalConfig
-                ? SmartMovingConfig.INSTANCE.toArray()
+                ? SmartMovingConfig.INSTANCE.toArray(username)
                 : new String[0];
         ServerPlayNetworking.send(player,
                 new SmartMovingNetwork.ConfigContentPayload(lines, null));
@@ -275,21 +278,21 @@ public final class SmartMovingServer {
     // ── C-18: SpeedChange 수신 — 권한 검증 후 속도 변경 동기화 ─────────
 
     /**
-     * 클라이언트 속도 변경 요청 처리.
-     * speedUser=true → 허용: 원본 options.changeSpeed(diff, player) 흐름 이식 →
-     *                  config.changeSpeed + saveToOptionsFile + logSpeedState → difference 응답.
+     * 클라이언트 속도 변경 요청 처리 — 원본 SmartMovingServerOptions.changeSingleSpeed(player, diff) 대응.
+     * speedUser=true → 허용: INSTANCE.changeSingleSpeed(username, diff) + save → difference 응답.
      * speedUser=false → 거부: difference=0 반환 → 클라이언트 "no rights" 메시지 표시.
      *
-     * 원본: SmartMovingServerOptions.changeSpeed(difference, player) 호출.
+     * 원본 setPlayerSpeedExponent 흐름(개인 맵 put + saveToOptionsFile)만 수행, logSpeedState 호출 없음.
+     * 관리자 자발적 전역 변경(원본 changeSpeed + logSpeedState)은 별도 서버 커맨드 이식 시 추가.
      */
     public static void processSpeedChangePacket(ServerPlayerEntity player, int difference) {
         if (!SmartMovingConfig.Config.speedUser) {
             ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(0, null));
             return;
         }
-        SmartMovingConfig.INSTANCE.changeSpeed(difference);
+        String username = player.getName().getString();
+        SmartMovingConfig.INSTANCE.changeSingleSpeed(username, difference);
         SmartMovingConfig.save();
-        logSpeedState(SmartMovingConfig.INSTANCE, player.getName().getString());
         ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(difference, null));
     }
 

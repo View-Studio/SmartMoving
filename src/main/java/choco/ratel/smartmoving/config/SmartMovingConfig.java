@@ -4,6 +4,8 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.*;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -27,6 +29,13 @@ public class SmartMovingConfig {
     public boolean speedUser = true;
     public float speedUserFactor = 0.2F;
     public int speedUserExponent = 0;
+    /**
+     * 원본: Property<Map<String,Integer>> _speedUsersExponents = IntegerMap("move.speed.users.exponents").singular();
+     * 플레이어별 속도 지수 맵. username → exponent.
+     * 파일 저장 형식: 원본 Value.tryParseIntegerMap() 대응 — CSV `"user1,5,user2,-2,..."`.
+     * toArray(username) 시 move.speed.user.exponent 값을 해당 플레이어 개인 값으로 치환.
+     */
+    public Map<String, Integer> playerSpeedExponents = new HashMap<>();
 
     // ── Movement Modes ──────────────────────────────────────────
     public boolean vanillaStyle = false;
@@ -239,8 +248,25 @@ public class SmartMovingConfig {
      * 서버가 클라이언트에게 ConfigContent 패킷으로 전송할 때 사용한다.
      */
     public String[] toArray() {
+        return toArray(null);
+    }
+
+    /**
+     * 플레이어별 속도 치환 포함 직렬화.
+     * 원본: SmartMovingServerOptions.writeToProperties(mp, key) 내부 iteration 중
+     *       `entry.setValue(config._speedUserExponent.getValueString(userExponent))` 로직.
+     * username != null + playerSpeedExponents 에 값 존재 시 `move.speed.user.exponent` 키 값을
+     * 해당 플레이어 개인 지수로 치환. 전역 전송(username=null)은 모든 플레이어 공통값.
+     */
+    public String[] toArray(String username) {
         Properties props = new Properties();
         writeTo(props);
+        if (username != null) {
+            Integer userExponent = playerSpeedExponents.get(username);
+            if (userExponent != null) {
+                props.setProperty("move.speed.user.exponent", String.valueOf(userExponent));
+            }
+        }
         String[] result = new String[props.size() * 2];
         int i = 0;
         for (String key : props.stringPropertyNames()) {
@@ -256,6 +282,7 @@ public class SmartMovingConfig {
         speedUser                = getBool(p,   "move.speed.user",                speedUser);
         speedUserFactor          = getFloat(p,  "move.speed.user.factor",         speedUserFactor);
         speedUserExponent        = getInt(p,    "move.speed.user.exponent",       speedUserExponent);
+        playerSpeedExponents     = parseIntegerMap(p.getProperty("move.speed.users.exponents"));
         vanillaStyle             = getBool(p,   "move.general.vanilla",           vanillaStyle);
         sneakFactor              = getFloat(p,  "move.sneak.factor",              sneakFactor);
         crawlFactor              = getFloat(p,  "move.crawl.factor",              crawlFactor);
@@ -331,6 +358,7 @@ public class SmartMovingConfig {
         p.setProperty("move.speed.user",                 String.valueOf(speedUser));
         p.setProperty("move.speed.user.factor",          String.valueOf(speedUserFactor));
         p.setProperty("move.speed.user.exponent",        String.valueOf(speedUserExponent));
+        p.setProperty("move.speed.users.exponents",      serializeIntegerMap(playerSpeedExponents));
         p.setProperty("move.general.vanilla",            String.valueOf(vanillaStyle));
         p.setProperty("move.sneak.factor",               String.valueOf(sneakFactor));
         p.setProperty("move.crawl.factor",               String.valueOf(crawlFactor));
@@ -416,6 +444,23 @@ public class SmartMovingConfig {
         speedUserExponent += difference;
     }
 
+    /**
+     * 플레이어별 속도 지수 조정.
+     * 원본: SmartMovingServerOptions.changeSingleSpeed(player, difference):
+     *   Integer exp = _speedUsersExponents.get(username);
+     *   if (exp == null) exp = _speedUserExponent.value;
+     *   exp += diff;
+     *   _speedUsersExponents.put(username, exp);
+     *   saveToOptionsFile();
+     * 개인 값이 없으면 전역 지수를 기준으로 시작.
+     */
+    public synchronized void changeSingleSpeed(String username, int difference) {
+        Integer exponent = playerSpeedExponents.get(username);
+        if (exponent == null) exponent = speedUserExponent;
+        exponent += difference;
+        playerSpeedExponents.put(username, exponent);
+    }
+
     /** 현재 속도를 정수 퍼센트 문자열로 반환 (원본: SmartMovingOptions.getSpeedPercent()) */
     public String getSpeedPercent() {
         return String.valueOf((int)(getUserSpeedFactor() * 100));
@@ -437,5 +482,35 @@ public class SmartMovingConfig {
         String v = p.getProperty(key);
         if (v == null) return def;
         try { return Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return def; }
+    }
+
+    /**
+     * 원본: Value.tryParseIntegerMap(String value) (Value.md L555-568).
+     * `,`으로 분할 → 짝수 인덱스=키, 홀수=값. parseInt 실패 항목은 스킵(원본은 NPE 가능).
+     */
+    private static Map<String, Integer> parseIntegerMap(String raw) {
+        Map<String, Integer> result = new HashMap<>();
+        if (raw == null || raw.isEmpty()) return result;
+        String[] parts = raw.split(",");
+        for (int i = 0; i < parts.length; i++) {
+            String key = parts[i++];
+            if (i < parts.length) {
+                try { result.put(key, Integer.parseInt(parts[i].trim())); }
+                catch (NumberFormatException ignored) {}
+            }
+        }
+        return result;
+    }
+
+    /** parseIntegerMap 역방향 — `"user1,5,user2,-2,..."` 형식 생성. */
+    private static String serializeIntegerMap(Map<String, Integer> map) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, Integer> e : map.entrySet()) {
+            if (!first) sb.append(',');
+            sb.append(e.getKey()).append(',').append(e.getValue());
+            first = false;
+        }
+        return sb.toString();
     }
 }
