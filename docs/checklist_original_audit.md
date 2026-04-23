@@ -154,7 +154,7 @@
 | [x] | `SmartMovingConfig.md` | `SmartMovingConfig.java` |
 | [x] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
 | [x] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
-| [ ] | `SmartMovingServerConfig.md` | 서버 설정 대응 (있는 경우) |
+| [x] | `SmartMovingServerConfig.md` | `SmartMovingConfig.SERVER_CONFIG` + `loadFromArray()` |
 | [ ] | `SmartMovingServerOptions.md` | 서버 설정 대응 |
 
 ---
@@ -923,6 +923,35 @@ N/A (구조적 변환):
 
 ---
 
+### [2026-04-23] config/SmartMovingServerConfig.md
+
+대응 구현: `SmartMovingConfig.SERVER_CONFIG` (singleton) + `SmartMovingConfig.loadFromArray(String[])` + `readFrom(Properties)` 체인
+
+원본 개요:
+- `SmartMovingServerConfig extends SmartMovingClientConfig` — 서버 수신 설정 파싱 + top/일반 2-레이어 우선순위 관리 어댑터
+- 메서드 3개: `loadFromProperties(String[], boolean top)`, `load(boolean top)`, `reset()`
+- 저장소 2개: `properties`(모든 수신), `topProperties`(top=true 수신만) — load 시 topProperties가 properties를 덮어씌워 전역 설정 우선 적용 보장
+
+1.21.1 대응 상태:
+- `SmartMovingConfig.SERVER_CONFIG` 인스턴스 — 서버 수신 설정 홀더 ✓
+- `loadFromArray(content)` — flat `[k1,v1,k2,v2,...]` 배열 파싱 + Properties 변환 + `readFrom(props)` ✓
+- `Config` 전환 로직은 `SmartMovingClient.processConfigContentPacket()` 에서 처리 ✓
+
+구조적 N/A (1.21.1 아키텍처 차이):
+- **top/일반 2-레이어 우선순위** — 1.21.1 서버 측 `SmartMovingServer.initialize()` 는 `globalConfig=true` 일 때만 `INSTANCE.toArray()` 전송, 그 외 빈 배열. 개인별 설정(`_globalConfig=false` 기반 클라이언트별 전송 경로) 자체가 미구현. 주석 명시: `"serverConfig(개인별 설정) 지원은 미구현 — globalConfig 우선"`
+- **`reset()` 메서드** — `SERVER_CONFIG`는 단일 인스턴스, 연결 해제 시 `Config = INSTANCE` 복원만 수행. 현재 전체 설정 덮어쓰기 구조에서는 잔류 위험 없음(모든 키가 매번 덮어씌워짐). 부분 설정 전송 경로가 없으므로 실질 문제 없음.
+- **`loadFromProperties` boolean top 파라미터** — `loadFromArray`는 단일 인자만 받음. top 레이어링 필요 없으므로 N/A.
+
+불일치 없음 (기능적 대응):
+- flat 배열 파싱 (`i += 2`, 홀수 길이 무시): 1.21.1 `loadFromArray`의 `if (content.length % 2 != 0) return;` + `for (int i = 0; i + 1 < content.length; i += 2)` 와 동등 ✓
+- super.loadFromProperties 체인 → SmartMovingClientConfig/SmartMovingConfig 필드 채우기: 1.21.1 `readFrom(Properties)` 로 flat 대응, 모든 필드 개별 `getBool/getFloat/getInt` 추출 ✓
+- 서버 config 수신 → Config 전환: 1.21.1 `SmartMovingClient.processConfigContentPacket` 에서 `first=true` 판별 후 `Config = SERVER_CONFIG` 전환 ✓
+
+신규 발견 미구현:
+- 없음 — 개인별 설정(top=false) 전송 경로는 서버 측 미구현이므로 top 우선순위 시스템 도입 불필요. 전체 설정 전송만 지원하는 현 구조에서 원본 기능과 기능적으로 동등.
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -993,3 +1022,4 @@ N/A (구조적 변환):
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [누락] `wallUpJump`(true), `wallHeadJump`(true) 불리언 필드 + `wallUpJumpVerticalFactor`(0.4F), `wallHeadJumpVerticalFactor`(0.3F), `wallUpJumpHorizontalFactor`(0.15F), `wallHeadJumpHorizontalFactor`(0.15F) 팩터 필드 전부 누락. | **처리 완료** — SmartMovingConfig.java: 6개 필드+readFrom+writeTo 추가. BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() WALL_UP/WALL_HEAD 수직 속도 오류 — 원본: `angle!=null` 경로 = `-0.078 + 0.498 * wallUpJumpVerticalFactor(0.4F)` → 0.121D, WALL_HEAD += wallHeadJumpVerticalFactor(0.3F) → 0.271D. 버그: `angle==null` 경로와 같은 vanilla 0.419D 사용. | **처리 완료** — SmartMovingJumper.tryJump(): WALL_UP/WALL_HEAD 전용 분기 추가(공식 경로). BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() 스프린트 수평 보정을 WALL_UP/WALL_HEAD에 적용 — 원본: 스프린트 보정은 `angle==null`(vanilla Up) 블록 내부에만 존재 → 벽점프 시 미적용. 버그: fast이면 항상 적용. | **처리 완료** — `if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD)` 조건으로 수정. BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingServerConfig.md` | 없음 — 서버 수신 설정 파싱 + top/일반 2-레이어 우선순위 어댑터. 1.21.1은 `SmartMovingConfig.SERVER_CONFIG` + `loadFromArray()` + `readFrom()` 체인으로 분산 대응. top 레이어링은 개인별 설정 전송 경로 미구현으로 N/A, `reset()`은 전체 설정 덮어쓰기 구조에서 실질 불필요. | N/A (구조적 대응) |
