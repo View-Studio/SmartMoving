@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2/H-3 완료 / ⏳ **H-4 진행 (factor 2단계 14필드)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2/H-3/H-4 완료 / ⏳ **H-5 진행 (기타 2필드)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -710,11 +710,12 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       + Easy 값 default + 각 필드 javadoc 에 원본 라인/defaults/버전 폴백/up() 하한 기록.
       readFrom/writeTo 에 13키 추가 (원본 키 이름 그대로 — `Exhaution` 오타 유지).
       base 2개만 난이도 체인 (Easy 1.2F / 0.8F) 적용. airBorne hunger 필드 없음 (원본 0F 하드코딩).
-- [ ] H-4. **factor 2단계 Config 필드 14개 추가** (§5.4 참조). `climbing/crawling/ceilClimbing/
-      swimming/diving/dipping/normal` 각 `HungerGainFactor` + `ExhaustionLossFactor` 쌍.
-      ⚠️ 2단계는 `Exhaustion` 정타 (원본 1:1). `ceilClimbing` 축약(`ceilingClimbing` 아님).
-      `swimming/diving/dipping` HungerGain 은 1.5F default, 나머지는 PF 기본 1F. normal 은
-      L589/L591 둘 다 참조 (중복 의도). readFrom/writeTo 포함.
+- [x] H-4. **factor 2단계 Config 필드 14개 추가** — `SmartMovingConfig.java` 에 "Exhaustion/
+      Hunger factor 2단계" 섹션 신설 (1단계 바로 뒤). climbing/crawling/ceilClimbing/
+      swimming/diving/dipping/normal 각 HungerGain + ExhaustionLoss 쌍 14개. `Exhaustion`
+      정타 / `ceilClimbing` 축약 원본 유지. swim/dive/dip HungerGain default=1.5F, 나머지는
+      PF 기본 1F. `ceilClimbing` 키 순서 이상 (`climb.gain.ceiling` / `climb.ceiling.loss`)
+      원본 그대로. `dipping` 키는 `dip` 축약 사용 원본 그대로. readFrom/writeTo 포함.
 - [ ] H-5. **기타 필드 2개**: `alwaysHungerGain` (Easy 0F) + `exhaustionLossHungerFactor`
       (Easy 0.02F). readFrom/writeTo.
 - [ ] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). javadoc 에
@@ -1661,6 +1662,34 @@ writeTo. 개별 필드 원자 단위 나누지 않고 1단계 전체 한 커밋 
 **다음 작업**: H-4 — factor 2단계 Config 필드 14개 추가. `climbing/crawling/ceilClimbing/
 swimming/diving/dipping/normal` 각 쌍. ⚠️ 2단계는 `Exhaustion` 정타. `ceilClimbing` 축약.
 §5.4 #14-#27 참조.
+
+### 세션 16 (계속) — 2026-04-24 — H-4 (factor 2단계 14필드 이식)
+
+**진행한 작업**:
+- `SmartMovingConfig.java` factor 1단계 섹션 뒤에 "factor 2단계" 섹션 신설. 14필드 선언
+  + javadoc + readFrom/writeTo.
+- **2단계 특성** (1단계와 다름):
+  - `Exhaustion` **정타** 유지 (1단계 `Exhaution` 오타와 혼재)
+  - `ceilClimbing` 축약 필드명 유지 (`ceilingClimbing` 아님)
+  - 난이도 체인 없음 — 전 난이도 동일 (Easy=default)
+  - swim/dive/dip HungerGain 은 default=1.5F (나머지는 PF 기본 1F)
+  - `ceilClimbing` 키 순서 이상: Hunger 는 `climb.gain.ceiling`, Exhaustion 은 `climb.ceiling.loss`
+  - `dipping` 필드는 config 키에서 `dip` 축약 (`move.hunger.dip.gain.factor`)
+  - `normal*` 은 `getFactor` L589 onGround + L591 else 양쪽에서 참조 (의도 중복)
+
+**완료 전 검증 체크리스트 (H-4 기준)**:
+- [근거] §5.4 factor 27개 테이블 #14-#27 참조 ✓
+- [대응] 원본 14개 ↔ 구현 14개 1:1 ✓
+- [분기] 난이도 체인 없음 확인 (전 난이도 동일) ✓
+- [상수] swim/dive/dip HungerGain 1.5F / 나머지 PF 기본 1F ✓
+- [타이밍] 해당 없음
+- [근사] 없음 (up() 하한도 2단계엔 없음)
+- [신규] 원본 키 순서 이상 (`ceilClimbing`) + 필드명 vs 키 불일치 (`dipping→dip`) — javadoc 명시 ✓
+- [회귀] 기존 다른 필드 처리 불변 ✓
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-5 — 기타 2필드 (`alwaysHungerGain` 0F / `exhaustionLossHungerFactor` 0.02F)
+이식. `handleExhaustion` 허기 공식에서 직접 참조. readFrom/writeTo.
 
 ---
 
