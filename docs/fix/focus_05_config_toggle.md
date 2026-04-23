@@ -18,10 +18,11 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (방향 전환 후 재착수) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 완료 (라벨 순환 — 유지) / ⏳ **H 섹션 진행 중 (Easy 프리셋 이식)** |
-| 잔여 섹션 | H (Easy 프리셋 리서치 + 이식) + G-2(수동 테스트, 사용자 몫) + G-5(포커스 전환) |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1 완료 / ⏳ **H-2 진행 (소비처 확인)** |
+| 이식 대상 | **20개 필드 확정** (Float 6 + Boolean 신규 13 + Boolean 정정 1) |
+| 잔여 섹션 | H-2~H-9 + G-2(수동 테스트) + G-5(포커스 전환) |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 사용자 지적으로 정정) |
-| 컴파일 상태 | ✅ 빌드 성공 (G-1/H 시작 전) |
+| 컴파일 상태 | ✅ 빌드 성공 (H 코드 변경 전) |
 
 ---
 
@@ -66,30 +67,85 @@
 | 2 | configToggle 키 × 1 | "Smart Moving disabled" (toggler=-1) |
 | 3 | × 1 (재진입) | "Smart Moving enabled" (toggler=0) |
 
-### 프리셋 값 (원본 Easy 1:1) ⚠️ **완전 추출 필요**
+### 프리셋 값 (원본 Easy 1:1) — H-1 완전 추출 결과 ✅
 
-아래는 리서치 파일에서 `.e()` 로 확인된 14개. 원본 `SmartMovingConfig.java` 전체
-소스 WebFetch 로 누락 없이 재확인 필요 (H-1).
+**원본 파일**: `https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/java/net/smart/moving/config/SmartMovingConfig.java`
 
-| # | 원본 필드 | default | **Easy** | 1.21.1 대응 | 현재 1.21.1 값 | 조치 |
-|---|---------|---------|---------|------------|---------------|------|
-| P-1 | `_baseExhautionLossFactor` | 1F | **1.2F** | 미구현 | N/A | 신규 추가 (default 1.2F) |
-| P-2 | `_exhaustionLossHungerFactor` | 0.05F | **0.02F** | 미구현 | N/A | 신규 추가 (default 0.02F) |
-| P-3 | `_baseHungerGainFactor` | 1F | **0.8F** | 미구현 | N/A | 신규 추가 (default 0.8F) |
-| P-4 | `_speedUser` (Creative 팩토리) | false (Easy) | **false** | `speedUser` | `true` ⚠️ | **기본값 정정 true→false** |
-| P-5 | `_lavaLikeWater` (Creative) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
-| P-6 | `_climbExhaustion` (Hard) | false (Easy) | **false** | `climbExhaustion` | `false` ✓ | 이미 일치 |
-| P-7 | `_ceilingClimbExhaustion` (Hard) | false (Easy) | **false** | `ceilingClimbExhaustion` | `false` ✓ | 이미 일치 |
-| P-8 | `_runExhaustion` (Hard) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
-| P-9 | `_climbJumpExhaustion` (Hard) | false (Easy) | **false** | 미구현 | N/A | 신규 추가 (default false) |
-| P-10 | `_sprintExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
-| P-11 | `_wallJumpExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
-| P-12 | `_jumpChargeExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
-| P-13 | `_jumpSlideExhaustion` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
-| P-14 | `_hungerGain` (Medium) | true | **false** (Easy) | 미구현 | N/A | 신규 추가 (default false) |
+**SM 버전 기준**: `_sm_current = _sm_3_2` (L59). 모든 `defaults(X, _pre_sm_*)` 버전
+폴백은 과거 세이브 로드시만 적용 — 1.21.1 신규 설치엔 **최상위 `defaults(Value(...))`
+값** 사용.
 
-**리스크**: 위 필드 중 "값만 있고 소비처가 없는" dead field 가능성. H-1 (소비처 확인)
-에서 각각 grep 필요. 소비처 없는 필드는 포커스 #5 범위 외 (후속 포커스).
+**Agent 덤프 섹션별 총 28개 → 이식 대상 20개** (중복/버전 호환 `_old_*` 4개, 이미
+일치 2개, 이미 이식 1개, Easy=default Float 는 P.2 로 이식 포함).
+
+#### P.1 — Float 값 차이 필드 (Easy ≠ default) — 신규 추가 3개
+
+| # | 원본 필드 (L) | default | **Easy** | Hard | 1.21.1 조치 |
+|---|---|---|---|---|---|
+| P-1 | `_baseExhautionLossFactor` (L399) | 1F | **1.2F** | 0.8F | 신규 `baseExhautionLossFactor = 1.2F` |
+| P-2 | `_exhaustionLossHungerFactor` (L417) | 0.05F | **0.02F** | 0.08F | 신규 `exhaustionLossHungerFactor = 0.02F` |
+| P-3 | `_baseHungerGainFactor` (L423) | 1F | **0.8F** | 1.2F | 신규 `baseHungerGainFactor = 0.8F` |
+
+#### P.2 — Float Easy=default (Creative/Hard 에서 값 다름) — 신규 추가 3개
+
+| # | 원본 필드 (L) | **Easy**=default | Creative | Hard | 1.21.1 조치 |
+|---|---|---|---|---|---|
+| P-4 | `_runFactorLevitate` (L169) | 1.3F | 2.0F | — | 신규 `runFactorLevitate = 1.3F` |
+| P-5 | `_sprintFactorLevitate` (L180) | 1.5F | 3F | — | 신규 `sprintFactorLevitate = 1.5F` |
+| P-6 | `_alwaysHungerGain` (L439) | 0F | — | 0.005F | 신규 `alwaysHungerGain = 0F` |
+
+#### P.3 — Boolean Creative 팩토리 (Easy=false) — 정정 1 + 신규 1
+
+`Creative(key) = Modified(key).defaults(Value(false).c(true))` → Easy=false, Creative=true
+
+| # | 원본 필드 (L) | **Easy**=default | Creative | 1.21.1 현재 | 조치 |
+|---|---|---|---|---|---|
+| P-7 | `_speedUser` (L96) | **false** | true | `true` ⚠️ | **기본값 `true → false` 정정** (`_pre_sm_3_2` 폴백은 과거 세이브만) |
+| P-8 | `_lavaLikeWater` (L163) | **false** | true | 미구현 | 신규 `lavaLikeWater = false` |
+
+#### P.4 — Boolean Hard 팩토리 (Easy=false) — 신규 5 + 이미 일치 2
+
+`Hard(key) = Modified(key).defaults(Value(false).h(true)).defaults(false, _pre_sm_1_5)`
+
+| # | 원본 필드 (L) | **Easy**=default | Hard | 1.21.1 현재 | 조치 |
+|---|---|---|---|---|---|
+| — | `_climbExhaustion` (L129) | false | true | `false` ✓ | 이미 일치 |
+| — | `_ceilingClimbExhaustion` (L145) | false | true | `false` ✓ | 이미 일치 |
+| P-9 | `_runExhaustion` (L170) | **false** | true | 미구현 | 신규 `runExhaustion = false` |
+| P-10 | `_climbJumpExhaustion` (L333) | **false** | true | 미구현 | 신규 `climbJumpExhaustion = false` |
+| P-11 | `_standJumpExhaustion` (L368) | **false** | true | 미구현 | 신규 `standJumpExhaustion = false` |
+| P-12 | `_sneakJumpExhaustion` (L372) | **false** | true | 미구현 | 신규 `sneakJumpExhaustion = false` |
+| P-13 | `_walkJumpExhaustion` (L376) | **false** | true | 미구현 | 신규 `walkJumpExhaustion = false` ⚠️ 원본 키 오타 `"move.jump.walkexhaustion"` (점 누락) 그대로 유지 |
+
+#### P.5 — Boolean Medium 팩토리 (Easy=false, **default=true**) — 신규 7개
+
+`Medium(key) = Unmodified(key).defaults(Value(true).e(false)).defaults(true, _pre_sm_1_5)` — **Easy 에서만 false**
+
+| # | 원본 필드 (L) | default | **Easy** | 1.21.1 현재 | 조치 |
+|---|---|---|---|---|---|
+| P-14 | `_sprintExhaustion` (L182) | true | **false** | 미구현 | 신규 `sprintExhaustion = false` |
+| P-15 | `_wallJumpExhaustion` (L355) | true | **false** | 미구현 | 신규 `wallJumpExhaustion = false` |
+| P-16 | `_runJumpExhaustion` (L380) | true | **false** | 미구현 | 신규 `runJumpExhaustion = false` |
+| P-17 | `_sprintJumpExhaustion` (L384) | true | **false** | 미구현 | 신규 `sprintJumpExhaustion = false` |
+| P-18 | `_jumpChargeExhaustion` (L388) | true | **false** | 미구현 | 신규 `jumpChargeExhaustion = false` |
+| P-19 | `_jumpSlideExhaustion` (L392) | true | **false** | 미구현 | 신규 `jumpSlideExhaustion = false` |
+| P-20 | `_hungerGain` (L422) | true | **false** | 미구현 | 신규 `hungerGain = false` |
+
+#### 제외 대상 (이식 불필요)
+
+- `_configKeyName` (L465) — 이미 `configKeyName` Map 으로 이식됨 (B-3).
+- `_old_jumpExhaustion` / `_old_sneakJumpExhaustion` / `_old_runJumpExhaustion` /
+  `_old_sprintJumpExhaustion` — `_pre_sm_1_7` 버전 호환용 source. 신규 세이브에는
+  불필요.
+- `climbExhaustion` / `ceilingClimbExhaustion` — 이미 1.21.1 에 `false` 로 존재.
+
+**총 이식 대상 20개**: Float 6 (P.1 + P.2) + Boolean 신규 13 (P.3 `lavaLikeWater` + P.4
+5개 + P.5 7개) + Boolean 정정 1 (P.3 `speedUser`).
+
+**리스크 — dead field 가능성**: 위 20개 중 소진/허기/속도 시스템 소비처가 1.21.1 에
+없는 것은 필드만 추가해도 동작 영향 0 — **H-2 에서 각각 `grep` 확인**. 소비처 있는
+것만 포커스 #5 완료 조건에 포함; 없는 것은 §17 후속 (해당 시스템 이식 포커스와
+묶음) 또는 "필드만 선언, 후속 연결" 로 처리.
 
 ---
 
@@ -497,12 +553,12 @@ Easy key 가 반환하는 **모든** 필드 값을 1.21.1 의 필드 기본값�
 
 - [x] H-0. **방향 전환 문서화** — §1/§2/§3/§7/§10 재정의 + §15 세션 13 로그 + §16 세션
       13 오판 정정 + §17 잔여 재정의. 코드 변경 없음.
-- [ ] H-1. **Easy 반환값 완전 추출 (리서치)** — Agent WebFetch 로 원본
-      `SmartMovingConfig.java` 전체 소스 + `net.smart.properties.Property.java` +
-      `net.smart.properties.Value.java` + `net.smart.properties.Configurable.java` 확보
-      후 `docs/research/original/smartmoving/properties/` 에 덤프. 리서치 파일 안에서
-      모든 `.e(...)` / Creative/Hard/Medium 팩토리 호출 / `_pre_sm_*` 버전 폴백 rule
-      을 빠짐없이 추출. §3 의 14개 필드가 완전한지 재검증 — 새 필드 발견 시 §3 확장.
+- [x] H-1. **Easy 반환값 완전 추출 (리서치)** — Agent WebFetch 로 원본
+      `SmartMovingConfig.java` 전체 소스 확보. `docs/research/original/smartmoving/properties/`
+      에 `Property.md` / `Value.md` / `Properties.md` 이미 존재 확인. §3 테이블 14 →
+      **20개로 확장** (Float P-1~P-6, Creative P-7~P-8, Hard P-9~P-13, Medium P-14~P-20).
+      `_old_*` 4개 + `climbExhaustion` / `ceilingClimbExhaustion` (이미 일치) +
+      `_configKeyName` (이미 이식) 제외. 원본 키 오타 `"move.jump.walkexhaustion"` 확인.
 - [ ] H-2. **각 필드 소비처 확인 (dead field 방지)** — H-1 에서 확정된 전체 목록
       각각에 대해 `grep` 으로 1.21.1 소비처 존재 여부 확인. 소비처 없는 필드는
       포커스 #5 범위 외 (해당 시스템 이식 후속 포커스에서 함께). §3 표에 "소비처 있음/
@@ -1265,6 +1321,40 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
 
 **다음 작업**: H-1 — Agent WebFetch 로 원본 `SmartMovingConfig.java` 전체 + Property
 시스템 클래스 확보. Easy 반환값 완전 추출. 새 필드 발견 시 §3 확장.
+
+### 세션 14 — 2026-04-23 — H-1 (원본 Easy 완전 추출)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 `SmartMovingConfig.java` 전체 덤프 (654 라인).
+- `.e()` / Creative/Hard/Medium 팩토리 / 버전 폴백 `_pre_sm_*` 규칙 전수 추출.
+- §3 테이블을 **14개 → 20개** 로 확장. P.1/P.2/P.3/P.4/P.5 5개 하위 섹션으로 분리.
+- **신규 발견 (리서치 파일에 없던 정보)**:
+  - Float 필드 3개가 Easy=default 지만 Creative/Hard 에서 값이 달라 이식 필요
+    (`runFactorLevitate` / `sprintFactorLevitate` / `alwaysHungerGain`). §3 P.2.
+  - Hard 팩토리 사용 필드 3개 추가 발견 (`standJumpExhaustion` / `sneakJumpExhaustion` /
+    `walkJumpExhaustion`). §3 P.4 P-11~P-13.
+  - Medium 팩토리 사용 필드 2개 추가 발견 (`runJumpExhaustion` / `sprintJumpExhaustion`).
+    §3 P.5 P-16~P-17.
+  - **키 오타**: `_walkJumpExhaustion` 키 `"move.jump.walkexhaustion"` (dot 누락).
+    원본 그대로 유지 결정 — 이식 시 동일 키로 readFrom/writeTo.
+  - `_old_*` 4개 (pre_sm_1_7 세이브 호환용): 이식 불필요 — 제외 명시.
+- `SM_VERSION = "1.0"` 이 실질적으로 SM 3.2 기준 이식임을 명시. 모든 버전 폴백은 과거
+  세이브 로드 시만 적용되므로 1.21.1 신규 설치엔 최상위 `defaults(Value(...))` 적용.
+
+**완료 전 검증 체크리스트 (H-1 기준)**:
+- [근거] 원본 `SmartMovingConfig.java` 전체 소스 WebFetch ✓
+- [근거] Property/Value 시스템 리서치 파일 존재 확인 ✓
+- [대응] 28개 필드 → 이식 대상 20개 분류 (§3 5단계 테이블) ✓
+- [분기] 28개 모두 섹션 1~5 분류 완료 ✓
+- [상수] 각 필드의 default/Easy/Hard/Creative 값 및 버전 폴백 전부 기록 ✓
+- [타이밍] 해당 없음 (리서치 단계)
+- [근사] 해당 없음 (원본 값 그대로)
+- [신규] Float 3 + Hard 3 + Medium 2 = 신규 8개 필드 발견 (14→20 확장)
+- [회귀] 코드 변경 없음
+- [빌드] 해당 없음 (문서+리서치)
+
+**다음 작업**: H-2 — 20개 필드 각각 1.21.1 소비처 존재 여부 `grep` 확인. dead field
+분류. 소비처 있는 것만 H-3~H-6 이식 대상 확정.
 
 ---
 
