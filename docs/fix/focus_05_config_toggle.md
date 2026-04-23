@@ -374,7 +374,12 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `toggle()` 이 갱신**하는 원본 방식 유지 (C/D 섹션에서 구현).
 
 ### C. `SmartMovingConfig` 메서드 이식
-- [ ] C-1. `toggle()` 재구현 — 원본 L325-L332 1:1
+- [x] C-1. `toggle()` 재구현 — 원본 `SmartMovingProperties.toggle()` (리서치 L325-L332 =
+      원본 Java L81-L88) 1:1 이식. `enabled = !enabled; save();` → `toggler++/length wrap
+      /updateToggler()/save()`. save() 호출은 원본 Properties.toggle() 에는 없지만 원본
+      SmartMovingOptions.toggle() override (L500-L531) 에서 saveToOptionsFile 호출 — 1.21.1
+      통합 계층에서 여기 유지. SmartMovingOptions.toggle() 의 추가 동작(_configChat 메시지,
+      gameType 별 defaultConfigKey 갱신) 은 별도 원자 작업으로 분리 예정 (C-7 후보).
 - [ ] C-2. `setKeys(String[])` 이식 — 원본 L345-L355 1:1
 - [x] C-3. `updateToggler()` 헬퍼 — `enabled = (toggler != -1)` (원본 `update()` L163-L172
       의 Property 루프는 1.21.1 Property 부재로 N/A, enabled 파생만 이식). **의존 순서상
@@ -661,9 +666,61 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 **다음 작업**: C-1 — `toggle()` 재구현 (toggler++ 순환 + updateToggler() 호출 + save()).
 
+### 세션 5 (계속) — 2026-04-23 — C-1
+
+**진행한 작업**:
+- C-1: `SmartMovingConfig.toggle()` 재구현. 원본 `SmartMovingProperties.toggle()` L81-L88 1:1.
+  - 기존 `enabled = !enabled; save();` 를 4상태 순환 로직으로 교체:
+      ```java
+      int length = configKeys == null ? 0 : configKeys.length;
+      toggler++;
+      if (toggler == length) toggler = -1;
+      updateToggler();
+      save();
+      ```
+  - save() 호출은 원본 Properties.toggle() 에는 없으나 SmartMovingOptions.toggle() override
+    (L500-L531) 의 saveToOptionsFile 에 해당. 1.21.1 통합 계층이라 여기서 호출 유지.
+  - **Options.toggle() 의 추가 동작(_configChat 메시지 + gameType 별 defaultKey 갱신)은
+    별도 원자 작업** — §10 C-7 신규 등록 필요 (신규 발견 기록).
+
+**완료 전 검증 체크리스트 (C-1 기준)**:
+- [근거] `SmartMovingProperties.md` L81-L88 임베드 소스 확인 ✓
+- [근거] `SmartMovingOptions.md` L500-L531 override 확인 (추가 동작은 별도) ✓
+- [대응] 원본 4줄 ↔ 구현 4줄 1:1 ✓
+- [분기] `if (toggler == length)` 조건 그대로, `==` 유지 ✓
+- [상수] 해당 없음
+- [타이밍] C-3 `updateToggler()` 호출 연결 ✓
+- [근사] save() 위치만 원본과 다름 — javadoc 명시 ✓
+- [신규] Options.toggle() 추가 동작(채팅 + defaultKey 갱신) → §16 기록 + §10 C-7 후속 원자 작업 예정
+- [회귀] 기존 `enabled = !enabled` 의미가 완전히 달라짐 → §14 회귀 감사 대상
+- [빌드] `./gradlew build` ✓
+
+**⚠ 중간 상태 주의**: C-1 완료 시점에서 `toggler = -2` 초기값 → 첫 토글 시 `-2+1=-1 → disabled`.
+원본도 load() 에서 toggler=0 으로 설정 후 initializeForGameIfNeccessary 에서 setCurrentKey
+로 default key 인덱스(survival 은 1)로 이동. F 섹션 완료 전까지 이 초기화 흐름 부재 →
+중간 상태에서는 토글이 예상대로 작동 안 함. F 완료 시점에 정상화.
+
+**다음 작업**: C-2 — `setKeys(String[])` 이식 (원본 L90-L97).
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 5 (2026-04-23) — C-1 중 발견
+
+- **Options.toggle() override 추가 동작 미이식** (§10 C-7 후속 원자 작업 신규 등록 필요):
+  원본 SmartMovingOptions.toggle() (L500-L531) 은 super.toggle() 호출 후:
+  (1) `_configChat.value` 면 `writeClientConfigMessageToChat(false)` 호출 — 채팅 피드백
+  (2) gameType switch 로 해당 게임타입의 `_*DefaultConfigKey.setValue(getCurrentKey())` — 현재
+      key 를 gameType 별 defaultKey 에 저장 (다음 게임 시작 시 복원용)
+  (3) `saveToOptionsFile(optionsPath)` — 파일 저장 (1.21.1 save() 에 해당)
+  (1)(2)(3) 중 (3) 은 C-1 에서 이미 처리. (1) 은 E 섹션의 4상태 채팅 피드백과 결합 예정.
+  (2) 는 F 섹션 gameType 판정 완료 후 구현. **§10 에 C-7 추가** 또는 F-4 로 편입 고려.
+
+- **`SmartMovingConfig.load()` 에서 toggler 초기화 누락**: 원본 `SmartMovingProperties.load()`
+  (L35-L55) 끝에서 `toggler = 0; update();` 호출. 1.21.1 `SmartMovingConfig.load()` 는 file
+  읽고 `INSTANCE.readFrom(props)` 만 호출 — `toggler = 0` 설정 없음. 이 때문에 F 섹션 완료 전
+  토글 동작이 비정상. F 이식 시 `load()` 에 `toggler = 0; updateToggler();` 추가 필요.
 
 ### 세션 2 (2026-04-23) — 리서치/Agent 혼동 주의
 

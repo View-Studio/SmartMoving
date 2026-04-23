@@ -604,8 +604,33 @@ public class SmartMovingConfig {
         enabled = toggler != -1;
     }
 
+    /**
+     * 원본 SmartMovingProperties.toggle() (L81-L88) 1:1 이식.
+     *
+     * 원본:
+     *   public void toggle() {
+     *       int length = keys == null ? 0 : keys.length;
+     *       toggler++;
+     *       if (toggler == length) toggler = -1;
+     *       update();
+     *   }
+     *
+     * 순환 패턴:
+     *   configKeys.length == 3 (survival/adventure, "e"/"m"/"h"):
+     *     0 → 1 → 2 → -1 → 0 → ...       (Easy → Medium → Hard → disabled → Easy ...)
+     *   configKeys.length == 1 (creative "c" 또는 DEFAULT_KEYS {null}):
+     *     0 → -1 → 0 → ...                 (on/off 토글)
+     *
+     * save(): 원본 Properties.toggle() 에는 없음. 원본 SmartMovingOptions.toggle() (override,
+     *   SmartMovingOptions.md L500-L531) 에서 saveToOptionsFile(optionsPath) 호출. 1.21.1 은
+     *   Properties/Options/Config 계층이 SmartMovingConfig 하나로 통합 — 여기서 save() 호출.
+     *   SmartMovingOptions.toggle() 의 다른 추가 동작(채팅, defaultKey 갱신)은 별도 원자 작업.
+     */
     public void toggle() {
-        enabled = !enabled;
+        int length = configKeys == null ? 0 : configKeys.length;
+        toggler++;
+        if (toggler == length) toggler = -1;
+        updateToggler();
         save();
     }
 
