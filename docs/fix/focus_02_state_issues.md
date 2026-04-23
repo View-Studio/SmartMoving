@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 31 — B-0 완료) |
-| 현재 단계 | A-0/A-1/B-0 완료 / ⏳ **A-2 (수중 3상태 isSwimming_sm/isDiving/isDipping)** |
+| 상태 | 🟡 진행 중 (세션 32 — A-2 완료) |
+| 현재 단계 | A-0/A-1/A-2/B-0 완료 — A-2 불일치 11건 확정 + B-6~B-13 원자 추가 / ⏳ **A-3 (등반 4상태)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,14 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-11** (세션 32 — A-2 완료): `isSwimming_sm`/`isDiving`/`isDipping` 수중 3상태 전수
+  감사 — `SmartMovingSelf.md` R-11 섹션 참조. 범위: R-11.1 필드 선언 / R-11.2 진입 조건 /
+  R-11.3 사전 준비 (AABB + couldStandUp + wantShallowSwim) / R-11.4 크롤 3-OR 강제 isDipping /
+  R-11.5 메인 분류 3-갈래 + A/B 서브 + 11-단계 offset 테이블 / R-11.6 크롤↔수영 전환 /
+  R-11.7 Config 게이트 / R-11.8 수중 3상태 갱신 + isShallowDiveOrSwim / R-11.9 얕은 물
+  특수 분기 / R-11.10 useStandard 경로 / R-11.11 리셋 위치 / R-11.12 side-by-side +
+  **불일치 11건** (B-6~B-13 원자 예비안).
+
 - **R-10** (세션 31 — B-0 완료): `isFast`/`isSlow`/`wouldIsSneaking` 의존 체인 완전 덤프
   — `SmartMovingSelf.md` L2508 이후 R-10 섹션 참조. 범위:
   - R-10.1 필드 선언 (L1413-L1448)
@@ -187,7 +195,12 @@
           !isClimbing` vs 1.21.1 L650 `wouldWantSneak && !player.isSprinting() && !isClimbing`
           — `wantSprint` (SM 복합) 을 vanilla `isSprinting()` 로 대체. `wantSprint` 은 6조건
           OR (sprintButton + 수영/비행/등반/크롤 컨텍스트 + disabled 체크) 필수.
-- [ ] A-2. **`isSwimming_sm` / `isDiving` / `isDipping`** 원본 덤프 (수중 3상태)
+- [x] A-2. ✅ **세션 32 완료** — 수중 3상태 `isSwimming_sm`/`isDiving`/`isDipping` 전수
+      감사. `SmartMovingSelf.md` R-11 섹션 (L2508 이후 R-10 뒤) 덤프 완료. **불일치 11건
+      확정** (§16 세션 32): 진입 조건 간소화 / Config 게이트 누락 / isClimbCrawling 조건
+      누락 / 메인 분류 3-갈래 완전 대체 / isShallowDiveOrSwim·isJumpingOutOfWater·
+      isStillSwimmingJump·isLevitating 필드 미이식 / 얕은 물 특수 분기 미이식 /
+      waterMovementTicks 증분 조건 차이 / 크롤↔수영 전환 isSliding 누락. B-6~B-13 원자 추가.
 - [ ] A-3. **`isClimbing` / `isCeilingClimbing` / `isCrawlClimbing` / `isClimbCrawling`** 원본 덤프 (등반 계열 4상태)
 - [ ] A-4. **`isHeadJumping` / `isSliding`** 원본 덤프 (전환 쌍)
 - [ ] A-5. **`isCrawling` + `contextContinueCrawl`** 원본 덤프 (가장 복잡, 종합 의존)
@@ -265,7 +278,57 @@
 - [ ] B-5. `SmartMovingSwimmer.java` L159 간소화 지점 원본 `handleSwimming` 과 side-by-side
       대조 → 불일치면 정정 원자 추가 (B-5a~). 1:1 이면 주석만 제거.
 
-#### B-N. A-2~A-6 추가 발견에 따라 동적 추가
+#### B-6. Swimmer `updateSwimState` L78 — `isClimbCrawling` 누락 조건 추가 (A-2 발견)
+- [ ] B-6. 원본 L301 3-OR (`isCrawling || isClimbCrawling || isCrawlClimbing`) 에 맞게
+      Swimmer L78 조건에 `sm.isClimbCrawling` 추가.
+
+#### B-7. Swimmer `updateSwimState` 진입 조건 복원 (A-2 발견)
+- [ ] B-7. 원본 L232 진입 조건 (`!isFlying && !isLiquidClimbing && (isInWater || (wasSwimming
+      && isInLiquid) || (Config.isLavaLikeWaterEnabled() && handleLavaMovement()))`) 복원.
+      의존 확인: `isLiquidClimbing` / `isInLiquid()` / `Config.isLavaLikeWaterEnabled()` —
+      미이식 시 각각 신설 원자 분해 (B-7a/b/c).
+
+#### B-8. `Config.isSwimmingEnabled() / isDivingEnabled()` 게이트 추가 (A-2 발견)
+- [ ] B-8. Config 에 `isSwimmingEnabled()` / `isDivingEnabled()` 헬퍼 메서드 신설
+      (`cfg.swim && cfg.enabled` / `cfg.dive && cfg.enabled` — B-2/B-3a 와 동일 패턴) +
+      `updateSwimState` 에서 게이트 적용 (원본 L239/L438-L440 대응).
+
+#### B-9. 메인 분류 공식 재작성 (A-2 발견 — 가장 큰 수정)
+- [ ] B-9. 원본 L303-L414 3-갈래 메인 분류 이식:
+      - (a) playerSwimWaterBorder/totalSwimWaterBorder 계산 (AABB 근사 또는 getFluidHeight 활용)
+      - (b) `[0, 2]` 구간 A/B 서브 분기 (`diveUp || moveSwim || wantShallowSwim`)
+      - (c) A 경로 11-단계 swimming offset 테이블 (1.4~1.9)
+      - (d) B 경로 10-단계 diving offset 테이블 (1.5~1.9)
+      - (e) `(2, ∞)` 구간 항상 diving + diveUp/diveDown/moveSwim + isFast 분기
+      - (f) `(-∞, 0)` handleSwimmingRejected
+      - (g) motionYDiff 전체 적용 로직
+      - ※ 규모 매우 큼 — 세션 여러 회 분할 권장 (B-9a~g 서브원자 신설 가능)
+
+#### B-10. 미이식 필드 4건 ClientState 이식 + 갱신 로직 (A-2 발견)
+- [ ] B-10a. `isShallowDiveOrSwim` 필드 ClientState 추가 + `couldStandUp && (isDiving ||
+      isSwimming_sm)` 공식 갱신 (원본 L507)
+- [ ] B-10b. `isJumpingOutOfWater` 필드 추가 + wantJumpOutOfWater + waterMovementTicks>10
+      조건 이식 (원본 L486-L487)
+- [ ] B-10c. `isStillSwimmingJump` 필드 추가 + useStandard 경로 false 리셋 이식
+      (원본 L550)
+- [ ] B-10d. `isLevitating` 필드 추가 + `diving && !diveUp && !diveDown && moveStrafe==0
+      && moveForward==0` 공식 이식 (원본 L474/L505)
+
+#### B-11. 얕은 물 특수 분기 이식 (A-2 발견)
+- [ ] B-11. 원본 L513-L536 이식 — `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
+      SwimCrawlWaterBottomBorder` 진입 조건 + isSlow 분기 (crawl 전환 / walking 전환).
+      AABB 근사 판정 필요 (`realMinPlayerSwimWaterDepth` 대응).
+
+#### B-12. `waterMovementTicks` 증분 조건 정정 (A-2 발견)
+- [ ] B-12. 원본 L481-L484 — `swimming || diving` 만 증분, else (dipping 포함) 0 리셋.
+      1.21.1 `updateSwimState` L82/L90 은 dipping 포함 증분 → 원본대로 정정. B-10b
+      `isJumpingOutOfWater` 의존.
+
+#### B-13. 크롤↔수영 전환 조건 `isSliding` 추가 (A-2 발견)
+- [ ] B-13. `SmartMovingSwimmer.handleSwimming` L119/L124 SwimCrawlWater 전환 조건에
+      원본 L418 `(isCrawling || isSliding)` 반영. 현재 `wasCrawling` 만 체크.
+
+#### B-N. A-3~A-6 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -512,6 +575,62 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 섹션 확장 → 1.21.1 `SmartMovingSwimmer.updateSwimState` grep + 매핑. B-5 (Swimmer
 간소화 원본 대조) 함께 수행.
 
+### 세션 32 — 2026-04-24 — A-2 (수중 3상태) 완료
+
+**진행한 작업**:
+- `.tmp_research/SmartMovingSelf.java` 원본 `handleSwimming` (L229-L576) + 리셋 위치
+  (L1377-L1403 landMotionPost / L1488-L1498 resetSwimming / L2290-L2297 resetState) +
+  `SmartMoving.java` 부모 필드 선언 (L38-L41) 전수 감사
+- `SmartMovingSelf.md` **R-11 섹션 신설** (L2508 이후 R-10 뒤) — 12 서브섹션:
+  * R-11.1 필드 선언 (이식 4건 + 미이식 5건 확인)
+  * R-11.2 진입 조건 (3-OR 내부 + 2-AND 바깥)
+  * R-11.3 사전 준비 (AABB 측정 + couldStandUp + wantShallowSwim +
+    isFakeShallowWaterSneaking 설정 블록)
+  * R-11.4 크롤/ClimbCrawl/CrawlClimb 강제 isDipping (3-OR)
+  * R-11.5 메인 분류 3-갈래 + A/B 서브 분기 + 11-단계 offset 테이블
+  * R-11.6 크롤↔수영 전환 (R-06 구간)
+  * R-11.7 Config 게이트 + useStandard 재판정
+  * R-11.8 수중 3상태 갱신 (L504-L511)
+  * R-11.9 얕은 물 특수 분기 (isSlow 조합 crawl/walking 전환)
+  * R-11.10 useStandard=true 경로 리셋
+  * R-11.11 리셋 위치 (resetSwimming/resetState/landMotionPost)
+  * R-11.12 1.21.1 side-by-side + 불일치 11건 + B-6~B-13 이식 우선순위
+- 1.21.1 `SmartMovingSwimmer.updateSwimState` (L64-L91) + `ClientState` grep 결과:
+  * 이식 필드: `isDipping` / `isSwimming_sm` / `isDiving` / `dippingDepth` /
+    `waterMovementTicks` / `isFakeShallowWaterSneaking` / `isClimbCrawling` /
+    `isCrawlClimbing`
+  * **미이식 필드**: `isShallowDiveOrSwim` / `isJumpingOutOfWater` / `isStillSwimmingJump` /
+    `isLevitating` / `isLiquidClimbing`
+- **불일치 11건 확정** (§16 세션 32 기록) — 가장 심각: 메인 분류 공식 완전 대체
+  (원본 3-갈래 + A/B 서브 + 11-단계 offset 테이블 vs 1.21.1 단순 offset 3분류)
+- §10 B-6 ~ B-13 원자 신설 (동적 추가):
+  * B-6 isClimbCrawling 누락 조건 / B-7 진입 조건 복원 / B-8 Config 게이트 /
+  * B-9 메인 분류 재작성 (7 서브원자 권장) / B-10 미이식 필드 4건 /
+  * B-11 얕은 물 특수 분기 / B-12 waterMovementTicks 증분 / B-13 isSliding 조건
+- B-5 (Swimmer 간소화) 는 A-2 감사 결과에 흡수 — B-9 (메인 분류 재작성) 에서 함께 처리
+- §1 진행 상황 + §5.2 R-11 인용 갱신
+
+**완료 전 검증 체크리스트 (A-2 기준)**:
+- [근거] 원본 `handleSwimming` L229-L576 + 리셋 3곳 + 부모 필드 선언 전수 확보 ✓
+- [근거] 1.21.1 `SmartMovingSwimmer` L64-L91 + ClientState grep 확인 ✓
+- [대응] 원본 갱신 위치 11곳 ↔ 1.21.1 updateSwimState side-by-side 완료 ✓
+- [분기] 3-갈래 (`[0,2]`/`(2,∞)`/`(-∞,0)`) + A/B 서브 (`diveUp||moveSwim||wantShallowSwim`) +
+  11-단계 offset 테이블 + 얕은 물 특수 2분기 전부 식별 ✓
+- [상수] `SwimCrawlWaterTopBorder=0.65` / `SwimCrawlWaterMaxBorder=1.0` /
+  `SwimCrawlWaterBottomBorder` / 1.9 다이빙 경계 / 1.4 수영 경계 / 0.1625 offset / 2.0
+  border / 1.5 couldStandUp depth / 0.5 crawl 전환 offset 기록 ✓
+- [타이밍] 갱신 순서 (resetSwimming → 분류 지역변수 → Config 게이트 → 필드 갱신
+  → 얕은 물 특수 분기 → setHeightOffset) 기록 ✓
+- [근사] SM 정밀 AABB → `getFluidHeight(WATER)` 근사 (§7 이미 기록)
+- [신규] §10 B-6~B-13 원자 8개 추가 ✓
+- [회귀] 코드 변경 없음 (리서치/문서만)
+- [빌드] 해당 없음
+
+**다음 작업**: A-3 — 등반 계열 4상태 (`isClimbing` / `isCeilingClimbing` /
+`isCrawlClimbing` / `isClimbCrawling`) 전수 감사. `.tmp_research/SmartMovingSelf.java`
+`handleClimbing` (L814-L1110) + `handleCeilingClimbing` (L1112-L1174) + 상태 전환
+(L2736-L2820) 덤프 → 1.21.1 `SmartMovingClimber` grep + 매핑.
+
 ---
 
 ## 16. 신규 발견
@@ -607,6 +726,93 @@ R-10 섹션 작성 중 1.21.1 이식 시 주의·추가 원자 필요 지점:
 **수정 범위**: §10 B-1 서브원자 설계 시 위 3건 반영. 특히 B-1c (can* 4 판정) 에서
 `collidedHorizontallyTickCount` / `SmartStatisticsFactory` 이식 여부 grep 전용 하위
 원자 추가. 필요 시 별도 포커스로 분리.
+
+### 세션 32 A-2 — 수중 3상태 불일치 11건 확정
+
+R-11 섹션 (SmartMovingSelf.md L2508 이후) 에 원본 전수 덤프 + 1.21.1 side-by-side.
+
+1. **진입 조건 간소화** (원본 L232 → 1.21.1 Swimmer L65)
+   - 원본: `!isFlying && !isLiquidClimbing && (sp.isInWater() || (wasSwimming &&
+     isInLiquid()) || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()))`
+   - 1.21.1: `player.isTouchingWater()` 만
+   - 영향: 비행/물등반/라바수영/연속성 전혀 반영 안 됨 → 물 진입 순간 즉시 수중 상태.
+   - 분류: [오역] / 수정 B-7.
+
+2. **Config.isSwimmingEnabled()/isDivingEnabled() 게이트 누락** (원본 L239/L438-L440)
+   - 원본: `Config.isSwimmingEnabled()` / `Config.isDivingEnabled()` 둘 다 false 면
+     useStandard 로 분기 + 분류 후 Config 재게이트 적용
+   - 1.21.1: updateSwimState 에 Config 게이트 없음 (handleSwimming L145-L146 에서 진입
+     막지만 isSwimming_sm/isDiving 값은 이미 true 설정된 후)
+   - 분류: [누락] / 수정 B-8.
+
+3. **isClimbCrawling 누락** (원본 L301 → 1.21.1 Swimmer L78)
+   - 원본 3-OR: `isCrawling || isClimbCrawling || isCrawlClimbing` → isDipping=true
+   - 1.21.1 2-OR: `sm.isCrawling || sm.isCrawlClimbing` (isClimbCrawling 누락)
+   - ※ 주석 (Swimmer L77) 은 3-OR 명시했지만 코드는 2-OR
+   - 분류: [누락] / 수정 B-6.
+
+4. **메인 분류 공식 완전 대체** (원본 L303-L414 → 1.21.1 Swimmer L86-L89)
+   - 원본: 3-갈래 (`[0,2]` / `(2,∞)` / `(-∞,0)`) + A/B 서브 (`diveUp||moveSwim||
+     wantShallowSwim`) + 11-단계 swimming offset 테이블 (1.4~1.9) + 10-단계 diving
+     offset 테이블 + motionYDiff 전체 적용
+   - 1.21.1: 단순 offset 3분류 (`<1.4 / [1.4,1.9) / >=1.9`) — diveUp/moveSwim 분기
+     전무, playerSwimWaterBorder>2 처리 흡수됨
+   - 분류: [오역] / 수정 B-9 (가장 큼, 서브원자 7개 분해 권장).
+
+5. **isShallowDiveOrSwim 필드 미이식** (원본 L507)
+   - 원본: `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)` — handleSwimming
+     메인 분류 이후 갱신
+   - 1.21.1: ClientState 필드 없음 (grep 0건)
+   - 영향: 얕은 물 특수 분기 L513-L536 판정 불가능
+   - 분류: [누락] / 수정 B-10a.
+
+6. **isJumpingOutOfWater 필드 미이식** (원본 L487)
+   - 원본: `isJumpingOutOfWater = wantJumpOutOfWater && (waterMovementTicks > 10 ||
+     sp.onGround || wasJumpingOutOfWater)` — 수면 탈출 점프 진행 조건
+   - 1.21.1: ClientState 필드 없음
+   - 영향: 수면에서 점프로 탈출하는 특수 물리 (L500 `motionY = 0.30000001192092896D`) 없음
+   - 분류: [누락] / 수정 B-10b.
+
+7. **isStillSwimmingJump 필드 미이식** (원본 L550)
+   - 원본: useStandard 경로에서 false 리셋
+   - 1.21.1: ClientState 필드 없음
+   - 분류: [누락] / 수정 B-10c.
+
+8. **isLevitating 필드 미이식** (원본 L505)
+   - 원본: `isLevitating = levitating` where `levitating = diving && !diveUp && !diveDown
+     && moveStrafing==0F && moveForward==0F` (L474) — diving 중 정지 모드
+   - 1.21.1: ClientState 필드 없음
+   - 영향: diving 중 정지 상태 렌더/물리 차이
+   - 분류: [누락] / 수정 B-10d.
+
+9. **얕은 물 특수 분기 미이식** (원본 L513-L536)
+   - 원본: `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth < SwimCrawlWaterBottomBorder`
+     진입 조건 + isSlow 분기 (swimming/diving → crawling / walking)
+   - 1.21.1: 미이식 (B-10a 먼저 필요)
+   - 분류: [누락] / 수정 B-11.
+
+10. **waterMovementTicks 증분 조건 차이** (원본 L481-L484 vs 1.21.1 L82/L90)
+    - 원본: `if(swimming || diving) waterMovementTicks++; else waterMovementTicks=0;`
+      — dipping 에서는 0 리셋
+    - 1.21.1: `sm.waterMovementTicks++` (L82/L90) — dipping 에서도 증분
+    - 영향: isJumpingOutOfWater 의 `waterMovementTicks > 10` 판정 부정확
+    - 분류: [오역] / 수정 B-12.
+
+11. **크롤↔수영 전환 isSliding 조건 누락** (원본 L418 vs 1.21.1 handleSwimming L119/L124)
+    - 원본: `(isCrawling || isSliding) && playerCrawlWaterBorder < SwimCrawlWaterMaxBorder`
+    - 1.21.1: `sm.isCrawling && sm.dippingDepth > SWIM_CRAWL_TOP` (L119) — isSliding 누락
+    - 영향: 슬라이딩 중 물 진입 시 전환 동작 누락
+    - 분류: [누락] / 수정 B-13.
+
+**수정 범위**: §10 B-6~B-13 (8 원자 + B-9 서브원자 7개 권장 = 최대 14 원자). B-9 가 가장
+큼 — 메인 분류 공식 재작성 시 세션 분산 필수.
+
+**우선순위 권고**:
+- 1순위: B-6 (isClimbCrawling 한 조건 추가) — 1줄 수정, 즉시 가능
+- 2순위: B-10a~d (필드 이식) — 이후 B-11/B-12 전제
+- 3순위: B-12 (waterMovementTicks 증분) — B-10b 완료 후
+- 4순위: B-9 (메인 분류 재작성) — 가장 큰 작업, 여러 세션 분할
+- 5순위: B-7/B-8/B-11/B-13 — 순차 진행
 
 ---
 

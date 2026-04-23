@@ -2870,3 +2870,430 @@ L3241    return sp.isSprinting() && !isFast && (sp.onGround || vanilla());  — 
   1.21.1 이식 시 동일하게 `player.setSprinting(...)`. Options 필드 매핑 필요.
 - **collidedHorizontallyTickCount** / **SmartStatisticsFactory** 미이식 시 각각
   `0` / `true` 근사 또는 신설 원자로 분리 — 포커스 #2 범위 내 판단.
+
+---
+
+## R-11 추가 리서치 — isSwimming/isDiving/isDipping 수중 3상태 전수 덤프 (2026-04-24 세션 32 — 포커스 #2 A-2)
+
+포커스 #2 A-2 감사 — 수중 3상태 갱신 로직 전수 매핑. 기존 `handleSwimming` 섹션 (L414-L499)
+보완 + 1.21.1 `SmartMovingSwimmer.updateSwimState` side-by-side.
+
+### R-11.1 관련 필드 선언
+
+```java
+// --- SmartMoving.java (부모) L38-L41 ---
+public boolean isDipping;               // 수면 경계 (발만 잠김)
+public boolean isSwimming;              // 수영 중
+public boolean isDiving;                // 잠수 중
+public boolean isLevitating;            // 부양 (diving 내 정지)
+
+// --- SmartMovingSelf.java L1432, L1435-L1437, L1448 ---
+public float dippingDepth;              // = playerSwimWaterBorder
+public boolean isJumpingOutOfWater;     // 수면 점프 진행 중
+public boolean isShallowDiveOrSwim;     // couldStandUp && (isDiving || isSwimming)
+public boolean isFakeShallowWaterSneaking;  // 얕은 물 sneak 가짜 플래그
+public int waterMovementTicks;          // swimming||diving 지속 틱 카운터
+public boolean isStillSwimmingJump;     // 수영 점프 hold 상태
+```
+
+**1.21.1 이식 상태**:
+- `isDipping` / `isSwimming_sm` (접미사) / `isDiving` / `dippingDepth` — ClientState 이식됨
+- `isFakeShallowWaterSneaking` / `waterMovementTicks` / `isCrawlClimbing` / `isClimbCrawling` — 이식됨
+- **`isShallowDiveOrSwim` / `isJumpingOutOfWater` / `isStillSwimmingJump` / `isLiquidClimbing` / `isLevitating` — 미이식** (grep 확인)
+
+### R-11.2 handleSwimming 진입 조건 (L232-L249)
+
+```java
+// --- SmartMovingSelf.java L232-L249 ---
+boolean handleSwimming = !isFlying && !isLiquidClimbing && (sp.isInWater() || (wasSwimming && isInLiquid()) || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()));
+if(handleSwimming)
+{
+    resetClimbing();
+
+    float wasHeightOffset = heightOffset;
+
+    boolean useStandard = !Config.isSwimmingEnabled() && !Config.isDivingEnabled();
+    if(sp.ridingEntity != null)
+    {
+        resetSwimming();
+        useStandard = true;
+    }
+
+    if(useStandard && isCrawling)
+        standupIfPossible();
+    else
+        resetHeightOffset();
+```
+
+**진입 조건 (3-OR 안쪽)**:
+1. `sp.isInWater()` — 현재 물속
+2. `wasSwimming && isInLiquid()` — 이전 틱 swimming + 여전히 액체
+3. `Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()` — 라바 수영 옵션 + 라바 접촉
+
+**진입 차단 (2-AND 바깥)**:
+- `!isFlying` — 비행 중 아님
+- `!isLiquidClimbing` — 물 등반 중 아님
+
+**useStandard 게이트**:
+- `Config.isSwimmingEnabled()` / `Config.isDivingEnabled()` 둘 다 false → useStandard
+- `sp.ridingEntity != null` → resetSwimming + useStandard
+
+### R-11.3 SM 경로 사전 준비 (L251-L296)
+
+```java
+// --- SmartMovingSelf.java L251-L296 (요약) ---
+if(!useStandard)
+{
+    resetSwimming();
+
+    int i = MathHelper.floor_double(sp.posX);
+    int j = MathHelper.floor_double(sp.boundingBox.minY);
+    int k = MathHelper.floor_double(sp.posZ);
+
+    boolean swimming = false;  // 지역변수
+    boolean diving = false;
+    boolean dipping = false;
+
+    double j_offset = sp.boundingBox.minY - j;
+
+    double totalSwimWaterBorder = getMaxPlayerLiquidBetween(sp.boundingBox.maxY - 1.8, sp.boundingBox.maxY + 1.2);
+    double minPlayerSwimWaterCeiling = getMinPlayerSolidBetween(sp.boundingBox.maxY - 1.8, sp.boundingBox.maxY + 1.2, 0);
+    double realTotalSwimWaterBorder = Math.min(totalSwimWaterBorder, minPlayerSwimWaterCeiling);
+    double minPlayerSwimWaterDepth = totalSwimWaterBorder - getMaxPlayerSolidBetween(totalSwimWaterBorder - 2, totalSwimWaterBorder, 0);
+    double realMinPlayerSwimWaterDepth = totalSwimWaterBorder - getMaxPlayerSolidBetween(realTotalSwimWaterBorder - 2, realTotalSwimWaterBorder, 0);
+    double playerSwimWaterBorder = totalSwimWaterBorder - j - j_offset;
+
+    if(isCrawling && playerSwimWaterBorder > SwimCrawlWaterTopBorder)
+        standupIfPossible();
+
+    double motionYDiff = 0;
+    boolean couldStandUp = playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5;
+
+    boolean diveUp = isp.getIsJumpingField();
+    boolean diveDown = esp.movementInput.sneak && Config._diveDownOnSneak.value;
+    boolean swimDown = esp.movementInput.sneak && Config._swimDownOnSneak.value;
+
+    boolean wantShallowSwim = couldStandUp && (wasSwimming || wasDiving);
+    if(wantShallowSwim) {
+        HashSet<Orientation> orientations = Orientation.getClimbingOrientations(sp, true, true);
+        // 4방향+대각 8방향 isTunnelAhead 검사
+        while(iterator.hasNext())
+            if(!(wantShallowSwim &= !iterator.next().isTunnelAhead(sp.worldObj, i, j, k))) break;
+    }
+
+    if(wasSwimming && wantShallowSwim && swimDown) {
+        swimDown = false;
+        isFakeShallowWaterSneaking = true;
+    }
+
+    if(isDiving && diveUp && diveDown)
+        diveUp = diveDown = false;
+```
+
+**핵심 개념**:
+- **SM 정밀 AABB**: `getMaxPlayerLiquidBetween` / `getMinPlayerSolidBetween` / `getMaxPlayerSolidBetween`
+  — 반-블록 단위 Y 범위 스캔. 1.21.1 에 대응 없음 → `player.getFluidHeight(WATER)` 근사 (§7 기록).
+- **`playerSwimWaterBorder` = 플레이어 minY 기준 액체 경계 Y 오프셋**
+- **`couldStandUp` = border>=0 && depth<=1.5** — 얕은 물 판정
+- **`wantShallowSwim`** — 얕은 물 continuity (이전 틱 swim/dive 였을 때만)
+- **`isFakeShallowWaterSneaking`** = wasSwimming + wantShallowSwim + swimDown 엣지 (swimDown 억제)
+
+### R-11.4 크롤/ClimbCrawl/CrawlClimb 강제 isDipping (L301-L302)
+
+```java
+// --- SmartMovingSelf.java L301-L302 ---
+if(isCrawling || isClimbCrawling || isCrawlClimbing)
+    isDipping = true;
+```
+
+**3-OR 조건** — 크롤/등반크롤/크롤등반 중 어느 것이든 수중 진입 시 강제로 isDipping.
+**1.21.1 불일치**: Swimmer L78 은 `isCrawling || isCrawlClimbing` 만 (isClimbCrawling 누락).
+
+### R-11.5 메인 분류 블록 (L303-L414) — 3-갈래
+
+```java
+// --- SmartMovingSelf.java L303-L414 (요약) ---
+else if(playerSwimWaterBorder >= 0 && playerSwimWaterBorder <= 2)
+{
+    double offset = playerSwimWaterBorder + 0.1625D;
+    boolean moveSwim = sp.rotationPitch < 0F && esp.movementInput.moveForward > 0F
+                    || sp.rotationPitch > 0F && esp.movementInput.moveForward < 0F;
+    if(diveUp || moveSwim || wantShallowSwim) {
+        // A경로 — 활성 수영 경계 테이블
+        if(offset < 1.4)        { dipping = true;  /* motionYDiff: offset<1 → -0.02, else -0.01 */ }
+        else if(offset < 1.9)   { swimming = true; /* motionYDiff: 11-단계 offset 테이블 */ }
+        else                    { diving = true;   /* motionYDiff: diveUp/diveDown/moveSwim 조합 */ }
+    } else {
+        // B경로 — 비활성 수영 경계 테이블
+        if(offset < 1.5)        { dipping = true;  /* motionYDiff: -0.02 일괄 */ }
+        else                    { diving = true;   /* motionYDiff: 10-단계 offset 테이블 */ }
+    }
+}
+else if(playerSwimWaterBorder > 2)
+{
+    diving = true;
+    // motionYDiff: diveUp + isFast 분기 (물속 스프린트 점프 특수)
+    if(diveUp && isFast && playerSwimWaterBorder < 2.5 && isAirBlock(j+3))
+        motionYDiff = 0.11D / Config._sprintFactor.value;
+    else if(diveUp)   motionYDiff = 0.01 + 0.1 * speedFactor;
+    else if(diveDown) motionYDiff = 0.01 - 0.1 * speedFactor;
+    else              motionYDiff = 0.01D;
+}
+else
+    handleSwimmingRejected = true;   // border < 0 → SM 비처리
+```
+
+**3-갈래 게이트**:
+1. **[0, 2]** 구간 — 경계 부근 수영/다이빙 세분화
+2. **(2, ∞)** 구간 — 항상 diving (깊은 물)
+3. **(-∞, 0)** 구간 — handleSwimmingRejected (물밖)
+
+**A/B 서브경로** (구간 1 내부):
+- A: `diveUp || moveSwim || wantShallowSwim` — 활성 수직 의도
+- B: else — 중립 (피동)
+
+**offset 테이블 (A/swimming, offset 1.4~1.9)** — 11단계 motionYDiff:
+1.4<=o<1.5:-0.02, <1.6:-0.01, <1.62:-0.005, <1.64:-0.0025, <1.66:-0.00125, <1.664:-0.000625, <1.668:0,
+<1.672:+0.000625, <1.676:+0.00125, <1.68:+0.0025, <1.7:+0.005, <1.8:+0.01, else:+0.02.
+swimDown 억제 시 `-0.05 * (isFast ? sprintFactor : 1)` 덮어쓰기.
+
+### R-11.6 크롤↔수영 전환 (L416-L434) — R-06 구간
+
+```java
+// --- SmartMovingSelf.java L416-L434 ---
+dippingDepth = (float)playerSwimWaterBorder;
+float playerCrawlWaterBorder = dippingDepth + wasHeightOffset;
+if((isCrawling || isSliding) && playerCrawlWaterBorder < SwimCrawlWaterMaxBorder)
+    if(playerCrawlWaterBorder < SwimCrawlWaterTopBorder)
+    {
+        // continue crawling in shallow water
+        setHeightOffset(wasHeightOffset);
+        handleSwimmingRejected = true;
+    }
+    else
+    {
+        // from crawling in shallow water to swimming/diving
+        if(wantShallowSwim) move(0, 0.1, 0, true);
+        isCrawling = false;
+        isDiving = false;
+        isSwimming = true;
+        isDipping = false;
+    }
+```
+
+**진입 조건**: `(isCrawling || isSliding) && playerCrawlWaterBorder < SwimCrawlWaterMaxBorder(=1.0)`
+**내부 2분기**:
+- `playerCrawlWaterBorder < SwimCrawlWaterTopBorder(=0.65)` — 얕은 물 유지 (crawl)
+- else — 크롤→수영 전환 (isCrawling=false, isSwimming=true, isDipping=false)
+
+### R-11.7 Config 게이트 + useStandard 재판정 (L436-L441)
+
+```java
+// --- SmartMovingSelf.java L436-L441 ---
+if(!handleSwimmingRejected)
+{
+    swimming = !useStandard && swimming && Config.isSwimmingEnabled();
+    diving = !useStandard && diving && Config.isDivingEnabled();
+    dipping = !useStandard && dipping && Config.isSwimmingEnabled();
+    useStandard = !swimming && !diving && !dipping;
+```
+
+**분류 이후 Config 재게이트** — 원본 L303-L414 분류만으로는 부족, Config 옵션 게이트 통과해야 함.
+
+### R-11.8 수중 3상태 갱신 (L504-L511)
+
+```java
+// --- SmartMovingSelf.java L481-L511 ---
+if(swimming || diving)
+    waterMovementTicks++;
+else
+    waterMovementTicks = 0;                          // dipping 에서는 리셋!
+
+boolean wantJumpOutOfWater = (moveForward != 0 || moveStrafing != 0)
+    && sp.isCollidedHorizontally && diveUp && !isSlow;
+isJumpingOutOfWater = wantJumpOutOfWater
+    && (waterMovementTicks > 10 || sp.onGround || wasJumpingOutOfWater);
+
+// ... diving/swimming motionY 처리 후:
+isDiving = diving;
+isLevitating = levitating;
+isSwimming = swimming;
+isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming);
+isDipping = dipping;
+
+if(isDiving || isSwimming)
+    setHeightOffset(-1F);
+```
+
+**공식**:
+- `isDiving = diving` (지역변수 → 필드)
+- `isSwimming = swimming`
+- `isDipping = dipping`
+- `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)` — 원본 필드
+- `waterMovementTicks` 증분: `swimming || diving` 만 (dipping 시 리셋)
+- `isJumpingOutOfWater` — 수면 탈출 점프 진행 조건
+
+### R-11.9 얕은 물 특수 분기 (L513-L536)
+
+```java
+// --- SmartMovingSelf.java L513-L536 ---
+if(isShallowDiveOrSwim && realMinPlayerSwimWaterDepth < SwimCrawlWaterBottomBorder)
+{
+    if(isSlow)
+    {
+        // from swimming/diving in shallow water to crawling in shallow water
+        setHeightOffset(-1F);
+        isCrawling = true;
+        isDiving = false;
+        isSwimming = false;
+        isShallowDiveOrSwim = false;
+        isDipping = true;
+    }
+    else
+    {
+        // from swimming/diving in shallow water to walking in shallow water
+        resetHeightOffset();
+        sp.moveEntity(0, getMaxPlayerSolidBetween(sp.boundingBox.minY, sp.boundingBox.maxY, 0) - sp.boundingBox.minY, 0);
+        isCrawling = false;
+        isDiving = false;
+        isSwimming = false;
+        isShallowDiveOrSwim = false;
+        isDipping = true;
+    }
+}
+```
+
+**얕은 물 전환** (shallow depth < SwimCrawlWaterBottomBorder):
+- `isSlow` → crawl 진입 (isCrawling=true + isDipping=true)
+- else → walking in shallow water (isCrawling=false + isDipping=true)
+
+### R-11.10 useStandard=true 경로 + 진입 실패 (L544-L551)
+
+```java
+// --- SmartMovingSelf.java L544-L551 ---
+}   // if(!useStandard)
+else    // useStandard=true 경로
+{
+    isDiving = false;
+    isSwimming = false;
+    isShallowDiveOrSwim = false;
+    isDipping = false;
+    isStillSwimmingJump = false;
+}
+```
+
+**useStandard 진입 시 3상태 + isStillSwimmingJump 리셋**.
+
+### R-11.11 리셋 위치 (resetSwimming / resetState / landMotionPost / fromSwimmingOrDiving)
+
+```java
+// --- SmartMovingSelf.java L1488-L1498 resetSwimming ---
+private void resetSwimming()
+{
+    dippingDepth = -1;
+    isDipping = false;
+    isSwimming = false;
+    isDiving = false;
+    isLevitating = false;
+    isShallowDiveOrSwim = false;
+    isFakeShallowWaterSneaking = false;
+    isJumpingOutOfWater = false;
+}
+
+// --- SmartMovingSelf.java L2290-L2297 resetState ---
+this.isDipping = false;
+this.isSwimming = false;
+this.isDiving = false;
+this.isLevitating = false;
+// ... 그 외 모든 상태 리셋
+
+// --- SmartMovingSelf.java L1377-L1403 landMotionPost / fromSwimmingOrDiving ---
+if(crawlStandUpCeiling - crawlStandUpBottom < sp.height) {
+    // from diving in deep water to crawling in small hole
+    isCrawling = true;
+    isDipping = false;
+    setHeightOffset(-1F);
+} else if(crawlStandUpLiquidCeiling - crawlStandUpBottom < sp.height) {
+    // from diving in deep water to crawling below the water
+    isCrawling = true;
+    contextContinueCrawl = true;
+    isDipping = false;
+    setHeightOffset(-1F);
+} else if(crawlStandUpBottom > sp.boundingBox.minY) {
+    if(isSlow && crawlStandUpBottom > sp.boundingBox.minY + 0.5D) {
+        isCrawling = true;
+        isDipping = false;
+        setHeightOffset(-1F);
+    }
+    move(0, (crawlStandUpBottom - sp.boundingBox.minY), 0, true);
+}
+```
+
+**수중 퇴장 시 crawl 로 전환** — landMotionPost 내 3분기:
+1. 천장 낮음 → crawl + 공간 없음
+2. 액체 천장 낮음 → crawl + contextContinueCrawl=true
+3. 공간 있음 → isSlow 면 crawl 전환 + 이동 조정
+
+### R-11.12 1.21.1 `SmartMovingSwimmer.updateSwimState` side-by-side + 불일치 11건
+
+**1.21.1 코드** (`SmartMovingSwimmer.java` L64-L91):
+
+```java
+public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientState sm) {
+    if (!player.isTouchingWater()) {
+        sm.isDipping = false;
+        sm.isSwimming_sm = false;
+        sm.isDiving = false;
+        sm.waterMovementTicks = 0;
+        sm.dippingDepth = -1F;
+        return;
+    }
+    double fluidHeight = player.getFluidHeight(FluidTags.WATER);
+    sm.dippingDepth = (float)fluidHeight;
+    if (sm.isCrawling || sm.isCrawlClimbing) {    // ★ isClimbCrawling 누락
+        sm.isDipping = true;
+        sm.isSwimming_sm = false;
+        sm.isDiving = false;
+        sm.waterMovementTicks++;
+        return;
+    }
+    double offset = fluidHeight + 0.1625D;
+    sm.isDipping = offset < OFFSET_SWIMMING;        // 1.4
+    sm.isSwimming_sm = offset >= 1.4 && offset < OFFSET_DIVING;   // 1.4~1.9
+    sm.isDiving = offset >= OFFSET_DIVING;          // 1.9+
+    sm.waterMovementTicks++;
+}
+```
+
+**불일치 11건**:
+
+| # | 원본 위치 | 원본 동작 | 1.21.1 실제 | 분류 |
+|---|---|---|---|---|
+| 1 | L232 | 진입 조건 `!isFlying && !isLiquidClimbing && (isInWater \|\| (wasSwimming && isInLiquid) \|\| (LavaLikeWaterEnabled && lavaMovement))` | `player.isTouchingWater()` 만 | [오역] |
+| 2 | L239 | `useStandard = !isSwimmingEnabled && !isDivingEnabled` 게이트 후 resetSwimming | Config 게이트 없음 | [누락] |
+| 3 | L301 | `isCrawling \|\| isClimbCrawling \|\| isCrawlClimbing` → `isDipping=true` | `isCrawling \|\| isCrawlClimbing` (isClimbCrawling 누락) | [누락] |
+| 4 | L303-L414 | 3-갈래 (`[0,2]`/`(2,∞)`/`(-∞,0)`) + A/B 서브 분기 + 11-단계 offset 테이블 | 단순 `offset<1.4 / [1.4,1.9) / >=1.9` 3분류 | [오역] |
+| 5 | L507 | `isShallowDiveOrSwim = couldStandUp && (isDiving \|\| isSwimming)` 필드 갱신 | **필드 미이식** | [누락] |
+| 6 | L487 | `isJumpingOutOfWater` 필드 갱신 | **필드 미이식** | [누락] |
+| 7 | L550 | `isStillSwimmingJump = false` (useStandard 경로) | **필드 미이식** | [누락] |
+| 8 | L513-L536 | 얕은 물 특수 분기 (isSlow → crawl / else → walking) | 미이식 | [누락] |
+| 9 | L481-L484 | `waterMovementTicks++` 은 `swimming \|\| diving` 만, dipping 에서는 `=0` 리셋 | updateSwimState 는 dipping 에서도 증분 | [오역] |
+| 10 | L418 | 크롤↔수영 전환 조건 `(isCrawling \|\| isSliding) && playerCrawlWaterBorder < 1.0` | handleSwimming L119 에 `sm.isCrawling && sm.dippingDepth > 0.65` 대응 있으나 `isSliding` 조건 없음 | [누락] |
+| 11 | L505 | `isLevitating = levitating` where levitating = `diving && !diveUp && !diveDown && moveStrafing==0 && moveForward==0` | **필드 미이식** | [누락] |
+
+**추가 확인 필요** (미해결):
+- `isLiquidClimbing` 1.21.1 대응 여부 (원본 handleSwimming 진입 차단 조건)
+- `isInLiquid()` 메서드 1.21.1 대응 (물 외 용암 포함 액체)
+- `Config.isLavaLikeWaterEnabled()` 1.21.1 Config 이식 여부
+- `Orientation.getClimbingOrientations + isTunnelAhead` 는 1.21.1 handleSwimming L170-L175 에 4방향만 존재 (대각 4방향 누락)
+
+**1.21.1 이식 우선순위 (B-N 원자 분해 예비안)**:
+- **B-6**: Swimmer L78 `isClimbCrawling` 조건 추가 (원본 L301 3-OR)
+- **B-7**: updateSwimState 진입 조건 `isFlying/isLiquidClimbing/isLavaLikeWater` 복원
+- **B-8**: `Config.isSwimmingEnabled()/isDivingEnabled()` 게이트 추가 (Config 헬퍼 신설)
+- **B-9**: 메인 분류 공식 원본 L303-L414 로 교체 (A/B 서브 + 11-단계 offset 테이블)
+- **B-10**: `isShallowDiveOrSwim` / `isJumpingOutOfWater` / `isStillSwimmingJump` /
+  `isLevitating` 필드 ClientState 이식 + 갱신 로직
+- **B-11**: 얕은 물 특수 분기 L513-L536 이식 (isSlow 조합 crawl/walking)
+- **B-12**: `waterMovementTicks` 증분 조건 정정 (dipping 시 0 리셋)
+- **B-13**: 크롤↔수영 전환 `isSliding` 조건 추가
