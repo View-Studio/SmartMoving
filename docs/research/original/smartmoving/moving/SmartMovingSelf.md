@@ -4223,3 +4223,150 @@ else if((isCrawling && !wasCrawling) || initializeCrawling)
 - **B-41**: `wantCrawlNotClimb` 갱신 블록 이식 (원본 L2452-L2461)
 - **B-42**: `mustCrawl` AABB 정밀 개선 — canStandUp 근사 → getMax/MinPlayerSolidBetween
   근사치 향상 (1.21.1 AABB API 제약 — §7 유지 가능, 별도 포커스 후보)
+
+---
+
+## R-15 추가 리서치 — wasCrawling_st/wasSneaking/wasClimbCrawling 이력 3개 전수 덤프 (2026-04-24 세션 36 — 포커스 #2 A-6)
+
+포커스 #2 A-6 감사 — 이력 필드 3개 + R-09 블록 저장 위치 매핑. R-09 블록 자체는
+세션 28 이전에 이식됨 (`SmartMovingClientState.java` L769-L840) — 이번 감사는
+**저장 시점 정밀도** 및 **R-09 블록 종료부 누락** 중심.
+
+### R-15.1 관련 필드 선언
+
+```java
+// --- 원본 이력 필드 용도 ---
+// wasSneaking      (지역변수, tickEssential L2716): isSlow 공식 직전 저장
+// wasClimbCrawling (지역변수, tickEssential L2786): isClimbCrawling 공식 직전 저장
+// wasCrawling      (public 필드 L3074): isCrawling 공식 직전 저장 (다용도 — R-09 외에도
+//                    capabilities.flying 해제, isCrawlClimbing 전환, 전환 후처리 등)
+// wasRunning       (public 필드): R-09 블록 종료 L3043 `wasRunning = isRunning`
+// wasLevitating    (public 필드): R-09 블록 종료 L3044 `wasLevitating = isLevitating`
+```
+
+**1.21.1 이식 상태** (ClientState grep):
+- **이식됨**: `wasSneaking` (L241) / `wasCrawling_st` (L244, R-09 전용) /
+  `wasClimbCrawling` (L247) — 3개 저장 L560-L562, 리셋 L905-L907 전부 존재
+- **미이식**: `wasRunning` (A-4 B-22b 예정) / `wasLevitating` (A-2 B-10d `isLevitating`
+  의존) / `wasCrawling` (다용도 — A-5 B-31a 예정, `wasCrawling_st` 와 구분)
+
+### R-15.2 저장 위치 맵
+
+**원본 저장 위치**:
+| 위치 | 저장 | 대상 공식 위치 | 비고 |
+|---|---|---|---|
+| L2441 | `wasCrawling = isCrawling` | L2442 isCrawling 공식 직전 | public 필드 |
+| L2524 | `wasHeadJumping = isHeadJumping` | L2525 isHeadJumping 공식 직전 | A-4 B-22a |
+| L2678 | `wasGroundSprinting = isGroundSprinting` | L2679 isGroundSprinting 공식 직전 | A-1 B-1d |
+| L2716 | `wasSneaking = isSlow` | L2717 isSlow 공식 직전 | 지역변수 |
+| L2786 | `wasClimbCrawling = isClimbCrawling` | L2795 isClimbCrawling 공식 직전 | 지역변수 |
+| L3043 | `wasRunning = isRunning` | R-09 블록 종료부 | public 필드 |
+| L3044 | `wasLevitating = isLevitating` | R-09 블록 종료부 | public 필드 |
+
+**1.21.1 저장 위치** (ClientState):
+| 위치 | 저장 | 1.21.1 시점 | 원본 시점 |
+|---|---|---|---|
+| L560 | `wasSneaking = isSlow` | tickEssential 초반 | L2716 공식 직전 |
+| L561 | `wasCrawling_st = isCrawling` | tickEssential 초반 | L2441 공식 직전 |
+| L562 | `wasClimbCrawling = isClimbCrawling` | tickEssential 초반 | L2786 공식 직전 |
+| — | `wasHeadJumping = isHeadJumping` | **미이식** | L2524 |
+| — | `wasGroundSprinting = isGroundSprinting` | **미이식** | L2678 |
+| — | `wasRunning = isRunning` | **미이식** | L3043 |
+| — | `wasLevitating = isLevitating` | **미이식** | L3044 |
+
+### R-15.3 저장 시점 동치성 분석
+
+**원본 저장 전략**: 각 필드의 공식 **직전** 저장 — "이전 틱 계산 값" 을 정확히 보존.
+
+**1.21.1 저장 전략**: tickEssential 초반 일괄 저장 — 한 군데 모아 관리.
+
+**동치성 조건**: `L560-L562 저장 시점과 각 공식 갱신 시점 사이에 해당 필드 변경이 없어야 함`.
+
+- `wasSneaking = isSlow` (L560) → isSlow 갱신은 L651 (`isSlow = sneakContinueInput &&
+  wouldIsSneaking`) — L560 ~ L651 사이에 isSlow 변경 없음 → 동치 ✓
+- `wasCrawling_st = isCrawling` (L561) → isCrawling 갱신은 IMPL-01 L673/L685/L690 →
+  L561 이후 IMPL-01 가 L663 에서 시작 → 동치 ✓
+- `wasClimbCrawling = isClimbCrawling` (L562) → isClimbCrawling 갱신 로직 자체가 미이식
+  (A-3 B-18 예정) → 저장 시점 의미 유지 (B-18 이식 시 저장 시점 검토 필요)
+
+**결론**: 현재 3개 필드 저장 시점은 **결과적으로 동치**. 그러나 B-33 (A-5 메인 공식 재작성)
+/ B-2 (A-1 isSlow 정정) / B-18 (A-3 isClimbCrawling 이식) 수행 시 저장 시점을 공식 직전으로
+옮겨야 1:1 구조 완벽 일치.
+
+### R-15.4 R-09 블록 종료부 누락 (원본 L3043-L3044)
+
+```java
+// --- SmartMovingSelf.java L3040-L3045 ---
+if(sneakButton.StopPressed)
+    ignoreNextStopSneakButtonPressed = false;
+
+wasRunning = isRunning;        // L3043 — 미이식
+wasLevitating = isLevitating;  // L3044 — 미이식
+```
+
+**1.21.1 L839 이후**:
+```java
+if (sneakKeyStopPressed) ignoreNextStopSneakButtonPressed = false;
+}   // R-09 블록 종료 — wasRunning/wasLevitating 저장 없음
+```
+
+**누락 영향**:
+- `wasRunning` 은 원본 L2553 isSliding 직접 진입 조건 `(isGroundSprinting || (wasRunning
+  && !isRunning && onGround))` 에 필수 → A-4 B-25 에서 신설 예정
+- `wasLevitating` 은 원본 L2518-L2522 flying/levitate 전환 조건에 사용 → A-2 B-10d
+  의존. 현재 isLevitating 미이식이라 wasLevitating 의미 없음
+
+### R-15.5 R-09 블록 세부 조건 검증
+
+**원본 vs 1.21.1 R-09 블록 (원본 L2968-L3045 vs 1.21.1 L769-L840) 전체 대조**:
+
+| 원본 | 1.21.1 | 상태 |
+|---|---|---|
+| L2968 `Options.isSneakToggleEnabled()` | L773 `cfg.sneakToggle && cfg.enabled` | ✓ 표면 매핑 |
+| L2969 `Options.isCrawlToggleEnabled()` | L774 `cfg.crawlToggle && cfg.enabled` | ✓ 표면 매핑 |
+| L2975 `isCrawling && jumpButton.StopPressed` | L779 `isCrawling && jumpKeyStopPressed` | ✓ |
+| L2977 sneakButton.StopPressed + ignoreNext | L781 | ✓ |
+| L2979 `!isCrawling && !isCrawlClimbing && !isClimbCrawling` | L783 | ✓ |
+| L2982 willStopCrawl |= ... | L785 | ✓ |
+| L2988 `isCrawling && !willStopCrawlStartSneak` | L796 | ✓ |
+| **L2990-L2993** `wantSneak && wantSprint && sneakButton.StartPressed && sneakToggled` | **L798-L801** `wantSneak_ && wantSprint_ && ...` | ⚠️ **B-4 간소 매핑** |
+| L2995 `wasSneaking && sneakButton.StartPressed` | L802 `wasSneaking && sneakKeyStartPressed` | ✓ |
+| L2997 `!isSwimming && !isDiving && jumpButton.StopPressed` | L804 `!isSwimming_sm && !isDiving && jumpKeyStopPressed` | ✓ |
+| L3004 | L810 | ✓ |
+| L3006 | L812 | ✓ |
+| L3008 `isSlow && !wasSneaking` | L814 동일 | ✓ |
+| **L3015 `isCrawling && !wasCrawling`** | **L820 `isCrawling && !wasCrawling_st`** | ✓ (필드명 매핑) |
+| L3017 `isClimbCrawling && !wasClimbCrawling` | L822 동일 | ✓ |
+| L3023-L3026 sneakToggled 갱신 | L827-L828 | ✓ |
+| L3031-L3037 crawlToggled 갱신 + ignoreNext=sneakButton.Pressed | L832-L836 | ✓ |
+| L3040-L3041 sneakButton.StopPressed → ignoreNext=false | L839 | ✓ |
+| **L3043** `wasRunning = isRunning` | **—** | **✗ 미이식** |
+| **L3044** `wasLevitating = isLevitating` | **—** | **✗ 미이식** |
+
+**R-09 블록 최종 평가**: 거의 1:1 이식 완료 (세션 28 작업). 남은 불일치 2건:
+1. L788 간소 매핑 (wantSneak_/wantSprint_) → **B-4 범위**
+2. L3043-L3044 wasRunning/wasLevitating 저장 누락 → A-4 B-22b / A-2 B-10d 와 연계
+
+### R-15.6 불일치 목록 (A-6)
+
+| # | 원본 | 1.21.1 | 분류 |
+|---|---|---|---|
+| 1 | L3043 `wasRunning = isRunning` 저장 | R-09 블록 종료부에 없음 (isRunning 필드 자체 미이식) | [누락] / A-4 B-22b 의존 |
+| 2 | L3044 `wasLevitating = isLevitating` 저장 | R-09 블록 종료부에 없음 (isLevitating 필드 자체 미이식) | [누락] / A-2 B-10d 의존 |
+| 3 | 원본 L2716/L2786/L2441 각 필드 공식 **직전** 저장 | 1.21.1 L560-L562 tickEssential 초반 일괄 저장 (결과적 동치) | [구조 차이] / B-2/B-18/B-33 수정 시 함께 조정 |
+| 4 | 원본 R-09 블록 L2990-L2993 `wantSneak/wantSprint` | 1.21.1 L788 간소 매핑 `wantSneak_/wantSprint_` | [오역] / 기존 B-4 범위 |
+
+### R-15.7 B-N 이식 우선순위 예비안
+
+**A-6 는 신규 필드 이식이 아닌 대부분 기존 원자 (B-4/B-22b/B-10d/B-2/B-18/B-33) 에 흡수됨**:
+
+- **B-43**: R-09 블록 종료부 저장 2건 이식 (원본 L3043-L3044):
+  `wasRunning = isRunning; wasLevitating = isLevitating;`
+  의존: A-4 B-22b `wasRunning`+`isRunning` / A-2 B-10d `isLevitating`+`wasLevitating` 선행
+- **B-44**: 3개 이력 필드 저장 시점 정밀 조정 (원본 L2716/L2786/L2441 공식 직전 이동):
+  - B-44a: wasSneaking 저장 L560 → isSlow 공식 직전 (B-2 수정 시)
+  - B-44b: wasCrawling_st 저장 L561 → isCrawling 공식 직전 (B-33 수정 시)
+  - B-44c: wasClimbCrawling 저장 L562 → isClimbCrawling 공식 직전 (B-18 수정 시)
+- **기존 B-N 범위**: B-4 (L788 간소 매핑) 로 4번 불일치 해결
+
+**A-6 단독 원자**: B-43 만 신규. 나머지는 기존 B-N 에 흡수.

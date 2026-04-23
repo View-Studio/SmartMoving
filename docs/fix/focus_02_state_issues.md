@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 35 — A-5 완료) |
-| 현재 단계 | A-0/A-1/A-2/A-3/A-4/A-5/B-0 완료 — A-5 불일치 15건 + B-31~B-42 원자 추가 / ⏳ **A-6 (이력 3개 wasCrawling_st/wasSneaking/wasClimbCrawling)** |
+| 상태 | 🟡 진행 중 (세션 36 — A-6 완료 — **A 단계 감사 완료**) |
+| 현재 단계 | A-0~A-6 + B-0 완료 — A-6 불일치 4건 + B-43/B-44 원자 추가 / ⏳ **A-7 (13필드 1.21.1 매핑 테이블 통합)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,13 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-15** (세션 36 — A-6 완료): 이력 3개 `wasCrawling_st`/`wasSneaking`/`wasClimbCrawling`
+  전수 감사 — `SmartMovingSelf.md` R-15 섹션 참조. 범위: R-15.1 필드 선언 (이식 완료 +
+  미이식 3건 확인) / R-15.2 저장 위치 맵 / R-15.3 저장 시점 동치성 분석 / R-15.4 R-09
+  블록 종료부 누락 2건 / R-15.5 R-09 블록 세부 조건 전수 대조 / R-15.6 **불일치 4건** /
+  R-15.7 B-43~B-44 원자 예비안. **A-6 는 대부분 기존 원자(B-4/B-22b/B-10d/B-2/B-18/B-33)
+  에 흡수 — 신규 원자 B-43 (R-09 종료부) + B-44a~c (저장 시점 조정) 만 추가**.
+
 - **R-14** (세션 35 — A-5 완료): `isCrawling`/`contextContinueCrawl` 전수 감사 —
   `SmartMovingSelf.md` R-14 섹션 참조. 범위: R-14.1 필드 선언 (3건 미이식) /
   R-14.2 갱신 위치 맵 (원본 19곳 + contextContinueCrawl 4곳) / R-14.3 tickEssential
@@ -250,7 +257,17 @@
       wall 오르기 진입 미이식 / handleCeilingClimbing 해제 미이식 / landMotionPost 3분기 중
       1개 누락 / toCrawling() 헬퍼 부분 이식 / wantCrawlNotClimb 미이식 / initializeCrawling
       미이식 / mustCrawl AABB 근사. B-31~B-42 원자 추가.
-- [ ] A-6. **`wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`** 원본 스냅샷 위치 확인
+- [x] A-6. ✅ **세션 36 완료** — 이력 3개 `wasCrawling_st`/`wasSneaking`/`wasClimbCrawling`
+      전수 감사. **3개 필드 자체는 이식 완료** (ClientState L241/L244/L247 필드 + L560-L562
+      저장 + L905-L907 리셋). R-09 블록 전체 세부 조건 1:1 대조 완료 — 거의 1:1 이식됨.
+      **불일치 4건 확정** (§16 세션 36):
+      (1) R-09 블록 종료부 `wasRunning=isRunning` / `wasLevitating=isLevitating` 저장 누락
+          (A-4 B-22b / A-2 B-10d 의존)
+      (2) 3개 이력 필드 저장 시점이 공식 직전 아닌 tickEssential 초반 일괄 저장 (결과적
+          동치이나 B-2/B-18/B-33 수정 시 공식 직전으로 이동 필요)
+      (3) R-09 L788 간소 매핑 — 기존 B-4 범위
+      B-43 (R-09 종료부) + B-44a~c (저장 시점 정밀 조정) 원자 추가. A-6 대부분 기존 B-N
+      에 흡수.
 - [ ] A-7. 각 A-1~A-6 그룹별 1.21.1 grep + side-by-side 매핑 테이블 작성
 
 **각 A-N 그룹은 Agent WebFetch 로 원본 갱신 위치 전수 덤프 + 1.21.1 grep + 매핑**.
@@ -548,7 +565,22 @@
       getMinPlayerSolidBetween` 정밀 AABB 근사. 1.21.1 AABB API 제약으로 §7 근사 유지
       가능 — 별도 포커스 후보 (focus_??? 분리).
 
-#### B-N. A-6 추가 발견에 따라 동적 추가
+#### B-43. R-09 블록 종료부 저장 2건 이식 (A-6 발견)
+- [ ] B-43. 원본 L3043-L3044 이식 — `ClientState.tickEssential` L839 이후 R-09 블록
+      종료부에 추가:
+      `wasRunning = isRunning;`
+      `wasLevitating = isLevitating;`
+      의존: A-4 B-22b (wasRunning+isRunning) / A-2 B-10d (isLevitating+wasLevitating) 선행.
+
+#### B-44. 이력 3개 저장 시점 정밀 조정 (A-6 발견)
+- [ ] B-44a. `wasSneaking = isSlow` 저장 L560 → isSlow 공식 직전 (원본 L2716 대응).
+      B-2 (isSlow 정정) 수정 시 함께 조정.
+- [ ] B-44b. `wasCrawling_st = isCrawling` 저장 L561 → isCrawling 공식 직전 (원본 L2441
+      대응). B-33 (A-5 메인 공식 재작성) 수정 시 함께 조정.
+- [ ] B-44c. `wasClimbCrawling = isClimbCrawling` 저장 L562 → isClimbCrawling 공식 직전
+      (원본 L2786 대응). B-18 (A-3 isClimbCrawling 이식) 수정 시 함께 조정.
+
+#### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -1012,6 +1044,71 @@ updateEntityActionState L2347-L3044 전체 크롤 관련 + R-09 블록 (L2966-L3
 **다음 작업**: A-6 — 이력 3개 `wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`
 전수 감사. R-09 토글 블록 + 이전 틱 스냅샷 저장 위치 확인.
 
+### 세션 36 — 2026-04-24 — A-6 (이력 3개) 완료 — **A 단계 감사 완료**
+
+**진행한 작업**:
+- 원본 `.tmp_research/SmartMovingSelf.java` 에서 wasCrawling / wasSneaking /
+  wasClimbCrawling + wasRunning / wasLevitating / wasHeadJumping / wasGroundSprinting
+  저장 위치 전수 grep
+- R-09 블록 전체 (원본 L2968-L3045) 와 1.21.1 ClientState L769-L840 전수 1:1 대조
+- `SmartMovingSelf.md` **R-15 섹션 신설** (7 서브섹션):
+  * R-15.1 필드 선언 (이식 완료 3건 + 미이식 3건 확인)
+  * R-15.2 저장 위치 맵 (원본 7곳 + 1.21.1 3곳)
+  * R-15.3 저장 시점 동치성 분석 (결과적 동치 증명)
+  * R-15.4 R-09 블록 종료부 누락 (wasRunning/wasLevitating)
+  * R-15.5 R-09 블록 세부 조건 18행 대조표
+  * R-15.6 **불일치 4건**
+  * R-15.7 B-43~B-44 원자 예비안 (기존 원자 흡수)
+- **핵심 발견**:
+  * 3개 이력 필드 (wasSneaking/wasCrawling_st/wasClimbCrawling) 자체는 **이식 완료**
+  * R-09 블록 거의 1:1 이식 (세션 28 작업) — 남은 불일치는 L788 간소 매핑 (B-4 범위)
+    + L3043-L3044 종료부 저장 누락
+  * 저장 시점은 결과적 동치지만 B-2/B-18/B-33 수정 시 원본처럼 공식 직전으로 이동 권장
+  * A-6 에서 **새로 발견한 독립 원자는 B-43 (종료부 저장) 1건**. 나머지 B-44 는 기존
+    B-2/B-18/B-33 수정에 편승하는 보조 작업
+- §10 B-43 + B-44a~c 4 원자 신설 (대부분 기존 B-N 의존)
+- §1 상태 갱신 — **A 단계 감사 완료**, 다음 A-7 매핑 테이블 통합
+
+**완료 전 검증 체크리스트 (A-6 기준)**:
+- [근거] 원본 이력 필드 7개 저장 위치 전수 grep ✓
+- [근거] R-09 블록 원본 L2968-L3045 vs 1.21.1 L769-L840 전체 18행 대조 ✓
+- [대응] 3개 이력 필드 이식 완료 확인 + 미이식 4건 확인 ✓
+- [분기] willStopCrawl / willStopSneak / willStartSneak / willStartCrawl / sneakToggled /
+  crawlToggled 갱신 분기 전수 식별 ✓
+- [상수] isSneakToggleEnabled / isCrawlToggleEnabled 표면 매핑 확인 ✓
+- [타이밍] 저장 시점 (원본 공식 직전 vs 1.21.1 초반 일괄) 동치성 증명 + B-N 수정 시
+  공식 직전 이동 권고 기록 ✓
+- [근사] 없음 (이식된 3개 필드는 근사 없음)
+- [신규] B-43 (R-09 종료부) + B-44a~c (저장 시점) 4 원자 추가 ✓
+- [회귀] 코드 변경 없음 (리서치/문서만)
+- [빌드] 해당 없음
+
+**A 단계 감사 완료 총괄**:
+- 세션 31-36 (6 세션) 동안 A-0 ~ A-6 + B-0 완료
+- R-10 ~ R-15 리서치 섹션 6개 추가 (의존 체인 완전 덤프)
+- **불일치 누적 70건**:
+  * A-1 isSlow/isFast: 3건 (원자 B-1a~f/B-2/B-3a~b/B-4/B-5)
+  * A-2 수중 3상태: 11건 (B-6~B-13)
+  * A-3 등반 4상태: 14건 (B-14~B-21)
+  * A-4 전환 쌍: 13건 (B-22~B-30)
+  * A-5 isCrawling: 15건 (B-31~B-42)
+  * A-6 이력 3개: 4건 (B-43~B-44)
+  * 세션 30 간소 매핑: 2건 (B-4/B-5)
+  * 세션 31 B-0 후속: 3건 (순환 의존/미이식 2필드/전환 후처리)
+- **B 단계 원자 누적**: 약 50개 (서브원자 포함 약 70+)
+- **미이식 필드 총합**: isGroundSprinting 관련 4 can* + 6 Sprint 변종 + standing +
+  disabled + wantSprint + _sprintEnableStanding (A-1/B-0) / isShallowDiveOrSwim +
+  isJumpingOutOfWater + isStillSwimmingJump + isLevitating + isLiquidClimbing (A-2) /
+  isNeighborClimbing + hasClimbGap + hasNeighborClimbGap + hasNeighborClimbCrawlGap +
+  isVineOnlyClimbing + isVineAnyClimbing + isClimbingStill + handsEdgeBlock +
+  feetEdgeBlock (A-3) / wasHeadJumping + wasRunning + isRunning(필드) + isStanding +
+  wasLevitating (A-4/A-6) / wasCrawling(tickEssential전용) + wantCrawlNotClimb +
+  initializeCrawling (A-5)
+  = **30개+ 미이식 필드**
+
+**다음 작업**: A-7 — 13 상태 필드 1.21.1 매핑 테이블 통합. §6 갱신 — 원본 심볼 ↔
+1.21.1 심볼 전체 정리 + B-N 원자 우선순위 최종 확정.
+
 ---
 
 ## 16. 신규 발견
@@ -1468,6 +1565,119 @@ R-14 섹션 전수 덤프. isCrawling 은 가장 복잡한 상태 — 원본 19�
 - 7순위: **B-39** (landMotionPost 3분기)
 - 8순위: **B-41** (wantCrawlNotClimb) + **B-36** (grab 3분기) — 의존 필드 선행 필요
 - 9순위: **B-42** (mustCrawl AABB — 별도 포커스 분리 권장)
+
+### 세션 36 A-6 — 이력 3개 불일치 4건 확정
+
+R-15 섹션 전수 덤프 기반. 3개 이력 필드 **이식 완료** 확인. 남은 불일치는 기존 B-N
+원자에 대부분 흡수.
+
+1. **R-09 블록 종료부 저장 2건 누락** (원본 L3043-L3044)
+   - `wasRunning = isRunning` / `wasLevitating = isLevitating` 저장 없음
+   - 의존 필드 자체 미이식 (A-4 B-22b wasRunning+isRunning / A-2 B-10d isLevitating)
+   - 분류: [누락] / 수정 B-43 (의존 원자 선행).
+
+2. **이력 필드 저장 시점 차이** (원본 공식 직전 vs 1.21.1 tickEssential 초반 일괄)
+   - 원본: wasSneaking L2716 (isSlow 공식 L2717 직전), wasClimbCrawling L2786,
+     wasCrawling L2441
+   - 1.21.1: L560-L562 일괄 저장
+   - 결과적 동치 (저장 ~ 공식 갱신 사이에 필드 변경 없음) 이나 1:1 구조 엄격 적용 시 이동
+   - 분류: [구조 차이] / 수정 B-44a~c (B-2/B-18/B-33 수정 시 함께 조정).
+
+3. **R-09 L788 wantSneak_/wantSprint_ 간소 매핑** — 기존 B-4 범위 (§16 세션 30 발견).
+
+4. **미이식 필드 확장 인식** — A-6 감사 중 다른 `was*` 필드 미이식 재확인:
+   - `wasHeadJumping` (A-4 B-22a)
+   - `wasGroundSprinting` (A-1/B-1d 관련 — 원본 L2678)
+   - `wasRunning` (A-4 B-22b)
+   - `wasLevitating` (A-2 B-10d 파생)
+   - `wasCrawling` tickEssential 전용 (A-5 B-31a)
+   - 분류: 기존 B-N 범위.
+
+**수정 범위**: B-43 + B-44a~c (4 신규) + 기존 B-4 / B-2 / B-18 / B-33 수정 시 저장
+시점 이동 포함.
+
+**우선순위 권고 (A-6)**:
+- 1순위: **기존 B-N 선행 완료** — B-22b (wasRunning+isRunning) / B-10d (isLevitating) /
+  B-2 (isSlow) / B-18 (isClimbCrawling) / B-33 (isCrawling 메인 공식) / B-4 (R-09 간소
+  매핑 제거) 이 완료되어야 A-6 후속 원자 의미 생김
+- 2순위: **B-43** (R-09 종료부 저장) — B-22b + B-10d 완료 후
+- 3순위: **B-44a~c** (저장 시점 이동) — 각 기존 원자 수정 시 함께
+
+### A 단계 완료 총괄 — B 단계 통합 우선순위 최종안
+
+A 단계 6 세션 감사로 불일치 **70건** 확정 → B 단계 원자 약 **50개** (서브원자 포함 70+).
+
+**B 단계 의존 그래프 기반 실행 순서** (권고):
+
+```
+Phase 1 (필드 선언 일괄):
+  B-1a (Config._sprintEnableStanding)
+  B-1b (Button ↔ KeyBinding 매핑 테이블)
+  B-2 헬퍼 (Config.isSneakingEnabled)
+  B-3a 헬퍼 (Config.isSprintingEnabled)
+  B-8 헬퍼 (Config.isSwimmingEnabled/isDivingEnabled)
+  B-10a~d (isShallowDiveOrSwim/isJumpingOutOfWater/isStillSwimmingJump/isLevitating)
+  B-15a~f (isNeighborClimbing/hasClimbGap/.../edgeBlock)
+  B-22a~d (wasHeadJumping/wasRunning/isRunning/isStanding)
+  B-31a~c (wasCrawling/wantCrawlNotClimb/initializeCrawling)
+
+Phase 2 (공식 이식 — 의존 필드 완성 후):
+  B-1c (can* 4 판정)
+  B-1d (6 Sprint 변종)
+  B-1e (standing)
+  B-1f (isFast 6-OR)
+  B-3a (wantSprint 6조건 OR)
+  B-3b (wouldIsSneaking 정정)
+  B-16 (isClimbHolding/wantClimbHolding)
+  B-17 (isCrawlClimbing 공식)
+  B-18 (isClimbCrawling 공식 + 카운터)
+  B-23 (isHeadJumping 매 틱 재평가)
+  B-30 (isStanding 공식)
+  B-32 (canCrawl 5-AND 복원)
+  B-33 (isCrawling 메인 공식)
+  B-40 (toCrawling 헬퍼)
+
+Phase 3 (보조 블록):
+  B-2 (isSlow 정정 — B-44a 포함)
+  B-6 (Swimmer isClimbCrawling 조건)
+  B-7 (updateSwimState 진입 조건)
+  B-8 (Config 게이트)
+  B-9 (메인 분류 3-갈래)
+  B-11 (얕은 물 특수 분기)
+  B-12 (waterMovementTicks 증분)
+  B-13 (crawl↔swim 전환 isSliding)
+  B-14 (resetClimbing 신설)
+  B-19 (hasClimb* 갱신 로직)
+  B-20 (Standard/Simple Base Climb)
+  B-21 (isCeilingClimbing 해제)
+  B-24 (해제 엣지 후처리)
+  B-25 (isSliding 직접 진입 조건)
+  B-26 (직접 진입 부수 동작)
+  B-27 (fallDistance 분기)
+  B-28 (handleClimbing isSliding 해제)
+  B-29 (toSlidingOrCrawling 조건)
+  B-34 (capabilities.flying 해제 점프)
+  B-35 (wasCrawling↔isCrawling 전환 후처리)
+  B-36 (grab.StartPressed 3분기)
+  B-37 (wall 오르기 진입)
+  B-38 (handleCeilingClimbing 해제)
+  B-39 (landMotionPost 3분기)
+  B-41 (wantCrawlNotClimb 갱신)
+  B-43 (R-09 종료부 저장)
+  B-44a~c (저장 시점 조정)
+
+Phase 4 (정리):
+  B-4 (R-09 간소 매핑 제거)
+  B-5 (Swimmer 간소화 — B-9 에 흡수됨)
+  B-42 (mustCrawl AABB — 별도 포커스 후보)
+
+Phase 5 (C 단계):
+  C-1 ./gradlew clean build
+  C-2 §14 회귀 방지 감사
+  C-3 checklist_original_audit.md 기록
+  C-4 사용자 인게임 재검증
+  C-5 playtest_fixes.md → #3
+```
 
 ---
 
