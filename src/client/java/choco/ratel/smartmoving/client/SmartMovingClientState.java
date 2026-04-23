@@ -1109,6 +1109,30 @@ public final class SmartMovingClientState {
         return player.getWorld().isSpaceEmpty(player, standBox);
     }
 
+    // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
+
+    /**
+     * 원본 SmartMovingSelf L3327-L3330 `private boolean vanilla()`:
+     *   return !Config.enabled || Config._vanillaStyle.value;
+     * SM 비활성 상태 또는 명시적 vanilla 스타일 옵션 활성 시 true.
+     * isRunning() / handleLand L678/L721 / tryJump L2047 등 여러 조건에 사용.
+     */
+    private boolean vanilla() {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        return !cfg.enabled || cfg.vanillaStyle;
+    }
+
+    /**
+     * 원본 SmartMovingSelf L3239-L3242 `public boolean isRunning() override`:
+     *   return sp.isSprinting() && !isFast && (sp.onGround || vanilla());
+     * **파생 메서드** — 필드 저장 없음. 매 호출마다 재계산.
+     * 사용처: handleExhaustion Config.getFactor (원본 L1202/L1278) + L3043 `wasRunning = isRunning`.
+     * B-22c (세션 42).
+     */
+    public boolean isRunning(ClientPlayerEntity player) {
+        return player.isSprinting() && !isFast && (player.isOnGround() || vanilla());
+    }
+
     /**
      * 원본 `SmartMovingSelf.handleExhaustion` (L849-L916, updateHunger 섹션 L1184-L1310) 의
      * Easy 실행 경로만 이식한 축소판. 점프/클라이밍/천장/스프린트 피로 블록은 Easy 에서
@@ -1158,9 +1182,10 @@ public final class SmartMovingClientState {
         boolean isVerticalStill = Math.abs(diffY) < 0.007;
         // 원본 L1191 isStill = isStanding && isVerticalStill
         boolean isStill = isStanding && isVerticalStill;
-        // 원본 L3241 isRunning() = sp.isSprinting() && !isFast && (sp.onGround || vanilla())
-        //   vanilla() = SM 비활성 상태. handleExhaustion 은 cfg.enabled 때만 호출되므로 false.
-        boolean isRunning = player.isSprinting() && !isFast && onGround;
+        // 원본 L3241 isRunning() override = sp.isSprinting() && !isFast && (sp.onGround || vanilla()).
+        // B-22c (세션 42): 기존 로컬 `!isFast && onGround` 공식 → ClientState.isRunning(player) 호출.
+        //   vanilla() 항목 복원 — cfg.vanillaStyle=true 경로 반영 (기존 부정확 주석 제거).
+        boolean isRunning = isRunning(player);
 
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 

@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 41 — B Phase 1 wasCrawling 개명) |
-| 현재 단계 | A 완료 + B Phase 1: 필드 17 + wasCrawling 개명 + Config 헬퍼 4 + Config 필드 1 완료 / ⏳ **Phase 1 잔여 (B-22c isRunning 필드 승격)** |
+| 상태 | 🟡 진행 중 (세션 42 — **B Phase 1 100% 완료**) |
+| 현재 단계 | A 완료 + B Phase 1 완료 (필드 17 + Config 헬퍼 4 + Config 필드 1 + isRunning/vanilla 메서드 2) / ⏳ **B Phase 2 (공식 이식) 진입** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -253,7 +253,7 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 |---|---|---|---|
 | `isAerodynamic` | `isAerodynamic` | ✓ 이식 완료 (R-05/포커스#6 B-5) | — |
 | `isStanding` (public L1419) | — | ✗ 미이식 | B-22d/B-30 |
-| `isRunning` (필드 + override L3241) | — (로컬만 L995) | ✗ 필드 미이식 | **B-22c** |
+| `isRunning` (**메서드 override L3239-L3242**, 필드 아님) | `ClientState.isRunning(player)` 메서드 (✅ 세션 42) | ✓ 이식 완료 (메서드만) | — |
 | `wantCrawl` | `wantCrawl` | ✓ 이식 | — |
 | `mustCrawl` | `mustCrawl` | 🔄 AABB 근사 (canStandUp) | B-42 (별도 포커스) |
 | `inputContinueCrawl` | 동일 | ✓ 이식 | — |
@@ -670,9 +670,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 #### B-22. 미이식 필드 4건 이식 (A-4 발견)
 - [x] B-22a. ✅ **세션 38 완료** — `wasHeadJumping` 필드 추가 + resetState 리셋.
 - [x] B-22b. ✅ **세션 38 완료** — `wasRunning` 필드 추가 + resetState 리셋.
-- [ ] B-22c. `isRunning` 필드 추가 (현재 로컬 변수 → 필드 승격) + `isRunning()` override
-      이식 (원본 L3241 `isSprinting() && !isFast && (onGround || vanilla())`) — 별도
-      세션 (로컬→필드 승격은 handleExhaustion 수정 포함).
+- [x] B-22c. ✅ **세션 42 완료** — 원본은 필드 아닌 **메서드만** 존재 (L3239-L3242).
+      수정 내용:
+      (1) `vanilla()` private 헬퍼 이식 (원본 L3327-L3330 `!Config.enabled ||
+          Config._vanillaStyle.value` → `!cfg.enabled || cfg.vanillaStyle`)
+      (2) `isRunning(ClientPlayerEntity player)` public 메서드 이식
+          (원본 override `isSprinting() && !isFast && (onGround || vanilla())` 완전 일치)
+      (3) handleExhaustion L1163 로컬 변수 `isSprinting && !isFast && onGround` → 메서드
+          호출 `isRunning(player)` 로 교체. 기존 부정확 주석 ("vanilla() 는 false") 제거.
+      **필드 승격 불필요** 판정 — 원본이 메서드만 사용하므로 1:1 원칙상 메서드 이식.
 - [x] B-22d. ✅ **세션 38 완료** — `isStanding` 필드 추가 + resetState 리셋. 갱신 공식
       L2734 은 B-30 범위.
 
@@ -1562,6 +1568,76 @@ B-10a~d / B-15a~f 등) 은 병렬 가능.
 (L3241 `public boolean isRunning() { return isSprinting() && !isFast && (onGround || vanilla()); }`)
 + **필드** 조합. 1.21.1 에서는 필드 신설 + 메서드 추가로 처리. 기존 handleExhaustion
 L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드 갱신 위치 결정 필요.
+
+### 세션 42 — 2026-04-24 — B Phase 1 마지막 B-22c — **Phase 1 100% 완료**
+
+**진행한 작업**:
+- 원본 `SmartMovingSelf.java` `isRunning()` 재확인 (L3239-L3242) — **필드가 아니라
+  메서드 override** 였음. 기존 B-22c 계획 "필드 승격" 은 잘못된 전제. 수정:
+  * 원본 `public boolean isRunning() { return sp.isSprinting() && !isFast && (sp.onGround || vanilla()); }`
+  * 파생 메서드 — 필드 저장 X. 매 호출마다 재계산
+  * 사용처: L3043 `wasRunning = isRunning` (메서드 결과를 필드에 저장) + L1202/L1278
+    Config.getFactor 파라미터
+- 원본 `vanilla()` 헬퍼 (L3327-L3330) 이식: `return !Config.enabled || Config._vanillaStyle.value`
+- `SmartMovingConfig.vanillaStyle` 필드 L51 에 이미 이식됨 — 그대로 사용
+- `SmartMovingClientState.java` 수정:
+  * L1112-L1131 (canStandUp 뒤) 에 **vanilla() 헬퍼 + isRunning(ClientPlayerEntity) 메서드
+    2개 추가**. 각 원본 위치 (L3327-L3330 / L3239-L3242) 주석 + 사용처 기록
+  * handleExhaustion L1163 기존 로컬 변수 `isSprinting() && !isFast && onGround` →
+    `isRunning(player)` 메서드 호출로 교체
+  * 기존 **부정확한 주석 제거** (원본 `vanilla() = !Config.enabled || Config._vanillaStyle.value`
+    이므로 `cfg.vanillaStyle=true` + `cfg.enabled=true` 경로에서도 vanilla() 가 true.
+    기존 "handleExhaustion 은 cfg.enabled 때만 호출되므로 vanilla() 는 false" 주석은 부정확)
+- `./gradlew compileJava --rerun-tasks` 성공 (로컬 변수 `boolean isRunning = isRunning(player)`
+  는 RHS 먼저 평가되므로 Java 해석 정상)
+
+**완료 전 검증 체크리스트 (세션 42 기준)**:
+- [근거] 원본 `isRunning()` / `vanilla()` 메서드 정의 직접 read ✓
+- [근거] `vanillaStyle` Config 이식 확인 (L51) ✓
+- [대응] 원본 2 메서드 1:1 이식 (`cfg.enabled` 가드 + `cfg.vanillaStyle` 조합) ✓
+- [분기] `isSprinting() && !isFast && (onGround || vanilla())` 3-AND 공식 보존 ✓
+- [상수] 없음 (메서드 본문)
+- [타이밍] 메서드는 매 호출 재계산 — 원본 타이밍과 동일 ✓
+- [근사] 없음 (1:1)
+- [신규] 기존 부정확 주석 정정 ✓
+- [회귀] compileJava 성공 — handleExhaustion 동작 정상 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+---
+
+## 🎉 B Phase 1 (필드 선언 일괄) 100% 완료
+
+**누적 성과 (세션 38-42, 5 세션)**:
+- **ClientState 필드 추가**: 17 boolean + 2 BlockState = **19 필드**
+  * 이력 스냅샷 (3): wasHeadJumping / wasRunning / (wasCrawling 개명)
+  * 상태 (4): isStanding
+  * 수중 (4): isShallowDiveOrSwim / isJumpingOutOfWater / isStillSwimmingJump (+ isLevitating 이미 있음)
+  * 크롤 (2): wantCrawlNotClimb / initializeCrawling
+  * 등반 (9): isVineOnlyClimbing / isVineAnyClimbing / isClimbingStill /
+    isNeighborClimbing / hasClimbGap / hasNeighborClimbGap /
+    hasNeighborClimbCrawlGap / handsEdgeBlock / feetEdgeBlock
+- **Config 추가**:
+  * 필드 1: sprintEnableStanding
+  * 헬퍼 메서드 4: isSneakingEnabled / isSprintingEnabled / isSwimmingEnabled / isDivingEnabled
+- **ClientState 메서드 추가 2**: vanilla() / isRunning(player)
+- **개명**: wasCrawling_st → wasCrawling (원본과 일치)
+
+**B Phase 2 (공식 이식) 진입 준비 완료**.
+
+**Phase 2 권고 우선순위** (세션 36 §15 기록):
+- B-1c (can* 4 판정) / B-1d (6 Sprint 변종) / B-1e (standing) / B-1f (isFast 6-OR)
+- B-3a (wantSprint 공식) / B-3b (wouldIsSneaking 정정)
+- B-16 (isClimbHolding/wantClimbHolding 3-OR)
+- B-17 (isCrawlClimbing 공식) / B-18 (isClimbCrawling + climbIntoCount)
+- B-23 (isHeadJumping 매 틱 재평가)
+- B-30 (isStanding 공식)
+- B-32 (canCrawl 5-AND 복원)
+- B-33 (isCrawling 메인 공식 재작성)
+- B-40 (toCrawling 헬퍼)
+- B-2 (isSlow 정정) — 간단한 2줄 수정
+
+**다음 권고 시작**: **B-2 (isSlow 정정)** — 가장 단순한 2줄 교체로 첫 Phase 2 원자로 적합.
+또는 **B-30 (isStanding 공식 이식)** — isStanding 필드 이미 이식됨 + 공식 1줄.
 
 ---
 
