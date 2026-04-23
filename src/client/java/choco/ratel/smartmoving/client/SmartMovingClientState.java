@@ -159,6 +159,24 @@ public final class SmartMovingClientState {
      */
     public boolean wantSprint;
 
+    /**
+     * 원본 SmartMovingSelf L1439 `public boolean isGroundSprinting;` — **public 필드**.
+     * 매 틱 tickEssential L2679 에서 계산:
+     *   `canHorizontallySprint && (onGround || isLevitating()) && !isSwimming && !isDiving && !isClimbing`
+     * 사용처: isFast (L2689) / isHeadJumpCharging (L1883 Jumper) / isSlidingEnable (L2553)
+     * 및 B-1d/B-1f 의존.
+     * B-1c3 (세션 51).
+     */
+    public boolean isGroundSprinting;
+
+    /**
+     * 원본 SmartMovingSelf `collidedHorizontallyTickCount` (필드 선언 위치 리서치 미확인).
+     * 수평 충돌 연속 틱 카운터. 매 틱 `horizontalCollision ? ++count : 0`.
+     * 사용처: canHorizontallySprint (원본 L2675) `canAnySprint && collidedHorizontallyTickCount < 3`.
+     * B-1c2 (세션 51).
+     */
+    public int collidedHorizontallyTickCount;
+
     /** 크롤링 상태 */
     public boolean isCrawling;
 
@@ -863,8 +881,81 @@ public final class SmartMovingClientState {
             wasSneaking = isSlow;
             // B-2 (세션 43): 기존 `sneakContinueInput && wouldIsSneaking` 중복 제거 → 원본 1:1.
             isSlow = wantSneak && wouldIsSneaking;
-            // isFast 원본: grabButton.Pressed && isSprinting()
-            isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
+
+            // B-1c2 (세션 51): collidedHorizontallyTickCount 매 틱 갱신.
+            //   수평 충돌 연속 틱 카운터. can* 판정 (원본 L2675) 에 사용.
+            if (player.horizontalCollision) collidedHorizontallyTickCount++;
+            else                            collidedHorizontallyTickCount = 0;
+
+            // B-1c3/B-1d/B-1e/B-1f (세션 51): 원본 L2617-L2695 블록 일괄 이식 —
+            //   preferSprint + can* 4 + isClimbSprintSpeed + 6 Sprint 변종 + standing +
+            //   isFast 6갈래 OR. 기존 `isFast = grab && isSprinting()` 대체.
+            // ※ maxExhaustionForAction 조정 (원본 L2626-L2628, L2651-L2653) 은 handleExhaustion
+            //   축소판이 참조하지 않으므로 현재 생략. B-N 확장 여지.
+            // ※ isGroundSprinting 전환 후처리 (원본 L2697-L2709) 는 wasRunningWhenSprintStarted /
+            //   Options._runOnSprintRelease / isStandupSprintingOrRunning() 미이식 → 별도 원자.
+            // ※ isLevitating 필드는 이식(L179)되었으나 갱신 로직 (B-10d) 미이식 → 항상 false.
+            //   B-10d 이식 후 isGroundSprinting 공식의 isLevitating 분기 자동 활성.
+            {
+                // 원본 L2633-L2634 / L2643-L2644: isSprintJump 매 틱 갱신.
+                if (!player.isOnGround() && isFast && !isClimbing && !isCeilingClimbing
+                        && !isDiving && !isSwimming_sm) {
+                    isSprintJump = true;
+                }
+                if (player.isOnGround() || isFlying || player.getAbilities().flying
+                        || isSwimming_sm || isDiving || player.isInLava()) {
+                    isSprintJump = false;
+                }
+
+                // 원본 L2636-L2641 exhaustionAllowsSprinting (SM 피로 OFF 기본 → 항상 true).
+                boolean _exhaustionAllowsSprinting17 = !cfg0.isSprintExhaustionEnabled()
+                        || (exhaustion <= cfg0.sprintExhaustionStop
+                                && (isFast || isSprintJump
+                                        || exhaustion <= cfg0.sprintExhaustionStart));
+
+                // 원본 L2646-L2657 preferSprint (maxExhaustion 조정 축소).
+                boolean _preferSprint17 = false;
+                if (wantSprint && !wantSneak) {
+                    if (_exhaustionAllowsSprinting17) _preferSprint17 = true;
+                }
+
+                // 원본 L2659-L2671 isClimbSprintSpeed — SmartStatisticsFactory.getTickDistance()
+                //   1.21.1 미이식 → `true` 근사 (모든 등반 속도 허용). B-N 후속: tick 거리 통계.
+                boolean _isClimbSprintSpeed17 = true;
+
+                // 원본 L2673-L2676 can* 4 판정.
+                boolean _canAnySprint17 = _preferSprint17
+                        && !player.isOnFire()
+                        && (cfg0.sprintDuringItemUsage || !player.isUsingItem());
+                boolean _canVerticallySprint17 = _canAnySprint17 && !player.verticalCollision;
+                boolean _canHorizontallySprint17 = _canAnySprint17
+                        && collidedHorizontallyTickCount < 3;
+                boolean _canAllSprint17 = _canHorizontallySprint17 && _canVerticallySprint17;
+
+                // 원본 L2678-L2684 6 Sprint 변종.
+                // (wasGroundSprinting 지역 변수는 전환 후처리 전용 — 미이식 경로에서만 사용 → 생략)
+                isGroundSprinting = _canHorizontallySprint17
+                        && (player.isOnGround() || isLevitating)
+                        && !isSwimming_sm && !isDiving && !isClimbing;
+                boolean _isSwimSprinting17    = _canHorizontallySprint17 && isSwimming_sm;
+                boolean _isDiveSprinting17    = _canAllSprint17 && isDiving;
+                boolean _isCeilingSprinting17 = _canHorizontallySprint17 && isCeilingClimbing;
+                boolean _isFlyingSprinting17  = _canAllSprint17 && isFlying;
+                boolean _isClimbSprinting17   = _canAnySprint17 && isClimbing && _isClimbSprintSpeed17;
+
+                // 원본 L2686 standing 지역 변수.
+                boolean _standing17 = player.isOnGround() && !isSliding && !isCrawling;
+
+                // 원본 L2688-L2695 isFast 6갈래 OR (+ isClimbSprinting 중복 1:1 보존).
+                isFast = (isGroundSprinting && (!_standing17 || cfg0.sprintEnableStanding))
+                        || _isClimbSprinting17
+                        || _isSwimSprinting17
+                        || _isDiveSprinting17
+                        || _isCeilingSprinting17
+                        || _isFlyingSprinting17
+                        || _isClimbSprinting17;  // 원본 L2695 중복 그대로 보존
+            }
+
             // isFlying 원본: sp.capabilities.isFlying
             isFlying = player.getAbilities().flying;
             // wasCapabilitiesIsFlying: beforeOnLivingUpdate에서 저장 (vanilla tickMovement 실행 전)
@@ -1232,6 +1323,8 @@ public final class SmartMovingClientState {
         wantCrawlNotClimb       = false;
         initializeCrawling      = false;
         wantSprint              = false;
+        isGroundSprinting       = false;
+        collidedHorizontallyTickCount = 0;
         // B Phase 1 (세션 40) 등반 9 필드 리셋
         isVineOnlyClimbing      = false;
         isVineAnyClimbing       = false;

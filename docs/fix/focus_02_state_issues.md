@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 50 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b/B-1c1 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 51 — **B-1 isFast 체인 완성 / A-1 불일치 전부 해소**) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b/B-1c~f 완료 / ⏳ **B Phase 2 잔여 (B-17b2/B-18/B-24/B-16/B-33/B-N 등)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -525,22 +525,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       `moveForwardButton` / `moveBackwardButton` / `moveLeftButton` / `moveRightButton` —
       각 `.Pressed` / `.StartPressed` / `.StopPressed` 의 1.21.1 대응 (`isPressed()` /
       `wasPressed()` / `SmartMovingKeys.*` 엣지 검출 필드). 기존 구현 grep 으로 확인.
-- [~] B-1c. **세션 50 B-1c1 선행 완료** — Config 필드/헬퍼 7건 추가:
-      필드 5: `runExhaustionStart=75F` / `runExhaustionStop=100F` /
-      `sprintExhaustionStart=50F` / `sprintExhaustionStop=100F` /
-      `sprintDuringItemUsage=false` / `runExhaustion=false` / `sprintExhaustion=false`.
-      헬퍼 3: `isRunExhaustionEnabled()` / `isClimbExhaustionEnabled()` /
-      `isSprintExhaustionEnabled()` (AND 패턴).
-      **잔여 B-1c2/B-1c3**: ClientState `collidedHorizontallyTickCount` 필드 + 갱신 /
-      `preferSprint + canAnySprint/canHorizontallySprint/canAllSprint + isClimbSprintSpeed`
-      공식 이식 (SmartStatisticsFactory 근사 `true`).
-- [ ] B-1d. 6 Sprint 변종 (`isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` /
-      `isDiveSprinting` / `isCeilingSprinting` / `isFlyingSprinting`) ClientState 이식
-      — 원본 선언 + 계산 블록 1:1.
-- [ ] B-1e. `standing = onGround && !isSliding && !isCrawling` 로컬 변수 이식
-      (`tickEssential` isFast 계산 직전).
-- [ ] B-1f. `SmartMovingClientState.tickEssential` L653 `isFast` 공식 6갈래 OR 로 교체
-      (원본 `SmartMovingSelf` L2688-L2695, `isClimbSprinting` 중복 1:1 보존).
+- [x] B-1c. ✅ **세션 50-51 완료** — Config 7필드/3헬퍼 + ClientState 필드 2 +
+      공식 이식. 세션 50: B-1c1 (Config 피로/스프린트). 세션 51: B-1c2/3
+      (collidedHorizontallyTickCount 필드+갱신, preferSprint, isClimbSprintSpeed 근사 `true`,
+      can* 4). SmartStatisticsFactory.getTickDistance() 1.21.1 미이식 → `true` 근사 (주석 명시).
+- [x] B-1d. ✅ **세션 51 완료** — 6 Sprint 변종 이식. `isGroundSprinting` public 필드 +
+      5 지역 변수 (`isSwim/Dive/Ceiling/Flying/ClimbSprinting`). 원본 L2678-L2684 1:1.
+      isLevitating 필드 참조는 B-10d 후 자동 활성.
+- [x] B-1e. ✅ **세션 51 완료** — `_standing17 = onGround && !isSliding && !isCrawling` 지역
+      변수 이식 (원본 L2686).
+- [x] B-1f. ✅ **세션 51 완료** — `isFast` 공식 **6갈래 OR 완전 복원** (원본 L2688-L2695).
+      `isClimbSprinting` 중복 (L2695) 1:1 보존. 기존 `grab && isSprinting()` 제거.
+      **A-1 불일치 #1 해소**.
 
 #### B-2. `isSlow` 공식 정정 (단일 원자)
 - [x] B-2. ✅ **세션 43 완료** — `SmartMovingClientState.tickEssential` 정정:
@@ -2048,6 +2044,66 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   `tickEssential` 내 갱신 (`horizontalCollision ? ++count : 0`) + `preferSprint` +
   can* 4 + `isClimbSprintSpeed` 공식 이식. SmartStatisticsFactory 근사 `true` 필요.
 - 그 뒤 **B-1d + B-1e + B-1f** 일괄 (isFast 완성 — A-1 #1 해소).
+
+### 세션 51 — 2026-04-24 — B Phase 2 **B-1c2~B-1f 일괄 이식 — isFast 체인 완성**
+
+**진행한 작업**:
+- `SmartMovingClientState` 필드 2개 추가:
+  * `isGroundSprinting` public (원본 L1439) + resetState 리셋
+  * `collidedHorizontallyTickCount` int (원본 L1432 근처 추정) + resetState 리셋
+- tickEssential 에 **collidedHorizontallyTickCount 매 틱 갱신**:
+  `horizontalCollision ? ++count : 0` (B-1c2)
+- 기존 L885 `isFast = grab && isSprinting()` 한 줄을 **원본 L2617-L2695 블록 축소판**으로
+  완전 교체 (B-1c3 + B-1d + B-1e + B-1f):
+  * isSprintJump 매 틱 갱신 (원본 L2633-L2634 true + L2643-L2644 false)
+  * exhaustionAllowsSprinting (원본 L2636-L2641) — Config 헬퍼 isSprintExhaustionEnabled 사용
+  * preferSprint (원본 L2646-L2657) — maxExhaustion 조정 축소 (handleExhaustion 미참조)
+  * isClimbSprintSpeed (원본 L2659-L2671) — SmartStatisticsFactory 미이식 → `true` 근사
+  * can* 4 판정 (원본 L2673-L2676) — `isBurning`/`isUsingItem`/`sprintDuringItemUsage`/
+    `verticalCollision`/`collidedHorizontallyTickCount` 사용
+  * 6 Sprint 변종 (원본 L2678-L2684) — isGroundSprinting 필드 + 5 지역 변수.
+    isLevitating 필드 참조 — B-10d 후 자동 활성
+  * standing 지역 (원본 L2686) — `onGround && !isSliding && !isCrawling`
+  * **isFast 6갈래 OR** (원본 L2688-L2695) — isClimbSprinting 중복 1:1 보존
+- **A-1 불일치 #1 해소**: 기존 `grab && isSprinting()` 간소 매핑 → 원본 6갈래 OR 완전 복원.
+  수영/잠수/비행/등반/천장 컨텍스트 전부 sprint 변종 감지.
+- isGroundSprinting 전환 후처리 (원본 L2697-L2709) — 별도 B-N 원자 분리 (setSprinting
+  호출 + wasRunningWhenSprintStarted / Options._runOnSprintRelease 등 미이식 의존)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 51 기준)**:
+- [근거] 원본 L2617-L2695 전수 read (R-10.6~R-10.8) ✓
+- [근거] B-1c1 Config 헬퍼/필드 이식 확인 ✓
+- [대응] 6갈래 OR 공식 원본 1:1 (isClimbSprinting 중복 포함) ✓
+- [분기] isSprintJump 2분기 / exhaustionAllows* / preferSprint / isClimbSprintSpeed /
+  can* 4 / 6 Sprint 변종 / standing / isFast 6갈래 전수 ✓
+- [상수] `sprintExhaustionStop=100F` / `sprintExhaustionStart=50F` / `sprintEnableStanding=false`
+  / `collidedHorizontallyTickCount<3` 임계값 원본 동일 ✓
+- [타이밍] isSprintJump 이전 틱 `isFast` 참조 — 해당 블록 이전에 isFast 이전 틱 값이
+  유지되는 구조 (현재 틱 isFast 는 블록 말미에 갱신) ✓
+- [근사] `isClimbSprintSpeed=true` 근사 (SmartStatisticsFactory 미이식), `maxExhaustion*`
+  조정 축소 (handleExhaustion 축소판 — 필드 미참조). 각 주석 명시 ✓
+- [신규] isGroundSprinting 전환 후처리 미이식 → 별도 B-N 원자 (B-48 후보) ✓
+- [회귀] compileJava 성공 — 기존 `grab && isSprinting()` 호출 대체 완료 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**🎉 A-1 불일치 3건 전부 해소**:
+- ✅ #1 **isFast 6갈래 OR** (B-1f 세션 51) — 간소 매핑 → 원본 1:1 완전 복원
+- ✅ #2 isSlow Config.isSneakingEnabled() (B-2 세션 43)
+- ✅ #3 wouldIsSneaking `!wantSprint` (B-3b 세션 49)
+
+**Phase 2 진행 상황 (세션 51 기준)**:
+- ✅ 세션 43-49: B-2 / B-44a / B-30 / B-32 / B-40 / B-45 / B-23 / B-17a/b1 / B-3a/b (11 원자)
+- ✅ 세션 50: B-1c1 (Config 7필드+3헬퍼)
+- ✅ 세션 51: **B-1c2/B-1c3/B-1d/B-1e/B-1f** (isFast 체인 완성, A-1 #1 해소)
+- ⏳ 잔여 ~23 원자 (B-17b2 / B-18 / B-24 / B-16 / B-33 / B-48 isGroundSprinting 전환 등)
+
+**다음 작업 권고**:
+- **B-48** (isGroundSprinting 전환 후처리) — `wasRunningWhenSprintStarted` + `Options._run/walkOnSprintRelease`
+  필드 + `isStandupSprintingOrRunning()` 메서드 이식. 중간 규모.
+- **B-18** (isClimbCrawling + climbIntoCount 카운터) — B-16 (isClimbHolding) 선행 필요.
+- **B-17b2** (isCrawlClimbing 전환 3분기) — wantClimbUp/Down 필드 승격 + move() API.
+- **B-24** (isHeadJumping 해제 엣지 handleCrash) — Config 필드 2개 신설 + handleCrash 공유.
 
 ---
 
