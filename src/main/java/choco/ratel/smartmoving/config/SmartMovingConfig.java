@@ -517,6 +517,29 @@ public class SmartMovingConfig {
         return dive && enabled;
     }
 
+    /**
+     * 원본 `SmartMovingOptions.java` L449-L455 `isSneakToggleEnabled()`:
+     *   return _sneakToggle.value && enabled;
+     * **AND 패턴** — SM 비활성 시 토글 모드 비허용.
+     * 사용처: sneakContinueInput (원본 L2576) / R-09 블록 진입 (원본 L2968) / wantSneak_
+     * 계산 (원본 L2981 부근).
+     * B-45a (세션 45).
+     */
+    public boolean isSneakToggleEnabled() {
+        return sneakToggle && enabled;
+    }
+
+    /**
+     * 원본 `SmartMovingOptions.java` L462-L469 `isCrawlToggleEnabled()`:
+     *   return _crawlToggle.value && enabled;
+     * **AND 패턴**. 사용처: inputContinueCrawl (원본 L2407) / R-09 블록 (원본 L2969) /
+     * toCrawling() (원본 L3050).
+     * B-45a (세션 45).
+     */
+    public boolean isCrawlToggleEnabled() {
+        return crawlToggle && enabled;
+    }
+
     // ── Config key 토글 시스템 (원본 SmartMovingProperties L26-L31) ─────────────────
     // H-19 (세션 23): CONFIG_KEY_ENABLED/DISABLED 상수 삭제. getCurrentKey/getKey/getNextKey/
     //   hasKey/setCurrentKey 메서드 5개도 삭제 (외부 호출처 0건 확인). DEFAULT_KEYS 만 유지

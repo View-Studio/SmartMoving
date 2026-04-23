@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 44 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + B-2/B-30/B-44a/B-32/B-40 완료 + Config.fallingDistanceMinimum 추가 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 45 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + B-2/B-30/B-44a/B-32/B-40/B-45 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -304,6 +304,8 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `Config.isSprintingEnabled()` = `_sprint.value && enabled` | `cfg.isSprintingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
 | `Config.isSwimmingEnabled()` = `_swim.value && enabled` | `cfg.isSwimmingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
 | `Config.isDivingEnabled()` = `_dive.value && enabled` | `cfg.isDivingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
+| `Options.isSneakToggleEnabled()` = `_sneakToggle && enabled` | `cfg.isSneakToggleEnabled()` (✅ 세션 45) | ✓ 이식 완료 |
+| `Options.isCrawlToggleEnabled()` = `_crawlToggle && enabled` | `cfg.isCrawlToggleEnabled()` (✅ 세션 45) | ✓ 이식 완료 |
 | `Config.isLavaLikeWaterEnabled()` | — | ✗ 미이식 (B-7) |
 | `Config.isFreeClimbingEnabled()` | `cfg.freeClimb` (확인) | ✓? |
 | `Config.isSmartBaseClimb()` / `isSimpleBaseClimb()` / `isStandardBaseClimb()` | — | ✗ 미이식 (B-20) |
@@ -818,11 +820,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (원본 L2786 대응). B-18 (A-3 isClimbCrawling 이식) 수정 시 함께 조정.
 
 #### B-45. `isSneakToggleEnabled()` / `isCrawlToggleEnabled()` Config 헬퍼 신설 + 호출 정리 (세션 44 발견)
-- [ ] B-45a. `SmartMovingConfig` 에 `isSneakToggleEnabled()` / `isCrawlToggleEnabled()`
-      헬퍼 2개 추가 (원본 `SmartMovingOptions.md` L449-L468 — AND 패턴:
-      `_toggle && enabled`).
-- [ ] B-45b. ClientState 의 `cfg.sneakToggle ? ... : ...` / `cfg.crawlToggle ? ... : ...`
-      호출 지점 전수 헬퍼 교체 (L784 sneakContinueInput, L789 wantSneak_, 기타).
+- [x] B-45a. ✅ **세션 45 완료** — `SmartMovingConfig.isSneakToggleEnabled()` /
+      `isCrawlToggleEnabled()` 헬퍼 2개 추가 (원본 SmartMovingOptions L449-L468 AND 패턴).
+- [x] B-45b. ✅ **세션 45 완료** — ClientState 6곳 + Jumper 1곳 전수 헬퍼 치환:
+      (1) ClientState L738 inputContinueCrawl / (2) L788 sneakContinueInput /
+      (3-4) L943-L944 R-09 블록 / (5) L959 wantSneak_ / (6) toCrawling() 내부 L1173 /
+      (7) Jumper L110 → sm.toCrawling() 호출로 승격 (ignoreNextStopSneakButtonPressed
+      자동 포함). cfg.enabled 누락 3곳 해소 (L788/L959/Jumper L112).
 
 #### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
@@ -1745,6 +1749,50 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   `wantSprint` 필드 + 계산 블록 (B-3a) 선행 필요.
 - **B-17 / B-18 (isCrawlClimbing / isClimbCrawling 공식 이식)** — B-15 의존 필드 완성됨 →
   규모 큰 공식 이식 가능.
+
+### 세션 45 — 2026-04-24 — B Phase 2 계속: B-45 (Config 토글 헬퍼 2종 + 호출 정리)
+
+**진행한 작업**:
+- `SmartMovingConfig` 에 `isSneakToggleEnabled()` / `isCrawlToggleEnabled()` 2 헬퍼 추가
+  (원본 `SmartMovingOptions.md` L449-L468 — AND 패턴: `_toggle && enabled`)
+- 원본 그대로 주석에 파일/라인 + 사용처 + B-N 의존 기록
+- **ClientState 6곳 + Jumper 1곳 전수 헬퍼 치환**:
+  * ClientState L738 `isCrawlToggleEnabled0 = ...` → `cfg0.isCrawlToggleEnabled()` 직접 사용
+  * ClientState L788 `sneakContinueInput` 조건 — **cfg.enabled 가드 추가** (기존 누락)
+  * ClientState L943-L944 R-09 블록 isSneak/CrawlToggleEnabled — 헬퍼로 통일
+  * ClientState L959 `wantSneak_` (R-09 블록 간소 매핑) — **cfg.enabled 가드 추가**
+  * ClientState L1173 toCrawling() 내부 — 헬퍼 치환
+  * Jumper L112 `sm.isCrawling=true + cfg.crawlToggle → crawlToggled=true` → **`sm.toCrawling()`
+    승격** — 원본 toSlidingOrCrawling else 분기 `wasCrawling=toCrawling()` 와 일치,
+    cfg.enabled 가드 + ignoreNextStopSneakButtonPressed 자동 포함
+- §6.7 Config 매핑 테이블에 헬퍼 2종 추가
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 45 기준)**:
+- [근거] 원본 `SmartMovingOptions.md` L449-L468 공식 확인 ✓
+- [대응] 2 헬퍼 원본 AND 패턴 1:1 ✓
+- [분기] 7곳 호출 전수 헬퍼 치환 — cfg.enabled 누락 3건 해소 ✓
+- [상수] 없음 (메서드)
+- [타이밍] 헬퍼 치환은 의미 변경 — cfg.enabled=false 시 이전과 동작 다름 (버그 수정) ✓
+- [근사] 없음
+- [신규] Jumper L110 inline → toCrawling() 호출 승격 — ignoreNextStopSneakButtonPressed
+  자동 포함. 이 플래그 사용 여부 실제 동작에서 확인 필요 (별도 테스트 시)
+- [회귀] compileJava 성공 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 45 기준)**:
+- ✅ B-2 / B-44a / B-30 — 세션 43
+- ✅ B-32 / B-40 / Config.fallingDistanceMinimum — 세션 44
+- ✅ B-45 (Config 2 헬퍼 + 7곳 호출 정리) — 세션 45
+- ⏳ 잔여 ~33 원자 (B-1c~f / B-3a~b / B-16 / B-17 / B-18 / B-23 등)
+
+**다음 작업 권고**:
+- **B-17 (isCrawlClimbing 공식 이식)** — B-15a `isNeighborClimbing` 이식 완료 → 규모 중간.
+  원본 L2737 5-AND 공식 + L2737-L2754 canStandUp/wasCrawlClimbing 전환 블록 이식.
+- 또는 **B-18 (isClimbCrawling 공식 + climbIntoCount 카운터)** — B-15b `hasClimbGap` +
+  B-16 `isClimbHolding` 의존. B-16 선행 필요.
+- 또는 **B-23 (isHeadJumping 매 틱 재평가)** — B-22a `wasHeadJumping` 이식 완료 → 가능.
+  원본 L2524-L2530 5-AND 해제 공식.
 
 ---
 

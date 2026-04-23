@@ -735,9 +735,9 @@ public final class SmartMovingClientState {
 
             // inputContinueCrawl (원본 L2407 1:1):
             //   isCrawlToggleEnabled ? crawlToggled : sneakPressed || (!freeClimbEnabled && grabPressed)
-            boolean isCrawlToggleEnabled0 = cfg0.crawlToggle && cfg0.enabled;
+            // B-45b (세션 45): Config.isCrawlToggleEnabled() 헬퍼로 치환.
             boolean freeClimbingEnabled0  = cfg0.freeClimb  && cfg0.enabled;
-            boolean inputContinueCrawl = isCrawlToggleEnabled0
+            boolean inputContinueCrawl = cfg0.isCrawlToggleEnabled()
                     ? crawlToggled
                     : (sneakPressedRaw || (!freeClimbingEnabled0 && grabHeld0));
 
@@ -785,7 +785,8 @@ public final class SmartMovingClientState {
             //   wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing    (원본 L2712)
             //   wasSneaking = isSlow                                              (원본 L2716 공식 직전)
             //   isSlow = wantSneak && wouldIsSneaking                              (원본 L2718)
-            boolean sneakContinueInput = cfg0.sneakToggle
+            // B-45b (세션 45): Config.isSneakToggleEnabled() 헬퍼로 치환 — cfg.enabled AND 가드 포함.
+            boolean sneakContinueInput = cfg0.isSneakToggleEnabled()
                     ? (sneakToggled || sneakKeyStartPressed)
                     : sneakPressedRaw;
             boolean grabPressed0 = SmartMovingKeys.grab.isPressed();
@@ -940,8 +941,9 @@ public final class SmartMovingClientState {
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
             // wasSneaking/wasCrawling/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
             {
-                boolean isSneakToggleEnabled = cfg.sneakToggle && cfg.enabled;
-                boolean isCrawlToggleEnabled = cfg.crawlToggle && cfg.enabled;
+                // B-45b (세션 45): Config 헬퍼 치환 (의미 동일).
+                boolean isSneakToggleEnabled = cfg.isSneakToggleEnabled();
+                boolean isCrawlToggleEnabled = cfg.isCrawlToggleEnabled();
 
                 boolean willStopCrawl = false;
                 boolean willStopCrawlStartSneak = false;
@@ -956,7 +958,8 @@ public final class SmartMovingClientState {
                 }
 
                 // 원본 L2986: wantSneak/wantSprint 참조. 간소 매핑: wantSneak=sneakContinueInput, wantSprint=isSprinting.
-                boolean wantSneak_ = cfg.sneakToggle
+                // B-45b (세션 45): cfg.enabled AND 가드 포함 헬퍼 치환. (본 블록은 B-4 간소 매핑 제거 범위)
+                boolean wantSneak_ = cfg.isSneakToggleEnabled()
                         ? (sneakToggled || sneakKeyStartPressed)
                         : MinecraftClient.getInstance().options.sneakKey.isPressed();
                 boolean wantSprint_ = player.isSprinting();
@@ -1169,7 +1172,8 @@ public final class SmartMovingClientState {
     public boolean toCrawling() {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         isCrawling = true;
-        if (cfg.crawlToggle && cfg.enabled) crawlToggled = true;
+        // B-45b (세션 45): Config 헬퍼 치환.
+        if (cfg.isCrawlToggleEnabled()) crawlToggled = true;
         ignoreNextStopSneakButtonPressed = true;
         return true;
     }

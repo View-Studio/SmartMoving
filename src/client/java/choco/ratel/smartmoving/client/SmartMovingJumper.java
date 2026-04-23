@@ -107,9 +107,9 @@ public final class SmartMovingJumper {
                                  .getBoxAt(player.getPos())
                                  .contract(1.0E-7);
             if (!world.isSpaceEmpty(player, standBox)) {
-                sm.isCrawling = true;
-                // 원본: toCrawling() → Options.isCrawlToggleEnabled() 게이트
-                if (cfg.crawlToggle) sm.crawlToggled = true;
+                // B-45b (세션 45): 원본 toSlidingOrCrawling else 분기 `wasCrawling = toCrawling()`
+                // 대응. 기존 inline (cfg.enabled 누락) → ClientState.toCrawling() 헬퍼 호출.
+                sm.toCrawling();
             }
         }
 
