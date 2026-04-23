@@ -155,7 +155,7 @@
 | [x] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
 | [x] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
 | [x] | `SmartMovingServerConfig.md` | `SmartMovingConfig.SERVER_CONFIG` + `loadFromArray()` |
-| [ ] | `SmartMovingServerOptions.md` | 서버 설정 대응 |
+| [x] | `SmartMovingServerOptions.md` | `SmartMovingServer.initialize()` + `SmartMovingConfig.toArray()` |
 
 ---
 
@@ -952,6 +952,47 @@ N/A (구조적 변환):
 
 ---
 
+### [2026-04-23] config/SmartMovingServerOptions.md
+
+대응 구현: `SmartMovingServer.initialize()` + `SmartMovingConfig.INSTANCE.toArray()` + `SmartMovingServer.processSpeedChangePacket()` + `SmartMovingServer.processConfigChangePacket()`
+
+원본 개요:
+- `SmartMovingServerOptions`(상속 없음, Object 직접 상속) — 서버 측 설정 관리 어댑터. `SmartMovingConfig`를 필드로 보유.
+- 생성자(`config, optionsPath, gameType`): gameType별(Survival/Creative/Adventure) `configKey`/`configKeys`/`_userConfigKeys` 3종 Property 참조 세팅 + `setKeys()` + `setCurrentKey()` + `logConfigState()`
+- 메서드: `toggle(player)`, `changeSpeed(diff, player)`, `writeToProperties()`(전역/플레이어별/토글), `changeSingleSpeed(player, diff)`, `getPlayerSpeedExponent`/`setPlayerSpeedExponent`, `getPlayerConfigurationKey`/`setPlayerConfigurationKey`, `logConfigState`/`logSpeedState` 등
+- 플레이어별 속도 치환: `writeToProperties(mp, key)` 내에서 `entry.setValue(config._speedUserExponent.getValueString(userExponent))` 로 전역 속도 대신 개인 속도 삽입
+
+1.21.1 대응 상태:
+- `writeToProperties()` (전역) → `SmartMovingConfig.INSTANCE.toArray()` ✓ (initialize에서 사용, 기능 동등)
+- `initialize(player)` → `SmartMovingServer.initialize(player, server)` ✓ (globalConfig=true → toArray() 전송, false → 빈 배열)
+- `processSpeedChangePacket(player, diff)` — 클라이언트 속도 변경 요청에 대한 권한 검증 응답 (원본 별도 Comm 경로 대응)
+- `processConfigChangePacket(player)` — 권한 거부 응답 (항상 ConfigChange S2C 전송)
+- `hasPermission(expected, actual)` — equals 기반 권한 검증
+
+구조적 N/A (1.21.1 아키텍처 차이):
+- **gameType별 configKey 시스템** (Survival/Creative/Adventure × `_configKey`/`_configKeys`/`_userConfigKeys`): SmartMovingConfig 복잡 config 변형 시스템 전체가 1.21.1 단일 파일 구조에서 N/A (SmartMovingConfig.md 감사 시 이미 확인됨)
+- **disabled 단축 경로** (원본 `key==null && !enabled` → `{globalConfigKey, globalConfigValue}` 2원소 반환): 1.21.1 `toArray()`가 enabled 키 포함 전체 직렬화 → 클라이언트 `readFrom()`에서 `enabled=false` 적용으로 기능 동등. 네트워크 효율만 차이.
+- **`SmartMovingProperties.Disabled` 참조 비교** (`key == "disabled"` 상수): 1.21.1은 Property/Properties 계층 자체 없음 → N/A
+- **FMLLog → Fabric Logger**: 서버 콘솔 로그 전체 미이식 (1.21.1 주석에 `username=null: 설정 편집 권한 없음` 만 명시)
+
+미구현 기능 (신규 발견):
+- `toggle(player)` — 서버 관리자가 config key를 순환하는 명령 경로 (클라이언트 `/smoving config toggle` 커맨드 대응). SM 채팅 커맨드 시스템 전체가 1.21.1에 미이식.
+- `changeSpeed(diff, player)` — 서버 관리자 자발적 속도 변경. `processSpeedChangePacket`은 클라이언트 요청 처리만, 서버측 자발적 변경 경로 없음.
+- `changeSingleSpeed(player, diff)` + `_speedUsersExponents` 맵 — 플레이어별 개인 속도 지수 관리. `writeToProperties(mp, key)` 의 entry.setValue 치환 로직 자체가 미구현.
+- `writeToProperties(player, toggle)` + `_userConfigKeys` 맵 + `getPlayerConfigurationKey`/`setPlayerConfigurationKey` — 플레이어별 개인 config key 관리.
+- `logConfigState` / `logSpeedState` / `getPostfix` — 서버 콘솔 로그 전체.
+- `synchronized` 접근자 (`setPlayerSpeedExponent`, `setPlayerConfigurationKey`) — 맵 관리 자체가 미구현이므로 해당 없음.
+
+불일치 없음 (정상 경로):
+- flat `[k1,v1,k2,v2,...]` 직렬화 형식: `toArray()` 의 `for` 루프(`props.stringPropertyNames()` 순회 + i/i+1 채움) 와 원본 iterator 패턴 동등 ✓
+- 서버→클라이언트 `ConfigContent` 패킷 흐름: 원본 `writeToProperties() → SmartMovingPacketStream` 과 동등한 `SmartMovingConfig.INSTANCE.toArray() → ConfigContentPayload` ✓
+- globalConfig=true/false 분기: 1.21.1 `initialize()`의 `globalConfig ? toArray() : new String[0]` → 원본 설계 정확히 반영 ✓
+
+신규 발견 미구현:
+- 위 미구현 기능들 → 신규 발견 항목 테이블에 일괄 기록. SmartMovingConfig의 복잡 config 시스템 + 채팅 커맨드 + 플레이어별 개인화는 1.21.1에서 의도적으로 단순화됨.
+
+---
+
 ## 신규 발견 항목 (감사 중 발견한 미구현)
 
 > 감사 중 발견한 항목을 즉시 여기에 기록한다.
@@ -1023,3 +1064,9 @@ N/A (구조적 변환):
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() WALL_UP/WALL_HEAD 수직 속도 오류 — 원본: `angle!=null` 경로 = `-0.078 + 0.498 * wallUpJumpVerticalFactor(0.4F)` → 0.121D, WALL_HEAD += wallHeadJumpVerticalFactor(0.3F) → 0.271D. 버그: `angle==null` 경로와 같은 vanilla 0.419D 사용. | **처리 완료** — SmartMovingJumper.tryJump(): WALL_UP/WALL_HEAD 전용 분기 추가(공식 경로). BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() 스프린트 수평 보정을 WALL_UP/WALL_HEAD에 적용 — 원본: 스프린트 보정은 `angle==null`(vanilla Up) 블록 내부에만 존재 → 벽점프 시 미적용. 버그: fast이면 항상 적용. | **처리 완료** — `if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD)` 조건으로 수정. BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingServerConfig.md` | 없음 — 서버 수신 설정 파싱 + top/일반 2-레이어 우선순위 어댑터. 1.21.1은 `SmartMovingConfig.SERVER_CONFIG` + `loadFromArray()` + `readFrom()` 체인으로 분산 대응. top 레이어링은 개인별 설정 전송 경로 미구현으로 N/A, `reset()`은 전체 설정 덮어쓰기 구조에서 실질 불필요. | N/A (구조적 대응) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | 서버 측 플레이어별 개인화 + 서버 관리자 명령 어댑터. 정상 경로(globalConfig 전역 직렬화)는 `SmartMovingConfig.INSTANCE.toArray()` + `SmartMovingServer.initialize()` 로 기능 동등 대응. disabled 단축 경로도 `readFrom()` 에서 `enabled=false` 적용으로 기능 동등. | N/A (전역 경로 대응 완료) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `toggle(player)` — 서버 관리자가 config key를 순환하는 명령. SM 채팅 커맨드 시스템 전체가 1.21.1 미이식. | 미구현 (SmartMovingConfig 복잡 config 변형 시스템 의존) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSpeed(diff, player)` — 서버 관리자 자발적 속도 변경 (클라이언트 요청 응답 `processSpeedChangePacket`과 별개). | 미구현 (서버 커맨드 경로 없음) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSingleSpeed` + `_speedUsersExponents` 맵 + `writeToProperties(mp, key)` 의 entry.setValue 치환 — 플레이어별 개인 속도 지수 관리. | 미구현 (전역 speedUserExponent만 지원) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `writeToProperties(player, toggle)` + `_userConfigKeys` 맵 + `getPlayerConfigurationKey`/`setPlayerConfigurationKey` — 플레이어별 개인 config key 관리. | 미구현 (SmartMovingConfig 복잡 config key 시스템 자체 N/A) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `logConfigState` / `logSpeedState` / `getPostfix` — 서버 콘솔 로그. `"overrides client configurations"`, `"allows client configurations"`, `"speed set to X%"` 등. | 미구현 (FMLLog → Fabric Logger 이식 필요) |
