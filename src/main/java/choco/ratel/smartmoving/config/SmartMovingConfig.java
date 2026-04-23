@@ -467,6 +467,75 @@ public class SmartMovingConfig {
      */
     public float fallingDistanceMinimum = 3F;
 
+    // ── B-1c1 (세션 50) — 원본 SmartMovingConfig.java 피로/스프린트 관련 필드 ─────────
+
+    /**
+     * 원본 L298 `_runExhaustionStart = Positive("move.exhaustion.run.start").defaults(75F)`.
+     * 사용처: exhaustionAllowsRunning (원본 L2621-L2622) 판정 하한.
+     */
+    public float runExhaustionStart = 75F;
+
+    /**
+     * 원본 L299 `_runExhaustionStop = Positive("move.exhaustion.run.stop").up(100F, _runExhaustionStart)`.
+     * `up(100F, ...)` — 기본값 100F, 최소 runExhaustionStart. 사용처: maxExhaustionForAction 상한.
+     */
+    public float runExhaustionStop = 100F;
+
+    /**
+     * 원본 L314 `_sprintExhaustionStart = Positive(...).defaults(50F)`.
+     * 사용처: exhaustionAllowsSprinting (원본 L2640) 판정 하한.
+     */
+    public float sprintExhaustionStart = 50F;
+
+    /**
+     * 원본 L315 `_sprintExhaustionStop = Positive(...).up(100F, _sprintExhaustionStart)`.
+     * 기본값 100F. 사용처: exhaustionAllowsSprinting (원본 L2639) + maxExhaustionForAction 상한.
+     */
+    public float sprintExhaustionStop = 100F;
+
+    /**
+     * 원본 L589 `_sprintDuringItemUsage = Modified("move.usage.sprint")`.
+     * Modified 기본값 false. 사용처: canAnySprint (원본 L2673) — true 면 아이템 사용 중에도
+     * sprint 허용.
+     */
+    public boolean sprintDuringItemUsage = false;
+
+    /**
+     * 원본 `SmartMovingClientConfig.java` L90 `isRunExhaustion = Modified(...)`.
+     * 1.21.1 기본값 false (SM 기본 비활성).
+     */
+    public boolean runExhaustion = false;
+
+    /**
+     * 원본 `SmartMovingClientConfig.java` L94 `_sprintExhaustion = Modified(...)`.
+     * 1.21.1 기본값 false.
+     */
+    public boolean sprintExhaustion = false;
+
+    /**
+     * 원본 `SmartMovingClientConfig.java` L92 `isRunExhaustionEnabled() = _runExhaustion && enabled`.
+     * AND 패턴. B-1c1 (세션 50).
+     */
+    public boolean isRunExhaustionEnabled() {
+        return runExhaustion && enabled;
+    }
+
+    /**
+     * 원본 `SmartMovingClientConfig.java` L93 `isClimbExhaustionEnabled() = _climbExhaustion && enabled`.
+     * AND 패턴. B-1c1 (세션 50).
+     */
+    public boolean isClimbExhaustionEnabled() {
+        return climbExhaustion && enabled;
+    }
+
+    /**
+     * 원본 `SmartMovingClientConfig.java` L96 `isSprintExhaustionEnabled() = _sprintExhaustion && enabled`.
+     * AND 패턴. B-1c1 (세션 50).
+     */
+    public boolean isSprintExhaustionEnabled() {
+        return sprintExhaustion && enabled;
+    }
+
     // ── 활성화 플래그 ──────────────────────────────────────────
     /**
      * SM 활성화 상태. 원본 SmartMovingProperties.enabled (L33).

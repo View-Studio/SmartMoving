@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 49 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 50 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b/B-1c1 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -525,8 +525,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       `moveForwardButton` / `moveBackwardButton` / `moveLeftButton` / `moveRightButton` —
       각 `.Pressed` / `.StartPressed` / `.StopPressed` 의 1.21.1 대응 (`isPressed()` /
       `wasPressed()` / `SmartMovingKeys.*` 엣지 검출 필드). 기존 구현 grep 으로 확인.
-- [ ] B-1c. `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed`
-      4 판정 ClientState 이식 — 원본 선언 + 계산 블록 1:1.
+- [~] B-1c. **세션 50 B-1c1 선행 완료** — Config 필드/헬퍼 7건 추가:
+      필드 5: `runExhaustionStart=75F` / `runExhaustionStop=100F` /
+      `sprintExhaustionStart=50F` / `sprintExhaustionStop=100F` /
+      `sprintDuringItemUsage=false` / `runExhaustion=false` / `sprintExhaustion=false`.
+      헬퍼 3: `isRunExhaustionEnabled()` / `isClimbExhaustionEnabled()` /
+      `isSprintExhaustionEnabled()` (AND 패턴).
+      **잔여 B-1c2/B-1c3**: ClientState `collidedHorizontallyTickCount` 필드 + 갱신 /
+      `preferSprint + canAnySprint/canHorizontallySprint/canAllSprint + isClimbSprintSpeed`
+      공식 이식 (SmartStatisticsFactory 근사 `true`).
 - [ ] B-1d. 6 Sprint 변종 (`isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` /
       `isDiveSprinting` / `isCeilingSprinting` / `isFlyingSprinting`) ClientState 이식
       — 원본 선언 + 계산 블록 1:1.
@@ -1997,6 +2004,50 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   규모 큼 (여러 세션 분할).
 - **B-17b2** — `else if(wasCrawlClimbing)` 전환 3분기. wantClimbUp/Down 필드 + move() API.
 - **B-18** — `isClimbCrawling` 공식 + climbIntoCount. B-16 선행.
+
+### 세션 50 — 2026-04-24 — B Phase 2 B-1c1 (Config 피로/스프린트 필드 7 + 헬퍼 3)
+
+**진행한 작업**:
+- `SmartMovingConfig.java` 에 B-1 체인 선행 필드/헬퍼 일괄 추가:
+  * `runExhaustionStart = 75F` (원본 L298)
+  * `runExhaustionStop = 100F` (원본 L299, up 100F)
+  * `sprintExhaustionStart = 50F` (원본 L314)
+  * `sprintExhaustionStop = 100F` (원본 L315, up 100F)
+  * `sprintDuringItemUsage = false` (원본 L589 Modified)
+  * `runExhaustion = false` (원본 SmartMovingClientConfig L90)
+  * `sprintExhaustion = false` (원본 L94)
+  * 헬퍼 3: `isRunExhaustionEnabled()` / `isClimbExhaustionEnabled()` /
+    `isSprintExhaustionEnabled()` (전부 AND 패턴, 원본 SmartMovingClientConfig L92-L96)
+- 각 필드/헬퍼에 원본 라인 + 사용처 + B-N 의존 주석
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 50 기준)**:
+- [근거] 원본 SmartMovingConfig L298/L299/L314/L315/L589 + SmartMovingClientConfig
+  L90/L92/L93/L94/L96 직접 확인 ✓
+- [대응] 원본 필드 1:1 이식 + 헬퍼 AND 패턴 1:1 ✓
+- [분기] Modified (Boolean) vs Positive/Float 기본값 구분 — Modified 기본 false ✓
+- [상수] 75F / 100F / 50F / 100F 원본 기본값 동일 ✓
+- [타이밍] Config 필드만 — 타이밍 해당 없음 ✓
+- [근사] 없음 (순수 필드/헬퍼)
+- [신규] 없음
+- [회귀] compileJava 성공 — 기존 호출처 없음 (신규 필드) ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 50 기준)**:
+- ✅ B-2 / B-44a / B-30 / B-32 / B-40 / B-45 / B-23 / B-17a / B-17b1 / B-3a / B-3b — 세션 43-49
+- ✅ **B-1c1** (Config 선행 7필드+3헬퍼) — 세션 50
+- ⏳ B-1c2 (ClientState `collidedHorizontallyTickCount` + 갱신)
+- ⏳ B-1c3 (`preferSprint` + can* 4 + `isClimbSprintSpeed` 공식 이식)
+- ⏳ B-1d (6 Sprint 변종)
+- ⏳ B-1e (`standing` 지역 계산)
+- ⏳ B-1f (`isFast` 6갈래 OR — A-1 불일치 #1 최종 해소)
+- 기타 ~22 원자
+
+**다음 작업 권고**:
+- **B-1c2 + B-1c3** 묶음 — ClientState `collidedHorizontallyTickCount` 필드 +
+  `tickEssential` 내 갱신 (`horizontalCollision ? ++count : 0`) + `preferSprint` +
+  can* 4 + `isClimbSprintSpeed` 공식 이식. SmartStatisticsFactory 근사 `true` 필요.
+- 그 뒤 **B-1d + B-1e + B-1f** 일괄 (isFast 완성 — A-1 #1 해소).
 
 ---
 
