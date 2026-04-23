@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 53 — B Phase 2 계속 / B-24 해제 엣지) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/b1/B-3a/b/B-1c~f/B-4/B-24 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 54 — B Phase 2 계속 / B-27 + B-29) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 21 원자 완료 / ⏳ **B Phase 2 잔여 ~19 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -722,19 +722,21 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: B-25 선행. `Config.SlideDown` 상수 1.21.1 이식 여부 확인 필요.
 
 #### B-27. `fallDistance > _fallingDistanceMinimum` 분기 이식 (A-4 발견)
-- [ ] B-27. 원본 L2569-L2574 이식:
+- [x] B-27. ✅ **세션 54 완료** — 원본 L2569-L2574 이식. SlideToHeadJumping 뒤에 배치:
       `if (isSliding && fallDistance > cfg.fallingDistanceMinimum) {
-          isSliding = false; wasCrawling = true; isCrawling = false; }`
-      `_fallingDistanceMinimum` Config 필드 1.21.1 이식 확인.
+         isSliding=false; wasCrawling=true; isCrawling=false; }`.
+      `fallingDistanceMinimum=3F` (세션 44 이식됨) 사용.
 
 #### B-28. handleClimbing 진입 시 `isSliding=false` 이식 (A-4 발견)
 - [ ] B-28. 원본 L985 대응 — 클라이밍 진입 시 슬라이딩 해제. B-14 resetClimbing 에
       `isSliding=false` 포함하거나 별도 원자로 SmartMovingClimber.handleClimbing 진입부 추가.
 
 #### B-29. `toSlidingOrCrawling` 조건 정정 (A-4 발견)
-- [ ] B-29. Jumper L103 조건 원본 L2226 으로 정정:
-      `Config.isSlidingEnabled() && (grabPressed || wasHeadJumping)` → isSliding = true.
-      의존: B-22a `wasHeadJumping` 선행.
+- [x] B-29. ✅ **세션 54 완료** — `SmartMovingJumper.resetHeightOffset` L103 조건 원본 L2226
+      1:1 복원:
+      `cfg.slide && cfg.enabled && (SmartMovingKeys.grab.isPressed() || sm.wasHeadJumping)`.
+      기존 `(player.isSprinting() || sm.isFast) && cfg.slide` 간소/대체 매핑 제거.
+      `wasHeadJumping` 은 B-22a 이식 + B-23 에서 tickEssential 저장 완료.
 
 #### B-30. `isStanding` 갱신 공식 이식 (A-4 발견)
 - [x] B-30. ✅ **세션 43 완료** — tickEssential 에 원본 L2734 공식 추가:
@@ -2209,6 +2211,57 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-29** (toSlidingOrCrawling 조건 정정) — `grabPressed || wasHeadJumping` 로 정정.
   wasHeadJumping 이식됨 → 가능.
 - **B-27** (isSliding fallDistance 분기 이식) — 단일 공식. 가능.
+
+### 세션 54 — 2026-04-24 — B Phase 2 B-29 + B-27
+
+**진행한 작업**:
+- **B-29 `toSlidingOrCrawling` 조건 정정** (`SmartMovingJumper.resetHeightOffset` L103):
+  * 기존: `(player.isSprinting() || sm.isFast) && cfg.slide`
+  * 정정: `cfg.slide && cfg.enabled && (SmartMovingKeys.grab.isPressed() || sm.wasHeadJumping)`
+  * 원본 L2226 `Config.isSlidingEnabled() && (grabButton.Pressed || wasHeadJumping)` 1:1 복원
+  * `wasHeadJumping` B-22a 이식 + B-23 에서 tickEssential 저장 완료 → 의존 해소
+  * 의미 차이 상당 — 원본은 "잡기 or 헤드점프 종료", 기존은 "스프린트 or SM Fast"
+- **B-27 isSliding fallDistance 분기 이식** (tickEssential SlideToHeadJumping 뒤):
+  * 원본 L2569-L2574:
+    `if (isSliding && fallDistance > cfg.fallingDistanceMinimum) {
+        isSliding=false; wasCrawling=true; isCrawling=false; }`
+  * `fallingDistanceMinimum=3F` (B-32 세션 44 이식됨) 사용
+  * SlideToHeadJumping 0.05F 임계와 대조: 큰 낙하 → 크롤 전환 준비 (반면 0.05F 는
+    살짝 낙하 → 헤드점프 전환)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 54 기준)**:
+- [근거] 원본 L2226 toSlidingOrCrawling 조건 직접 read (R-13.6) ✓
+- [근거] 원본 L2569-L2574 fallDistance 분기 직접 read (R-13.5) ✓
+- [대응] B-29 원본 1:1 (AND + OR 조건) ✓
+- [대응] B-27 원본 1:1 (3필드 동시 변경) ✓
+- [분기] SlideToHeadJumping (0.05F) vs B-27 fallDistance (3F) 2단계 임계값 구분 ✓
+- [상수] `fallingDistanceMinimum=3F` 원본 일치 ✓
+- [타이밍] Jumper 타이밍 확인 — tickEssential 이후 travel() 시점, wasHeadJumping 이번
+  틱 재평가 직전 값 (원본 동일) ✓
+- [근사] 없음 ✓
+- [신규] 없음
+- [회귀] compileJava 성공 — 기존 Jumper 분기 로직 의미 완전히 다른 거라 동작 변경 예상 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**R-13 A-4 불일치 현황**:
+- ✅ #1 매 틱 재평가 5-AND (B-23 세션 46)
+- ✅ #2 해제 엣지 후처리 (B-24 세션 53)
+- ✅ #6 fallDistance > fallingDistanceMinimum 분기 (B-27 세션 54)
+- ✅ #8 toSlidingOrCrawling 조건 완전 대체 (B-29 세션 54)
+- ⏳ #3 직접 진입 6-AND 조건 / #4 부수 동작 3건 / #5 isHeadJumping=false / #7 handleClimbing 해제 / #9-#13 미이식 필드
+
+**Phase 2 진행 상황 (세션 54 기준)**:
+- ✅ 21 원자 완료
+- ⏳ 잔여 ~19 원자
+
+**다음 작업 권고**:
+- **B-28** (handleClimbing 진입 시 isSliding=false) — R-13 #7 / R-14 #7. Climber 에 추가
+  or B-14 resetClimbing 에 포함. 단순.
+- **B-25/B-26** (직접 진입 6-AND + 부수 동작) — 의존 필드 다수 필요 (wasRunning+isRunning+
+  isGroundSprinting+sneakStartPressed — wasRunning/isRunning 이식 완료, isGroundSprinting
+  이식 완료 → 가능). 규모 중간.
+- **B-48** (isGroundSprinting 전환 후처리) — Options 필드 선행.
 
 ---
 

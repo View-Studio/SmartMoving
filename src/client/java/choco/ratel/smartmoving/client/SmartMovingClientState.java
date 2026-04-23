@@ -1057,6 +1057,18 @@ public final class SmartMovingClientState {
                 isAerodynamic = true;
             }
 
+            // B-27 (세션 54): 원본 L2569-L2574 fallDistance > _fallingDistanceMinimum 분기.
+            //   isSliding && fallDistance > fallingDistanceMinimum →
+            //     isSliding=false, wasCrawling=true, isCrawling=false.
+            //   SlideToHeadJumping 의 0.05F 임계값보다 훨씬 큰 3F (fallingDistanceMinimum).
+            //   둘 다 isSliding 해제지만 SlideToHeadJumping 은 "살짝 낙하 → 헤드점프 전환",
+            //   B-27 은 "큰 낙하 → 크롤 전환 준비".
+            if (isSliding && player.fallDistance > cfg0.fallingDistanceMinimum) {
+                isSliding = false;
+                wasCrawling = true;
+                isCrawling = false;
+            }
+
             // IMPL-03: 더블클릭 방향 점프 카운터 갱신
             // 원본: updateEntityActionState() 내 방향키 StartPressed → count 갱신
             {

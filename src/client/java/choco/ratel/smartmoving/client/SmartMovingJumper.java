@@ -98,9 +98,13 @@ public final class SmartMovingJumper {
         sm.isHeadJumping = false;
         sm.heightOffset = 0F;
 
-        // 헤드점프 착지 → 슬라이딩 or 크롤링 전환 (원본: toSlidingOrCrawling() lines 1607-1631)
+        // B-29 (세션 54): 원본 toSlidingOrCrawling L2226 조건 1:1 복원 —
+        //   `Config.isSlidingEnabled() && (grabButton.Pressed || wasHeadJumping)`
+        // 기존 `isSprinting() || isFast` 근사 매핑 제거. 원본은 "grab 잡기 or 이전 틱
+        // headJumping" 조건 — 의미 완전히 다른 간소 매핑 제거.
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if ((player.isSprinting() || sm.isFast) && cfg.slide) {
+        if (cfg.slide && cfg.enabled
+                && (SmartMovingKeys.grab.isPressed() || sm.wasHeadJumping)) {
             sm.isSliding = true;
         } else {
             Box standBox = player.getDimensions(EntityPose.STANDING)
