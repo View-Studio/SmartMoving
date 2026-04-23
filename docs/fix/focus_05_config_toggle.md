@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-13 완료 / ⏳ **H-14 진행 (checklist 기록)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-14 완료 / ⏳ **G-5 진행 (포커스 #6 전환)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -765,9 +765,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       "H 섹션 회귀 감사" 섹션 신설: 변경 3종(speedUser/exhaustion/허기 패킷)별 영향 분석
       + grep 스캔 4건(TODO/speedUser/handleExhaustion/hungerIncrease) + 잠재 회귀 대상
       4건 재확인. 회귀 0건. 근사 1건(서버 허기 연동 §17 후속) 수용.
-- [ ] H-14. **`checklist_original_audit.md` 기록** — "Easy 1:1 factor 헬퍼 + handleExhaustion
-      축소판 + speedUser 정정" 기록. §3 매트릭스의 live 1 → 4 전환 (P-1/P-2/P-3 활성화 +
-      P-7 정정).
+- [x] H-14. **`checklist_original_audit.md` 기록** — 신규 발견 표 말미에 포커스 #5 H 섹션
+      전체 요약 1행 추가 (2026-04-24). H-3~H-11 작업 내용 + Easy 1:1 원칙 6종 + 배제
+      범위 5종 + 잔여 §17 후속(focus_11_server_hunger_sync.md) 모두 기록.
 
 ---
 
@@ -2023,6 +2023,35 @@ L913 1:1.
 
 **다음 작업**: H-14 — `checklist_original_audit.md` 신규 발견 표에 "Easy 1:1 factor 헬퍼 +
 handleExhaustion 축소판 + speedUser 정정" 기록. §3 매트릭스 live 1→4 전환 반영.
+
+### 세션 21 (계속) — 2026-04-24 — H-14 (checklist 기록)
+
+**진행한 작업**:
+- `docs/checklist_original_audit.md` 신규 발견 표 말미에 2026-04-24 자 행 추가.
+- 구조: `config/SmartMovingConfig.md` + `config/SmartMovingClientConfig.md` +
+  `moving/SmartMovingSelf.md` 세 소스, **[오역/누락] Easy 1:1 허기/소진 공식 이식**.
+- 처리 요약: H-3 (factor 1단계 13) / H-4 (factor 2단계 14) / H-5 (기타 2) / H-6 (speedUser
+  정정) / H-7 (getFactor 메서드) / H-8 (ClientState 2필드) / H-9 (handleExhaustion 축소판)
+  / H-10 (tickEssential 호출 삽입) / H-11 (허기 패킷 송신).
+- Easy 1:1 원칙 6종 명시: Exhaution/Exhaustion 오타 혼재 / ceilClimbing 축약 / airBorne
+  hunger 하드코딩 0F / 난이도 체인 base 2개만 / up() 단순 default 근사 / L589-L591 normal 중복.
+- 배제 5종 명시: 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 /
+  Creative levitate / getMaxExhaustion 순회.
+- 잔여 §17 후속: 서버 허기 연동 3디테일 → `focus_11_server_hunger_sync.md` 후보.
+
+**완료 전 검증 체크리스트 (H-14 기준)**:
+- [근거] focus_05 H-3~H-13 전부 [x] 완료 확인 ✓
+- [대응] H 섹션 작업 내용 ↔ checklist 기록 요약 1:1 ✓
+- [분기] 해당 없음 (문서 기록)
+- [상수] 해당 없음
+- [타이밍] 해당 없음
+- [근사] 해당 없음
+- [신규] 기록 자체가 신규 발견 정리 (이전 L1092 "4상태 토글 복원" 다음 행)
+- [회귀] 문서만 변경 — 코드 영향 없음
+- [빌드] 해당 없음
+
+**다음 작업**: G-5 — `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신. H 섹션
+모든 원자 작업 [x] + §14 회귀 방지 감사 통과 조건 달성 — 포커스 #5 완료.
 
 ---
 
