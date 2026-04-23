@@ -10,10 +10,10 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 |
-| 현재 단계 | ✅ A/B/C(1~7)/D/E/F 완료 / ⏳ G 섹션 대기 (검증 + 포커스 전환) |
-| 잔여 섹션 | G (검증 + playtest_fixes.md 포커스 전환) |
+| 현재 단계 | ✅ A~F + G-1/G-3 완료 / ⏳ G-4 진행 / G-2 사용자 수동 검증 대기 |
+| 잔여 섹션 | G-2(수동 테스트, 사용자 몫) + G-4(checklist 기록) + G-5(포커스 전환) |
 | 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 |
-| 컴파일 상태 | ✅ 빌드 성공 (F-1/F-2/F-3 완료) |
+| 컴파일 상태 | ✅ 빌드 성공 (G-1 확인) / 회귀 감사 통과 (G-3) |
 
 ---
 
@@ -437,11 +437,13 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       로 gameType 주입. tick 폴링으로 gameType 변경 감지 — 별도 이벤트 훅 불필요.
 
 ### G. 검증
-- [ ] G-1. `./gradlew build` 성공
-- [ ] G-2. 재현 케이스 표 모든 행 검증 (수동 테스트)
-- [ ] G-3. 회귀 방지 감사 (섹션 14)
+- [x] G-1. `./gradlew build` 성공 — F 섹션 완료 시점 + G 세션 재실행 모두 통과
+- [ ] G-2. 재현 케이스 표 모든 행 검증 (수동 테스트) — **사용자 확인 대기** (인게임 실행 필요)
+- [x] G-3. 회귀 방지 감사 (§14) — TODO/미확인 0건, `INSTANCE.toggle()` 2호출처 의미 적합,
+      `cfg.enabled` 31참조 의미 일치. **구조적 누락** 2건 (toggler 서버→클라 동기화 / SERVER_CONFIG
+      에서 getCurrentKey 항상 -2 경로) §16/§17 기록 — 회귀는 아니지만 후속 필요.
 - [ ] G-4. `checklist_original_audit.md` 신규 발견 표에 "4상태 토글 복원" 기록
-- [ ] G-5. `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신
+- [ ] G-5. `playtest_fixes.md` 의 "현재 포커스" 를 `#6` 으로 갱신 — G-2 완료 후
 
 ---
 
@@ -516,16 +518,16 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 | 기존 이식 | 영향 포인트 | 확인 |
 |----------|-----------|------|
-| `SmartMovingServer.adminToggleConfig` | `INSTANCE.toggle()` 호출 — 새 순환 자동 반영 | [ ] 커맨드 `/smoving config toggle` 4상태 정상 |
-| `SmartMovingServer.broadcastConfig` | 모든 접속자에게 재전송 — toggler 값이 `INSTANCE.toArray()` 에 포함되는지 | [ ] readFrom/writeTo 에 toggler 저장 확인 |
-| `cfg.enabled` 참조 위치 모두 | 의미 유지 (enabled = toggler != -1) | [ ] `grep -rn "cfg.enabled\|Config.enabled" src/` 결과 전부 의미 맞음 |
-| `isSneakToggleEnabled` / `isCrawlToggleEnabled` | `cfg.sneakToggle && cfg.enabled` — 원본과 동일 | [ ] 변경 없음 확인 |
-| `SmartMovingClient.processConfigContentPacket` | 서버가 보낸 toggler 값으로 SERVER_CONFIG 갱신 | [ ] 파일 포맷에 key/toggler 포함 |
+| `SmartMovingServer.adminToggleConfig` | `INSTANCE.toggle()` 호출 — 새 순환 자동 반영 | [x] 코드 상 `INSTANCE.toggle()` 호출 유지 + 4상태 순환 로직 적용됨 (수동 인게임 검증은 G-2) |
+| `SmartMovingServer.broadcastConfig` | 모든 접속자에게 재전송 — toggler 값이 `INSTANCE.toArray()` 에 포함되는지 | [△] toggler 자체는 전송 안 됨 — 게임타입별 keys 6개(survivalConfigKeys 등)만 전송. **서버→클라 toggler 동기화 구조적 누락** → §16 에 기록, §17 후속. 실제 Config 값 전송은 정상 (포커스 범위 외 영향). |
+| `cfg.enabled` 참조 위치 모두 | 의미 유지 (enabled = toggler != -1) | [x] `grep` 결과 9개 파일 31개 참조 — 모두 "활성화 상태" read-only 용도, 의미 일치 |
+| `isSneakToggleEnabled` / `isCrawlToggleEnabled` | `cfg.sneakToggle && cfg.enabled` — 원본과 동일 | [x] 이 포커스에서 변경한 파일에 없음 — 불변 |
+| `SmartMovingClient.processConfigContentPacket` | 서버가 보낸 toggler 값으로 SERVER_CONFIG 갱신 | [△] 서버는 toggler 미전송 → 클라 SERVER_CONFIG.toggler 는 초기값 -2. SERVER_CONFIG 경로에서는 `tickEssential` 의 initializeForGameIfNeccessary 도 `Config==INSTANCE` 가드에 의해 호출 안 됨 → SERVER_CONFIG 에서 getCurrentKey 는 항상 "disabled 방어 코드" 경로 (-2 → null). 구조적 한계, §17 후속. |
 
 ### 공통 grep 스캔
 
-- [ ] `grep -rn "// TODO\|// \[미확인\]" src/main/java/choco/ratel/smartmoving/config/ src/main/java/choco/ratel/smartmoving/server/` — 추가 TODO 없음
-- [ ] `grep -rn "cfg.toggle\|INSTANCE.toggle" src/` — 새 toggle() 의미로 쓰이는지 확인
+- [x] `grep "// TODO\|// \[미확인\]" src/main/java/choco/ratel/smartmoving/config/ src/main/java/choco/ratel/smartmoving/server/` — **0건**, 통과
+- [x] `grep "INSTANCE\.toggle\|cfg\.toggle\|Config\.toggle"` — 2개 호출처 (`adminToggleConfig`, `configToggle` 키) 모두 4상태 순환 의미로 적합
 
 ---
 
@@ -1085,9 +1087,67 @@ override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
 **다음 작업**: G 섹션 — 회귀 방지 감사 + checklist_original_audit.md 신규 발견 기록 +
 playtest_fixes.md 포커스 #6 전환.
 
+### 세션 12 — 2026-04-23 — G-1 / G-3
+
+**진행한 작업**:
+- **G-1** `./gradlew build` 재실행 → 성공. F 섹션 완료 이후 변경 없음 확인.
+- **G-3** §14 회귀 방지 감사 수행:
+    - `grep "// TODO\|// \[미확인\]" src/main/java/choco/ratel/smartmoving/config/
+       src/main/java/choco/ratel/smartmoving/server/` → **0건** (통과).
+    - `grep "INSTANCE\.toggle"` → 2곳 (`SmartMovingServer.adminToggleConfig:244`,
+      `SmartMovingClientState:492`). 양쪽 모두 4상태 순환 의미로 정상 작동.
+    - `grep "\.enabled"` → 12개 파일 31개 참조. `SmartMovingConfig.java` 의 4개 중 1개는
+      선언·파생 계산(L225/L252/L614/L621), 1개는 `readFrom` L413. 나머지는 모두 read-only
+      소비. 의미 일치.
+    - `readFrom` L413 `enabled = getBool(p, "move.enabled", ...)`: 파일 저장된 값과 tick 내
+      `initializeForGameIfNeccessary` 파생값 충돌 여부 검토 → 첫 tick 에서 gameType 판정 시
+      `setKeys → toggler=0 → enabled=true` 로 항상 덮어써짐. readFrom 은 무해(무의미). 정리
+      필요하지만 포커스 #5 직접 영향 없음.
+- §14 의 5개 기존 이식 영향 표 체크:
+    - adminToggleConfig ✓, cfg.enabled 의미 ✓, isSneakToggleEnabled 불변 ✓
+    - broadcastConfig △: `toggler` 자체 전송 안 됨. 게임타입별 keys 6개로 대체 전송.
+      실제 Config 값 전파는 정상, key 라벨 표시만 서버→클라 단절. §17 후속.
+    - processConfigContentPacket △: 위와 동일 구조. SERVER_CONFIG 경로에서 gameType
+      초기화 경로 없어 `toggler=-2` 유지 → getCurrentKey 방어 경로(null). §17 후속.
+- **§16 세션 12 추가**: toggler 영속화/동기화 부재 2건 기록.
+- **§17 추가**: 후속 포커스 후보 `focus_08_toggle_persistence.md` 로 영속화 + 동기화
+  묶음 제안. Options.toggle override 추가 동작(세션 5)과 함께 해결.
+
+**완료 전 검증 체크리스트 (G-1+G-3 기준)**:
+- [근거] §14 체크리스트 항목별 grep/검토 수행 ✓
+- [대응] 원본 1:1 대응은 C/D/E/F 에서 이미 완료 — G 는 검증 성격
+- [분기] 회귀 발생한 분기 없음 ✓
+- [상수] 원본 상수 변경 없음 ✓
+- [타이밍] 기존 호출 타이밍 불변 ✓
+- [근사] 신규 근사 없음 (§16 에 구조적 누락만 기록)
+- [신규] toggler 영속화/동기화 2건 §16 기록 + §17 후속 추가 ✓
+- [회귀] 확인 결과: 0건 (구조적 누락은 기존 회귀 아닌 포커스 #5 범위 외 잔여)
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: G-4 — `checklist_original_audit.md` 신규 발견 표에 "4상태 토글 복원" 기록.
+G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 12 (2026-04-23) — G-3 회귀 감사 중 발견
+
+- **`toggler` 서버→클라 동기화 누락**: `SmartMovingConfig.toArray()/loadFromArray()` 가
+  `toggler` 값을 네트워크에 포함하지 않음. 서버 관리자가 `/smoving config toggle` 로 상태를
+  바꿔도 클라이언트의 `SERVER_CONFIG.toggler` 는 초기 -2 로 유지. 실제 이동 수치 설정은
+  `survival/creative/adventure ConfigKeys` 6개로 전송되어 문제 없지만, "현재 어떤 key
+  (Easy/Medium/Hard) 가 선택됐는지" 라벨 표시는 서버→클라 전파 안 됨. 구조적 한계 —
+  `move.config.toggler` 같은 키를 `writeTo/readFrom` 에 추가하거나, key 전용 serialize
+  필드 필요. 포커스 #5 범위 초과 — §17 후속.
+
+- **`SERVER_CONFIG` 경로에서 gameType 초기화 부재**: `tickEssential` 의
+  `initializeForGameIfNeccessary` 호출은 `Config == INSTANCE` 가드로 로컬 설정에서만 작동.
+  서버 수신 설정(`SERVER_CONFIG`) 은 gameType 초기화 경로 없음 → `toggler=-2` 유지 →
+  `getCurrentKey()` 는 방어 코드로 null 반환. `enabled = (toggler != -1)` 이므로 `-2` 는
+  `enabled=true` 로 간주 (-1 이 아니므로). logConfigState 는 "default server configuration"
+  출력 (null currentKey 경로). 기능 상 동작하지만 key 라벨 표시 안 됨. 포커스 #5 범위 초과
+  — §17 후속.
 
 ### 세션 11 (2026-04-23) — F-1/F-2/F-3 중 발견
 
@@ -1137,4 +1197,12 @@ playtest_fixes.md 포커스 #6 전환.
   별도 포커스 후보이지만 1.21.1 구조상 N/A 권장.
 - **`_survivalDefaultConfigUserKeys` 플레이어별 config key 맵**: `writeToProperties(player, toggle)`
   ↔ `getPlayerConfigurationKey` — 이 포커스 완료 후 `focus_07_player_config_key.md` 로 분리 가능.
-- **gamemode 변경 이벤트 훅** (survival↔creative 전환 시 setKeys 재호출): Fabric 이벤트 확인 필요.
+- **gamemode 변경 이벤트 훅** (survival↔creative 전환 시 setKeys 재호출): tick 폴링으로
+  충분 (F-3 에서 해결) — 이벤트 훅 불필요.
+- **`toggler` / 현재 key 영속화 + 서버→클라 동기화** (세션 12 발견): 두 가지 묶음.
+  (1) 파일 저장 시 현재 key 를 gameType 별 defaultConfigKey 에 기록 (원본 Options.toggle
+      override 의 L500-L531 동작) — 다음 로드 시 `setCurrentKey(defaultConfigKey)` 로 복원.
+  (2) `toArray()` 에 현재 key 또는 toggler 포함 → 서버→클라 라벨 동기화.
+  Options.toggle 추가 동작 (§16 세션 5) 과 묶어서 `focus_08_toggle_persistence.md` 로 분리 가능.
+- **`_configChatInit` / `_speedChatInit` 채팅 초기화** (세션 11 발견): `initializeForGameIfNeccessary`
+  끝의 채팅 초기화 블록. 현재 미이식. 별도 속성 `_configChatInit` 등도 신설 필요.
