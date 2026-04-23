@@ -215,6 +215,54 @@ public final class SmartMovingServer {
         logConfigState(SmartMovingConfig.INSTANCE, null, false);
     }
 
+    // ── 3-12: 관리자 자발적 config/speed 변경 + 전체 재전송 ───────────────────
+
+    /**
+     * 현재 접속 중인 모든 initialized 플레이어에게 ConfigContent 를 재전송한다.
+     * 원본: SmartMovingServerComm 이 config 변경 후 각 플레이어 session 을 순회하며 writeToProperties 전송.
+     * 1.21.1: initialize 와 동일 경로를 재사용하되, sm.initialized 체크 대신 강제 전송.
+     */
+    public static void broadcastConfig(MinecraftServer server) {
+        boolean global = SmartMovingConfig.INSTANCE.globalConfig;
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            SmartMovingServer sm = SmartMovingServer.get(p);
+            if (!sm.initialized) continue;
+            String un = p.getName().getString();
+            String[] lines = global ? SmartMovingConfig.INSTANCE.toArray(un) : new String[0];
+            ServerPlayNetworking.send(p,
+                    new SmartMovingNetwork.ConfigContentPayload(lines, null));
+        }
+    }
+
+    /**
+     * 관리자 자발적 config 토글.
+     * 원본: SmartMovingServerOptions.toggle(player) (L66-L71):
+     *   config.toggle(); saveToOptionsFile; logConfigState(config, username, true);
+     * 1.21.1: SmartMovingConfig.INSTANCE.toggle() + save() + log + 전체 재전송.
+     */
+    public static void adminToggleConfig(ServerPlayerEntity player) {
+        SmartMovingConfig.INSTANCE.toggle();
+        SmartMovingConfig.save();
+        logConfigState(SmartMovingConfig.INSTANCE, player.getName().getString(), true);
+        MinecraftServer server = player.getServer();
+        if (server != null) broadcastConfig(server);
+    }
+
+    /**
+     * 관리자 자발적 전역 속도 변경.
+     * 원본: SmartMovingServerOptions.changeSpeed(diff, player) (L73-L78):
+     *   config.changeSpeed(diff); saveToOptionsFile; logSpeedState(config, username);
+     * 1.21.1: INSTANCE.changeSpeed(diff) + save + log + 전체 재전송.
+     * 클라이언트 요청 수락 경로(processSpeedChangePacket=changeSingleSpeed)와 별개 — 전역 변경.
+     */
+    public static void adminChangeSpeed(ServerPlayerEntity player, int difference) {
+        SmartMovingConfig.INSTANCE.changeSpeed(difference);
+        SmartMovingConfig.save();
+        logSpeedState(SmartMovingConfig.INSTANCE, player.getName().getString());
+        MinecraftServer server = player.getServer();
+        if (server != null) broadcastConfig(server);
+    }
+
     // ── 3-11: 서버 콘솔 로그 (원본: SmartMovingServerOptions 로그 메서드) ─────────
 
     /**
