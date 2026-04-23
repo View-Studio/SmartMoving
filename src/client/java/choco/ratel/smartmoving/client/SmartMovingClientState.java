@@ -226,6 +226,17 @@ public final class SmartMovingClientState {
      */
     public boolean mustCrawl;
 
+    /**
+     * 원본 SmartMovingSelf L3077 `private boolean contextContinueCrawl`.
+     * 깊은 물 다이빙 → 물 아래 포복 전환 시 fromSwimmingOrDiving(L1388) 에서 true 로 설정.
+     * wouldWantCrawl 식(L2419)의 `isCrawling && (inputContinueCrawl || contextContinueCrawl)` 조건에 사용.
+     * 해제 경로: L2411(inputContinue/물속/mustCrawl), L2416(천장 액체 여유), L2447(!isCrawling).
+     *
+     * 1.21.1: true 설정 경로(fromSwimmingOrDiving)는 후속 이식 — 현재는 항상 false 유지,
+     * 해제 로직만 선제 이식(원본 1:1).
+     */
+    public boolean contextContinueCrawl;
+
     /** 원본 L2717 `wasSneaking = isSlow` (이전 틱 isSlow 저장, willStartSneak/willStopSneak 조건용). */
     public boolean wasSneaking;
 
@@ -503,35 +514,65 @@ public final class SmartMovingClientState {
             wasCrawling_st = isCrawling;
             wasClimbCrawling = isClimbCrawling;
 
-            // ── wantCrawl / mustCrawl pre-compute (원본 L2419-L2432 + L1792-L1794) ────
-            // 원본에서 이 값들은 wouldWantSneak 계산 앞에 확정되며, 1.21.1 도 동일 순서로 이식.
+            // ── mustCrawl / inputContinueCrawl / contextContinueCrawl 해제 / wantCrawl pre-compute ─
+            // 원본 L1792-L1794 (mustCrawl), L2407-L2418 (inputContinueCrawl + contextContinueCrawl 해제),
+            // L2419-L2432 (wouldWantCrawl + wantCrawl) 1:1 이식.
+            //
             // `player.isSneaking()` 은 sm_isSneaking override 가 isSlow 를 참조하여 순환 가능 →
-            // 원본처럼 **raw sneakKey + sneakToggled** 사용(원본 L1801: `sneakToggled || sneakButton.Pressed`).
-            // IMPL-01 의 실제 isCrawling 전환 로직은 이 필드 값을 재사용.
+            // 원본처럼 raw sneakKey + sneakToggled 사용(원본 L1801).
             boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
             SmartMovingConfig cfg0 = SmartMovingConfig.Config;
             boolean grabJustPressed0 = SmartMovingKeys.grab.wasPressed();
+            boolean grabHeld0 = SmartMovingKeys.grab.isPressed();
+
+            // mustCrawl (원본 L1792-L1794). 1.21.1 은 AABB 기반 canStandUp 으로 근사.
+            // 원본 L2404: `if (flying && (flyingEnabled || levitateSmallEnabled)) mustCrawl = false;` 도 반영.
             if (cfg0.crawl && cfg0.enabled) {
-                if (!isCrawling) {
-                    wantCrawl = grabJustPressed0
-                            && (sneakPressedRaw || sneakToggled)
-                            && player.isOnGround()
-                            && !isFlying && !isSwimming_sm && !isDiving && !isDipping
-                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
-                            && !isSliding && !isHeadJumping;
-                    mustCrawl = !canStandUp(player)
-                            && !isSwimming_sm && !isDiving
-                            && (!isDipping || dippingDepth < 0.65F);
-                } else {
-                    // 원본 wouldWantCrawl L1800: `isCrawling && (inputContinueCrawl || contextContinueCrawl)`
-                    // 이미 크롤링 중이면 유지 의미로 wantCrawl=true 근사.
-                    wantCrawl = true;
-                    mustCrawl = !canStandUp(player) && (!isDipping || dippingDepth < 0.65F);
-                }
+                mustCrawl = !canStandUp(player)
+                        && !isSwimming_sm && !isDiving
+                        && (!isDipping || dippingDepth < 0.65F);
+                if (isFlying && cfg0.fly) mustCrawl = false;
             } else {
-                wantCrawl = false;
                 mustCrawl = false;
             }
+
+            // inputContinueCrawl (원본 L2407 1:1):
+            //   isCrawlToggleEnabled ? crawlToggled : sneakPressed || (!freeClimbEnabled && grabPressed)
+            boolean isCrawlToggleEnabled0 = cfg0.crawlToggle && cfg0.enabled;
+            boolean freeClimbingEnabled0  = cfg0.freeClimb  && cfg0.enabled;
+            boolean inputContinueCrawl = isCrawlToggleEnabled0
+                    ? crawlToggled
+                    : (sneakPressedRaw || (!freeClimbingEnabled0 && grabHeld0));
+
+            // contextContinueCrawl 해제 (원본 L2408-L2418).
+            //   if (inputContinueCrawl || isInWater() || mustCrawl) → false
+            //   crawlStandUpLiquidCeiling 조건은 물속 천장 감지 — 1.21.1 근사: isDipping 으로 축소.
+            if (contextContinueCrawl) {
+                if (inputContinueCrawl || player.isTouchingWater() || mustCrawl) {
+                    contextContinueCrawl = false;
+                } else if (isCrawling && !isDipping) {
+                    // 원본: 포복 위 천장까지 액체 여유가 충분하면 해제. 1.21.1: 물 밖이면 해제 근사.
+                    contextContinueCrawl = false;
+                }
+            }
+
+            // wouldWantCrawl (원본 L2419-L2430): isCrawling 유지 경로 + 신규 진입 경로.
+            // wantCrawl = isCrawlingEnabled && wouldWantCrawl (원본 L2431-L2432).
+            boolean crawlingEnabled_  = cfg0.crawl && cfg0.enabled;
+            boolean wouldWantCrawl_ =
+                    !player.getAbilities().flying &&
+                    (
+                        (isCrawling && (inputContinueCrawl || contextContinueCrawl))
+                        ||
+                        (grabJustPressed0 && (sneakToggled || sneakPressedRaw) && player.isOnGround())
+                    );
+            // 원본 진입 경로 추가 가드(!flying/!swim/!dive/!dipping/!climbing/!crawlClimbing/!ceilingClimbing/
+            //   !sliding/!headJumping): 1.21.1 에서는 canCrawl(원본 L1805)과 중복. 여기선 상태 전환을
+            //   IMPL-01 에 맡기고 pre-compute 는 원본 wouldWantCrawl 그대로 유지.
+            wantCrawl = crawlingEnabled_ && wouldWantCrawl_;
+
+            // 원본 L2446-L2447: !isCrawling 시 contextContinueCrawl=false.
+            if (!isCrawling) contextContinueCrawl = false;
 
             // C-15: isSlow / isFast / isFlying 매 틱 계산
             // 원본 L2576-L2586 sneakContinueInput + wouldWantSneak + L2711-2719 wouldIsSneaking/isSlow 1:1.
@@ -575,7 +616,14 @@ public final class SmartMovingClientState {
             if (cfg.crawl) {
                 boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
                 if (!isCrawling) {
-                    if (wantCrawl || mustCrawl) {
+                    // 원본 L1805-L1809 canCrawl = !swim && !dive && (!dipping || shallow)
+                    //                             && !climbing && fallDistance < minimum.
+                    // 1.21.1 근사: crawlClimbing/ceilingClimbing/sliding/headJumping/flying 도 제외.
+                    boolean canCrawl = !isSwimming_sm && !isDiving
+                            && (!isDipping || dippingDepth < 0.65F)
+                            && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                            && !isSliding && !isHeadJumping && !isFlying;
+                    if (canCrawl && (wantCrawl || mustCrawl)) {
                         isCrawling = true;
                         // 원본: Options.isCrawlToggleEnabled() 게이트 — _crawlToggle 기본값 false(홀드)
                         if (SmartMovingConfig.Config.crawlToggle) crawlToggled = true;
@@ -800,6 +848,7 @@ public final class SmartMovingClientState {
         isFakeShallowWaterSneaking = false;
         wantCrawl = false;
         mustCrawl = false;
+        contextContinueCrawl = false;
         ignoreNextStopSneakButtonPressed = false;
         wasSneaking = false;
         wasCrawling_st = false;
