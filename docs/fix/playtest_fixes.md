@@ -8,10 +8,15 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #5  — 옵션토글 4단계 순환 (disabled / easy / medium / hard)
+항목 #6  — increase/decrease 작동 안 됨
 ```
 
-작업 문서: [`focus_05_config_toggle.md`](focus_05_config_toggle.md)
+작업 문서: [`focus_06_speed_change.md`](focus_06_speed_change.md)
+
+> **포커스 #5 완료 (2026-04-24)**: 세션 15 에서 사용자 결정으로 "Easy 실사용 경로만" 이식
+> 범위 확정 후 H-3~H-14 완료 (factor 헬퍼 + handleExhaustion 축소판 + Config 29필드 +
+> 허기 패킷 + speedUser 정정). 회귀 0건. Easy 1:1 근사 ~90% (서버 허기 연동 3디테일은
+> `focus_11_server_hunger_sync.md` 후속). 작업 문서: [focus_05](focus_05_config_toggle.md).
 
 ---
 
@@ -41,8 +46,8 @@
 
 | 순서 | 번호 | 제목 | 작업 문서 | 상태 | 선행 의존 |
 |------|------|------|----------|------|----------|
-| 1 | **#5** | 옵션토글 4단계 순환 | [focus_05](focus_05_config_toggle.md) | 🟡 진행 중 | 없음 |
-| 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ⚪ 대기 | #5 (`enabled` / `toggler` 의미 확정 후) |
+| 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24) | 없음 |
+| 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | 🟡 진행 중 | #5 완료 |
 | 3 | **#2** | 스마트무빙 상태 이상 | [focus_02](focus_02_state_issues.md) | ⚪ 대기 (재현 케이스) | 없음 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 (재현 케이스) | #2 (상태 값 확정 후 전환 조건 검증) |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
