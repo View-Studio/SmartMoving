@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 + C-1/C-2 완료 / [~] B-5 §17 이동 / ⏳ **D 단계 (검증 + 포커스 전환)** |
+| 현재 단계 | ✅ A+B(5)+C+D-1/D-3 완료 / [~] B-5 §17 이동 / ⏳ D-2(사용자 몫) + D-4(포커스 #2 전환) |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -305,10 +305,13 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       일관성 유지. 정합, 코드 변경 불필요.
 
 ### D. 검증
-- [ ] D-1. `./gradlew build` 성공
-- [ ] D-2. 재현 케이스 T-1~T-5 수동 테스트 (이동 거리 측정)
-- [ ] D-3. 회귀 방지 감사 (§14)
-- [ ] D-4. `playtest_fixes.md` "현재 포커스" → `#2` 갱신
+- [x] D-1. `./gradlew clean build` — BUILD SUCCESSFUL in 7s ✓
+- [ ] D-2. 재현 케이스 T-1~T-5 수동 테스트 (이동 거리 측정) — **사용자 몫**
+- [x] D-3. 회귀 방지 감사 (§14) — grep `// TODO / [미확인]` 0건. `getUserSpeedFactor` /
+      `getCombinedSpeedFactor` 호출처 50건(6파일) 전부 의도된 위치 확인. 기본 상태
+      (`!speedUser` or `!Creative`) 에서 configFactor=1F → vanilla 동작 불변. `adminChangeSpeed`
+      / `changeSingleSpeed` / `playerSpeedExponents` Map 불변. **회귀 0건**.
+- [ ] D-4. `playtest_fixes.md` "현재 포커스" → `#2` 갱신 (D-2 통과 후)
 
 ---
 
@@ -690,6 +693,53 @@ sprintFactor / `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeed
 
 **다음 작업**: D 단계 (검증 + 포커스 전환) — D-1 clean build / D-2 수동 테스트(사용자 몫) /
 D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
+
+### 세션 28 (계속) — 2026-04-24 — D-1/D-3 (통합 빌드 + 회귀 감사)
+
+**진행한 작업**:
+- **D-1**: `./gradlew clean build` — **BUILD SUCCESSFUL in 7s** (10 tasks) ✓
+- **D-3**: 회귀 방지 감사 수행:
+  - `grep "// TODO\|// \[미확인\]" src/` — 0건 ✓
+  - `getUserSpeedFactor` / `getCombinedSpeedFactor` / `getConfigSpeedFactor` /
+    `getPotionSpeedFactor` 호출처 50건 (6파일) 전부 의도된 위치:
+    - Config.java: 본체 4건 (getUserSpeedFactor 정의 + getSpeedPercent UI)
+    - Climber.java: 8건 (setOnlyShouldClimbSpeed 4갈래 + 하강 클램프)
+    - Flyer.java: 4건 (handleFlying)
+    - MixinLivingEntityClient.java: 11건 (getMovementSpeed inject + 하강 클램프 +
+      SmartMovingMover import)
+    - Mover.java: 19건 (헬퍼 4개 정의 + isCreative 헬퍼)
+    - Swimmer.java: 4건 (handleSwimming)
+  - 기본 상태 (!speedUser 또는 !Creative): Mover.getConfigSpeedFactor = 1F × speedFactor
+    (기본 1F) = 1F → getMovementSpeed inject `vanillaSpeed × 1F` = vanilla 그대로.
+    회귀 0건 ✓
+  - `adminChangeSpeed` (서버 관리자 전역) — B-6 Creative 게이트 영향 없음 (op 커맨드
+    전용). 불변 ✓
+  - `changeSingleSpeed` + `playerSpeedExponents` Map — 불변 ✓
+  - 비행 동작 변경 점검: Flyer 가 `cfg.speedFactor * cfg.getUserSpeedFactor()` 인라인 →
+    `Mover.getCombinedSpeedFactor` 경유로 변경. Creative 게이트 추가됨. 기본 체감 변화 0.
+
+**완료 전 검증 체크리스트 (D-1/D-3 기준)**:
+- [근거] 원본 호출처 A-1 매핑 전수 ✓
+- [근거] 1.21.1 호출처 grep 50건 검토 ✓
+- [대응] 원본 5곳(land/swim/fly/climb/jump) 중 4곳 이식 완료 + 1곳(jump max horizontal)
+  §17 이동. B-5 제외 full coverage ✓
+- [분기] Creative 게이트 3층 (factor/키/서버) 정합 ✓
+- [상수] 해당 없음
+- [타이밍] vanilla travel ↔ SM travel cancel 분기 확인 — 이중 적용 없음 ✓
+- [근사] getNonSlowInputSpeedFactor (얼음/스프린트) vanilla 자체 처리로 대체 — 원본 등가
+- [신규] B-4 Free climb 보정 3종 + B-5 maxHorizontalMotion 시스템 — §16/§17 기록 ✓
+- [회귀] 기본 상태 이동 속도 vanilla 그대로. Creative+speedUser 활성 시에만 Land/Swim/
+  Climb/Fly 에 User 배율 적용. 회귀 0건.
+- [빌드] `./gradlew clean build` ✓
+
+**다음 작업**: D-2 (사용자 인게임 수동 테스트) — 통과 시 D-4 포커스 #2 전환.
+
+**사용자 검증 요청** — 포커스 #5 H-6 에서 `speedUser=false` 로 정정됨. 테스트 준비:
+1. `config/smart_moving_options.properties` 에서 `move.speed.user=true` 수동 편집
+2. Creative 모드로 전환
+3. speedIncrease 키(O) × 5 → 채팅 "150%" + **실제 걷기/수영/클라이밍/비행 속도 증가 확인**
+4. Survival 로 전환 → 같은 키 눌러도 무반응 (Creative 게이트 정상)
+5. Survival 에서 걷기/달리기 속도는 기본 (vanilla) — User 배율 미적용 정상
 
 ---
 
