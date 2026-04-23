@@ -773,6 +773,48 @@ public class SmartMovingConfig {
         return false;
     }
 
+    /**
+     * 원본 SmartMovingProperties.setCurrentKey(String key) (L120-L136) 1:1 이식.
+     *
+     *   public void setCurrentKey(String key) {
+     *       if (key == null || key.equals(Disabled))
+     *           toggler = -1;
+     *       else if (keys.length == 1 && keys[0] == null && key.equals(Enabled))
+     *           toggler = 0;
+     *       else {
+     *           for (toggler = 0; toggler < keys.length; toggler++)
+     *               if (key.equals(keys[toggler]))
+     *                   break;
+     *           if (toggler == keys.length)
+     *               toggler = -1;
+     *       }
+     *       update();
+     *   }
+     *
+     * 3갈래:
+     *   (1) key == null || "disabled"                              → toggler = -1
+     *   (2) keys == {null} (DEFAULT_KEYS) && key == "enabled"      → toggler = 0 (단순 on/off enabled)
+     *   (3) else: 배열 탐색 + 미매칭 시 toggler = -1
+     * 끝에 updateToggler() 호출 (원본 update() 의 ② enabled 파생 재계산).
+     *
+     * 호출: F 섹션 `initializeForGameIfNeccessary()` 에서 gameType 별 defaultKey 적용 시.
+     */
+    public void setCurrentKey(String key) {
+        if (key == null || key.equals(CONFIG_KEY_DISABLED))
+            toggler = -1;
+        else if (configKeys.length == 1 && configKeys[0] == null
+                && key.equals(CONFIG_KEY_ENABLED))
+            toggler = 0;
+        else {
+            for (toggler = 0; toggler < configKeys.length; toggler++)
+                if (key.equals(configKeys[toggler]))
+                    break;
+            if (toggler == configKeys.length)
+                toggler = -1;
+        }
+        updateToggler();
+    }
+
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
     }

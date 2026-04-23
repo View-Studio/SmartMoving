@@ -10,10 +10,10 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 |
-| 현재 단계 | ✅ A/B/C/D/E 완료 / ⏳ F-1 대기 (gameType 기반 setKeys 호출) |
+| 현재 단계 | ✅ A/B/C(1~7)/D/E 완료 / ⏳ F-1 대기 (gameType 기반 setKeys 호출) |
 | 잔여 섹션 | F (gameType 초기화) + G (검증 + 포커스 전환) |
 | 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 |
-| 컴파일 상태 | ✅ 빌드 성공 (최신 커밋 e04e134) |
+| 컴파일 상태 | ✅ 빌드 성공 (C-7 완료) |
 
 ---
 
@@ -397,6 +397,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `key==null \|\| "disabled"` → `getKey(0)` / keys 매칭 다음 인덱스 / 마지막·미매칭 → "disabled".
 - [x] C-6. `hasKey(String)` — 원본 L145-L156 1:1. `Enabled`/`Disabled` 특수 분기 +
       배열 내 null 포함 검색. 호출처는 `setCurrentKey(String)` 이식 시 유효성 체크로 연결 예정.
+- [x] C-7. `setCurrentKey(String)` — 원본 L120-L136 1:1 이식. §16 의 "C-7 후보" 를 정식 승격.
+      F-1/F-2 `initializeForGameIfNeccessary` 포팅의 선행 의존 (원본 L892 에서 호출).
+      3갈래: (1) `key==null || "disabled"` → `toggler=-1`, (2) `keys=={null} && key=="enabled"`
+      → `toggler=0`, (3) 배열 탐색 + 미매칭 시 `toggler=-1`. 끝에 `updateToggler()` 호출.
 
 ### D. 서버 로그 4상태 확장
 - [x] D-1. `SmartMovingServer.logConfigState` 의 `currentKey==null` / `configName==""` /
@@ -952,6 +956,53 @@ override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
 
 **다음 작업**: F-1 — `SmartMovingServer.initialize` 에서 gameType 기반 setKeys 호출 흐름 이식.
 `player.interactionManager.getGameMode()` 로 gameType 판정. `initializeForGameIfNeccessary` 포팅.
+
+### 세션 10 — 2026-04-23 — C-7 (신규 승격)
+
+**진행한 작업**:
+- §16 에 "C-7 후보" 로 기록되어 있던 `setCurrentKey(String)` 를 §10 정식 체크박스로 승격.
+  F-1/F-2 `initializeForGameIfNeccessary` 포팅의 선행 의존 (원본 L892:
+  `if (!defaultKey.isEmpty()) setCurrentKey(defaultKey);`).
+- C-7: `SmartMovingConfig.setCurrentKey(String)` 신규 메서드 추가. 원본 L120-L136 1:1:
+    ```java
+    public void setCurrentKey(String key) {
+        if (key == null || key.equals(CONFIG_KEY_DISABLED))
+            toggler = -1;
+        else if (configKeys.length == 1 && configKeys[0] == null
+                && key.equals(CONFIG_KEY_ENABLED))
+            toggler = 0;
+        else {
+            for (toggler = 0; toggler < configKeys.length; toggler++)
+                if (key.equals(configKeys[toggler]))
+                    break;
+            if (toggler == configKeys.length)
+                toggler = -1;
+        }
+        updateToggler();
+    }
+    ```
+- 3갈래 분기:
+    - (1) `key == null || "disabled"` → `toggler = -1` (비활성)
+    - (2) `configKeys == {null} (DEFAULT_KEYS) && key == "enabled"` → `toggler = 0` (단순 on/off enabled)
+    - (3) 배열 탐색 (for 매칭 없으면 length 도달 → `toggler = -1`)
+- 끝에 `updateToggler()` 호출 (원본 `update()` 의 ② enabled 파생 재계산).
+- 호출처 없음 (F 섹션에서 첫 소비).
+
+**완료 전 검증 체크리스트 (C-7 기준)**:
+- [근거] `SmartMovingProperties.md` L120-L136 원본 임베드 확인 ✓
+- [대응] 원본 17줄 ↔ 구현 15줄(if/else 블록 구조 포함) 1:1 ✓
+- [분기] 3갈래 + 배열 탐색 for 루프 + 미매칭 `toggler=length → -1` 모두 재현 ✓
+- [상수] `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 사용 ✓
+- [타이밍] 호출처는 F 섹션에서 연결
+- [근사] 해당 없음 (완전 재현 영역)
+- [신규] 없음
+- [회귀] 신규 메서드 추가만 — 영향 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: F-1/F-2 묶음 (gameType 판정 + setKeys/setCurrentKey 호출). 원본
+`initializeForGameIfNeccessary()` 는 클라이언트 측 로직 (`Minecraft.getMinecraft().playerController`).
+1.21.1 대응: `MinecraftClient.getInstance().interactionManager.getCurrentGameMode()`.
+§10 F 재정의 필요 (현재 "SmartMovingServer.initialize" 로 명시되어 있으나 원본은 클라이언트 측).
 
 ---
 
