@@ -276,6 +276,104 @@ SmartMoving 1.7.10 원본에서 다음 정보를 덤프. 원본 Java 코드 그�
   - 원본 그대로 (해석 금지)
 ```
 
+### 5.4. factor 시스템 원본 완전 추출 (세션 15 H-3 준비 — Agent WebFetch)
+
+**원본 `SmartMovingClientConfig.java` L554-L595 — `getFactor(hunger, 14상태)` 본체**:
+
+```java
+public float getFactor(boolean hunger, boolean onGround, boolean isStanding, boolean isStill,
+    boolean isSneaking, boolean isRunning, boolean isSprinting, boolean isClimbing,
+    boolean isClimbCrawling, boolean isCeilingClimbing, boolean isDipping,
+    boolean isSwimming, boolean isDiving, boolean isCrawling, boolean isCrawlClimbing) {
+    isClimbing |= isClimbCrawling;
+    isCrawling |= isCrawlClimbing;
+    boolean actionOverGound = isClimbing || isCeilingClimbing || isDiving || isSwimming;
+    boolean airBorne = !onGround && !actionOverGound;
+    isStanding = actionOverGound ? isStill : isStanding;
+    isSneaking = isSneaking & !isStanding;
+
+    float factor = hunger ? _baseHungerGainFactor.value : _baseExhautionLossFactor.value;
+    if (airBorne)        factor *= hunger ? 0F : _fallExhautionLossFactor.value;  // ⚠️ hunger=0F 하드코딩
+    else if (isSprinting) factor *= hunger ? _sprintingHungerGainFactor.value : _sprintingExhautionLossFactor.value;
+    else if (isRunning)   factor *= hunger ? _runningHungerGainFactor.value : _runningExhautionLossFactor.value;
+    else if (isSneaking)  factor *= hunger ? _sneakingHungerGainFactor.value : _sneakingExhautionLossFactor.value;
+    else if (isStanding)  factor *= hunger ? _standingHungerGainFactor.value : _standingExhautionLossFactor.value;
+    else                  factor *= hunger ? _walkingHungerGainFactor.value : _walkingExhautionLossFactor.value;
+
+    if (isClimbing)           factor *= hunger ? _climbingHungerGainFactor.value : _climbingExhaustionLossFactor.value;
+    else if (isCrawling)       factor *= hunger ? _crawlingHungerGainFactor.value : _crawlingExhaustionLossFactor.value;
+    else if (isCeilingClimbing) factor *= hunger ? _ceilClimbingHungerGainFactor.value : _ceilClimbingExhaustionLossFactor.value;
+    else if (isSwimming)       factor *= hunger ? _swimmingHungerGainFactor.value : _swimmingExhaustionLossFactor.value;
+    else if (isDiving)         factor *= hunger ? _divingHungerGainFactor.value : _divingExhaustionLossFactor.value;
+    else if (isDipping)        factor *= hunger ? _dippingHungerGainFactor.value : _dippingExhaustionLossFactor.value;
+    else if (onGround)         factor *= hunger ? _normalHungerGainFactor.value : _normalExhaustionLossFactor.value;
+    else                       factor *= hunger ? _normalHungerGainFactor.value : _normalExhaustionLossFactor.value;  // L589/L591 중복
+
+    return factor;
+}
+```
+
+**Factor 필드 원본 선언 27개 (SmartMovingConfig.java 라인 번호 포함)**:
+
+**1단계 — base (난이도 의존 2개)**:
+| # | 필드 | L | default | **Easy(.e)** | Medium | Hard(.h) | Creative | 키 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `_baseExhautionLossFactor` | 399 | 1F | **1.2F** | — | 0.8F | — | `move.exhaustion.loss.factor` |
+| 2 | `_baseHungerGainFactor` | 423 | 1F | **0.8F** | — | 1.2F | — | `move.hunger.gain.factor` |
+
+**1단계 — airBorne (fall)**:
+| # | 필드 | L | default | 비고 |
+|---|---|---|---|---|
+| 3 | `_fallExhautionLossFactor` | 406 | 2.5F (up 하한 _standing) | hunger 대응 필드 **없음 → 0F 하드코딩** |
+
+**1단계 — 이동상태별 (각 hunger/exhaustion 쌍)**:
+| # | 필드 | L | default | 비고 (up() 하한/버전 폴백) |
+|---|---|---|---|---|
+| 4 | `_sprintingHungerGainFactor` | 425 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 5 | `_sprintingExhautionLossFactor` | 401 | 0F | — |
+| 6 | `_runningHungerGainFactor` | 426 | 10F | `_pre_sm_1_3` 키이명 |
+| 7 | `_runningExhautionLossFactor` | 402 | 0.5F | up 하한 `_sprinting` |
+| 8 | `_sneakingHungerGainFactor` | 428 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 9 | `_sneakingExhautionLossFactor` | 404 | 1.5F | up 하한 `_walking`, `_sm_1_1` → 1F |
+| 10 | `_standingHungerGainFactor` | 429 | 0F | — |
+| 11 | `_standingExhautionLossFactor` | 405 | 2F | up 하한 `_sneaking.maximum(1F)` |
+| 12 | `_walkingHungerGainFactor` | 427 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 13 | `_walkingExhautionLossFactor` | 403 | 1F | up 하한 `_running` |
+
+**2단계 — 행동상태별 (각 hunger/exhaustion 쌍, Exhaustion 정타)**:
+| # | 필드 | L | default | 비고 |
+|---|---|---|---|---|
+| 14 | `_climbingHungerGainFactor` | 431 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 15 | `_climbingExhaustionLossFactor` | 409 | PF 기본 | — |
+| 16 | `_crawlingHungerGainFactor` | 432 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 17 | `_crawlingExhaustionLossFactor` | 410 | PF 기본 | — |
+| 18 | `_ceilClimbingHungerGainFactor` | 433 | PF 기본 | `_pre_sm_1_3` 키이명. 축약 `Ceil` |
+| 19 | `_ceilClimbingExhaustionLossFactor` | 408 | PF 기본 | 축약 `Ceil` |
+| 20 | `_swimmingHungerGainFactor` | 434 | **1.5F** | `_pre_sm_1_3` 키이명 |
+| 21 | `_swimmingExhaustionLossFactor` | 412 | PF 기본 | — |
+| 22 | `_divingHungerGainFactor` | 435 | **1.5F** | `_pre_sm_1_3` 키이명 |
+| 23 | `_divingExhaustionLossFactor` | 413 | PF 기본 | — |
+| 24 | `_dippingHungerGainFactor` | 436 | **1.5F** | `_pre_sm_1_3` 키이명. 원본 키 `move.hunger.dip.gain.factor` |
+| 25 | `_dippingExhaustionLossFactor` | 411 | PF 기본 | 원본 키 `move.exhaustion.dip.loss.factor` |
+| 26 | `_normalHungerGainFactor` | 437 | PF 기본 | `_pre_sm_1_3` 키이명 |
+| 27 | `_normalExhaustionLossFactor` | 414 | PF 기본 | onGround + else 둘 다 참조 (L589/L591) |
+
+**+ 기타 handleExhaustion 에서 사용**:
+| # | 필드 | L | default | Easy | Hard |
+|---|---|---|---|---|---|
+| 28 | `_alwaysHungerGain` | 439 (추정) | 0F | 0F | 0.005F |
+| 29 | `_exhaustionLossHungerFactor` | 417 | 0.05F | **0.02F** | 0.08F |
+
+**PF 기본** (PositiveFactor 타입 default) = `1F` (Properties.getDefaultValue(PositiveFactor)).
+
+**⚠️ 1:1 이식 주의사항**:
+1. **`Exhaution` vs `Exhaustion` 오타 혼재** — 1단계 7개는 `Exhaution`, 2단계 7개는 `Exhaustion`. 필드명 + config key 모두 원본 그대로 유지.
+2. **airBorne + hunger 는 `0F` 하드코딩** — 대응 필드 없음. 이식 시 `fallHungerGainFactor` 같은 필드 **만들면 안 됨**.
+3. **난이도(.e/.h) 체인은 `_base*` 2개에만** — 나머지 25개는 난이도 무관. Easy=default=Medium=Hard.
+4. **`up()` 동적 하한** — 5개 필드가 다른 필드 값 이상으로 강제됨. 1.21.1 단순 `default` 이식 시 이 동적 하한은 잃음 (수용 가능한 근사, javadoc 명시).
+5. **필드명 축약 `Ceil`** — `_ceilClimbing*` 로 선언됨 (`_ceilingClimbing*` 아님). 원본 그대로.
+6. **L589/L591 `_normal*` 중복** — onGround / else 분기 모두 동일 필드. 의도된 중복. 1.21.1 이식도 동일 구조.
+
 ---
 
 ## 6. 1:1 매핑 테이블
@@ -607,22 +705,22 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 #### H-3 ~ H-14: Easy 실제 사용 코드 경로 이식 (세션 15 재정의)
 
-- [ ] H-3. **factor 1단계 Config 필드 12개 추가** — 이동속도 배율. `_baseExhautionLossFactor`
-      (Easy=1.2F) / `_baseHungerGainFactor` (Easy=0.8F) / `_fallExhautionLossFactor` /
-      `_sprintingHungerGainFactor` / `_sprintingExhautionLossFactor` / `_runHungerGainFactor` /
-      `_runExhautionLossFactor` / `_sneakingHungerGainFactor` / `_sneakingExhautionLossFactor` /
-      `_standingHungerGainFactor` / `_standingExhautionLossFactor` / `_walkingHungerGainFactor` /
-      `_walkingExhautionLossFactor`. 각 필드 Easy 값 default + readFrom/writeTo + javadoc 에
-      원본 Value defaults 전체 기록. **원본 `SmartMovingConfig.java` 실제 라인 확인 필요
-      (추가 Agent WebFetch).**
-- [ ] H-4. **factor 2단계 Config 필드 14개 추가** — 행동 배율. `_climbingHungerGainFactor` /
-      `_climbingExhaustionLossFactor` / `_crawlingHungerGainFactor` / `_crawlingExhaustionLossFactor` /
-      `_ceilingClimbingHungerGainFactor` / `_ceilingClimbingExhaustionLossFactor` /
-      `_swimmingHungerGainFactor` / `_swimmingExhaustionLossFactor` / `_divingHungerGainFactor` /
-      `_divingExhaustionLossFactor` / `_dippingHungerGainFactor` / `_dippingExhaustionLossFactor` /
-      `_normalHungerGainFactor` / `_normalExhaustionLossFactor`. **원본 라인 확인 필요.**
-- [ ] H-5. **기타 필드 2개** (H-3/H-4 에 포함 안 된 것): `_alwaysHungerGain` (Easy=0F) +
-      `_exhaustionLossHungerFactor` (Easy=0.02F). readFrom/writeTo.
+- [ ] H-3. **factor 1단계 Config 필드 13개 추가** (§5.4 재확인 후 수정: 12→13). 정확한 필드명:
+      `baseExhautionLossFactor` (Easy 1.2F) / `baseHungerGainFactor` (Easy 0.8F) /
+      `fallExhautionLossFactor` (default 2.5F, hunger 쪽 하드코딩 0F — 필드 없음) /
+      `sprintingHungerGainFactor` (PF 기본 1F) / `sprintingExhautionLossFactor` (0F) /
+      `runningHungerGainFactor` (10F) / `runningExhautionLossFactor` (0.5F) /
+      `sneakingHungerGainFactor` (1F) / `sneakingExhautionLossFactor` (1.5F) /
+      `standingHungerGainFactor` (0F) / `standingExhautionLossFactor` (2F) /
+      `walkingHungerGainFactor` (1F) / `walkingExhautionLossFactor` (1F). ⚠️ `Exhaution`
+      오타 유지 (원본 1:1). readFrom/writeTo 포함. up() 하한은 근사(단순 default).
+- [ ] H-4. **factor 2단계 Config 필드 14개 추가** (§5.4 참조). `climbing/crawling/ceilClimbing/
+      swimming/diving/dipping/normal` 각 `HungerGainFactor` + `ExhaustionLossFactor` 쌍.
+      ⚠️ 2단계는 `Exhaustion` 정타 (원본 1:1). `ceilClimbing` 축약(`ceilingClimbing` 아님).
+      `swimming/diving/dipping` HungerGain 은 1.5F default, 나머지는 PF 기본 1F. normal 은
+      L589/L591 둘 다 참조 (중복 의도). readFrom/writeTo 포함.
+- [ ] H-5. **기타 필드 2개**: `alwaysHungerGain` (Easy 0F) + `exhaustionLossHungerFactor`
+      (Easy 0.02F). readFrom/writeTo.
 - [ ] H-6. **`speedUser` 정정** — 기본값 `true → false` (Easy 1:1). javadoc 에
       "Creative 전용 true, Easy 포함 그 외 false (원본 `Creative(move.speed.user)` 팩토리)" 명시.
 - [ ] H-7. **`SmartMovingConfig.getFactor(hunger, 14상태)` 메서드 이식** — 원본
@@ -1504,6 +1602,36 @@ dead 19개는 "소진/허기/라바 시스템 이식" 별도 포커스 `focus_11
 
 **다음 작업**: H-3 진입. 원본 `SmartMovingConfig.java` 에서 factor 1단계 필드 12개의
 실제 라인 + Value defaults 전체 확인 후 `SmartMovingConfig.java` 에 이식.
+
+### 세션 15 (계속) — 2026-04-23 — H-3 준비 (Agent WebFetch)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 `SmartMovingConfig.java` 에서 factor 필드 27개 + 원본
+  `SmartMovingClientConfig.java` 의 `getFactor(hunger, 14상태)` 본체 L554-L595 완전 덤프.
+- **추정 오류 정정**:
+  - 추정 12 → 실제 13 (1단계) + 14 (2단계) = **27개**
+  - `_runHungerGainFactor` → **`_runningHungerGainFactor`** (필드명)
+  - `_ceilingClimbing*` → **`_ceilClimbing*`** (축약)
+  - airBorne hunger 대응 필드 **없음** — 하드코딩 `0F`
+  - `.e()/.h()` 체인은 `_base*` 2개에만. 나머지 25개는 난이도 무관
+- §5.4 추가 — `getFactor` 본체 + 27개 필드 원본 라인 + 주의사항 6개 전부 문서화.
+- §10 H-3/H-4 재작성 — 정확한 필드명 + default 값 + `Exhaution` 오타 유지 명시.
+
+**완료 전 검증 체크리스트 (H-3 준비 기준)**:
+- [근거] 원본 `SmartMovingConfig.java`/`SmartMovingClientConfig.java` Agent WebFetch 완료 ✓
+- [근거] 27개 필드 각각 L 번호 + default + 난이도 체인 확보 ✓
+- [대응] §5.4 에 원본 코드 완전 임베드 ✓
+- [분기] getFactor 의 2단계 각 분기 (airBorne/sprinting/running/sneaking/standing/walking +
+        climbing/crawling/ceilClimbing/swimming/diving/dipping/normal) 확인 ✓
+- [상수] PF 기본 1F / Easy-Hard 체인 값 / up() 하한 / 버전 폴백 전부 기록 ✓
+- [타이밍] 해당 없음 (리서치)
+- [근사] up() 동적 하한은 1.21.1 에서 단순 default 로 근사 — 주의사항 명시 ✓
+- [신규] `_ceilClimbing` 축약 / airBorne hunger 하드코딩 / Exhaution 오타 혼재 — §5.4 명시
+- [회귀] 문서만 변경
+- [빌드] 해당 없음
+
+**다음 작업**: H-3 이식 착수 — `SmartMovingConfig.java` 에 1단계 13필드 선언 + readFrom/
+writeTo. 개별 필드 원자 단위 나누지 않고 1단계 전체 한 커밋 (동일 성격).
 
 ---
 
