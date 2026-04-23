@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 33 — A-3 완료) |
-| 현재 단계 | A-0/A-1/A-2/A-3/B-0 완료 — A-3 불일치 14건 + B-14~B-21 원자 추가 / ⏳ **A-4 (전환 쌍 isHeadJumping/isSliding)** |
+| 상태 | 🟡 진행 중 (세션 34 — A-4 완료) |
+| 현재 단계 | A-0/A-1/A-2/A-3/A-4/B-0 완료 — A-4 불일치 13건 + B-22~B-30 원자 추가 / ⏳ **A-5 (isCrawling + contextContinueCrawl)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,13 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-13** (세션 34 — A-4 완료): `isHeadJumping`/`isSliding` 전환 쌍 전수 감사 —
+  `SmartMovingSelf.md` R-13 섹션 참조. 범위: R-13.1 필드 선언 (4건 미이식) /
+  R-13.2 갱신 위치 맵 / R-13.3 isHeadJumping 매 틱 재평가 5-AND 공식 /
+  R-13.4 isSliding 직접 진입 6-AND 조건 + 부수 동작 / R-13.5 fallDistance 분기 /
+  R-13.6 toSlidingOrCrawling 조건 / R-13.7 isAerodynamic 이식 완료 확인 /
+  R-13.8 미이식 필드 4건 / R-13.9 **불일치 13건** / R-13.10 B-22~B-30 원자 예비안.
+
 - **R-12** (세션 33 — A-3 완료): `isClimbing`/`isCeilingClimbing`/`isCrawlClimbing`/
   `isClimbCrawling` 등반 4상태 전수 감사 — `SmartMovingSelf.md` R-12 섹션 참조. 범위:
   R-12.1 필드 선언 (9건 미이식 포함) / R-12.2 갱신 위치 맵 (원본 vs 1.21.1) /
@@ -217,7 +224,15 @@
       isVineOnlyClimbing / isVineAnyClimbing / isClimbingStill / hasNeighborClimbGap /
       hasNeighborClimbCrawlGap / handsEdgeBlock / feetEdgeBlock) / Standard·Simple Base
       Climb 미이식 / isCeilingClimbing 해제 엣지 미이식. B-14~B-21 원자 추가.
-- [ ] A-4. **`isHeadJumping` / `isSliding`** 원본 덤프 (전환 쌍)
+- [x] A-4. ✅ **세션 34 완료** — 전환 쌍 `isHeadJumping`/`isSliding` 전수 감사.
+      `SmartMovingSelf.md` R-13 섹션 덤프 완료. **불일치 13건 확정** (§16 세션 34):
+      isHeadJumping 매 틱 재평가 5-AND 공식 미이식 / 해제 엣지 후처리 (handleCrash +
+      restoreFromFlying) 미이식 / 직접 진입 6-AND 조건 간소화 / 부수 동작 3건
+      (setHeightOffset + move + tryJump SlideDown) 미이식 / fallDistance>fallingDistance
+      분기 미이식 / handleClimbing 진입 isSliding=false 미이식 / toSlidingOrCrawling
+      조건 완전 대체 / 미이식 필드 4건 (wasHeadJumping / wasRunning / isRunning /
+      isStanding). **isAerodynamic 은 R-05/포커스#6 B-5 이식 완료 확인**. B-22~B-30
+      원자 추가.
 - [ ] A-5. **`isCrawling` + `contextContinueCrawl`** 원본 덤프 (가장 복잡, 종합 의존)
 - [ ] A-6. **`wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`** 원본 스냅샷 위치 확인
 - [ ] A-7. 각 A-1~A-6 그룹별 1.21.1 grep + side-by-side 매핑 테이블 작성
@@ -394,7 +409,61 @@
 #### B-21. `isCeilingClimbing` 해제 엣지 이식 (A-3 발견)
 - [ ] B-21. 원본 L1485 resetClimbing 에서 false 설정. B-14 완료 후 자동 해결.
 
-#### B-N. A-4~A-6 추가 발견에 따라 동적 추가
+#### B-22. 미이식 필드 4건 이식 (A-4 발견)
+- [ ] B-22a. `wasHeadJumping` 필드 추가 (이전 틱 저장용) — ClientState 필드
+- [ ] B-22b. `wasRunning` 필드 추가 — 엣지 판정용
+- [ ] B-22c. `isRunning` 필드 추가 (현재 로컬 변수 → 필드 승격) + `isRunning()` override
+      이식 (원본 L3241 `isSprinting() && !isFast && (onGround || vanilla())`)
+- [ ] B-22d. `isStanding` 필드 추가 — 원본 L1419 + 갱신 공식 L2734
+
+#### B-23. `isHeadJumping` 매 틱 재평가 5-AND 공식 이식 (A-4 발견)
+- [ ] B-23. 원본 L2524-L2530 tickEssential 에 이식:
+      `wasHeadJumping = isHeadJumping;`
+      `isHeadJumping = isHeadJumping && !onGround && !(swim||dive) && !(flying||capabilities.flying) && !(waterMovement && motionY<0) && !lavaMovement`
+      + `if (!isHeadJumping) isAerodynamic = false;` (기존 이식됨, 재평가 위치 확인)
+      의존: B-22a `wasHeadJumping` 선행.
+
+#### B-24. 해제 엣지 후처리 이식 (A-4 발견)
+- [ ] B-24. 원본 L2535-L2540 이식 — `wasHeadJumping && !isHeadJumping && onGround` 시:
+      - `handleCrash(_headFallDamageStartDistance, _headFallDamageFactor)` 호출
+      - `restoreFromFlying = true` 설정 → standupIfPossible 트리거
+      의존: B-22a + B-23 선행.
+
+#### B-25. `isSliding` 직접 진입 6-AND 조건 복원 (A-4 발견)
+- [ ] B-25. ClientState L699 `wantSlide` 조건 원본 L2553 으로 정정:
+      `Config.isSlidingEnabled() && grabPressed && (isGroundSprinting || (wasRunning && !isRunning && onGround)) && !isCrawling && sneakStartPressed && !isDipping`
+      의존: B-1d `isGroundSprinting` + B-22b `wasRunning` + B-22c `isRunning` 선행.
+      `sneakStartPressed` 엣지 검출 — 기존 `sneakKeyStartPressed` 활용.
+
+#### B-26. 직접 진입 부수 동작 이식 (A-4 발견)
+- [ ] B-26. 원본 L2555-L2560 부수 동작 이식:
+      - `heightOffset = -1F` 설정
+      - `move(0, -1D, 0)` — 1 블록 하강 (Box collision 체크 포함)
+      - `tryJump(Config.SlideDown, false, wasRunning, null)` 호출
+      - `isSliding = true; isHeadJumping = false; isAerodynamic = false`
+      의존: B-25 선행. `Config.SlideDown` 상수 1.21.1 이식 여부 확인 필요.
+
+#### B-27. `fallDistance > _fallingDistanceMinimum` 분기 이식 (A-4 발견)
+- [ ] B-27. 원본 L2569-L2574 이식:
+      `if (isSliding && fallDistance > cfg.fallingDistanceMinimum) {
+          isSliding = false; wasCrawling = true; isCrawling = false; }`
+      `_fallingDistanceMinimum` Config 필드 1.21.1 이식 확인.
+
+#### B-28. handleClimbing 진입 시 `isSliding=false` 이식 (A-4 발견)
+- [ ] B-28. 원본 L985 대응 — 클라이밍 진입 시 슬라이딩 해제. B-14 resetClimbing 에
+      `isSliding=false` 포함하거나 별도 원자로 SmartMovingClimber.handleClimbing 진입부 추가.
+
+#### B-29. `toSlidingOrCrawling` 조건 정정 (A-4 발견)
+- [ ] B-29. Jumper L103 조건 원본 L2226 으로 정정:
+      `Config.isSlidingEnabled() && (grabPressed || wasHeadJumping)` → isSliding = true.
+      의존: B-22a `wasHeadJumping` 선행.
+
+#### B-30. `isStanding` 갱신 공식 이식 (A-4 발견)
+- [ ] B-30. tickEssential 에 원본 L2734 공식 추가:
+      `isStanding = horizontalSpeedSquare < 0.0005` (horizontalSpeedSquare = motionX² + motionZ²).
+      의존: B-22d `isStanding` 필드 선행.
+
+#### B-N. A-5~A-6 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -753,6 +822,55 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 `.tmp_research/SmartMovingSelf.java` L1607 toSlidingOrCrawling + L2524-L2560
 isAerodynamic + L2546-L2550 SlideToHeadJumping 전환 덤프 → 1.21.1 ClientState grep 매핑.
 
+### 세션 34 — 2026-04-24 — A-4 (전환 쌍 isHeadJumping/isSliding) 완료
+
+**진행한 작업**:
+- 원본 갱신 위치 전수 grep + 블록 확보:
+  * isHeadJumping 6곳: L2128/L2218/L2294/L2524-L2530/L2549/L2559
+  * isSliding 7곳: L985/L2227/L2296/L2548/L2558/L2565/L2571
+  * isAerodynamic 4곳: L2533/L2550/L2560/resetState
+  * 관련 메서드: toSlidingOrCrawling L2222-L2230 / 직접 진입 블록 L2553-L2561 /
+    매 틱 재평가 L2524-L2540 / fallDistance 분기 L2569-L2574
+- 1.21.1 grep 결과:
+  * 이식된 갱신: Jumper L98/L104/L217 / Climber L472 / ClientState L702/L710/L711/L712/
+    L715/L716 (직접 진입 + SlideToHeadJumping + isAerodynamic) / Slider L48/L76 /
+    resetState L896/L912/L932
+  * isAerodynamic 전체 4곳 이식 완료 (R-05/포커스#6 B-5 결과)
+  * **미이식 필드 4건**: `wasHeadJumping` / `wasRunning` / `isRunning`(필드) / `isStanding`
+  * **미이식 블록 6건**: isHeadJumping 매 틱 재평가 5-AND / 해제 엣지 후처리 /
+    직접 진입 부수 동작 3건 / fallDistance 분기 / handleClimbing 진입 isSliding=false /
+    toSlidingOrCrawling 조건 정정
+  * **상수 확인**: `SlideToHeadJumpingFallDistance = 0.05F` 일치 ✓
+- `SmartMovingSelf.md` **R-13 섹션 신설** (10 서브섹션):
+  * R-13.1 필드 선언 / R-13.2 갱신 위치 맵 / R-13.3 매 틱 재평가 / R-13.4 직접 진입
+    6-AND / R-13.5 fallDistance 분기 / R-13.6 toSlidingOrCrawling / R-13.7 isAerodynamic
+    이식 완료 / R-13.8 미이식 필드 / R-13.9 **불일치 13건** / R-13.10 B-22~B-30 예비안
+- §10 B-22 ~ B-30 9 원자 신설 (B-22a~d 서브 4 포함):
+  * B-22 미이식 필드 4건 / B-23 매 틱 재평가 / B-24 해제 엣지 / B-25 직접 진입 조건 /
+  * B-26 부수 동작 / B-27 fallDistance 분기 / B-28 handleClimbing 해제 / B-29 toSlidingOrCrawling / B-30 isStanding 공식
+- §1 진행 상황 갱신, §5.2 R-13 인용 추가
+
+**완료 전 검증 체크리스트 (A-4 기준)**:
+- [근거] 원본 isHeadJumping/isSliding/isAerodynamic 갱신 위치 17곳 전수 확보 ✓
+- [근거] 매 틱 재평가 + 직접 진입 + fallDistance + toSlidingOrCrawling 블록 전수 읽기 ✓
+- [대응] 원본 17곳 ↔ 1.21.1 대응 위치 side-by-side 완료 ✓
+- [분기] 매 틱 재평가 5-AND / 직접 진입 6-AND / 해제 엣지 후처리 / fallDistance 분기 /
+  toSlidingOrCrawling 2갈래 전부 식별 ✓
+- [상수] `SlideToHeadJumpingFallDistance = 0.05F` / `_fallingDistanceMinimum` /
+  `_headFallDamageStartDistance` / `_headFallDamageFactor` / `_slidingSpeedStopFactor`
+  기록 ✓
+- [타이밍] 갱신 순서 (wasHeadJumping 저장 → isHeadJumping 재평가 → isAerodynamic 리셋 →
+  해제 엣지 handleCrash → 직접 진입 6-AND → SlideToHeadJumping → 수평속도 판정 →
+  fallDistance 판정) 기록 ✓
+- [근사] isAerodynamic 은 R-05 이미 1:1 이식됨 확인 ✓
+- [신규] §10 B-22~B-30 원자 9개 추가 ✓
+- [회귀] 코드 변경 없음 (리서치/문서만)
+- [빌드] 해당 없음
+
+**다음 작업**: A-5 — `isCrawling` + `contextContinueCrawl` 전수 감사 (가장 복잡,
+종합 의존). 원본 `handleSwimming` 크롤 분기 + tickEssential 크롤 판정 +
+updateEntityActionState L2347-L3044 전체 크롤 관련 + R-09 블록 (L2966-L3045).
+
 ---
 
 ## 16. 신규 발견
@@ -1026,6 +1144,94 @@ B-15 (필드 이식) 과 B-19 (갱신 로직) 가 전제 의존. 순서 권고:
 - 6순위: **B-18** (isClimbCrawling 공식 + 카운터) — B-15b / B-16 선행
 - 7순위: **B-20** (Standard/Simple Base Climb) — 독립 가능
 - 8순위: **B-21** (isCeilingClimbing 해제) — B-14 완료 시 자동
+
+### 세션 34 A-4 — 전환 쌍 isHeadJumping/isSliding 불일치 13건 확정
+
+R-13 섹션 전수 덤프 기반. isAerodynamic 은 이미 R-05/포커스#6 B-5 에서 이식 완료 확인
+— 이번 포커스 수정 대상 아님.
+
+1. **isHeadJumping 매 틱 재평가 5-AND 공식 미이식** (원본 L2524-L2530)
+   - 조건: `!onGround && !(swimming||diving) && !(flying||capabilities.flying) &&
+     !(waterMovement && motionY<0) && !lavaMovement`
+   - 1.21.1 tickEssential 에 재평가 블록 없음. 한 번 true 가 된 isHeadJumping 은
+     SlideToHeadJumping 전환 경로 외에는 자동 해제되지 않음.
+   - 분류: [누락] / 수정 B-23.
+
+2. **해제 엣지 후처리 미이식** (원본 L2535-L2540)
+   - `wasHeadJumping && !isHeadJumping && onGround` 시 `handleCrash(_headFallDamageStart,
+     _headFallDamageFactor)` + `restoreFromFlying = true`
+   - 낙하 데미지 + standupIfPossible 트리거 누락
+   - 분류: [누락] / 수정 B-24.
+
+3. **isSliding 직접 진입 6-AND 조건 간소화** (원본 L2553 vs 1.21.1 L699)
+   - 원본: `SlidingEnabled && grabPressed && (isGroundSprinting || (wasRunning && !isRunning
+     && onGround)) && !isCrawling && sneakStartPressed && !isDipping`
+   - 1.21.1: `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping`
+   - 차이: grab 조건 누락 / isGroundSprinting → isSprinting 간소 / wasRunning 엣지 누락 /
+     sneak 엣지(StartPressed) → 상태(isSneaking) / !isDipping 누락
+   - 분류: [오역] / 수정 B-25.
+
+4. **직접 진입 부수 동작 3건 미이식** (원본 L2555-L2557)
+   - `setHeightOffset(-1)` — pose 낮춤
+   - `move(0, -1D, 0, true)` — 1 블록 하강
+   - `tryJump(Config.SlideDown, false, wasRunning, null)` — SlideDown 점프
+   - 1.21.1 L702 는 `isSliding = true; isAerodynamic = false` 만
+   - 분류: [누락] / 수정 B-26.
+
+5. **직접 진입 블록 isHeadJumping=false 누락** (원본 L2559)
+   - 1.21.1 L702-L704 에 없음
+   - 분류: [누락] / 수정 B-26.
+
+6. **fallDistance > _fallingDistanceMinimum 분기 미이식** (원본 L2569-L2574)
+   - `isSliding = false; wasCrawling = true; isCrawling = false;`
+   - 분류: [누락] / 수정 B-27.
+
+7. **handleClimbing 진입 시 isSliding=false 미이식** (원본 L985)
+   - 1.21.1 Climber 에 isSliding 해제 위치 없음
+   - 분류: [누락] / 수정 B-28 (또는 B-14 resetClimbing 에 포함).
+
+8. **toSlidingOrCrawling 조건 완전 대체** (원본 L2226 vs 1.21.1 Jumper L103)
+   - 원본: `SlidingEnabled && (grabPressed || wasHeadJumping)`
+   - 1.21.1: `(isSprinting || isFast) && cfg.slide`
+   - **의미 자체가 다름** — 원본 "잡기/이전헤드점프" vs 1.21.1 "스프린트/Fast"
+   - 분류: [오역] / 수정 B-29.
+
+9. **`wasHeadJumping` 필드 미이식**
+   - 원본 L2524 매 틱 저장. 해제 엣지 후처리 + toSlidingOrCrawling 조건 사용
+   - 분류: [누락] / 수정 B-22a.
+
+10. **`wasRunning` 필드 미이식**
+    - 원본 L2553 직접 진입 조건 + L2557 tryJump 파라미터 사용
+    - 1.21.1 엔 필드 없음 (로컬만)
+    - 분류: [누락] / 수정 B-22b.
+
+11. **`isRunning` 필드 미이식**
+    - 원본 L3241 override 메서드 `isSprinting() && !isFast && (onGround || vanilla())`
+    - 1.21.1 엔 handleExhaustion 로컬 변수만 (L995)
+    - 분류: [누락] / 수정 B-22c.
+
+12. **`isStanding` 필드 미이식**
+    - 원본 L1419 필드 + L2734 갱신 공식 (`horizontalSpeedSquare < 0.0005`)
+    - 1.21.1 엔 필드 없음 (ClientState grep 0건 — 실제 용도는 getJumpSpeed +
+      handleExhaustion Config.getFactor)
+    - 분류: [누락] / 수정 B-22d + B-30.
+
+13. **standUp() 내 isHeadJumping=false 경로 일치 검증 필요** (원본 L2218 ↔ Jumper L98)
+    - 1.21.1 Jumper L98 에 있으나 호출 경로가 원본 standUp 과 동일한지 검증 필요
+    - 분류: [부분] / 수정 검증 필요.
+
+**수정 범위**: §10 B-22~B-30 (9 원자 + B-22a~d 4 서브 = 최대 13 원자). B-22 (필드 이식)
+가 전제 — B-23 / B-24 / B-25 / B-29 / B-30 이 의존.
+
+**우선순위 권고 (A-4)**:
+- 1순위: **B-22a~d** (미이식 필드 4건 이식) — 선언만, 나머지 B-N 이 전부 의존
+- 2순위: **B-30** (isStanding 공식) — 기존 호출처가 로컬 변수로 임시 계산 중
+- 3순위: **B-23** (매 틱 재평가 공식) — B-22a 선행. 가장 구조적 불일치
+- 4순위: **B-24** (해제 엣지 후처리) — B-23 완료 후
+- 5순위: **B-29** (toSlidingOrCrawling 조건 정정) — B-22a 선행
+- 6순위: **B-25+B-26** (직접 진입 조건 + 부수 동작) — 묶음 (B-22b+c+B-1d 선행)
+- 7순위: **B-27** (fallDistance 분기)
+- 8순위: **B-28** (handleClimbing 해제) — B-14 와 겹치면 합병
 
 ---
 

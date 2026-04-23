@@ -3618,3 +3618,270 @@ resetState() 호출` 주석만 있고 실제 resetClimbing 호출 코드 없음 
   유지할지 SM 물리 덮어쓸지 판단 필요
 - **B-21**: `isCeilingClimbing` 해제 엣지 이식 (원본 L1485 resetClimbing 대응) —
   B-14 완료 후 자동 해결 가능
+
+---
+
+## R-13 추가 리서치 — isHeadJumping/isSliding 전환 쌍 전수 덤프 (2026-04-24 세션 34 — 포커스 #2 A-4)
+
+포커스 #2 A-4 감사 — 전환 쌍 상태 갱신 로직 전수 매핑. `isAerodynamic` 은 포커스 #6
+B-5 (R-05) 에서 다뤘으나 isHeadJumping / isSliding 과 연결된 부분 재확인.
+
+### R-13.1 관련 필드 선언
+
+```java
+// --- SmartMoving.java (부모) L42, L44 ---
+public boolean isHeadJumping;    // 헤드 점프
+public boolean isSliding;        // 슬라이딩
+
+// --- SmartMovingSelf.java L1419, L1441, L1460?(wasHeadJumping/wasRunning/isRunning/wasLevitating 등) ---
+public boolean isStanding;       // 수평 속도 < 0.0005 정지
+public boolean isAerodynamic;    // 공기역학 모드 (HeadJumping 중)
+// wasHeadJumping / wasRunning / isRunning / wasLevitating / wasCapabilitiesIsFlying 등
+// 이전 틱 스냅샷 필드들
+```
+
+**1.21.1 이식 상태**:
+- **이식됨**: `isHeadJumping` / `isSliding` / `isAerodynamic` (ClientState 필드)
+- **미이식**: `wasHeadJumping` / `wasRunning` / `isRunning` (필드 — 로컬만 있음) /
+  `isStanding` 필드 (grep 확인 필요)
+
+### R-13.2 갱신 위치 맵
+
+**원본 isHeadJumping**:
+| 위치 | 동작 |
+|---|---|
+| L2128 | `isHeadJumping = true` — tryJump(..., head=true) 내 |
+| L2218 | `isHeadJumping = false` — standUp() 내 (설 수 있을 때) |
+| L2294 | resetState false |
+| **L2524-L2530** | **매 틱 재평가 5-AND 공식 (핵심)** — `isHeadJumping = isHeadJumping && !onGround && !(swimming||diving) && !(flying||capabilities.flying) && !(waterMovement && motionY<0) && !lavaMovement` |
+| L2549 | SlideToHeadJumping 전환 — slide 중 fallDistance>0.05F |
+| L2559 | 직접 진입 블록 내 `isHeadJumping = false` (slide 직접 진입 시) |
+
+**원본 isSliding**:
+| 위치 | 동작 |
+|---|---|
+| L985 | handleClimbing 내부 `isSliding = false` (클라이밍 진입) |
+| L2227 | toSlidingOrCrawling() 내 true (`isSlidingEnabled && (grabPressed || wasHeadJumping)`) |
+| L2296 | resetState false |
+| L2548 | SlideToHeadJumping 전환 |
+| L2558 | 직접 진입 블록 true |
+| L2565 | 수평속도 저하 false (`!sneakPressed || horizontalSpeedSquare < slidingSpeedStopFactor*0.01`) |
+| L2571 | fallDistance > fallingDistanceMinimum false + wasCrawling=true + isCrawling=false |
+
+**원본 isAerodynamic**:
+| 위치 | 동작 |
+|---|---|
+| L2533 | `!isHeadJumping` 시 false |
+| L2550 | SlideToHeadJumping 전환 true |
+| L2560 | 직접 진입 블록 false |
+
+**1.21.1 대응**:
+| 원본 | 1.21.1 | 상태 |
+|---|---|---|
+| L2128 isHeadJumping=true (tryJump head) | Jumper L217 / Climber L472 | ✓ |
+| L2218 standUp isHeadJumping=false | Jumper L98 (유사 위치) | ✓ (부분) |
+| **L2524-L2530 매 틱 재평가** | — | **✗ 미이식** |
+| L2549 SlideToHeadJumping true | ClientState L711 | ✓ |
+| L2559 직접 진입 isHeadJumping=false | ClientState L701-L704 에 없음 | ✗ 미이식 |
+| L985 handleClimbing isSliding=false | Climber 내 없음 (grep 0건) | ✗ 미이식 |
+| **L2227 toSlidingOrCrawling 조건** | Jumper L103 간소화 | ✗ 오역 |
+| L2548 SlideToHeadJumping false | ClientState L710 | ✓ |
+| L2558 직접 진입 true | ClientState L702 | ✓ (부분) |
+| L2565 수평속도 저하 false | Slider L48 | ✓ |
+| **L2569-L2574 fallDistance 분기** | — | **✗ 미이식** |
+| L2533/L2550/L2560 isAerodynamic | ClientState L716/L712/L703 | ✓ (전부) |
+
+### R-13.3 isHeadJumping 매 틱 재평가 공식 (원본 L2524-L2530)
+
+```java
+// --- SmartMovingSelf.java L2524-L2540 ---
+wasHeadJumping = isHeadJumping;
+isHeadJumping = isHeadJumping &&
+    !sp.onGround &&
+    !(isSwimming || isDiving) &&
+    !(isFlying || sp.capabilities.isFlying) &&
+    !(sp.handleWaterMovement() && sp.motionY < 0) &&
+    !sp.handleLavaMovement();
+
+if(!isHeadJumping)
+    isAerodynamic = false;
+
+if(wasHeadJumping && !isHeadJumping)
+    if(sp.onGround)
+    {
+        handleCrash(Config._headFallDamageStartDistance.value, Config._headFallDamageFactor.value);
+        restoreFromFlying = true;
+    }
+```
+
+**5-AND 해제 조건**:
+1. `!sp.onGround`
+2. `!(isSwimming || isDiving)`
+3. `!(isFlying || sp.capabilities.isFlying)`
+4. `!(sp.handleWaterMovement() && sp.motionY < 0)` — 물 접촉 + 하강 중
+5. `!sp.handleLavaMovement()` — 라바 접촉
+
+**해제 엣지 후처리** (`wasHeadJumping && !isHeadJumping && sp.onGround`):
+- `handleCrash(_headFallDamageStartDistance, _headFallDamageFactor)` — 낙하 데미지
+- `restoreFromFlying = true` — standupIfPossible 트리거
+
+### R-13.4 isSliding 직접 진입 블록 (원본 L2553-L2561)
+
+```java
+// --- SmartMovingSelf.java L2553-L2561 ---
+if(Config.isSlidingEnabled() && grabButton.Pressed &&
+   (isGroundSprinting || (wasRunning && !isRunning && sp.onGround)) &&
+   !isCrawling && sneakButton.StartPressed && !isDipping)
+{
+    setHeightOffset(-1);
+    move(0, (-1D), 0, true);
+    tryJump(Config.SlideDown, false, wasRunning, null);
+    isSliding = true;
+    isHeadJumping = false;
+    isAerodynamic = false;
+}
+```
+
+**조건 분해** (6-AND):
+1. `Config.isSlidingEnabled()` (`cfg.slide && cfg.enabled`)
+2. `grabButton.Pressed` (`SmartMovingKeys.grab.isPressed()`)
+3. `isGroundSprinting || (wasRunning && !isRunning && sp.onGround)` — sprint 상태 또는 running 종료 엣지 + onGround
+4. `!isCrawling`
+5. `sneakButton.StartPressed` — **sneak 엣지** (frame 내 새로 눌림)
+6. `!isDipping`
+
+**부수 동작**:
+- `setHeightOffset(-1)` — 플레이어 pose 낮춤
+- `move(0, -1D, 0, true)` — 1 블록 아래로 이동
+- `tryJump(Config.SlideDown, ...)` — SlideDown 점프 트리거
+- `isSliding = true; isHeadJumping = false; isAerodynamic = false`
+
+**1.21.1 ClientState L698-L705** (현재):
+```java
+if (!isSliding && cfg.slide && !isCrawling) {
+    boolean wantSlide = player.isSneaking() && player.isSprinting()
+            && player.isOnGround() && !isClimbing && !isHeadJumping;
+    if (wantSlide) {
+        isSliding = true;
+        isAerodynamic = false;
+    }
+}
+```
+
+**차이**:
+- `cfg.enabled` 누락
+- `grabButton.Pressed` 누락
+- `isGroundSprinting` → `player.isSprinting()` 간소 (SM 복합 → vanilla 단순)
+- `wasRunning && !isRunning && sp.onGround` 조건 누락 (running 종료 엣지)
+- `sneakButton.StartPressed` (엣지) → `player.isSneaking()` (Pressed 상태) — 엣지 검출 누락
+- `!isDipping` 누락
+- **부수 동작 전부 미이식**: `setHeightOffset(-1)` / `move(0,-1D,0)` / `tryJump(SlideDown,...)`
+- `isHeadJumping = false` 누락 (원본 L2559)
+
+### R-13.5 fallDistance > fallingDistanceMinimum 분기 (원본 L2569-L2574)
+
+```java
+// --- SmartMovingSelf.java L2569-L2574 ---
+if(isSliding && sp.fallDistance > Config._fallingDistanceMinimum.value)
+{
+    isSliding = false;
+    wasCrawling = true;
+    isCrawling = false;
+}
+```
+
+**동작**: 슬라이딩 중 `fallDistance > _fallingDistanceMinimum` → 슬라이딩 해제 + 크롤 전환 준비.
+
+**1.21.1**: 이 블록 전체 미이식. SlideToHeadJumping (L709-L713) 만 있고 그 아래
+fallDistance 분기 없음.
+
+### R-13.6 `toSlidingOrCrawling` 조건 (원본 L2222-L2230)
+
+```java
+// --- SmartMovingSelf.java L2222-L2230 ---
+private void toSlidingOrCrawling(double gapUnderneight)
+{
+    move(0, (-gapUnderneight), 0, true);
+
+    if(Config.isSlidingEnabled() && (grabButton.Pressed || wasHeadJumping))
+        isSliding = true;
+    else
+        wasCrawling = toCrawling();
+}
+```
+
+**조건**: `Config.isSlidingEnabled() && (grabButton.Pressed || wasHeadJumping)` → isSliding.
+
+**1.21.1 Jumper L101-L114** (현재):
+```java
+if ((player.isSprinting() || sm.isFast) && cfg.slide) {
+    sm.isSliding = true;
+} else {
+    Box standBox = ...;
+    if (!world.isSpaceEmpty(player, standBox)) {
+        sm.isCrawling = true;
+        if (cfg.crawl Toggle) sm.crawlToggled = true;
+    }
+}
+```
+
+**차이**:
+- `cfg.enabled` 누락
+- `grabButton.Pressed || wasHeadJumping` → `isSprinting() || isFast` 완전 대체
+- **조건 의미 자체가 다름** — 원본은 "잡기 중이거나 이전 헤드점프 중" 이었는지 판정,
+  1.21.1 은 "스프린트 또는 Fast" 판정
+
+### R-13.7 isAerodynamic 관련 (R-05 참조)
+
+세션 22 이전에 이미 R-05 에서 이식됨 (포커스 #6 B-5). ClientState L703/L712/L716/L932
+에 4곳 갱신 전부 원본 대응. **이 부분은 이식 완료** — A-4 에서 수정 불필요.
+
+### R-13.8 미이식 필드
+
+1. **`wasHeadJumping`** (원본 L2524 매 틱 저장)
+   - 용도: 해제 엣지 후처리 (handleCrash + restoreFromFlying) + toSlidingOrCrawling 조건
+   - 1.21.1 필드 자체 없음
+
+2. **`wasRunning`** (원본 직접 진입 조건)
+   - 용도: sliding 직접 진입 조건 `wasRunning && !isRunning` 엣지 판정
+   - 1.21.1 필드 없음 (로컬 변수만 handleExhaustion 에서 사용)
+
+3. **`isRunning`** (필드) — 원본 L2553 직접 진입 조건 + L2556 tryJump 파라미터
+   - 1.21.1 ClientState 필드 아님 (L995 로컬 변수만)
+   - 원본 override 메서드 L3241: `isRunning() = sp.isSprinting() && !isFast && (sp.onGround || vanilla())`
+
+4. **`isStanding`** 필드 — 원본 L2734 tickEssential 에서 매 틱 갱신
+   - 1.21.1 필드 자체 없음 (ClientState grep 에 `isStanding` 필드 없음, 로컬 변수만)
+   - 사용처: getJumpSpeed, handleExhaustion Config.getFactor 등
+
+### R-13.9 1.21.1 side-by-side 불일치 목록
+
+| # | 원본 | 1.21.1 | 분류 |
+|---|---|---|---|
+| 1 | L2524-L2530 isHeadJumping 매 틱 재평가 5-AND 공식 | 없음 (ClientState tickEssential 에 재평가 블록 없음) | [누락] |
+| 2 | L2535-L2540 wasHeadJumping && !isHeadJumping && onGround 해제 엣지 → handleCrash + restoreFromFlying | 없음 | [누락] |
+| 3 | L2553 직접 진입 6-AND 조건 (`slidingEnabled && grabPressed && (isGroundSprinting || (wasRunning && !isRunning && onGround)) && !isCrawling && sneakStartPressed && !isDipping`) | ClientState L699 `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping` 로 간소 대체 | [오역] |
+| 4 | L2555-L2557 직접 진입 부수 동작 (setHeightOffset(-1) + move(0,-1,0) + tryJump(SlideDown)) | 없음 | [누락] |
+| 5 | L2559 직접 진입 블록 isHeadJumping=false | 없음 | [누락] |
+| 6 | L2569-L2574 fallDistance > _fallingDistanceMinimum → isSliding=false + wasCrawling=true + isCrawling=false | 없음 | [누락] |
+| 7 | L985 handleClimbing 내 isSliding=false (클라이밍 진입) | Climber 내 없음 | [누락] |
+| 8 | L2226 toSlidingOrCrawling 조건 `slidingEnabled && (grabPressed || wasHeadJumping)` | Jumper L103 `(isSprinting || isFast) && cfg.slide` 로 완전 대체 | [오역] |
+| 9 | `wasHeadJumping` 필드 | 없음 | [누락] |
+| 10 | `wasRunning` 필드 | 없음 (로컬만) | [누락] |
+| 11 | `isRunning` 필드 + override 메서드 | 없음 (로컬만) | [누락] |
+| 12 | `isStanding` 필드 (원본 L1419 + L2734 갱신 공식) | 필드 없음 | [누락] |
+| 13 | L2218 standUp() 내 isHeadJumping=false 이식 확인 | Jumper L98 에 있으나 경로 일치 검증 필요 | [부분] |
+
+### R-13.10 B-N 이식 우선순위 예비안
+
+- **B-22**: `wasHeadJumping` / `wasRunning` / `isRunning` / `isStanding` 필드 이식 (ClientState)
+- **B-23**: `isHeadJumping` 매 틱 재평가 5-AND 공식 이식 (tickEssential 내부, B-22 선행)
+- **B-24**: `wasHeadJumping && !isHeadJumping && onGround` 해제 엣지 후처리 이식 (handleCrash +
+  restoreFromFlying)
+- **B-25**: `isSliding` 직접 진입 조건 복원 (원본 L2553 6-AND)
+- **B-26**: 직접 진입 부수 동작 이식 (setHeightOffset + move + tryJump SlideDown +
+  isHeadJumping=false)
+- **B-27**: `fallDistance > _fallingDistanceMinimum` 분기 이식 (L2569-L2574)
+- **B-28**: handleClimbing 진입 시 `isSliding=false` 이식 (L985) — B-14 resetClimbing 내 포함 가능
+- **B-29**: `toSlidingOrCrawling` 조건 정정 (원본 L2226)
+- **B-30**: `isStanding` 갱신 공식 이식 (tickEssential L2734 `horizontalSpeedSquare < 0.0005`)
