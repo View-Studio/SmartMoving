@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 34 — A-4 완료) |
-| 현재 단계 | A-0/A-1/A-2/A-3/A-4/B-0 완료 — A-4 불일치 13건 + B-22~B-30 원자 추가 / ⏳ **A-5 (isCrawling + contextContinueCrawl)** |
+| 상태 | 🟡 진행 중 (세션 35 — A-5 완료) |
+| 현재 단계 | A-0/A-1/A-2/A-3/A-4/A-5/B-0 완료 — A-5 불일치 15건 + B-31~B-42 원자 추가 / ⏳ **A-6 (이력 3개 wasCrawling_st/wasSneaking/wasClimbCrawling)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,15 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-14** (세션 35 — A-5 완료): `isCrawling`/`contextContinueCrawl` 전수 감사 —
+  `SmartMovingSelf.md` R-14 섹션 참조. 범위: R-14.1 필드 선언 (3건 미이식) /
+  R-14.2 갱신 위치 맵 (원본 19곳 + contextContinueCrawl 4곳) / R-14.3 tickEssential
+  크롤 판정 블록 (mustCrawl + inputContinueCrawl + contextContinueCrawl 해제 +
+  wouldWantCrawl + canCrawl 5-AND + 메인 공식) / R-14.4 1.21.1 IMPL-01 구조 차이 /
+  R-14.5 toCrawling() 함수 / R-14.6 handleClimbing wall 오르기 / R-14.7 landMotionPost
+  3분기 / R-14.8 grab.StartPressed 수영/크롤 3분기 / R-14.9 wasCrawling↔isCrawling
+  전환 후처리 / R-14.10 **불일치 15건** / R-14.11 B-31~B-42 원자 예비안.
+
 - **R-13** (세션 34 — A-4 완료): `isHeadJumping`/`isSliding` 전환 쌍 전수 감사 —
   `SmartMovingSelf.md` R-13 섹션 참조. 범위: R-13.1 필드 선언 (4건 미이식) /
   R-13.2 갱신 위치 맵 / R-13.3 isHeadJumping 매 틱 재평가 5-AND 공식 /
@@ -233,7 +242,14 @@
       조건 완전 대체 / 미이식 필드 4건 (wasHeadJumping / wasRunning / isRunning /
       isStanding). **isAerodynamic 은 R-05/포커스#6 B-5 이식 완료 확인**. B-22~B-30
       원자 추가.
-- [ ] A-5. **`isCrawling` + `contextContinueCrawl`** 원본 덤프 (가장 복잡, 종합 의존)
+- [x] A-5. ✅ **세션 35 완료** — `isCrawling`+`contextContinueCrawl` 전수 감사.
+      `SmartMovingSelf.md` R-14 섹션 덤프 완료. **불일치 15건 확정** (§16 세션 35):
+      메인 공식 구조 차이 (매 틱 vs 이원화) / canCrawl 9-AND 근사 (원본 5-AND) /
+      wasCrawling 필드 누락 / capabilities.flying 해제 점프 미이식 / 전환 후처리
+      heightOffset+move 미이식 / grab.StartPressed 수영/크롤 3분기 미이식 / handleClimbing
+      wall 오르기 진입 미이식 / handleCeilingClimbing 해제 미이식 / landMotionPost 3분기 중
+      1개 누락 / toCrawling() 헬퍼 부분 이식 / wantCrawlNotClimb 미이식 / initializeCrawling
+      미이식 / mustCrawl AABB 근사. B-31~B-42 원자 추가.
 - [ ] A-6. **`wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`** 원본 스냅샷 위치 확인
 - [ ] A-7. 각 A-1~A-6 그룹별 1.21.1 grep + side-by-side 매핑 테이블 작성
 
@@ -463,7 +479,76 @@
       `isStanding = horizontalSpeedSquare < 0.0005` (horizontalSpeedSquare = motionX² + motionZ²).
       의존: B-22d `isStanding` 필드 선행.
 
-#### B-N. A-5~A-6 추가 발견에 따라 동적 추가
+#### B-31. 미이식 필드 3건 이식 (A-5 발견)
+- [ ] B-31a. `wasCrawling` 필드 ClientState 추가 (wasCrawling_st 와 구분 — tickEssential
+      이전 틱 저장 전용, L2441 대응)
+- [ ] B-31b. `wantCrawlNotClimb` 필드 + L2452-L2461 갱신 블록
+- [ ] B-31c. `initializeCrawling` 필드 + 관련 로직
+
+#### B-32. `canCrawl` 공식 원본 5-AND 복원 (A-5 발견 — 1:1 원칙 위배)
+- [ ] B-32. ClientState L669-L672 조건 원본 L2434-L2439 로 정정:
+      `!isSwimming_sm && !isDiving && (!isDipping || (dippingDepth + heightOffset) <
+      SwimCrawlWaterTopBorder) && !isClimbing && fallDistance < _fallingDistanceMinimum`
+      — 9-AND 잉여 조건 (isCrawlClimbing / isCeilingClimbing / isSliding / isHeadJumping /
+      isFlying) 제거.
+
+#### B-33. 메인 공식 재작성 — 매 틱 재계산 구조 (A-5 발견)
+- [ ] B-33. IMPL-01 (L661-L693) 진입/해제 이원화 → 원본 매 틱 공식으로 전환:
+      `wasCrawling = isCrawling;`
+      `isCrawling = canCrawl && (wantCrawl || mustCrawl);`
+      `if (!isCrawling) contextContinueCrawl = false;`
+      (L2446-L2447 은 이미 L622 에 이식됨)
+      IMPL-01 의 진입 엣지 처리 (crawlToggled 설정 + ignoreNextStopSneakButtonPressed) 는
+      B-40 toCrawling() 헬퍼로 이전.
+      의존: B-31a `wasCrawling` / B-32 canCrawl 정정 선행.
+
+#### B-34. capabilities.flying 해제 점프 이식 (A-5 발견)
+- [ ] B-34. 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling && capabilities.flying
+      → tryJump(Config.Up, null, null, null)`. 의존: B-31a 선행.
+
+#### B-35. wasCrawling↔isCrawling 전환 후처리 이식 (A-5 발견)
+- [ ] B-35. 원본 L2822-L2836 이식 — 두 방향 전환 시:
+      - `wasCrawling && !isCrawling && !initializeCrawling && !flying` →
+        resetHeightOffset + `move(0, crawlStandUpBottom - minY, 0)`
+      - `(isCrawling && !wasCrawling) || initializeCrawling` →
+        `setHeightOffset(-1F)` + `move(0, -1D, 0)` + (initializeCrawling 이면 toCrawling)
+      의존: B-31a/B-31c + B-40 toCrawling 헬퍼 선행.
+
+#### B-36. grab.StartPressed 수영/크롤 3분기 이식 (A-5 발견)
+- [ ] B-36. 원본 L2838-L2861 이식 — grab 엣지 3분기:
+      (a) isShallowDiveOrSwim + wouldWantClimb → walking 전환
+      (b) isDipping + wouldWantCrawl + depth>=BottomBorder + depth>=MediumBorder → 수영/다이빙 전환
+      (c) isDipping + wouldWantCrawl + depth>=BottomBorder + depth<MediumBorder → 얕은 물 크롤
+      의존: B-10a `isShallowDiveOrSwim` / B-10c `isStillSwimmingJump` + `wouldWantClimb` 선행.
+
+#### B-37. handleClimbing wall 오르기 crawl 진입 이식 (A-5 발견)
+- [ ] B-37. 원본 L985-L986 이식 — Climber.handleClimbing wantClimbUp + handsClimbing
+      IsRelevant 분기에 `isSliding=false; isCrawling=true` 추가.
+
+#### B-38. handleCeilingClimbing 진입 시 isCrawling=false 이식 (A-5 발견)
+- [ ] B-38. 원본 L1170 대응 — Climber.handleCeilingClimbing L571 isCeilingClimbing=true
+      이후 `sm.isCrawling = false` 추가.
+
+#### B-39. landMotionPost 3분기 (isSlow + 0.5D) 이식 (A-5 발견)
+- [ ] B-39. 원본 L1392-L1403 3분기 (`crawlStandUpBottom > minY`) 중 **isSlow && > minY+0.5D
+      → crawling** 서브 분기 ClientState fromSwimmingOrDiving 에 추가 (현재 2분기만 이식).
+
+#### B-40. `toCrawling()` 헬퍼 메서드 신설 + 호출 지점 정리 (A-5 발견)
+- [ ] B-40. 원본 L3047-L3054 함수 이식 — `boolean toCrawling()` (ClientState 메서드):
+      `{ isCrawling = true; if (cfg.crawlToggle) crawlToggled = true;
+         ignoreNextStopSneakButtonPressed = true; return true; }`
+      기존 inline 3줄 (IMPL-01 L674-L677) + B-35/B-36 에서 사용.
+
+#### B-41. `wantCrawlNotClimb` 갱신 블록 이식 (A-5 발견)
+- [ ] B-41. 원본 L2452-L2461 이식 — grab.StartPressed + !wasCrawling 등 4-AND 조건.
+      의존: B-31b 필드 선행.
+
+#### B-42. `mustCrawl` AABB 정밀 개선 (A-5 발견 — 근사 이식 기록)
+- [ ] B-42. 1.21.1 `canStandUp(player)` 메서드 근사 → 원본 `getMaxPlayerSolidBetween /
+      getMinPlayerSolidBetween` 정밀 AABB 근사. 1.21.1 AABB API 제약으로 §7 근사 유지
+      가능 — 별도 포커스 후보 (focus_??? 분리).
+
+#### B-N. A-6 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -871,6 +956,62 @@ isAerodynamic + L2546-L2550 SlideToHeadJumping 전환 덤프 → 1.21.1 ClientSt
 종합 의존). 원본 `handleSwimming` 크롤 분기 + tickEssential 크롤 판정 +
 updateEntityActionState L2347-L3044 전체 크롤 관련 + R-09 블록 (L2966-L3045).
 
+### 세션 35 — 2026-04-24 — A-5 (isCrawling + contextContinueCrawl) 완료
+
+**진행한 작업**:
+- 원본 `.tmp_research/SmartMovingSelf.java` 갱신 위치 전수 grep:
+  * isCrawling 19곳 / contextContinueCrawl 4곳 / wantCrawl/mustCrawl/canCrawl 계산 블록
+  * tickEssential L2395-L2450 (mustCrawl + inputContinueCrawl + contextContinueCrawl 해제
+    + wouldWantCrawl + wantCrawl + canCrawl 5-AND + 메인 공식)
+  * toCrawling() 함수 L3047-L3054
+  * 전환 후처리 L2822-L2836 + grab.StartPressed 3분기 L2838-L2861
+  * wall 오르기 L985-L986 / handleCeilingClimbing L1170 / landMotionPost L1377-L1403
+- 1.21.1 ClientState IMPL-01 블록 (L661-L693) + pre-compute (L564-L622) +
+  fromSwimmingOrDiving (L1056-L1070) side-by-side
+- `SmartMovingSelf.md` **R-14 섹션 신설** (11 서브섹션):
+  * R-14.1 필드 선언 (3건 미이식) / R-14.2 갱신 위치 맵 (원본 19곳 + contextContinueCrawl 4곳) /
+  * R-14.3 tickEssential 크롤 판정 블록 (메인 공식 포함) / R-14.4 1.21.1 IMPL-01 구조 차이 /
+  * R-14.5 toCrawling() 함수 / R-14.6 wall 오르기 / R-14.7 landMotionPost 3분기 /
+  * R-14.8 grab.StartPressed 수영/크롤 3분기 / R-14.9 wasCrawling↔isCrawling 전환 후처리 /
+  * R-14.10 **불일치 15건** / R-14.11 B-31~B-42 원자 예비안
+- **핵심 발견**:
+  * 메인 공식 **구조 차이** — 원본 매 틱 재계산 vs 1.21.1 IMPL-01 진입/해제 이원화 (중대)
+  * **canCrawl 9-AND 잉여** — 원본 5-AND (1:1 원칙 위배, 근사 주석 달려있음)
+  * **wasCrawling 필드 누락** — wasCrawling_st (R-09 전용) 와 혼동 방지 필요
+  * `grab.StartPressed` 수영/크롤 3분기 전체 미이식 (A-2 isShallowDiveOrSwim 의존)
+  * 전환 후처리 (heightOffset + move) + `initializeCrawling` 필드 미이식
+  * wall 오르기 `isSliding=false + isCrawling=true` 쌍 전환 미이식
+  * landMotionPost 3분기 중 isSlow+0.5D 분기 1개 누락
+- §10 B-31 ~ B-42 12 원자 신설 (B-31 서브 3개 포함 최대 14):
+  * B-31 미이식 필드 3건 / B-32 canCrawl 5-AND 복원 / B-33 메인 공식 재작성
+  * B-34 capabilities.flying 해제 점프 / B-35 전환 후처리 / B-36 grab 3분기
+  * B-37 wall 오르기 / B-38 ceiling 진입 / B-39 landMotionPost 3분기
+  * B-40 toCrawling 헬퍼 / B-41 wantCrawlNotClimb / B-42 mustCrawl AABB 정밀
+- §1 진행 상황 갱신, §5.2 R-14 인용 추가
+
+**완료 전 검증 체크리스트 (A-5 기준)**:
+- [근거] 원본 isCrawling 19곳 + contextContinueCrawl 4곳 + 의존 계산 블록 전수 확보 ✓
+- [근거] tickEssential 크롤 판정 + 전환 후처리 + grab 3분기 + wall/ceiling/landMotionPost
+  전수 확인 ✓
+- [대응] 원본 ↔ 1.21.1 (ClientState IMPL-01 + pre-compute + fromSwimmingOrDiving)
+  side-by-side 완료 ✓
+- [분기] mustCrawl AABB / 5-AND canCrawl / 매 틱 공식 / 전환 후처리 2방향 / grab
+  3분기 / handleClimbing 분기 / landMotionPost 3분기 전부 식별 ✓
+- [상수] `SwimCrawlWaterTopBorder` / `SwimCrawlWaterBottomBorder` /
+  `SwimCrawlWaterMediumBorder` / `_fallingDistanceMinimum` / `_crawlOverEdge` /
+  `crawlStandUpCeiling 1.1D 오프셋` / `-0.05 ground 제한` 기록 ✓
+- [타이밍] 갱신 순서 (mustCrawl → inputContinueCrawl → contextContinueCrawl 해제 →
+  wouldWantCrawl → wantCrawl → canCrawl → wasCrawling 저장 → isCrawling 메인 공식 →
+  contextContinueCrawl !isCrawling 해제 → capabilities.flying 해제 점프 → 전환 후처리 →
+  grab 3분기) 기록 ✓
+- [근사] mustCrawl AABB 는 §7 에 기록된 근사. B-42 에서 개선 시도 (별도 포커스 후보)
+- [신규] §10 B-31~B-42 원자 12개 추가 ✓
+- [회귀] 코드 변경 없음 (리서치/문서만)
+- [빌드] 해당 없음
+
+**다음 작업**: A-6 — 이력 3개 `wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`
+전수 감사. R-09 토글 블록 + 이전 틱 스냅샷 저장 위치 확인.
+
 ---
 
 ## 16. 신규 발견
@@ -1232,6 +1373,101 @@ R-13 섹션 전수 덤프 기반. isAerodynamic 은 이미 R-05/포커스#6 B-5 
 - 6순위: **B-25+B-26** (직접 진입 조건 + 부수 동작) — 묶음 (B-22b+c+B-1d 선행)
 - 7순위: **B-27** (fallDistance 분기)
 - 8순위: **B-28** (handleClimbing 해제) — B-14 와 겹치면 합병
+
+### 세션 35 A-5 — isCrawling + contextContinueCrawl 불일치 15건 확정
+
+R-14 섹션 전수 덤프. isCrawling 은 가장 복잡한 상태 — 원본 19곳 갱신 중 1.21.1 미이식
+다수. contextContinueCrawl 4곳은 거의 이식됨.
+
+1. **메인 공식 구조 차이** (원본 L2442 vs 1.21.1 IMPL-01 L661-L693)
+   - 원본: 매 틱 `wasCrawling = isCrawling; isCrawling = canCrawl && (wantCrawl || mustCrawl)`
+   - 1.21.1: 진입 분기(!isCrawling → canCrawl 평가) + 해제 분기(isCrawling → mustCrawl/
+     crawlToggled/isSneaking 판정) 이원화
+   - 영향: 원본의 자연 해제 (canCrawl false 시 isCrawling=false) 가 1.21.1 에서 누락.
+     수영/등반 진입해도 isCrawling 유지 가능.
+   - 분류: [오역] / 수정 B-33.
+
+2. **canCrawl 9-AND 잉여 (원본 5-AND)** (원본 L2434-L2439 vs 1.21.1 L669-L672)
+   - 원본 5-AND: `!swim && !dive && (!dipping || shallow) && !climbing && fallDistance<min`
+   - 1.21.1 9-AND: 추가 `!crawlClimbing && !ceilingClimbing && !sliding && !headJumping && !flying`
+   - 주석 "1.21.1 근사" 로 의도적 추가 (세션 30 원칙 위배 — 1:1 복원 필요)
+   - 분류: [잉여] / 수정 B-32.
+
+3. **`wasCrawling` 필드 누락** (원본 L2441 tickEssential 저장)
+   - 1.21.1 에 `wasCrawling_st` (R-09 전용) 만 있고 tickEssential 저장 전용 wasCrawling
+     없음. 혼동 방지 위해 별도 필드 필요
+   - 분류: [누락] / 수정 B-31a.
+
+4. **capabilities.flying 해제 점프 미이식** (원본 L2449-L2450)
+   - `wasCrawling && !isCrawling && capabilities.flying → tryJump(Config.Up, null,null,null)`
+   - 비행 중 크롤 해제 시 자동 점프 누락
+   - 분류: [누락] / 수정 B-34.
+
+5. **wasCrawling↔isCrawling 전환 후처리 미이식** (원본 L2822-L2836)
+   - 해제: `resetHeightOffset + move(0, crawlStandUpBottom - minY, 0)`
+   - 진입: `setHeightOffset(-1F) + move(0, -1D, 0)` (+ initializeCrawling 분기)
+   - 크롤 진입/해제 시 1 블록 수직 조정 전무 → 플레이어 위치 이상
+   - 분류: [누락] / 수정 B-35.
+
+6. **grab.StartPressed 수영/크롤 3분기 미이식** (원본 L2838-L2861)
+   - (a) shallow dive/swim + wouldWantClimb → walking 전환
+   - (b) dipping + wouldWantCrawl + depth>=Medium → 수영/다이빙
+   - (c) dipping + wouldWantCrawl + depth<Medium → 얕은 물 크롤
+   - 의존: A-2 isShallowDiveOrSwim 미이식 (B-10a) → 연쇄 영향
+   - 분류: [누락] / 수정 B-36.
+
+7. **handleClimbing wall 오르기 crawl 진입 미이식** (원본 L985-L986)
+   - `isSliding && handsClimbing.IsRelevant() → isSliding=false; isCrawling=true`
+   - Climber 내 wall 오르기 시 slide→crawl 쌍 전환 없음
+   - 분류: [누락] / 수정 B-37.
+
+8. **handleCeilingClimbing 진입 시 isCrawling=false 미이식** (원본 L1170)
+   - 천장 등반 진입 시 crawl 자동 해제 없음 — 상태 충돌 가능
+   - 분류: [누락] / 수정 B-38.
+
+9. **landMotionPost 3분기 중 isSlow+0.5D 누락** (원본 L1398)
+   - 1.21.1 fromSwimmingOrDiving 에 1/2분기만 이식 (L1063/L1068), 3분기 (`isSlow &&
+     crawlStandUpBottom > minY + 0.5D`) 누락
+   - 분류: [누락] / 수정 B-39.
+
+10. **`toCrawling()` 함수 부분 이식** (원본 L3047-L3054)
+    - 1.21.1 IMPL-01 내부 3줄 inline 만 — 다른 호출 지점 (5/6 미이식) 에서 미사용
+    - 분류: [부분] / 수정 B-40 (헬퍼 신설 + 호출 정합성).
+
+11. **`wantCrawlNotClimb` 필드 + 갱신 미이식** (원본 L2452-L2461)
+    - grab.StartPressed + !wasCrawling 4-AND 갱신
+    - 사용처: climbing 관련 — A-3 B-19 의존 가능성
+    - 분류: [누락] / 수정 B-31b + B-41.
+
+12. **`initializeCrawling` 필드 + 블록 미이식** (원본 L2399/L2822/L2831/L2834)
+    - mustCrawl 계산 + 전환 후처리에 사용 — 초기 틱 진입 시 boundingBox 처리 차이
+    - 분류: [누락] / 수정 B-31c.
+
+13. **`mustCrawl` AABB 근사** (원본 L2396-L2401 vs 1.21.1 L578)
+    - 원본: getMaxPlayerSolidBetween / getMinPlayerSolidBetween 정밀 AABB
+    - 1.21.1: `canStandUp(player)` 메서드 근사 (§7 기록)
+    - 분류: [근사] / 수정 B-42 (별도 포커스 후보).
+
+14. **`crawlStandUpBottom` 변수 미이식**
+    - 원본 L2396 지역변수 (B-35 전환 후처리에 사용)
+    - 분류: [누락] / B-35 내 포함.
+
+15. **토글 모드 분기 시점 차이** — 원본은 `inputContinueCrawl` 공식 내 `grabButton.Pressed`
+    가 `!Config.isFreeClimbingEnabled()` 와 조합 (L2407). 1.21.1 L586-L594 는
+    crawlToggle 분기만 있고 grabButton.Pressed 조건 위치가 조금 다를 수 있음. 검증 필요.
+    - 분류: [검증 필요] / B-N 추가 시.
+
+**수정 범위**: §10 B-31~B-42 (12 원자 + B-31a~c 3 서브 = 최대 14).
+**우선순위 권고 (A-5)**:
+- 1순위: **B-31a~c** (미이식 필드 3건) — 다른 B-N 의존
+- 2순위: **B-32** (canCrawl 5-AND 복원) — 1:1 원칙 즉시 수정 대상
+- 3순위: **B-33** (메인 공식 재작성) — 가장 구조적 변경
+- 4순위: **B-40** (toCrawling 헬퍼) — 중복 제거
+- 5순위: **B-34+B-35** (capabilities 점프 + 전환 후처리)
+- 6순위: **B-37+B-38** (Climber 수정 2건)
+- 7순위: **B-39** (landMotionPost 3분기)
+- 8순위: **B-41** (wantCrawlNotClimb) + **B-36** (grab 3분기) — 의존 필드 선행 필요
+- 9순위: **B-42** (mustCrawl AABB — 별도 포커스 분리 권장)
 
 ---
 

@@ -3885,3 +3885,341 @@ if ((player.isSprinting() || sm.isFast) && cfg.slide) {
 - **B-28**: handleClimbing 진입 시 `isSliding=false` 이식 (L985) — B-14 resetClimbing 내 포함 가능
 - **B-29**: `toSlidingOrCrawling` 조건 정정 (원본 L2226)
 - **B-30**: `isStanding` 갱신 공식 이식 (tickEssential L2734 `horizontalSpeedSquare < 0.0005`)
+
+---
+
+## R-14 추가 리서치 — isCrawling/contextContinueCrawl 전수 덤프 (2026-04-24 세션 35 — 포커스 #2 A-5)
+
+포커스 #2 A-5 감사 — isCrawling 및 contextContinueCrawl 전수 매핑. 가장 복잡한
+상태 — 13필드 중 가장 많은 갱신 위치 (19+) 보유.
+
+### R-14.1 관련 필드 선언
+
+```java
+// --- SmartMoving.java (부모) L43 ---
+public boolean isCrawling;
+
+// --- SmartMovingSelf.java 관련 필드 ---
+public boolean contextContinueCrawl;      // swim/dive → crawl 전환 보존 플래그
+public boolean wantCrawl;                 // 매 틱 계산 (L2430)
+public boolean mustCrawl;                 // 공간 부족 강제 (L2401)
+public boolean wasCrawling;               // 이전 틱 isCrawling 저장 (L2441)
+public boolean wantCrawlNotClimb;         // crawl 선호 (climb 아님)
+public boolean crawlToggled;              // 토글 상태
+public boolean initializeCrawling;        // 초기화 플래그 (L2827)
+public boolean ignoreNextStopSneakButtonPressed;  // toCrawling() 직후 무시
+```
+
+**1.21.1 이식 상태** (ClientState grep):
+- **이식됨**: `isCrawling` / `contextContinueCrawl` / `wantCrawl` / `mustCrawl` /
+  `crawlToggled` / `ignoreNextStopSneakButtonPressed` / `wasCrawling_st` / `wantCrawl`
+- **미이식**: `wasCrawling` 필드 (wasCrawling_st 는 R-09 토글 블록용 별도) /
+  `wantCrawlNotClimb` / `initializeCrawling`
+
+### R-14.2 갱신 위치 맵
+
+**원본 isCrawling** (19곳):
+| 위치 | 동작 | 맥락 |
+|---|---|---|
+| L430 | false | handleSwimming 크롤→수영 전환 (R-06/R-11.6) |
+| L519 | true | handleSwimming 얕은 물 특수 분기 isSlow (R-11.9) |
+| L530 | false | handleSwimming 얕은 물 특수 분기 walking (R-11.9) |
+| L986 | true | handleClimbing wall 오르기 (`isSliding && handsClimbing.IsRelevant()`) |
+| L1170 | false | handleCeilingClimbing 진입 시 |
+| L1380 | true | landMotionPost diving deep → small hole crawl |
+| L1387 | true | landMotionPost diving deep → below water crawl (contextContinueCrawl=true) |
+| L1398 | true | landMotionPost standing + isSlow → crawling |
+| L2217 | false | standUp() |
+| L2295 | false | resetState() |
+| L2349 | (toCrawling 호출) | updateEntityActionState 진입부 |
+| **L2442** | **메인 공식** | `isCrawling = canCrawl && (wantCrawl \|\| mustCrawl)` |
+| L2573 | false | isSliding fallDistance 분기 (B-27, R-13.5) |
+| L2752 | false | isCrawlClimbing 진입 시 (R-12.5) |
+| L2768 | toCrawling | isCrawlClimbing 해제 분기 |
+| L2835 | toCrawling | initializeCrawling 분기 |
+| L2853 | false | grab.StartPressed + dipping + depth>=Medium 분기 |
+| L2860 | toCrawling | grab.StartPressed + dipping + depth<Medium 분기 |
+| L3049 | true | toCrawling() 함수 내부 |
+
+**원본 contextContinueCrawl** (4곳):
+| 위치 | 동작 |
+|---|---|
+| L1388 | true — landMotionPost below water crawl |
+| L2411 | false — tickEssential inputContinueCrawl/isInWater/mustCrawl 해제 |
+| L2416 | false — tickEssential 액체 천장 해제 |
+| L2447 | false — tickEssential !isCrawling 해제 |
+
+**1.21.1 대응**:
+| 원본 | 1.21.1 | 상태 |
+|---|---|---|
+| L2395-L2447 tickEssential 크롤 판정 블록 | ClientState L564-L622 | ✓ 이식 (부분) |
+| **L2442 메인 공식** | ClientState L673 (IMPL-01 내부, 조건부) | ✗ 구조 다름 |
+| L2441 wasCrawling 저장 | 없음 (wasCrawling_st 는 R-09 전용) | ✗ 누락 |
+| L2449-L2450 capabilities.flying tryJump(Up) | 없음 | ✗ 누락 |
+| L2822-L2836 wasCrawling↔isCrawling 전환 후처리 | 없음 (IMPL-01 은 진입 시점 처리만) | ✗ 누락 |
+| L2838-L2861 grab.StartPressed 수영/크롤 분기 | 없음 | ✗ 누락 |
+| L986 wall 오르기 crawl 진입 | Climber 내 없음 | ✗ 누락 |
+| L1170 handleCeilingClimbing false | Climber L511-L571 내 없음 | ✗ 누락 |
+| L1380/L1387/L1398 landMotionPost 3분기 | ClientState L1063/L1068 (2분기만) | ✗ 1개 누락 (L1398) |
+| L2753 toCrawling 호출 | IMPL-01 L676-L677 inline | ✓ 호환 |
+| contextContinueCrawl 4곳 전부 | ClientState L598/L602/L622/L1069 | ✓ 이식 |
+
+### R-14.3 tickEssential 크롤 판정 블록 (원본 L2395-L2450) 핵심 공식
+
+```java
+// --- SmartMovingSelf.java L2395-L2447 (핵심) ---
+// mustCrawl 계산
+boolean mustCrawl = false;
+double crawlStandUpBottom = -1;
+if(isCrawling || isClimbCrawling)
+{
+    crawlStandUpBottom = getMaxPlayerSolidBetween(minY - (initializeCrawling ? 0D : 1D), minY,
+                         Config._crawlOverEdge.value ? 0 : -0.05);
+    double crawlStandUpCeiling = getMinPlayerSolidBetween(maxY, maxY + 1.1D, 0);
+    mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < sp.height - heightOffset;
+}
+
+if(esp.capabilities.isFlying && (Config.isFlyingEnabled() || Config.isLevitateSmallEnabled()))
+    mustCrawl = false;
+
+// inputContinueCrawl (L2407)
+boolean inputContinueCrawl = Options.isCrawlToggleEnabled()
+    ? crawlToggled
+    : sneakButton.Pressed || !Config.isFreeClimbingEnabled() && grabButton.Pressed;
+
+// contextContinueCrawl 해제 (L2408-L2418)
+if(contextContinueCrawl) {
+    if(inputContinueCrawl || sp.isInWater() || mustCrawl)
+        contextContinueCrawl = false;
+    else if(isCrawling) {
+        double crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(maxY, maxY + 1.1D);
+        if(crawlStandUpLiquidCeiling - crawlStandUpBottom >= sp.height + 1F)
+            contextContinueCrawl = false;
+    }
+}
+
+// wouldWantCrawl (L2419-L2428)
+boolean wouldWantCrawl = !esp.capabilities.isFlying && (
+    (isCrawling && (inputContinueCrawl || contextContinueCrawl)) ||
+    (grabButton.StartPressed && (sneakToggled || sneakButton.Pressed) && sp.onGround)
+);
+
+// wantCrawl (L2430-L2432)
+boolean wantCrawl = Config.isCrawlingEnabled() && wouldWantCrawl;
+
+// canCrawl (L2434-L2439) — 5-AND
+boolean canCrawl =
+    !isSwimming &&
+    !isDiving &&
+    (!isDipping || (dippingDepth + heightOffset) < SwimCrawlWaterTopBorder) &&
+    !isClimbing &&
+    sp.fallDistance < Config._fallingDistanceMinimum.value;
+
+// 메인 공식 (L2441-L2444) — 매 틱 재계산
+wasCrawling = isCrawling;
+isCrawling = canCrawl && (wantCrawl || mustCrawl);
+
+// !isCrawling 해제 (L2446-L2447)
+if(!isCrawling)
+    contextContinueCrawl = false;
+
+// capabilities.flying 해제 점프 (L2449-L2450)
+if (wasCrawling && !isCrawling && esp.capabilities.isFlying)
+    tryJump(Config.Up, null, null, null);
+```
+
+### R-14.4 1.21.1 IMPL-01 블록 (L661-L693) — 구조 차이
+
+```java
+// 1.21.1 L661-L693 (현재)
+if (cfg.crawl) {
+    boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
+    if (!isCrawling) {
+        // 진입 분기 — canCrawl 평가 (원본 확장)
+        boolean canCrawl = !isSwimming_sm && !isDiving
+                && (!isDipping || dippingDepth < 0.65F)
+                && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                && !isSliding && !isHeadJumping && !isFlying;
+        if (canCrawl && (wantCrawl || mustCrawl)) {
+            isCrawling = true;
+            if (cfg.crawlToggle) crawlToggled = true;
+            ignoreNextStopSneakButtonPressed = true;
+        }
+    } else {
+        // 해제 분기 — canCrawl 재평가 없음
+        if (mustCrawl) {
+            // 유지
+        } else if (crawlToggled) {
+            if (grabJustPressed) {
+                isCrawling = false;
+                crawlToggled = false;
+            }
+        } else {
+            if (!player.isSneaking()) isCrawling = false;
+        }
+    }
+}
+```
+
+**구조 차이 요약**:
+1. **매 틱 재계산 vs 진입/해제 이원화** — 원본은 공식 하나로 모든 전환 커버, 1.21.1 은
+   진입 시점에만 canCrawl 평가
+2. **canCrawl 확장** — 원본 5-AND vs 1.21.1 9-AND (crawlClimbing/ceilingClimbing/
+   sliding/headJumping/flying 추가) — 1:1 위배 (주석에 "근사" 명시)
+3. **해제 분기 canCrawl 재평가 누락** — 원본은 자연 해제, 1.21.1 은 수동
+4. **`wasCrawling` 저장 누락** — 1.21.1 에 wasCrawling 필드 별도 존재 여부 확인 필요
+
+### R-14.5 `toCrawling()` 함수 (원본 L3047-L3054)
+
+```java
+private boolean toCrawling() {
+    isCrawling = true;
+    if(Options.isCrawlToggleEnabled())
+        crawlToggled = true;
+    ignoreNextStopSneakButtonPressed = true;
+    return true;
+}
+```
+
+**1.21.1**: 별도 함수 없음. IMPL-01 L673-L677 에 inline 으로 3줄 펼쳐짐. 호출 지점
+(원본 L2349/L2566/L2760/L2812/L2835/L2860) 중 1.21.1 이식된 곳은 IMPL-01 만. 나머지
+전부 미이식 (A-4 B-28 와 중복 일부).
+
+### R-14.6 handleClimbing wall 오르기 crawl 진입 (원본 L985-L986)
+
+```java
+// --- SmartMovingSelf.java L985-L986 ---
+if(wantClimbUp) {
+    if(isSliding && handsClimbing.IsRelevant()) {
+        isSliding = false;
+        isCrawling = true;
+    }
+    handsClimbing = handsClimbing.ToUp();
+    // ...
+}
+```
+
+**1.21.1**: SmartMovingClimber 내 대응 분기 없음 (grep 0건). 등반 시 슬라이딩+크롤 동시
+전환 경로 누락.
+
+### R-14.7 landMotionPost 3분기 (원본 L1377-L1403)
+
+```java
+// --- SmartMovingSelf.java L1377-L1403 ---
+if(crawlStandUpCeiling - crawlStandUpBottom < sp.height) {
+    // 1분기: diving deep → small hole crawl
+    isCrawling = true;
+    isDipping = false;
+    setHeightOffset(-1F);
+} else if(crawlStandUpLiquidCeiling - crawlStandUpBottom < sp.height) {
+    // 2분기: diving deep → below water crawl
+    isCrawling = true;
+    contextContinueCrawl = true;
+    isDipping = false;
+    setHeightOffset(-1F);
+} else if(crawlStandUpBottom > sp.boundingBox.minY) {
+    // 3분기: diving deep → walking/crawling
+    if(isSlow && crawlStandUpBottom > sp.boundingBox.minY + 0.5D) {
+        isCrawling = true;
+        isDipping = false;
+        setHeightOffset(-1F);
+    }
+    move(0, (crawlStandUpBottom - sp.boundingBox.minY), 0, true);
+}
+```
+
+**1.21.1 ClientState L1056-L1070** (fromSwimmingOrDiving):
+- 1분기 이식 (L1063)
+- 2분기 이식 (L1068 + contextContinueCrawl=true L1069)
+- **3분기 미이식** (isSlow + 0.5D 오프셋 분기 없음)
+
+### R-14.8 grab.StartPressed 수영/크롤 분기 (원본 L2838-L2861)
+
+```java
+// --- SmartMovingSelf.java L2838-L2861 ---
+if(grabButton.StartPressed)
+    if(isShallowDiveOrSwim && wouldWantClimb) {
+        // shallow 걷기 전환
+        resetHeightOffset();
+        move(0, (getMaxPlayerSolidBetween(minY, maxY, 0) - minY), 0, true);
+        if(jumpButton.Pressed) isStillSwimmingJump = true;
+    }
+    else if(isDipping && wouldWantCrawl && dippingDepth >= SwimCrawlWaterBottomBorder)
+        if(dippingDepth >= SwimCrawlWaterMediumBorder) {
+            // 수영/다이빙으로
+            setHeightOffset(-1F);
+            move(0, (-1.6F + dippingDepth), 0, true);
+            isCrawling = false;
+        } else {
+            // 얕은 물 크롤
+            setHeightOffset(-1F);
+            move(0, (-1D), 0, true);
+            wasCrawling = toCrawling();
+        }
+```
+
+**1.21.1**: 미이식. grab 시작 시 수영↔크롤↔걷기 전환 3분기 전무. 의존 필드
+`isShallowDiveOrSwim` / `wouldWantClimb` / `isStillSwimmingJump` 미이식 (A-2 A-3 관련).
+
+### R-14.9 wasCrawling↔isCrawling 전환 후처리 (원본 L2822-L2836)
+
+```java
+// --- SmartMovingSelf.java L2822-L2836 ---
+if((wasCrawling && !isCrawling) && !initializeCrawling && !esp.capabilities.isFlying)
+{
+    resetHeightOffset();
+    move(0, (crawlStandUpBottom - sp.boundingBox.minY), 0, true);
+}
+else if((isCrawling && !wasCrawling) || initializeCrawling)
+{
+    setHeightOffset(-1F);
+    if(!initializeCrawling || sp.worldObj.isRemote)
+        move(0, (-1D), 0, true);
+    if(initializeCrawling)
+        wasCrawling = toCrawling();
+}
+```
+
+**역할**: isCrawling 상태 전환 시 heightOffset + 블록 1칸 이동 처리.
+**1.21.1**: 미이식. 높이 조정 / 블록 이동 / `initializeCrawling` 필드 전부 없음.
+
+### R-14.10 불일치 목록 (A-5)
+
+| # | 원본 | 1.21.1 | 분류 |
+|---|---|---|---|
+| 1 | L2442 매 틱 공식 `isCrawling = canCrawl && (wantCrawl \|\| mustCrawl)` | IMPL-01 진입/해제 이원화 (매 틱 재계산 없음) | [오역] |
+| 2 | L2434-L2439 canCrawl 5-AND | 1.21.1 9-AND (crawlClimbing/ceilingClimbing/sliding/headJumping/flying 추가) | [잉여] |
+| 3 | L2441 `wasCrawling = isCrawling` 저장 | 없음 (wasCrawling_st 는 R-09 전용) | [누락] |
+| 4 | L2449-L2450 `wasCrawling && !isCrawling && capabilities.flying → tryJump(Up)` | 없음 | [누락] |
+| 5 | L2822-L2836 wasCrawling↔isCrawling 전환 후처리 (heightOffset + move) | 없음 | [누락] |
+| 6 | L2838-L2861 grab.StartPressed 수영/크롤 3분기 | 없음 | [누락] |
+| 7 | L986 handleClimbing wall 오르기 `isSliding=false; isCrawling=true` | 없음 | [누락] |
+| 8 | L1170 handleCeilingClimbing 진입 시 isCrawling=false | 없음 (Climber 에 대응 없음) | [누락] |
+| 9 | L1398 landMotionPost 3분기 (isSlow + 0.5D) | 1.21.1 1/2분기만 이식, 3분기 누락 | [누락] |
+| 10 | L2752 isCrawlClimbing 진입 isCrawling=false | A-3 B-17 범위 (미이식) | [누락] |
+| 11 | L3047-L3054 `toCrawling()` 함수 | inline 처리 (호환) — 다만 호출 지점 5/6 미이식 | [부분] |
+| 12 | `wantCrawlNotClimb` 필드 + 갱신 (L2452-L2461) | 필드 없음 | [누락] |
+| 13 | `initializeCrawling` 필드 + 관련 블록 (L2827/L2831/L2834) | 필드 없음 | [누락] |
+| 14 | `wasCrawling` 필드 | ClientState 에 없음 (wasCrawling_st 는 R-09 전용) | [누락] |
+| 15 | `mustCrawl` 계산 AABB (getMaxPlayerSolidBetween/getMinPlayerSolidBetween 정밀) | 1.21.1 `canStandUp(player)` 메서드 근사 | [근사 — §7] |
+
+### R-14.11 B-N 이식 우선순위 예비안
+
+- **B-31**: 미이식 필드 3건 이식 (`wasCrawling` / `wantCrawlNotClimb` / `initializeCrawling`)
+- **B-32**: canCrawl 공식 정정 — 9-AND → 원본 5-AND 복원 (1:1 원칙)
+- **B-33**: 메인 공식 재작성 — 매 틱 `isCrawling = canCrawl && (wantCrawl || mustCrawl)` +
+  `wasCrawling = isCrawling` 사전 저장 (IMPL-01 이원화 구조 대체)
+- **B-34**: `wasCrawling && !isCrawling && capabilities.flying → tryJump(Up)` 이식
+  (원본 L2449-L2450)
+- **B-35**: wasCrawling↔isCrawling 전환 후처리 이식 (원본 L2822-L2836)
+  — heightOffset + move + initializeCrawling 분기
+- **B-36**: grab.StartPressed 수영/크롤 3분기 이식 (원본 L2838-L2861)
+  — 의존: B-10 (isShallowDiveOrSwim), B-10c (isStillSwimmingJump)
+- **B-37**: handleClimbing wall 오르기 crawl 진입 이식 (원본 L985-L986)
+- **B-38**: handleCeilingClimbing 진입 시 isCrawling=false 이식 (원본 L1170)
+- **B-39**: landMotionPost 3분기 (isSlow + 0.5D) 이식 (원본 L1398)
+- **B-40**: `toCrawling()` 헬퍼 메서드 신설 + 호출 지점 정합성 정리 (inline 된 3줄을
+  모두 헬퍼로 치환하여 중복 방지 + 원본 호출 지점 재정렬)
+- **B-41**: `wantCrawlNotClimb` 갱신 블록 이식 (원본 L2452-L2461)
+- **B-42**: `mustCrawl` AABB 정밀 개선 — canStandUp 근사 → getMax/MinPlayerSolidBetween
+  근사치 향상 (1.21.1 AABB API 제약 — §7 유지 가능, 별도 포커스 후보)
