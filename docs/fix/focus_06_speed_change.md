@@ -8,9 +8,10 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ⚪ 대기 (#5 완료 후 진입) |
-| 현재 단계 | — |
-| 선행 의존 | #5 (`enabled` / `toggler` 의미 확정) |
+| 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
+| 현재 단계 | ✅ A-1/A-2/A-3 완료 (누락 2건 + 확인 4건 식별) / ⏳ **B-1 진행 (헬퍼 정비)** |
+| 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
+| 선행 의존 | #5 완료 (세션 23) |
 
 ---
 
@@ -198,12 +199,58 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 ## 10. 원자 단위 작업 목록
 
 ### A. 호출처 감사
-- [ ] A-1. Agent WebFetch — 원본 `SmartMovingSelf.java` 에서 `getUserSpeedFactor` / `_speedUserFactor` / `_speedUserExponent` 참조 위치 **전부** 덤프
-- [ ] A-2. 1.21.1 `grep -rn "getUserSpeedFactor\|speedUserFactor\|speedUserExponent" src/` 실행 → 호출처 목록 작성
-- [ ] A-3. 원본 호출처 vs 1.21.1 호출처 매핑 — 누락 위치 리스트업
+- [x] A-1. Agent WebFetch — 원본 `SmartMovingSelf.java` 에서 `getUserSpeedFactor` 참조 전수 덤프.
+      핵심 발견: `Config.getUserSpeedFactor` → `getConfigSpeedFactor`(Self L156) → 2갈래 확산
+      (a) L119 `speedFactor` 지역변수 → `handleSwimming`/`handleLand`/`handleAlternativeFlying`
+      (b) `getCombinedSpeedFactor`(L149) → L780/L822/L843/L893/L1522/L2045 직접 곱셈 6곳.
+      원본 본체 + 호출처 14곳 전부 세션 24 에 덤프.
+- [x] A-2. 1.21.1 `grep "getUserSpeedFactor\|speedUserFactor\|speedUserExponent"` 실행. 호출처:
+      (i) `Flyer.handleFlying L55` — 이식됨 ✓
+      (ii) `Climber L250/L325` — combinedFactor 이식됨 ✓ (부분)
+      (iii) `Mover.getSpeedFactor` 최종 4단계 헬퍼 — **호출처 0건, dead code** ⚠️
+- [x] A-3. 누락 매핑 표 작성 (§10 하단 "A-3 매핑" 테이블 참조). **핵심 누락 2건 확정**:
+      (1) **Land 이동 전체** — vanilla travel() 이 처리 → User 배율 미반영. 체감 최대.
+      (2) **Swim/Dive** — `Swimmer.handleSwimming L190`: `cfg.diveSpeedFactor/swimSpeedFactor`
+          만, User 배율 곱셈 없음.
+      부가 확인 대상 4건: Climb 하강 클램프(L780) / Smart 사다리(L893) / Free climb(L1522) /
+      Jump maxHorizontalMotion(L2045). B 단계에서 각 Climber/Jumper 대응 라인 점검.
 
-### B. 호출처 이식 (A-3 누락 위치마다 원자 작업 추가)
-- [ ] B-N. (A-3 결과에 따라 채움)
+#### A-3 매핑 테이블 (세션 24)
+
+| # | 원본 | 1.21.1 대응 | 상태 | B 단계 |
+|---|---|---|---|---|
+| 1 | `getConfigSpeedFactor` 본체 (Self L156) | `Mover.getConfigSpeedFactor` | ⚠️ `cfg.enabled` 가드 미이식 | B-1 |
+| 2 | `getCombinedSpeedFactor` 본체 (Self L149) | 단일 헬퍼 부재, 인라인 | ⚠️ 헬퍼 신설 권장 | B-1 |
+| 3 | **Land 이동 L119** speedFactor 진입 | vanilla travel() | ❌ **누락** | B-2 |
+| 4 | **Swim/Dive L476-L561** | `Swimmer L190` | ❌ **누락** | B-3 |
+| 5 | Flying L622 | `Flyer L55` | ✓ 이식됨 | — |
+| 6 | Climb 하강 클램프 L780 | `Climber` 해당 라인 확인 필요 | ⚠️ 확인 | B-4 |
+| 7 | 표준 사다리 L822 | `Climber L250` | ✓ 이식됨 | — |
+| 8 | Simple 사다리 L843 | `Climber L325` | ✓ 이식됨 | — |
+| 9 | Smart 사다리 L893 | `Climber` 확인 필요 | ⚠️ 확인 | B-4 |
+| 10 | Free climb L1522 | `Climber.setOnlyShouldClimbSpeed` 대응 | ⚠️ 확인 | B-4 |
+| 11 | 점프 max 수평 L2045 | `Jumper` 확인 필요 | ⚠️ 확인 | B-5 |
+| 12 | 키 입력 L2326 | `ClientState.tickEssential` + SpeedChangePayload | ✓ 이식됨 | — |
+
+### B. 호출처 이식 (A-3 결과 기반 원자 작업 분해)
+- [ ] B-1. **헬퍼 정비** — `Mover.getConfigSpeedFactor` 에 `cfg.enabled ? ... : 1F` 가드 추가
+      (원본 Self L156 1:1). `getCombinedSpeedFactor(player, cfg)` 단일 헬퍼 신설 (기존 인라인
+      `getConfigSpeedFactor * getPotionSpeedFactor` 대체). 기존 `Climber` 2곳 호출을 새 헬퍼로 대체.
+- [ ] B-2. **Land 이동 User 배율 이식** (핵심 누락 1) — vanilla travel() 경로에 User 배율
+      주입. `MixinLivingEntityClient.sm_travel_client` 또는 `LivingEntity.travel` 에 Inject 로
+      movementInput 을 `getUserSpeedFactor()` 곱 처리. 또는 `GENERIC_MOVEMENT_SPEED` attribute
+      modifier 로 적용. 두 접근 비교 후 선택.
+- [ ] B-3. **Swim/Dive User 배율 이식** (핵심 누락 2) — `Swimmer.handleSwimming L190` 의
+      `speedFactor = isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor` 직후 또는 동일 라인에
+      `* cfg.getUserSpeedFactor()` 추가. 원본 Self L119 의 `getConfigSpeedFactor` 포함 구조와 정합.
+- [ ] B-4. **Climb 3갈래 확인/보완** — `SmartMovingClimber` 에서
+      (a) 사다리 하강 클램프 `motionY = max(motionY, -0.15 * combinedFactor)` 존재 여부
+      (b) Smart 모드 `motionY *= combinedFactor` 존재 여부
+      (c) Free climb / Ceiling climb motionY factor 에 User 배율 포함 여부
+      누락 시 각각 combinedFactor 곱셈 추가.
+- [ ] B-5. **점프 maxHorizontalMotion User 배율 이식** — `SmartMovingJumper.tryJump` 또는 대응
+      지점에서 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
+      원본 Self L2045 1:1. 현재 getMaxHorizontalMotion 자체가 이식됐는지도 확인.
 
 ### C. 클라이언트/서버 동기화 경로 정합
 - [ ] C-1. 서버 `processSpeedChangePacket` 이 `changeSingleSpeed` 로 서버측 개인값 갱신 후, 해당 플레이어에게 `broadcastConfig` 또는 **개인 Config 재전송** 호출 여부 확인
@@ -293,7 +340,38 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 
 ## 15. 작업 기록
 
-_(비어있음 — #5 완료 후 진입 시 기록)_
+### 세션 24 — 2026-04-24 — A 단계 (호출처 감사) 완료
+
+**진행한 작업**:
+- **A-1** Agent WebFetch — 원본 `SmartMovingSelf.java` 전수 감사. 핵심 구조 파악:
+  - `Config.getUserSpeedFactor()` → `getConfigSpeedFactor`(Self L156) → 2갈래 확산
+    (a) Self L119 `speedFactor` 지역변수 → `handleSwimming`/`handleLand`/`handleAlternativeFlying`
+    (b) `getCombinedSpeedFactor`(L149) → L780/L822/L843/L893/L1522/L2045 직접 곱셈 6곳
+  - 원본 호출처 14곳 전부 덤프됨. 추가 WebFetch 불필요.
+- **A-2** 1.21.1 grep — 현재 호출처 전수:
+  - `SmartMovingFlyer.handleFlying L55`: `cfg.speedFactor * cfg.getUserSpeedFactor()` ✓
+  - `SmartMovingClimber L250 / L325`: `combinedFactor = Mover.getConfigSpeedFactor * Mover.getPotionSpeedFactor` ✓
+  - `SmartMovingMover.getSpeedFactor` 최종 4단계 헬퍼: **호출처 0건, dead code**
+- **A-3** 매핑 테이블 작성 (§10 A-3 하단). 핵심 누락 2건 + 확인 4건:
+  - ❌ **Land 이동** (걷기/달리기/스프린트/점프) — vanilla travel() 처리라 User 배율 미반영
+  - ❌ **Swim/Dive** — `Swimmer L190` 에서 `cfg.diveSpeedFactor/swimSpeedFactor` 만, User 배율 없음
+  - ⚠️ Climb 하강 클램프(L780) / Smart 사다리(L893) / Free climb(L1522) / Jump maxHorizontal(L2045)
+    — Climber/Jumper 에서 대응 라인 점검 필요 (B-4/B-5)
+- **B 단계 원자 분해** — B-1 (헬퍼 정비) / B-2 (Land) / B-3 (Swim) / B-4 (Climb 3갈래) /
+  B-5 (Jump max horizontal). §10 에 각 체크박스 정의 완료.
+
+**완료 전 검증 체크리스트 (A 단계 기준)**:
+- [근거] 원본 SmartMovingSelf.java WebFetch 로 직접 확인 ✓
+- [근거] Config.java L498-L503 `getUserSpeedFactor` / `isUserSpeedAlwaysDefault` / `changeSpeed` 본체 확인 ✓
+- [대응] 원본 호출처 14 ↔ 1.21.1 호출처 3 매핑 완료 ✓
+- [분기] 원본 14곳 중 이식 3 / 누락 2 / 확인 대기 4 / 기타 5(UI/키/본체 등) 분류 완료 ✓
+- [상수/타이밍/근사] 해당 없음 (감사 단계)
+- [신규] `Mover.getSpeedFactor` dead code 발견 — B-1 에서 헬퍼 정비 시 제거 또는 활용 결정
+- [회귀] 코드 변경 없음
+- [빌드] 해당 없음 (리서치)
+
+**다음 작업**: B-1 — `Mover.getConfigSpeedFactor` 에 `cfg.enabled` 가드 추가 + 단일
+`getCombinedSpeedFactor` 헬퍼 신설 + 기존 인라인 호출 대체. 원본 Self L149-L156 1:1.
 
 ---
 
