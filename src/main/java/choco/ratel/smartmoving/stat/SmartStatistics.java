@@ -27,6 +27,12 @@ public class SmartStatistics {
     public float currentCameraAngle;
     public float currentVerticalAngle;
     public float currentHorizontalAngle;
+    /**
+     * 원본: SmartRenderRender.statistics.prevHorizontalAngle — 이전 계산값.
+     * atan(xDiff/zDiff) 가 NaN(xDiff=0 && zDiff=0)일 때 fallback 경로에서 사용.
+     * 최초값 NaN → currentCameraAngle 사용, 그 이후 prev 사용.
+     */
+    public float prevHorizontalAngle = Float.NaN;
 
     // ── 기타 ───────────────────────────────────────────────────
     public float smallOverGroundHeight;
@@ -39,7 +45,7 @@ public class SmartStatistics {
      * move() 이후 delta = currentPos - prevPos = 이번 틱 실제 이동량.
      */
     public void calculate(double prevX, double prevY, double prevZ,
-                          double x, double y, double z) {
+                          double x, double y, double z, float yawDegrees) {
         double diffX = x - prevX;
         double diffY = y - prevY;
         double diffZ = z - prevZ;
@@ -58,16 +64,26 @@ public class SmartStatistics {
         // 평탄화 수평 속도 (EMA on EMA: factor=0.5)
         currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened * 0.5f + currentHorizontalSpeed * 0.5f;
 
+        // 원본 SmartRenderRender L95: currentCameraAngle = rotationYaw / RadiantToAngle (= Math.toRadians)
+        currentCameraAngle = (float) Math.toRadians(yawDegrees);
+
         // 수직 이동 각도 (라디안): 수평 이동 방향에서 위/아래 각도
-        // 원본: atan(yDiff/h), h==0 → NaN → Quarter(π/2). 순수 수직 이동 시 항상 Quarter 반환.
+        // 원본 SmartRenderRender L96-98: atan(yDiff/h), h==0 → NaN → Quarter(π/2). 순수 수직 이동 시 Quarter.
         currentVerticalAngle = (horizontalDistance > 1e-4)
                 ? (float) Math.atan2(diffY, horizontalDistance)
                 : (float) (Math.PI / 2f);
 
-        // 수평 이동 방향 각도 (world Y 기준): 원본 currentHorizontalAngle
-        currentHorizontalAngle = (horizontalDistance > 1e-4)
-                ? (float) Math.atan2(diffX, diffZ)
-                : currentHorizontalAngle;
+        // 원본 SmartRenderRender L100-111: -atan(xDiff/zDiff). NaN(xDiff=0&&zDiff=0) 시
+        //   prevHorizontalAngle NaN → currentCameraAngle, 아니면 prev 사용.
+        //   정상 값이면 zDiff<0 일 때 +π 보정. Minecraft rotationYaw convention(+Z=0, +X=-π/2, -X=+π/2).
+        float newH = (float) -Math.atan(diffX / diffZ);
+        if (Float.isNaN(newH)) {
+            newH = Float.isNaN(prevHorizontalAngle) ? currentCameraAngle : prevHorizontalAngle;
+        } else if (diffZ < 0) {
+            newH += (float) Math.PI;
+        }
+        prevHorizontalAngle = newH;
+        currentHorizontalAngle = newH;
 
         // 누적 거리
         totalHorizontalDistance += (float) horizontalDistance;
@@ -89,6 +105,7 @@ public class SmartStatistics {
         currentCameraAngle = 0;
         currentVerticalAngle = 0;
         currentHorizontalAngle = 0;
+        prevHorizontalAngle = Float.NaN;
         smallOverGroundHeight = 0;
     }
 }

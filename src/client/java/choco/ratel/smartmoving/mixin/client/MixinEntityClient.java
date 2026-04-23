@@ -76,8 +76,10 @@ public abstract class MixinEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
         // C-25: SmartStatistics 갱신 — prevX/Y/Z는 tickMovement HEAD에서 저장된 이전 위치
+        // yaw: 원본 SmartRenderRender.currentCameraAngle = rotationYaw / RadiantToAngle 용
         sm.stats.calculate(player.prevX, player.prevY, player.prevZ,
-                           player.getX(), player.getY(), player.getZ());
+                           player.getX(), player.getY(), player.getZ(),
+                           player.getYaw());
 
         // 클라이밍 이동 거리 누적
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {

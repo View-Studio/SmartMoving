@@ -83,6 +83,26 @@ public class MixinPlayerEntityRenderer {
                 || sm.isHeadJumping || sm.isCrawling
                 || sm.isFlying || sm.isAngleJumping();
         if (!smActive) return;
+
+        // 원본 SmartMovingModel.md isSwim L474 / isDive L532:
+        //   isSwim: horizontalAngle = horizontalDistance < (isGenericSneaking ? 0.005 : 0.015)
+        //                             ? currentCameraAngle : currentHorizontalAngle
+        //   isDive: horizontalAngle = totalDistance < (isGenericSneaking ? 0.005 : 0.015)
+        //                             ? currentCameraAngle : currentHorizontalAngle
+        //   → bipedOuter.rotateAngleY = horizontalAngle (라디안)
+        //   isGenericSneaking = moving.isSlow (SmartMovingRender.md L152)
+        if (sm.isSwimming_sm || sm.isDiving) {
+            float threshold = sm.isSlow ? 0.005F : 0.015F;
+            double dist = sm.isDiving ? sm.stats.totalDistance : sm.stats.horizontalDistance;
+            float horizontalAngle = dist < threshold
+                    ? sm.stats.currentCameraAngle
+                    : sm.stats.currentHorizontalAngle;
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
+            return;
+        }
+
+        // 그 외 SM 상태: forwardRotation = atan2(-vel.x, vel.z) (현재 이동 방향 즉석 계산)
         Vec3d vel = localPlayer.getVelocity();
         if (vel.x * vel.x + vel.z * vel.z < 1e-4) return;
         smBodyYawActive = true;
