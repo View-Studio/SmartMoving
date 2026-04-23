@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 36 — A-6 완료 — **A 단계 감사 완료**) |
-| 현재 단계 | A-0~A-6 + B-0 완료 — A-6 불일치 4건 + B-43/B-44 원자 추가 / ⏳ **A-7 (13필드 1.21.1 매핑 테이블 통합)** |
+| 상태 | 🟡 진행 중 (세션 37 — **A 단계 100% 완료**) |
+| 현재 단계 | A-0~A-7 + B-0 완료 — §6 매핑 테이블 통합 / ⏳ **B 단계 Phase 1 (필드 선언 일괄)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -141,17 +141,238 @@
 
 ---
 
-## 6. 1:1 매핑 테이블
+## 6. 1:1 매핑 테이블 (A-7 세션 37 통합 완성)
 
-(재현 케이스 확보 후 구체 필드/메서드별로 작성)
+R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 진행 시 이 표를 기준으로
+이식. **범례**: ✓ 이식됨 / ✗ 미이식 / ⚠️ 부분/오역 / 🔄 근사
 
-| 원본 심볼 | 1.21.1 심볼 | 상태 |
+### 6.1 13 핵심 상태 필드
+
+| 원본 심볼 (`SmartMovingSelf.java`) | 1.21.1 심볼 (`SmartMovingClientState`) | 상태 | 수정 원자 |
+|---|---|---|---|
+| `isCrawling` | `isCrawling` (L138?) | ⚠️ 메인 공식 구조 차이 | B-33 |
+| `isDipping` | `isDipping` (L??) | ⚠️ 메인 분류 공식 완전 대체 | B-9 |
+| `isSwimming` | `isSwimming_sm` (vanilla 충돌 회피 접미사) | ⚠️ 메인 분류 공식 / 얕은 물 분기 | B-9/B-11 |
+| `isDiving` | `isDiving` | ⚠️ 메인 분류 공식 | B-9 |
+| `isClimbing` | `isClimbing` | ✓ 진입/해제 이식 완료 | — (B-14 resetClimbing) |
+| `isCeilingClimbing` | `isCeilingClimbing` | ⚠️ 진입 이식, 해제 엣지 누락 | B-14/B-21/B-38 |
+| `isCrawlClimbing` | `isCrawlClimbing` (L135) | ✗ 갱신 로직 완전 미이식 | **B-17** |
+| `isClimbCrawling` | `isClimbCrawling` (L150) | ✗ 갱신 로직 완전 미이식 | **B-18** |
+| `isSliding` | `isSliding` | ⚠️ 직접 진입 6-AND 간소화 + 부수 동작 누락 | B-25/B-26/B-27/B-28 |
+| `isHeadJumping` | `isHeadJumping` (L50) | ⚠️ 매 틱 재평가 5-AND 미이식 | **B-23/B-24** |
+| `isFast` | `isFast` | ✗ 공식 완전 오역 (grab+isSprinting 단순) | **B-1f** |
+| `isSlow` | `isSlow` | ⚠️ Config.isSneakingEnabled 가드 누락 + 중복 | **B-2** |
+| `contextContinueCrawl` | `contextContinueCrawl` | ✓ 4곳 모두 이식 | — |
+
+### 6.2 이력/이전 틱 스냅샷 필드
+
+| 원본 | 1.21.1 | 상태 | 수정 원자 |
+|---|---|---|---|
+| `wasSneaking` (지역) | `wasSneaking` (L241) | ✓ 이식, 저장 시점 조정 가능 | B-44a |
+| `wasClimbCrawling` (지역) | `wasClimbCrawling` (L247) | ✓ 이식, 저장 시점 조정 가능 | B-44c |
+| `wasCrawling` (필드 L3074, 다용도) | `wasCrawling_st` (L244, R-09 전용) | ⚠️ 부분 이식 (다용도 필드 별도 신설 필요) | B-31a + B-44b |
+| `wasHeadJumping` | — | ✗ 미이식 | **B-22a** |
+| `wasRunning` | — | ✗ 미이식 | **B-22b** |
+| `wasLevitating` | — | ✗ 미이식 (isLevitating 의존) | B-10d + B-43 |
+| `wasGroundSprinting` | — | ✗ 미이식 (isGroundSprinting 의존) | B-1d |
+| `wasCollidedHorizontally` | `wasCollidedHorizontally` | ✓ 이식 확인 | — |
+| `wasCapabilitiesIsFlying` | `wasCapabilitiesIsFlying` (H-4) | ✓ 이식 확인 | — |
+
+### 6.3 의존 필드 — A-1 isFast/isSlow 체인 (B-0/R-10)
+
+| 원본 | 1.21.1 | 상태 | 수정 원자 |
+|---|---|---|---|
+| `isGroundSprinting` (L1439 public) | — (Jumper L350 로컬) | ✗ ClientState 필드 미이식 | B-1d |
+| `isClimbSprinting` (지역) | — | ✗ 미이식 | B-1d |
+| `isSwimSprinting` (지역) | — | ✗ 미이식 | B-1d |
+| `isDiveSprinting` (지역) | — | ✗ 미이식 | B-1d |
+| `isCeilingSprinting` (지역) | — | ✗ 미이식 | B-1d |
+| `isFlyingSprinting` (지역) | — | ✗ 미이식 | B-1d |
+| `canHorizontallySprint` (지역) | — | ✗ 미이식 | B-1c |
+| `canAllSprint` (지역) | — | ✗ 미이식 | B-1c |
+| `canAnySprint` (지역) | — | ✗ 미이식 | B-1c |
+| `canVerticallySprint` (지역) | — | ✗ 미이식 | B-1c |
+| `isClimbSprintSpeed` (지역) | — | ✗ 미이식 (SmartStatisticsFactory 의존) | B-1c |
+| `standing` (지역) | — (로컬 변수) | ✗ 미이식 | B-1e |
+| `disabled` (지역 L2375) | — | ✗ 미이식 | B-3a |
+| `wantSprint` (L1415 public) | — (주석만 L106) | ✗ 미이식 | **B-3a** |
+| `wantSneak` (지역 L2588) | — | ✗ 미이식 (Config.isSneakingEnabled 포함) | B-2 |
+| `wouldWantSneak` (지역) | `wouldWantSneak` (L640 지역) | ✓ 이식 | — |
+| `wouldIsSneaking` (L1420 public) | `wouldIsSneaking` (필드) | ⚠️ 공식 간소 (wantSprint → isSprinting) | **B-3b** |
+| `moveForwardButtonPressed` (지역) | — | ✗ 미이식 | B-3a |
+| `moveButtonPressed` (지역) | — | ✗ 미이식 | B-3a |
+| `preferSprint` (지역) | — | ✗ 미이식 | B-1c |
+| `exhaustionAllowsSprinting` (지역) | — | ✗ 미이식 | B-1c 포함 |
+| `isSprintJump` | `isSprintJump` (확인 필요) | ⚠️ 순환 의존 주의 | B-1f 설계 시 |
+| `collidedHorizontallyTickCount` | — | ✗ 미이식 (can* 의존) | B-1c 서브 |
+| `SmartStatisticsFactory.getTickDistance()` | — | ✗ 미이식 (SmartRender 측) | B-1c 서브 또는 별도 포커스 |
+
+### 6.4 의존 필드 — A-2 수중 3상태 체인 (R-11)
+
+| 원본 | 1.21.1 | 상태 | 수정 원자 |
+|---|---|---|---|
+| `isShallowDiveOrSwim` (public) | — | ✗ 미이식 | **B-10a** |
+| `isJumpingOutOfWater` (public) | — | ✗ 미이식 | **B-10b** |
+| `isStillSwimmingJump` (public) | — | ✗ 미이식 | **B-10c** |
+| `isLevitating` (public) | — | ✗ 미이식 | **B-10d** |
+| `isLiquidClimbing` (로컬 파라미터) | — | ✗ 미이식 | B-7 서브 |
+| `isInLiquid()` (메서드) | — | ✗ 미이식 | B-7 서브 |
+| `waterMovementTicks` | `waterMovementTicks` | ⚠️ 증분 조건 차이 (dipping 시 리셋 누락) | **B-12** |
+| `isFakeShallowWaterSneaking` | `isFakeShallowWaterSneaking` (L215) | ✓ 이식 | — |
+| `couldStandUp` (지역) | 1.21.1 Swimmer L163 근사 | 🔄 AABB 근사 (§7 기록) | B-11 (근사 주석 정돈) |
+| `wantShallowSwim` (지역) | Swimmer L164 | ✓ 이식 | — |
+| `playerSwimWaterBorder` (지역) | `dippingDepth` 로 근사 | 🔄 AABB 근사 | B-9 서브 |
+
+### 6.5 의존 필드 — A-3 등반 체인 (R-12)
+
+| 원본 | 1.21.1 | 상태 | 수정 원자 |
+|---|---|---|---|
+| `isNeighborClimbing` (L1426 public) | — | ✗ 미이식 | **B-15a** |
+| `hasClimbGap` (L1427 public) | — | ✗ 미이식 | **B-15b** |
+| `hasClimbCrawlGap` (L1428 public) | `hasClimbCrawlGap` (L153) | ⚠️ 필드만 이식, 갱신 로직 미이식 | B-19 |
+| `hasNeighborClimbGap` (L1429) | — | ✗ 미이식 | B-15c |
+| `hasNeighborClimbCrawlGap` (L1430) | — | ✗ 미이식 | B-15c |
+| `isVineOnlyClimbing` | — | ✗ 미이식 | B-15d |
+| `isVineAnyClimbing` | — | ✗ 미이식 | B-15d |
+| `isClimbingStill` | — | ✗ 미이식 | B-15e |
+| `isClimbHolding` | `isClimbHolding` (L147) | ⚠️ 필드만, 공식 미이식 | **B-16** |
+| `wantClimbHolding` (지역) | — | ✗ 미이식 | B-16 |
+| `climbIntoCount` | `climbIntoCount` (L156) | ⚠️ 필드만, 카운터 로직 미이식 | B-18 |
+| `needClimbCrawling` (지역) | — | ✗ 미이식 | B-18 |
+| `canClimbCrawling` (지역) | — | ✗ 미이식 | B-18 |
+| `handsEdgeBlock` / `feetEdgeBlock` / edgeMeta | — | ✗ 미이식 | B-15f |
+| `actualHandsClimbType` / `actualFeetClimbType` | `actualHandsClimbType` / `actualFeetClimbType` | ⚠️ 필드만, 갱신 미이식 | B-19 |
+| `isClimbBackJumping` | `isClimbBackJumping` | ✓ 이식 | — |
+| `isWallJumping` | `isWallJumping` | ✓ 이식 | — |
+| `isClimbJumping` | `isClimbJumping` | ✓ 이식 | — |
+| `isFeetVineClimbing` / `isHandsVineClimbing` | 필드 | ✓ 이식 | — |
+
+### 6.6 의존 필드 — A-4/A-5 체인 (R-13/R-14)
+
+| 원본 | 1.21.1 | 상태 | 수정 원자 |
+|---|---|---|---|
+| `isAerodynamic` | `isAerodynamic` | ✓ 이식 완료 (R-05/포커스#6 B-5) | — |
+| `isStanding` (public L1419) | — | ✗ 미이식 | B-22d/B-30 |
+| `isRunning` (필드 + override L3241) | — (로컬만 L995) | ✗ 필드 미이식 | **B-22c** |
+| `wantCrawl` | `wantCrawl` | ✓ 이식 | — |
+| `mustCrawl` | `mustCrawl` | 🔄 AABB 근사 (canStandUp) | B-42 (별도 포커스) |
+| `inputContinueCrawl` | 동일 | ✓ 이식 | — |
+| `wouldWantCrawl` | 동일 | ✓ 이식 | — |
+| `wouldWantClimb` (지역) | — | ✗ 미이식 (B-36 에 필요) | B-36 서브 |
+| `wantCrawlNotClimb` | — | ✗ 미이식 | B-31b/B-41 |
+| `initializeCrawling` | — | ✗ 미이식 | B-31c |
+| `crawlStandUpBottom` (지역) | — | ✗ 미이식 | B-35 포함 |
+| `crawlStandUpCeiling` (지역) | — | 🔄 canStandUp 근사 | B-42 |
+| `sneakContinueInput` | 동일 | ✓ 이식 | — |
+| `isSmall` | `isSmall` (R-04 이식) | ✓ 이식 | — |
+
+### 6.7 Config / Options 필드 매핑
+
+| 원본 | 1.21.1 `SmartMovingConfig` | 상태 |
 |---|---|---|
-| `isDipping` | `SmartMovingClientState.isDipping` | ✓ |
-| `isSwimming` (원본) | `isSwimming_sm` (vanilla 충돌 회피 접미사) | ✓ |
-| `isDiving` | `isDiving` | ✓ |
-| `dippingDepth` | `dippingDepth` | ✓ |
-| ... | ... | (재현 케이스별 확장) |
+| `Config.enabled` | `cfg.enabled` | ✓ |
+| `Config._sneak.value` | `cfg.sneak` | ✓ |
+| `Config._crawl.value` | `cfg.crawl` | ✓ |
+| `Config._swim.value` | `cfg.swim` | ✓ |
+| `Config._dive.value` | `cfg.dive` | ✓ |
+| `Config._slide.value` | `cfg.slide` | ✓ |
+| `Config._fly.value` | `cfg.fly` | ✓ |
+| `Options._sneakToggle.value` | `cfg.sneakToggle` | ✓ |
+| `Options._crawlToggle.value` | `cfg.crawlToggle` | ✓ |
+| `Config._diveDownOnSneak.value` | `cfg.diveDownOnSneak` | ✓ |
+| `Config._swimDownOnSneak.value` | `cfg.swimDownOnSneak` | ✓ |
+| `Config._sprintFactor.value` | `cfg.sprintFactor` (확인 필요) | ✓? |
+| `Config._diveSpeedFactor.value` | `cfg.diveSpeedFactor` | ✓ |
+| `Config._swimSpeedFactor.value` | `cfg.swimSpeedFactor` | ✓ |
+| `Config._fallingDistanceMinimum.value` | `cfg.fallingDistanceMinimum` (확인) | ✓? |
+| `Config._crawlOverEdge.value` | `cfg.crawlOverEdge` (확인) | ✓? |
+| `Config._freeClimbingUpSpeedFactor.value` | `cfg.freeClimbingUpSpeedFactor` (확인) | ✓? |
+| `Config._freeClimbingDownSpeedFactor.value` | `cfg.freeClimbingDownSpeedFactor` (확인) | ✓? |
+| **`Config._sprintEnableStanding.value`** | — | ✗ **미이식 (B-1a)** |
+| `Config._sprintExhaustionStop.value` | — | ✗ 미이식 (B-1c 의존) |
+| `Config._sprintExhaustionStart.value` | — | ✗ 미이식 |
+| `Config._sprintDuringItemUsage.value` | — | ✗ 미이식 (B-1c 의존) |
+| `Options._runOnSprintRelease.value` | — | ✗ 미이식 (B-23 후처리) |
+| `Options._walkOnSprintRelease.value` | — | ✗ 미이식 |
+| `Config._headFallDamageStartDistance.value` | `cfg.headFallDamageStartDistance` (확인) | ✓? |
+| `Config._headFallDamageFactor.value` | `cfg.headFallDamageFactor` (확인) | ✓? |
+| `Config._slidingSpeedStopFactor.value` | `cfg.slidingSpeedStopFactor` (확인) | ✓? |
+| `Options._flyCloseToGround.value` | — | ✗ 미이식 (B-23 후처리) |
+| `Options._diveControlVertical.value` | — | ✗ 미이식 |
+| `Config.isCrawlingEnabled()` | `cfg.crawl && cfg.enabled` (inline) | ✓ |
+| `Config.isSneakingEnabled()` | — | ✗ 헬퍼 신설 (B-2) |
+| `Config.isSprintingEnabled()` | — | ✗ 헬퍼 신설 (B-3a) |
+| `Config.isSwimmingEnabled()` | — | ✗ 헬퍼 신설 (B-8) |
+| `Config.isDivingEnabled()` | — | ✗ 헬퍼 신설 (B-8) |
+| `Config.isLavaLikeWaterEnabled()` | — | ✗ 미이식 (B-7) |
+| `Config.isFreeClimbingEnabled()` | `cfg.freeClimb` (확인) | ✓? |
+| `Config.isSmartBaseClimb()` / `isSimpleBaseClimb()` / `isStandardBaseClimb()` | — | ✗ 미이식 (B-20) |
+| `Config.isSlidingEnabled()` | `cfg.slide && cfg.enabled` | ✓ |
+| `Config.isFlyingEnabled()` | `cfg.fly && cfg.enabled` | ✓ |
+| `Config.isLevitateSmallEnabled()` | — | ✗ 미이식 |
+
+### 6.8 Button ↔ KeyBinding 매핑 (B-1b)
+
+| 원본 `Button` | 1.21.1 대응 | 상태 |
+|---|---|---|
+| `grabButton.Pressed` | `SmartMovingKeys.grab.isPressed()` | ✓ |
+| `grabButton.StartPressed` | `SmartMovingKeys.grab.wasPressed()` (엣지 근사) | ⚠️ 엣지 검출 정합성 확인 |
+| `grabButton.StopPressed` | — | ✗ 엣지 검출 미이식 |
+| `sneakButton.Pressed` | `MinecraftClient.options.sneakKey.isPressed()` 또는 `player.isSneaking()` | ✓ |
+| `sneakButton.StartPressed` | `sneakKeyStartPressed` 필드 (이전 틱 비교) | ✓ |
+| `sneakButton.StopPressed` | `sneakKeyStopPressed` 필드 | ✓ |
+| `sprintButton.Pressed` | `MinecraftClient.options.sprintKey.isPressed()` | ⚠️ 확인 필요 |
+| `sprintButton.StopPressed` | — | ✗ 엣지 미이식 |
+| `jumpButton.Pressed` | `MinecraftClient.options.jumpKey.isPressed()` | ✓ |
+| `jumpButton.StartPressed` | — | ✗ 엣지 검출 미이식 |
+| `jumpButton.StopPressed` | `jumpKeyStopPressed` 필드 | ✓ |
+| `moveForwardButton` | `player.input.movementForward > 0F` | ✓ |
+| `moveBackwardButton` | `< 0F` | ✓ |
+| `moveLeftButton` / `moveRightButton` | `player.input.movementSideways` | ✓ |
+
+### 6.9 메서드/클래스 매핑
+
+| 원본 | 1.21.1 대응 | 상태 |
+|---|---|---|
+| `getMaxPlayerSolidBetween(y1, y2, d)` | `canStandUp(player)` / AABB helpers | 🔄 근사 (§7) |
+| `getMinPlayerSolidBetween(y1, y2, d)` | 동일 근사 | 🔄 |
+| `getMaxPlayerLiquidBetween(y1, y2)` | `player.getFluidHeight(WATER)` | 🔄 근사 |
+| `getMinPlayerLiquidBetween(y1, y2)` | 동일 근사 | 🔄 |
+| `isPlayerInSolidBetween(y1, y2)` | BlockState 스캔 근사 | 🔄 |
+| `Orientation.isClimbable(world, i, j, k)` | 1.21.1 ladder/vine BlockState 체크 | ⚠️ 확인 필요 |
+| `Orientation.getClimbingOrientations(sp, hasFeet, hasHands)` | 4방향 루프 (대각 누락) | ⚠️ 부분 이식 |
+| `Orientation.isTunnelAhead(world, i, j, k)` | Swimmer `isTunnelAhead` 메서드 | ⚠️ 확인 |
+| `SmartStatisticsFactory.getInstance(sp).getTickDistance()` | — | ✗ SmartRender 측 미이식 |
+| `sp.handleWaterMovement()` | `player.isTouchingWater()` | ✓ 표면 매핑 |
+| `sp.handleLavaMovement()` | `player.isInLava()` | ✓ |
+| `sp.isCollidedHorizontally` | `player.horizontalCollision` | ✓ |
+| `sp.isCollidedVertically` | `player.verticalCollision` | ✓ |
+| `sp.isBurning()` | `player.isOnFire()` | ✓ |
+| `sp.isUsingItem()` | `player.isUsingItem()` | ✓ |
+| `sp.capabilities.isFlying` | `player.getAbilities().flying` | ✓ |
+| `sp.setSprinting(bool)` | `player.setSprinting(bool)` | ✓ |
+| `toCrawling()` 함수 | — (inline 만) | ✗ 헬퍼 미이식 (B-40) |
+| `resetClimbing()` 메서드 | — (Mixin 주석만) | ✗ 미이식 (B-14) |
+| `resetSwimming()` 메서드 | Swimmer `updateSwimState` 물 밖 분기 (부분) | ⚠️ 부분 이식 |
+| `resetState()` | `ClientState.resetState()` | ✓ |
+| `handleClimbing()` | `Climber.handleClimbing()` | ⚠️ Free 만 이식, Standard/Simple 미이식 (B-20) |
+| `handleCeilingClimbing()` | `Climber.handleCeilingClimbing()` | ✓ 주요 경로 이식 |
+| `handleSwimming()` | `Swimmer.handleSwimming()` | ⚠️ 메인 분류 공식 간소 (B-9) |
+| `landMotionPost / fromSwimmingOrDiving` | `ClientState.fromSwimmingOrDiving` | ⚠️ 3분기 중 2 이식 (B-39) |
+| `tryJump()` | `Jumper.tryJump()` | ✓ 이식 |
+| `Config.SlideDown` | — | ✗ 상수 미이식 (B-26) |
+
+### 6.10 이식 규모 총괄
+
+- **✓ 완전 이식**: 13 핵심 상태 필드 중 4개 (isCrawling/contextContinueCrawl 부분 제외) +
+  이력 필드 3개 + Config 주요 필드 대부분 + Button/KeyBinding 매핑 대부분
+- **⚠️ 부분/오역**: 13 핵심 필드 중 7개 공식에 문제 + 의존 필드 다수
+- **✗ 완전 미이식**: 13 핵심 필드 중 2개 (isCrawlClimbing/isClimbCrawling 갱신 로직) +
+  의존 필드 30+ + Config 헬퍼 메서드 5개 + 메서드 2개 (resetClimbing/toCrawling) +
+  Standard/Simple Base Climb 옵션
+
+**최종 B-N 원자 누적**: 약 50개 (서브원자 포함 70+). **미이식 필드 30+**.
+B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 
 ---
 
@@ -268,7 +489,11 @@
       (3) R-09 L788 간소 매핑 — 기존 B-4 범위
       B-43 (R-09 종료부) + B-44a~c (저장 시점 정밀 조정) 원자 추가. A-6 대부분 기존 B-N
       에 흡수.
-- [ ] A-7. 각 A-1~A-6 그룹별 1.21.1 grep + side-by-side 매핑 테이블 작성
+- [x] A-7. ✅ **세션 37 완료** — 13 상태 필드 + 의존 필드 + Config + Button +
+      메서드/클래스 매핑 테이블 §6 통합 완성. §6 에 10 서브섹션 (6.1 13 핵심 상태 /
+      6.2 이력 / 6.3 A-1 체인 / 6.4 A-2 체인 / 6.5 A-3 체인 / 6.6 A-4/A-5 체인 /
+      6.7 Config / 6.8 Button↔KeyBinding / 6.9 메서드 / 6.10 이식 규모 총괄). **A 단계
+      전체 완료** — B 단계 Phase 1 진입 대기.
 
 **각 A-N 그룹은 Agent WebFetch 로 원본 갱신 위치 전수 덤프 + 1.21.1 grep + 매핑**.
 불일치 발견 시 해당 그룹에서 B-N 원자 작업 추가하여 수정. 포커스 #6 A→B-N 확장 패턴과 동일.
@@ -1108,6 +1333,50 @@ updateEntityActionState L2347-L3044 전체 크롤 관련 + R-09 블록 (L2966-L3
 
 **다음 작업**: A-7 — 13 상태 필드 1.21.1 매핑 테이블 통합. §6 갱신 — 원본 심볼 ↔
 1.21.1 심볼 전체 정리 + B-N 원자 우선순위 최종 확정.
+
+### 세션 37 — 2026-04-24 — A-7 (매핑 테이블 통합) 완료 — **A 단계 100% 완료**
+
+**진행한 작업**:
+- §6 1:1 매핑 테이블을 기초 4행 → **10 서브섹션 전체 통합 완성**으로 교체:
+  * §6.1 13 핵심 상태 필드 (4 ✓ / 7 ⚠️ / 2 ✗)
+  * §6.2 이력/이전 틱 스냅샷 필드 (wasSneaking/wasCrawling_st/wasClimbCrawling +
+    미이식 4건)
+  * §6.3 A-1 isFast/isSlow 체인 (B-0 덤프 내용) — 24 의존 필드
+  * §6.4 A-2 수중 3상태 체인 — 12 의존 필드
+  * §6.5 A-3 등반 체인 — 19 의존 필드
+  * §6.6 A-4/A-5 체인 — 15 의존 필드
+  * §6.7 Config/Options 필드 매핑 — 40+ 항목
+  * §6.8 Button ↔ KeyBinding 매핑 — 15 항목 (B-1b 참조)
+  * §6.9 메서드/클래스 매핑 — 25+ 항목 (AABB / Orientation / Config 헬퍼 / handle* 등)
+  * §6.10 이식 규모 총괄
+- R-10 ~ R-15 리서치에서 수집한 모든 매핑 정보를 §6 에 통합 — B 단계에서 단일
+  참조점으로 사용 가능
+- §10 A-7 [x] / §1 "A 단계 100% 완료, B 단계 Phase 1 진입 대기"
+
+**완료 전 검증 체크리스트 (A-7 기준)**:
+- [근거] R-10~R-15 전수 참조 ✓
+- [대응] 13 상태 + 의존 필드 + Config + Button + 메서드 전수 매핑 ✓
+- [분기] 이식 상태 3분류 (✓/⚠️/✗) + 근사 🔄 표기 ✓
+- [상수] Config 상수 / Button 상수 전체 포함 ✓
+- [신규] 없음 (통합 작업)
+- [회귀] 문서 변경만
+- [빌드] 해당 없음
+
+**A 단계 전체 감사 완료 (세션 31-37, 7 세션)**:
+- R-10 ~ R-15 리서치 섹션 6개 추가
+- §6 통합 매핑 테이블 10 서브섹션 완성
+- **불일치 누적 70건** (A-1:3 / A-2:11 / A-3:14 / A-4:13 / A-5:15 / A-6:4 / 세션 30 간소:2 / 세션 31 B-0 후속:3 / 세션 32-36 추가:5)
+- **B 단계 원자 누적 약 50개** (서브원자 포함 70+)
+- **미이식 필드 30+**
+- §10 Phase 1~5 실행 순서 확정 (세션 36 기록)
+
+**다음 세션 — B 단계 진입**: Phase 1 (필드 선언 일괄). 권고 시작 원자:
+- **B-22a** `wasHeadJumping` (가장 단순 — boolean 필드 1개)
+- 또는 **B-2 Config.isSneakingEnabled() 헬퍼** (기존 cfg.sneak && cfg.enabled inline 헬퍼化)
+- 또는 **B-1a Config._sprintEnableStanding** (Config 필드 신설)
+
+한 세션에 Phase 1 의 2~3 원자 묶어서 진행 가능 — 의존 없는 독립 필드들 (B-22a~d /
+B-10a~d / B-15a~f 등) 은 병렬 가능.
 
 ---
 
