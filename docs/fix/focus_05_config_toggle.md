@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-8 완료 (+ ClientState 2필드) / ⏳ **H-9 진행 (handleExhaustion 축소판 구현)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-9 완료 / ⏳ **H-10 진행 (tickEssential 호출 삽입)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -735,16 +735,13 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `lastHungerIncrease` 필드 추가 (`exhaustion` 뒤). 원본 SmartMovingSelf 의 동명 필드
       1:1 대응. javadoc 에 소비처 L863/L893(누적) / L911-L915(변화 감지 전송) 명시.
       `resetState()` 에 두 필드 초기화(0F) 추가.
-- [ ] H-9. **`SmartMovingClientState.handleExhaustion(player)` 축소판 이식** — 원본
-      SmartMovingSelf.md L849-L916 중 Easy 에서 실행되는 부분만:
-      (1) `horizontalMovement`/`movement`/`relevantMovementFactor` 계산
-      (2) `hungerGainFactor = Config.getFactor(true, ...)`
-      (3) `hungerIncrease += _alwaysHungerGain + relevantMovementFactor * 0.0001F * hungerGainFactor`
-      (4) `exhaustionLossFactor = Config.getFactor(false, ...)` + `exhaustionLoss = 1F * factor`
-      (5) `exhaustion -= exhaustionLoss` (클램프 0 이상)
-      (6) `hungerIncrease += _exhaustionLossHungerFactor * exhaustionLoss`
-      (7) `if (exhaustion == 0) maxExhaustionForAction = NaN` (해당 필드 없으면 (7) 생략)
-      Easy 에서 진입 안 하는 블록 (클라이밍/천장/스프린트/점프 피로) 은 전부 **제외**.
+- [x] H-9. **`SmartMovingClientState.handleExhaustion(player)` 축소판 이식** — 원본
+      SmartMovingSelf L849-L916 1:1 (Easy 실행 경로). canStandUp 뒤에 public 메서드 추가.
+      이동거리 계산 → isStanding/isStill/isRunning 로컬 파생(L1858/L1190/L1191/L3241) →
+      getFactor(true) → hungerIncrease 누적 → getFactor(false) → exhaustion 감소 (Math.max 0
+      클램프 유지) → 허기-소진 연동. Easy 배제 블록 5종(클라이밍/천장/스프린트 피로 + exhaustion==0
+      NaN 리셋 + 패킷 전송) javadoc 에 각각 이유 명시. getFactor 파라미터 매핑 주의사항
+      (isSneaking↔isSlow / isRunning↔로컬 / isSprinting↔isFast / isSwimming↔isSwimming_sm).
 - [ ] H-10. **`tickEssential` 호출 삽입** — `handleExhaustion(player)` 호출 위치:
       원본 `SmartMovingSelf.onLivingUpdate` 에서 호출. 1.21.1 대응은 tickEssential 말미
       (상태 캡처 이후) 적절.
@@ -1817,6 +1814,46 @@ SmartMovingClientConfig.java L554-L595 (§5.4 에 본체 임베드). 전처리 5
 private 메서드). 원본 SmartMovingSelf L849-L916 중 Easy 에서 실행되는 부분만:
 이동거리 계산 → hungerGainFactor → hungerIncrease 누적 → exhaustionLossFactor →
 exhaustion 감소 → hungerIncrease 허기연동. 점프/클라이밍/스프린트 피로 블록 전부 제외.
+
+### 세션 18 (계속) — 2026-04-24 — H-9 (handleExhaustion 축소판)
+
+**진행한 작업**:
+- `SmartMovingClientState.handleExhaustion(ClientPlayerEntity player)` public 메서드 추가
+  (canStandUp 헬퍼 뒤).
+- 원본 SmartMovingSelf L849-L916 + L1184-L1191 + L1858 + L3241 1:1 이식:
+  - 이동 거리: `player.getX() - player.prevX` 등 → `horizontalMovement` / `movement` / `relevantMovementFactor`.
+  - 로컬 상태 파생:
+    - `isStanding = horizontalSpeedSquare < 0.0005` (L1858)
+    - `isVerticalStill = Math.abs(diffY) < 0.007` (L1190)
+    - `isStill = isStanding && isVerticalStill` (L1191)
+    - `isRunning = player.isSprinting() && !isFast && onGround` (L3241, vanilla()=false 단순화)
+  - 허기 계산: `getFactor(true, ...)` → `hungerIncrease += alwaysHungerGain + movement*0.0001*factor`
+  - 소진 계산: `getFactor(false, ...)` → `exhaustionLoss = 1F*factor` → `exhaustion = max(0, exhaustion - exhaustionLoss)` → `hungerIncrease += exhaustionLossHungerFactor*exhaustionLoss`
+- **Agent WebFetch 로 isStill/isRunning 원본 정의 확인** (Easy 허기 계산 정확도 확보).
+- **Easy 배제 블록 5종 명시 제외** — javadoc 에 각각 이유 (클라이밍 L866-L876 / 천장 L877-L879 /
+  스프린트 L881-L883 / exhaustion==0 L897-L899 / 패킷 전송 L911-L915).
+- **getFactor 파라미터 매핑 주의사항** javadoc 기록:
+  - 원본 호출 L862: `Config.getFactor(true, sp.onGround, isStanding, isStill, isSlow, isRunning, isFast, ...)`
+  - 의미: `isSneaking` 위치에 `isSlow`, `isRunning` 위치에 로컬 isRunning, `isSprinting` 위치에 `isFast`.
+  - 1.21.1 `isSwimming` 위치에는 `isSwimming_sm` (_sm 접미사).
+
+**완료 전 검증 체크리스트 (H-9 기준)**:
+- [근거] SmartMovingSelf L849-L916 + L1184-L1191 + L1858 + L3241 리서치 확인 ✓
+- [근거] isStill/isRunning 정의 Agent WebFetch 로 확보 ✓
+- [대응] 원본 핵심 7줄 ↔ 구현 7블록 (이동거리 / 파생 / hunger factor / hunger+= /
+  exhaustion factor / exhaustion -= / hunger+= 허기연동) 1:1 ✓
+- [분기] Easy 제외 5종 블록 각각 이유 javadoc 명시 ✓
+- [상수] `0.0005` (isStanding) / `0.007` (isVerticalStill) / `0.0001F` (이동량 계수) 원본 그대로 ✓
+- [타이밍] H-10 에서 tickEssential 에 호출 삽입 예정
+- [근사] `vanilla()` → `false` 단순화 (enabled 때만 호출) / exhaustion `Math.max 0` 클램프
+  (1.21.1 기존 패턴 유지) — javadoc 에 각각 명시 ✓
+- [신규] 없음
+- [회귀] 신규 public 메서드 — 아직 호출 없음 (H-10 에서 연결). 기존 이식 영향 0.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-10 — `SmartMovingClientState.tickEssential` 에 `handleExhaustion(player)`
+호출 삽입. 기존 `exhaustion -= 1.0F` 단순 감소 로직과의 관계 정리 (중복 방지).
+원본 호출 타이밍은 `SmartMovingSelf.onLivingUpdate` — 1.21.1 대응 tickEssential.
 
 ---
 

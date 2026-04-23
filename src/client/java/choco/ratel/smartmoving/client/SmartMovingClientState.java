@@ -939,6 +939,84 @@ public final class SmartMovingClientState {
     }
 
     /**
+     * 원본 `SmartMovingSelf.handleExhaustion` (L849-L916, updateHunger 섹션 L1184-L1310) 의
+     * Easy 실행 경로만 이식한 축소판. 점프/클라이밍/천장/스프린트 피로 블록은 Easy 에서
+     * 게이트 false 라 진입 안 함 — 포커스 #5 범위 외로 전부 제외.
+     *
+     * **원본 대응 라인** (focus_05 §5.4):
+     * - L1184-L1191: 이동 거리 계산 + 로컬 상태(isStill/isRunning) 파생
+     * - L1858: `isStanding = horizontalSpeedSquare < 0.0005`
+     * - L862: `hungerGainFactor = Config.getFactor(true, ...)`
+     * - L863: `hungerIncrease += alwaysHungerGain + movement*0.0001F*hungerGainFactor`
+     * - L888: `exhaustionLossFactor = Config.getFactor(false, ...)`
+     * - L889-L890: `exhaustionLoss = 1F * factor`, `exhaustion -= exhaustionLoss`
+     * - L893: `hungerIncrease += exhaustionLossHungerFactor * exhaustionLoss`
+     *
+     * **제외된 원본 블록** (Easy 진입 안 함):
+     * - L866-L876 클라이밍 피로 (`_climbExhaustion=false`)
+     * - L877-L879 천장 피로 (`_ceilingClimbExhaustion=false`)
+     * - L881-L883 스프린트 피로 (`_sprintExhaustion=false`)
+     * - L897-L899 exhaustion==0 리셋 (maxExhaustionForAction 필드 N/A)
+     * - L911-L915 허기 패킷 전송 (H-11 별도)
+     *
+     * **getFactor 파라미터 매핑** (원본 L862/L888 호출):
+     * - isSneaking 자리 → `isSlow` (SM 의 sneak+!sprint+!climbing)
+     * - isRunning  자리 → 로컬 `isRunning` (`isSprinting() && !isFast && onGround`)
+     * - isSprinting 자리 → `isFast` (SM 의 grab+sprint)
+     * - isSwimming 자리 → `isSwimming_sm`
+     *
+     * @param player 현재 틱의 클라이언트 플레이어
+     */
+    public void handleExhaustion(ClientPlayerEntity player) {
+        // 원본 L1184-L1188 이동 거리 (sp.lastTickPosX 등 → vanilla prevX/Y/Z)
+        double diffX = player.getX() - player.prevX;
+        double diffY = player.getY() - player.prevY;
+        double diffZ = player.getZ() - player.prevZ;
+        float horizontalMovement = (float) Math.sqrt(diffX * diffX + diffZ * diffZ);
+        float movement = (float) Math.sqrt(horizontalMovement * horizontalMovement + (float)(diffY * diffY));
+        int relevantMovementFactor = Math.round(movement * 100F);
+
+        // 원본 L1858 isStanding = horizontalSpeedSquare < 0.0005
+        boolean onGround = player.isOnGround();
+        double vX = player.getVelocity().x;
+        double vZ = player.getVelocity().z;
+        double horizontalSpeedSquare = vX * vX + vZ * vZ;
+        boolean isStanding = horizontalSpeedSquare < 0.0005;
+        // 원본 L1190 isVerticalStill = Math.abs(diffY) < 0.007
+        boolean isVerticalStill = Math.abs(diffY) < 0.007;
+        // 원본 L1191 isStill = isStanding && isVerticalStill
+        boolean isStill = isStanding && isVerticalStill;
+        // 원본 L3241 isRunning() = sp.isSprinting() && !isFast && (sp.onGround || vanilla())
+        //   vanilla() = SM 비활성 상태. handleExhaustion 은 cfg.enabled 때만 호출되므로 false.
+        boolean isRunning = player.isSprinting() && !isFast && onGround;
+
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        // 원본 L862 hunger 배율
+        float hungerGainFactor = cfg.getFactor(true, onGround, isStanding, isStill,
+                isSlow, isRunning, isFast,
+                isClimbing, isClimbCrawling, isCeilingClimbing,
+                isDipping, isSwimming_sm, isDiving,
+                isCrawling, isCrawlClimbing);
+        // 원본 L863 상시 허기 + 이동량 허기
+        hungerIncrease += cfg.alwaysHungerGain + relevantMovementFactor * 0.0001F * hungerGainFactor;
+
+        // 원본 L888 exhaustion 배율
+        float exhaustionLossFactor = cfg.getFactor(false, onGround, isStanding, isStill,
+                isSlow, isRunning, isFast,
+                isClimbing, isClimbCrawling, isCeilingClimbing,
+                isDipping, isSwimming_sm, isDiving,
+                isCrawling, isCrawlClimbing);
+        // 원본 L889 exhaustionLoss = 1F * factor
+        float exhaustionLoss = 1F * exhaustionLossFactor;
+        // 원본 L890 exhaustion -= exhaustionLoss. 1.21.1 기존 패턴 유지 (Math.max 0 클램프).
+        exhaustion = Math.max(0F, exhaustion - exhaustionLoss);
+
+        // 원본 L893 허기-소진 연동
+        hungerIncrease += cfg.exhaustionLossHungerFactor * exhaustionLoss;
+    }
+
+    /**
      * 원본 SmartMovingSelf L1363-L1391 `fromSwimmingOrDiving(wasShortInWater)` 1:1 이식.
      *
      * 수영/잠수 종료 후 육상 전환 시 머리 위 공간 부족 판정:
