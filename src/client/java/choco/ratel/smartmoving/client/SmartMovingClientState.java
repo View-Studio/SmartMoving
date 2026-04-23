@@ -452,6 +452,16 @@ public final class SmartMovingClientState {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
 
+        // 원본 SmartMovingContext.interceptTick() L264: `Options.initializeForGameIfNeccessary()`.
+        // 매 tick gameType 변경 폴링. 로컬 설정(Config == INSTANCE) 일 때만 (서버 설정 덮어쓰기 방지).
+        // 리플렉션 `PlayerControllerMP.currentGameType` → `interactionManager.getCurrentGameMode().getId()`.
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE
+                && client.interactionManager != null) {
+            SmartMovingConfig.INSTANCE.initializeForGameIfNeccessary(
+                    client.interactionManager.getCurrentGameMode().getId());
+        }
+
         // 원본 Button.update() 대응 — 이번 틱 키 엣지 감지.
         // jumpButton.StartPressed / StopPressed / sneakButton.StartPressed / StopPressed 대응.
         // sm_travel_client 내 여러 핸들러에서 재참조 가능.

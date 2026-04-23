@@ -268,6 +268,23 @@ public class SmartMovingConfig {
             "h", "Hard"
     );
 
+    // ── gameType 상수 (원본 SmartMovingConfig L630-L633) ────────────────────
+    /** 원본 `Unknown = -1`. initializeForGameIfNeccessary 캐시 초기값 및 default 분기 트리거. */
+    public static final int GAME_TYPE_UNKNOWN   = -1;
+    /** 원본 `Survival = 0` — GameMode.SURVIVAL.getId() 와 일치. */
+    public static final int GAME_TYPE_SURVIVAL  = 0;
+    /** 원본 `Creative = 1` — GameMode.CREATIVE.getId() 와 일치. */
+    public static final int GAME_TYPE_CREATIVE  = 1;
+    /** 원본 `Adventure = 2` — GameMode.ADVENTURE.getId() 와 일치. */
+    public static final int GAME_TYPE_ADVENTURE = 2;
+
+    /**
+     * 원본 SmartMovingOptions.gameType (L... 캐시 필드). 초기값 Unknown.
+     * `initializeForGameIfNeccessary()` 가 현재 게임 타입과 비교하여 변경 감지.
+     * `resetForNewGame()` 로 Unknown 리셋 시 다음 호출에서 재초기화.
+     */
+    private int gameType = GAME_TYPE_UNKNOWN;
+
     // ── 게임타입별 config key 배열 + default key (원본 SmartMovingConfig L456-L463) ────
     // 원본 Property<String[]> / Property<String> 대응. CSV 직렬화(원본 comment:
     //   "entries seperated by ','"). `initializeForGameIfNeccessary()` 이식(F 섹션)에서
@@ -813,6 +830,80 @@ public class SmartMovingConfig {
                 toggler = -1;
         }
         updateToggler();
+    }
+
+    /**
+     * 원본 SmartMovingOptions.initializeForGameIfNeccessary() (L854-L903) 1:1 이식.
+     *
+     *   public void initializeForGameIfNeccessary() {
+     *       PlayerControllerMP controller = Minecraft.getMinecraft().playerController;
+     *       if (controller == null) return;
+     *       int currentGameType = ((GameType) Reflect.GetField(_currentGameType, controller)).getID();
+     *       if (currentGameType == gameType) return;
+     *       gameType = currentGameType;
+     *
+     *       String[] keys = null; String defaultKey = null;
+     *       switch (gameType) {
+     *           case Survival:  keys = _survivalConfigKeys.value;  defaultKey = _survivalDefaultConfigKey.value;  break;
+     *           case Creative:  keys = _creativeConfigKeys.value;  defaultKey = _creativeDefaultConfigKey.value;  break;
+     *           case Adventure: keys = _adventureConfigKeys.value; defaultKey = _adventureDefaultConfigKey.value; break;
+     *           default:        defaultKey = "";
+     *       }
+     *       setKeys(keys);
+     *       if (!defaultKey.isEmpty()) setCurrentKey(defaultKey);
+     *
+     *       if (_configChatInit.value) writeClientConfigMessageToChat(false);
+     *       if (isUserSpeedEnabled() && _speedChatInit.value) { ... }
+     *   }
+     *
+     * 1.21.1 차이:
+     *   - controller null 체크는 호출자 (`SmartMovingClientState`) 쪽에서 수행.
+     *   - 리플렉션 → `MinecraftClient.interactionManager.getCurrentGameMode().getId()` 주입.
+     *   - 채팅 초기화(_configChatInit / _speedChatInit) 분기는 범위 초과 — §16 기록.
+     *
+     * @param currentGameType GameMode.getId() 결과값 (Survival=0/Creative=1/Adventure=2/Spectator=3)
+     */
+    public void initializeForGameIfNeccessary(int currentGameType) {
+        if (currentGameType == gameType) return;
+        gameType = currentGameType;
+
+        String[] keys = null;
+        String defaultKey = null;
+
+        switch (gameType) {
+            case GAME_TYPE_SURVIVAL:
+                keys       = survivalConfigKeys;
+                defaultKey = survivalDefaultConfigKey;
+                break;
+            case GAME_TYPE_CREATIVE:
+                keys       = creativeConfigKeys;
+                defaultKey = creativeDefaultConfigKey;
+                break;
+            case GAME_TYPE_ADVENTURE:
+                keys       = adventureConfigKeys;
+                defaultKey = adventureDefaultConfigKey;
+                break;
+            default:
+                defaultKey = "";
+        }
+
+        setKeys(keys);
+        if (!defaultKey.isEmpty())
+            setCurrentKey(defaultKey);
+    }
+
+    /**
+     * 원본 SmartMovingOptions.resetForNewGame() (L844-L848) 1:1.
+     *
+     *   public void resetForNewGame() {
+     *       gameType = -1;
+     *   }
+     *
+     * 새 게임 시작(월드 진입/리스폰) 시 호출하여 다음 `initializeForGameIfNeccessary()`
+     * 호출에서 반드시 재초기화되도록 유도.
+     */
+    public void resetForNewGame() {
+        gameType = GAME_TYPE_UNKNOWN;
     }
 
     public void changeSpeed(int difference) {

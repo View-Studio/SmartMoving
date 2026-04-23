@@ -10,10 +10,10 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 |
-| 현재 단계 | ✅ A/B/C(1~7)/D/E 완료 / ⏳ F-1 대기 (gameType 기반 setKeys 호출) |
-| 잔여 섹션 | F (gameType 초기화) + G (검증 + 포커스 전환) |
+| 현재 단계 | ✅ A/B/C(1~7)/D/E/F 완료 / ⏳ G 섹션 대기 (검증 + 포커스 전환) |
+| 잔여 섹션 | G (검증 + playtest_fixes.md 포커스 전환) |
 | 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 |
-| 컴파일 상태 | ✅ 빌드 성공 (C-7 완료) |
+| 컴파일 상태 | ✅ 빌드 성공 (F-1/F-2/F-3 완료) |
 
 ---
 
@@ -419,9 +419,22 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       - 번역 키 원본 텍스트: Agent WebFetch 로 `en_US.lang` 확보 → `SmartMovingOptions.md` 에 추가.
 
 ### F. 게임타입별 configKeys 적용
-- [ ] F-1. `SmartMovingServer.initialize` 에서 `player.interactionManager.getGameMode()` 로 gameType 판정
-- [ ] F-2. gameType → setKeys 호출 (survival/adventure → "e,m,h", creative → "c")
-- [ ] F-3. gameType 변경 시 setKeys 재호출 여부 확인 — gamemode 변경 이벤트 훅 필요할 수도 (신규 발견 대상)
+
+**§10 F 재정의 (원본 구조 반영)**: 원본 `initializeForGameIfNeccessary()` 는 **클라이언트 측**
+메서드 (`Minecraft.getMinecraft().playerController` 기반). 1.21.1 대응은
+`MinecraftClient.getInstance().interactionManager.getCurrentGameMode()`. 매 tick 호출 + gameType
+캐시 비교로 변경 감지. 기존 "SmartMovingServer.initialize" 명시는 오지정 — 재정의.
+
+- [x] F-1/F-2. `initializeForGameIfNeccessary(int)` 이식 — 원본 L854-L903 1:1 (클라이언트 측).
+      gameType 캐시 필드 + switch (Survival/Creative/Adventure/default) + setKeys(keys) +
+      setCurrentKey(defaultKey). gameType 판정은 호출자에서 주입 (controller null 체크 포함).
+      `resetForNewGame()` 도 함께 이식 (원본 L844-L848). 상수 `GAME_TYPE_UNKNOWN/SURVIVAL/
+      CREATIVE/ADVENTURE` 정의 (원본 SmartMovingConfig L630-L633).
+      채팅 초기화 (_configChatInit / _speedChatInit 분기) 는 범위 초과 — §16 에 기록.
+- [x] F-3. 호출 타이밍 — `SmartMovingClientState.tickEssential` 시작부에 삽입. 원본
+      `SmartMovingContext.interceptTick() L264` 와 동일 위치. `Config == INSTANCE`
+      조건으로 서버 설정 덮어쓰기 방지. `client.interactionManager.getCurrentGameMode().getId()`
+      로 gameType 주입. tick 폴링으로 gameType 변경 감지 — 별도 이벤트 훅 불필요.
 
 ### G. 검증
 - [ ] G-1. `./gradlew build` 성공
@@ -1004,9 +1017,88 @@ override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
 1.21.1 대응: `MinecraftClient.getInstance().interactionManager.getCurrentGameMode()`.
 §10 F 재정의 필요 (현재 "SmartMovingServer.initialize" 로 명시되어 있으나 원본은 클라이언트 측).
 
+### 세션 11 — 2026-04-23 — F-1/F-2/F-3 (gameType 초기화)
+
+**진행한 작업**:
+- **§10 F 재정의**: 원본 `initializeForGameIfNeccessary()` 는 클라이언트 측
+  (`Minecraft.getMinecraft().playerController`). 기존 "SmartMovingServer.initialize" 오지정
+  — 클라이언트 tick 폴링으로 재정의.
+- **상수 추가** (`SmartMovingConfig`, 원본 SmartMovingConfig L630-L633):
+    - `GAME_TYPE_UNKNOWN   = -1`
+    - `GAME_TYPE_SURVIVAL  = 0`
+    - `GAME_TYPE_CREATIVE  = 1`
+    - `GAME_TYPE_ADVENTURE = 2`
+- **필드 추가**: `private int gameType = GAME_TYPE_UNKNOWN` (원본 캐시 필드).
+- **F-1/F-2 묶음**: `SmartMovingConfig.initializeForGameIfNeccessary(int)` 이식. 원본 L854-L903 1:1:
+    ```java
+    public void initializeForGameIfNeccessary(int currentGameType) {
+        if (currentGameType == gameType) return;
+        gameType = currentGameType;
+        String[] keys = null;
+        String defaultKey = null;
+        switch (gameType) {
+            case GAME_TYPE_SURVIVAL:  keys = survivalConfigKeys;  defaultKey = survivalDefaultConfigKey;  break;
+            case GAME_TYPE_CREATIVE:  keys = creativeConfigKeys;  defaultKey = creativeDefaultConfigKey;  break;
+            case GAME_TYPE_ADVENTURE: keys = adventureConfigKeys; defaultKey = adventureDefaultConfigKey; break;
+            default:                  defaultKey = "";
+        }
+        setKeys(keys);
+        if (!defaultKey.isEmpty()) setCurrentKey(defaultKey);
+    }
+    ```
+  - controller null 체크는 호출자로 위임 (원본 L859-L861).
+  - 리플렉션 → GameMode.getId() 주입 방식.
+  - `_configChatInit` / `_speedChatInit` 채팅 분기는 범위 초과 (§16 기록).
+- **resetForNewGame()** 도 함께 이식 (원본 L844-L848):
+    ```java
+    public void resetForNewGame() { gameType = GAME_TYPE_UNKNOWN; }
+    ```
+- **F-3 호출 타이밍**: `SmartMovingClientState.tickEssential` 시작부에 삽입:
+    ```java
+    MinecraftClient client = MinecraftClient.getInstance();
+    if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE
+            && client.interactionManager != null) {
+        SmartMovingConfig.INSTANCE.initializeForGameIfNeccessary(
+                client.interactionManager.getCurrentGameMode().getId());
+    }
+    ```
+  - 원본 `SmartMovingContext.interceptTick()` L264 와 동일 위치 (tick 폴링).
+  - `Config == INSTANCE` 조건으로 서버 설정 덮어쓰기 방지 (원본은 Options 객체 전용이라
+    서버 설정과 분리됨).
+- **빌드 문제 해결**: `MinecraftClient mc` 가 이미 내부 블록에 선언되어 있어 쉐도잉 충돌.
+  새 선언 이름 `client` 로 변경하여 회피.
+
+**완료 전 검증 체크리스트 (F-1/F-2/F-3 기준)**:
+- [근거] `SmartMovingOptions.md` L844-L903 (resetForNewGame + initializeForGameIfNeccessary) 확인 ✓
+- [근거] `SmartMovingContext.md` L264 호출 위치 확인 ✓
+- [대응] 원본 switch 4분기 ↔ 구현 switch 4분기(상수 치환) 1:1 ✓
+- [분기] 캐시 비교 조기 반환 / switch / `!defaultKey.isEmpty()` 가드 / `setKeys` / `setCurrentKey` ✓
+- [상수] Survival/Creative/Adventure 정수값 원본과 일치 (GameMode.getId() 와도 일치) ✓
+- [타이밍] 원본 `interceptTick` → 1.21.1 `tickEssential` 시작부 (동등) ✓
+- [근사] 리플렉션 `currentGameType` → GameMode.getId() 주입. controller null → 호출자.
+  채팅 초기화 블록 범위 초과. javadoc 에 "1.21.1 차이" 명시 ✓
+- [신규] 채팅 초기화 블록 미이식 — §16 에 추가 기록
+- [회귀] 기존 `tickEssential` 로직 영향 없음 — 시작부에 추가만. `MinecraftClient mc` 쉐도잉
+  충돌은 새 변수명 `client` 로 회피. 다른 호출처 없음.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: G 섹션 — 회귀 방지 감사 + checklist_original_audit.md 신규 발견 기록 +
+playtest_fixes.md 포커스 #6 전환.
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 11 (2026-04-23) — F-1/F-2/F-3 중 발견
+
+- **`_configChatInit` / `_speedChatInit` 채팅 초기화 블록 미이식**: 원본
+  `initializeForGameIfNeccessary()` L893-L902 에서 gameType 전환 직후:
+  (1) `_configChatInit.value` 면 `writeClientConfigMessageToChat(false)` 호출
+  (2) `isUserSpeedEnabled() && _speedChatInit.value && speedPercent != defaultSpeedPercent`
+      이면 `"move.speed.chat.client.init"` 메시지 출력
+  → **현재 이식 범위 밖**. F 섹션은 gameType 기반 keys/defaultKey 적용만 포함. 이 두 분기는
+  별도 원자 작업 (속성 `_configChatInit`/`_speedChatInit` 도 미이식) 으로 분리 권장.
+  포커스 #5 범위 초과 — 후속 포커스 또는 별도 원자 작업.
 
 ### 세션 5 (2026-04-23) — C-1 중 발견
 
