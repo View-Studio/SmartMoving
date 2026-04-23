@@ -8,7 +8,8 @@
     "MixinLivingEntity",
     "MixinPlayerEntity",
     "server.MixinServerPlayNetworkHandler",
-    "server.MixinServerPlayerEntity"
+    "server.MixinServerPlayerEntity",
+    "server.MixinServerPlayerInteractionManager"
   ],
   "injectors": {
     "defaultRequire": 1
