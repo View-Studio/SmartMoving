@@ -99,6 +99,25 @@ public class MixinPlayerEntityRenderer {
         //   9. isFlying (L704/L713) — horizontalAngle (threshold 0.05)
         //  10. isHeadJumping (L740) — currentHorizontalAngle
 
+        // isCeilingClimb (원본 L463 + L475-L476):
+        //   distance = totalHorizontalDistance * 0.7F
+        //   walkFactor = Factor(currentHorizontalSpeed, 0, 0.12951545F)  // 0→1 보간
+        //   horizontalAngle = horizontalDistance < 0.015F ? currentCameraAngle : currentHorizontalAngle
+        //   rotateY = cos(distance) * 0.44F * walkFactor
+        //   bipedOuter.rotateAngleY = rotateY + horizontalAngle
+        if (sm.isCeilingClimbing) {
+            float distance = sm.stats.totalHorizontalDistance * 0.7F;
+            float x = sm.stats.currentHorizontalSpeed;
+            float walkFactor = (x >= 0.12951545F) ? 1F : (x <= 0F ? 0F : x / 0.12951545F);
+            float horizontalAngle = sm.stats.horizontalDistance < 0.015F
+                    ? sm.stats.currentCameraAngle
+                    : sm.stats.currentHorizontalAngle;
+            float rotateY = (float) Math.cos(distance) * 0.44F * walkFactor;
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(rotateY + horizontalAngle);
+            return;
+        }
+
         // isSwim/isDive (원본 L495/L553)
         if (sm.isSwimming_sm || sm.isDiving) {
             float threshold = sm.isSlow ? 0.005F : 0.015F;
