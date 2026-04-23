@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-11 완료 / ⏳ **H-12 진행 (서버 addExhaustion 연동 검증)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-12 완료 / ⏳ **H-13 진행 (통합 빌드 + 회귀 감사)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -753,8 +753,14 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       원본 L911-L915 1:1 이식 — `hungerIncrease != lastHungerIncrease` 변화 감지 →
       `ClientPlayNetworking.send(new HungerChangePayload(hungerIncrease))` + lastHungerIncrease 갱신.
       `canSend` 체크로 SM 없는 서버 안전장치. H-9 javadoc 의 "H-11 별도" 문구도 정정.
-- [ ] H-12. **서버 `addExhaustion(sm.hunger)` 연동 검증** — 기존 구조 이미 이식됨
-      (`MixinServerPlayerEntity:50`). 클라 전송 활성 후 정상 작동 확인.
+- [x] H-12. **서버 `addExhaustion(sm.hunger)` 연동 검증** — 코드 리뷰 결과 현재 구현과
+      원본(SmartMovingServer L301-L308 addMovementStat) 사이 3가지 차이 발견:
+      (1) `sm.hunger = 0F` 리셋 추가됨 (원본 없음)
+      (2) 조건 `hunger > 0F` vs 원본 `disableAddExhaustion && hunger != 0F && !withinOnLivingUpdate`
+      (3) `withinOnLivingUpdate` 플래그 미이식
+      단순 정정은 회귀 가능성 (withinOnLivingUpdate 부재 상태에서 리셋만 제거 시 폭증).
+      §16 기록 + §17 후속 포커스 후보. 포커스 #5 내에서는 현재 구현 유지 — Easy 체감은
+      "원본보다 허기 소진 약간 느림" (실측값은 H-13 에서 확인).
 - [ ] H-13. **통합 빌드 + 회귀 감사** — vanilla 이동 허기 회귀 없는지 / SM 이동 중 허기
       증가 시작됐는지 / `disableAddExhaustion` 배치 차단이 의도대로 동작하는지.
 - [ ] H-14. **`checklist_original_audit.md` 기록** — "Easy 1:1 factor 헬퍼 + handleExhaustion
@@ -1928,9 +1934,69 @@ L913 1:1.
 **다음 작업**: H-12 — 서버 `addExhaustion(sm.hunger)` 연동 검증. 이미 이식된 로직이 정상
 작동하는지 코드 리뷰 + 의도된 동작 확인.
 
+### 세션 20 (계속) — 2026-04-24 — H-12 (서버 허기 연동 검증)
+
+**진행한 작업**:
+- 코드 리뷰 수행: `MixinServerPlayerEntity.sm_afterTravel` vs 원본 `SmartMovingServer.
+  addMovementStat` (L301-L308).
+- **차이 3건 발견** (§16 세션 20 상세):
+  1. `sm.hunger = 0F` 리셋 추가됨 (원본 없음) → delta 적용 / 원본은 누적값 매 틱 재적용
+  2. 조건 단순화 (`hunger > 0F` vs 원본 `disableAddExhaustion && hunger != 0F && !withinOnLivingUpdate`)
+  3. `withinOnLivingUpdate` 플래그 미이식
+- 단순 정정 위험성 평가: withinOnLivingUpdate 없이 리셋만 제거하면 **폭증** 가능.
+  3개 동시 이식 필요 → 포커스 #5 범위 외로 판단.
+- `focus_11_server_hunger_sync.md` 후보를 §17 에 등록.
+- 현재 구현 유지 결정 (코드 변경 없음). Easy 1:1 "근사" 수준 수용 — 체감 ~90%.
+
+**완료 전 검증 체크리스트 (H-12 기준)**:
+- [근거] 원본 `SmartMovingServer.md` L301-L308 addMovementStat 본체 확인 ✓
+- [근거] `MixinServerPlayerEntity` L40-L54 sm_afterTravel 전체 코드 리뷰 ✓
+- [대응] 원본 3줄 조건 ↔ 구현 1줄 조건 차이 식별 ✓
+- [분기] `disableAddExhaustion` / `withinOnLivingUpdate` 차이 명시 ✓
+- [상수] `hunger != 0F` (음수 허용) vs `hunger > 0F` (양수만) 차이 식별 ✓
+- [타이밍] 원본 addMovementStat (processPlayer 경로) vs 1.21.1 travel TAIL (서버 tick)
+  경로 차이 관찰 — withinOnLivingUpdate 플래그 필요 이유
+- [근사] 현재 구현은 "delta 적용" 근사 — javadoc 이 이미 `// 원본: addMovementStat()
+  이 없어짐 → travel() 인라인 처리` 로 표기. 추가 명시 불필요 (§16 에 정밀화)
+- [신규] 3건 전부 §16 세션 20 에 기록 + §17 `focus_11_server_hunger_sync.md` 후보 등록 ✓
+- [회귀] 코드 변경 없음 — 회귀 0
+- [빌드] 해당 없음 (문서만)
+
+**다음 작업**: H-13 — 통합 빌드 (전체 H 섹션 코드 통합 검증) + 회귀 방지 감사
+(`cfg.speedUser` 의미 변경 영향 / `exhaustion` 계산 공식 변경 영향 / 허기 패킷 송신
+신규 경로 영향).
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 20 (2026-04-24) — H-12 서버 허기 연동 차이 3건
+
+원본 `SmartMovingServer.addMovementStat(x,y,z)` (L301-L308) vs 1.21.1
+`MixinServerPlayerEntity.sm_afterTravel` 비교:
+
+1. **`sm.hunger = 0F` 리셋 — 원본에 없음**
+   - 1.21.1 현재: addExhaustion 호출 후 즉시 hunger=0 리셋 → 클라 새 값 전송 전까지 재호출 안 됨
+   - 원본: 리셋 없음. hunger 필드는 클라에서 받은 값 유지. 매 addMovementStat 호출마다 동일값 addExhaustion
+   - 의미: 1.21.1 은 **delta 만** 적용, 원본은 **매 틱 누적값** 적용
+   - Easy 체감: 1.21.1 이 원본보다 허기 소진 약간 느림
+
+2. **조건 차이**
+   - 1.21.1: `sm.hunger > 0F`
+   - 원본: `disableAddExhaustion && hunger != 0F && !withinOnLivingUpdate`
+   - 차이: `disableAddExhaustion` 체크 + `hunger != 0` (음수 허용) + `withinOnLivingUpdate`
+     스킵 조건
+
+3. **`withinOnLivingUpdate` 플래그 자체 미이식**
+   - 원본: `beforeOnLivingUpdate`/`afterOnLivingUpdate` 에서 true/false 설정 → 서버 자체
+     onLivingUpdate 경로의 addMovementStat 는 addExhaustion 스킵. 클라 이동 수신(`processPlayer`)
+     경로만 유효.
+   - 1.21.1: 이 플래그 없음. travel TAIL 이 서버 tick 경로 (onLivingUpdate 유사) 임에도
+     addExhaustion 호출됨 → 원본보다 호출 빈도 높을 수 있음
+   - 그런데 (1) 리셋 때문에 결과적으로 delta 만 적용되어 폭증하지는 않음 (상쇄)
+
+**조치**: 포커스 #5 범위 외. `focus_11_server_hunger_sync.md` 후보 (§17 에 추가).
+Easy 1:1 완벽은 이 포커스가 해결해야 달성. 현재는 "근사 1:1" (체감 ~90%).
 
 ### 세션 14 (2026-04-23) — H-2 대규모 dead field 발견
 
@@ -2038,6 +2104,13 @@ L913 1:1.
   값이 다른 필드들(`_baseExhautionLossFactor` Medium=1F/Hard=0.8F 등) 의 런타임
   토글은 구현 안 함. 필요 시 `focus_09_difficulty_presets.md` 로 분리. Property<T>
   시스템 전체 이식 또는 프리셋 룩업 테이블 방식 중 선택.
+- **서버 허기 delta/누적 동기화 정밀화** (세션 20 H-12 발견 — Easy 1:1 완벽 전제):
+  `focus_11_server_hunger_sync.md` 후보. 원본 `SmartMovingServer.addMovementStat`
+  L301-L308 의 3가지 디테일:
+  (a) `sm.hunger = 0F` 리셋 제거 (매 tick 누적값 적용)
+  (b) 조건 `disableAddExhaustion && hunger != 0F && !withinOnLivingUpdate` 복원
+  (c) `withinOnLivingUpdate` 플래그 이식 (beforeOnLivingUpdate/afterOnLivingUpdate)
+  단독 이식은 회귀 위험 (3개 동시 필요). 별도 포커스에서 일괄 처리.
 - **소진/허기/라바 시스템 전체 이식** (세션 14 발견 — Easy 1:1 동작 재현 전제):
   → `focus_11_exhaustion_hunger_system.md` 후보. 3개 구성:
   (1) `Config.getFactor(hunger, airBorne/sprint/run/sneak/stand/walk)` 공용 factor
