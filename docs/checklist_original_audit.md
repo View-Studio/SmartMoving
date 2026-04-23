@@ -153,7 +153,7 @@
 |------|----------------------------------|--------------|
 | [x] | `SmartMovingConfig.md` | `SmartMovingConfig.java` |
 | [x] | `SmartMovingOptions.md` | `SmartMovingConfig.java` (Options → Config 통합) |
-| [ ] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
+| [x] | `SmartMovingClientConfig.md` | `SmartMovingConfig.java` |
 | [ ] | `SmartMovingServerConfig.md` | 서버 설정 대응 (있는 경우) |
 | [ ] | `SmartMovingServerOptions.md` | 서버 설정 대응 |
 
@@ -989,3 +989,7 @@ N/A (구조적 변환):
 | 2026-04-23 | `config/SmartMovingConfig.md` | [오역] processBlockCode §0 — `cfg.baseClimb = true` 설정, 그러나 `baseClimb`은 climbing 코드 미사용. 원본: `_baseClimb="standard"` → `_isFreeBaseClimb/_isSmartBase/_isSimpleBase` 모두 false. 1.21.1: freeClimb/simpleClimb/smartClimb 변경 없음 → §0 수신 시 climbing 모드 무변경. | **처리 완료** — `§0` → `cfg.freeClimb=false; cfg.simpleClimb=false; cfg.smartClimb=false;` 로 수정. BUILD SUCCESSFUL ✓
 | 2026-04-23 | `config/SmartMovingConfig.md` | [오역] getUserSpeedFactor() — `speedUserFactor==1F` 조기 반환 조건 누락. 원본: `isUserSpeedAlwaysDefault() = !speedUser \|\| factor==1F`. 1.21.1: `!speedUser \|\| exponent==0`만 체크. speedUserFactor=1F+exponent≠0일 때 2^exp 반환 (원본은 1F). | **처리 완료** — `if (!speedUser \|\| speedUserFactor == 1F \|\| speedUserExponent == 0)` 조건으로 수정. BUILD SUCCESSFUL ✓
 | 2026-04-23 | `config/SmartMovingOptions.md` | [오역] crawlToggle config 게이트 누락 — toCrawling()에서 `if(Options.isCrawlToggleEnabled()) crawlToggled=true;`이나 1.21.1은 무조건 crawlToggled=true. 기본값 false(홀드)에서도 항상 토글 동작. | **처리 완료** — SmartMovingConfig: crawlToggle=false 필드+readFrom+writeTo 추가; ClientState+Jumper: crawlToggle config 게이트 추가. BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] handleWallJumping 게이트 오류 — `angleJumpSide/angleJumpBack`(더블클릭 방향 점프용) 을 벽점프 게이트로 사용. 원본: `isWallJumpEnabled() = _wallUpJump.value`(grab=false) / `_wallHeadJump.value`(grab=true). | **처리 완료** — SmartMovingJumper.handleWallJumping: `if (!cfg.wallUpJump/wallHeadJump) return;` 게이트로 교체 |
+| 2026-04-23 | `config/SmartMovingClientConfig.md` | [누락] `wallUpJump`(true), `wallHeadJump`(true) 불리언 필드 + `wallUpJumpVerticalFactor`(0.4F), `wallHeadJumpVerticalFactor`(0.3F), `wallUpJumpHorizontalFactor`(0.15F), `wallHeadJumpHorizontalFactor`(0.15F) 팩터 필드 전부 누락. | **처리 완료** — SmartMovingConfig.java: 6개 필드+readFrom+writeTo 추가. BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() WALL_UP/WALL_HEAD 수직 속도 오류 — 원본: `angle!=null` 경로 = `-0.078 + 0.498 * wallUpJumpVerticalFactor(0.4F)` → 0.121D, WALL_HEAD += wallHeadJumpVerticalFactor(0.3F) → 0.271D. 버그: `angle==null` 경로와 같은 vanilla 0.419D 사용. | **처리 완료** — SmartMovingJumper.tryJump(): WALL_UP/WALL_HEAD 전용 분기 추가(공식 경로). BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() 스프린트 수평 보정을 WALL_UP/WALL_HEAD에 적용 — 원본: 스프린트 보정은 `angle==null`(vanilla Up) 블록 내부에만 존재 → 벽점프 시 미적용. 버그: fast이면 항상 적용. | **처리 완료** — `if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD)` 조건으로 수정. BUILD SUCCESSFUL ✓ |

@@ -153,13 +153,22 @@ public final class SmartMovingJumper {
         double motionZ = vel.z;
 
         // ── 수직 속도 계산 ──────────────────────────────────────────────────
+        // 원본 분기: angle==null → "vanilla Up" 블록(0.419D + potion); angle!=null → 공식 경로
+        // 벽점프(WALL_UP/WALL_HEAD)는 tryJump(type, null, null, angle)로 호출되어 angle!=null 경로
         double verticalMotion;
         if (up && !player.isTouchingWater()) {
-            // 원본: vanilla Up 점프 수치 그대로 사용
-            // 0.41999998688697815D + potionJump * 0.1F
-            StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
-            int potionJump = (jumpBoost != null) ? jumpBoost.getAmplifier() : 0;
-            verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
+            if (jumpType == WALL_UP) {
+                // 원본: angle!=null 경로, getJumpVerticalFactor → wallUpJumpVerticalFactor(0.4F)
+                verticalMotion = -0.078 + 0.498 * cfg.wallUpJumpVerticalFactor;
+            } else if (jumpType == WALL_HEAD) {
+                // 원본: angle!=null 경로, factor += wallHeadJumpVerticalFactor(0.3F)
+                verticalMotion = -0.078 + 0.498 * (cfg.wallUpJumpVerticalFactor + cfg.wallHeadJumpVerticalFactor);
+            } else {
+                // 원본: angle==null 경로 — vanilla Up 점프 수치
+                StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
+                int potionJump = (jumpBoost != null) ? jumpBoost.getAmplifier() : 0;
+                verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
+            }
         } else {
             // 원본: -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor
             // verticalJumpFactor = Config._jumpVerticalFactor.value = PositiveFactor 기본값 1F (A-19 확인)
@@ -171,8 +180,8 @@ public final class SmartMovingJumper {
         }
 
         // ── 스프린트 점프 수평 보정 ─────────────────────────────────────────
-        // 원본: motionX -= sin(yaw) * 0.2F; motionZ += cos(yaw) * 0.2F
-        if (fast) {
+        // 원본: "vanilla Up" 블록(angle==null) 내부에만 적용 → 벽점프(WALL_UP/WALL_HEAD) 시 스킵
+        if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD) {
             double yawRad = Math.toRadians(player.getYaw());
             motionX -= Math.sin(yawRad) * 0.2F;
             motionZ += Math.cos(yawRad) * 0.2F;
@@ -410,14 +419,13 @@ public final class SmartMovingJumper {
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // 원본 canWallJumping 조건 (isWallJumpEnabled 포함)
+        // 원본 canWallJumping 조건
         if (player.isOnGround()) return;
         if (sm.isHeadJumping) return;
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) return;
         if (sm.isSwimming_sm || sm.isDiving) return;
         if (sm.isFlying) return;
         if (!player.horizontalCollision) return;
-        if (!cfg.angleJumpSide && !cfg.angleJumpBack) return;
 
         Vec3d vel = player.getVelocity();
 
@@ -430,12 +438,15 @@ public final class SmartMovingJumper {
 
         // grab=true → WallHead/WallHeadSlide, grab=false → WallUp/WallUpSlide
         // wasCollidedHorizontally: 이전 틱부터 벽에 닿아있던 경우 Slide 타입 (수직 속도 미적용)
+        // 원본: isWallJumpEnabled() = _wallUpJump.value (grab=false), _wallHeadJump.value (grab=true)
         boolean grabPressed = SmartMovingKeys.grab.isPressed();
         int jumpType;
         if (grabPressed) {
+            if (!cfg.wallHeadJump) return;
             if (player.fallDistance > cfg.wallHeadJumpFallMaximumDistance) return;
             jumpType = sm.wasCollidedHorizontally ? WALL_HEAD_SLIDE : WALL_HEAD;
         } else {
+            if (!cfg.wallUpJump) return;
             if (player.fallDistance > cfg.wallUpJumpFallMaximumDistance) return;
             jumpType = sm.wasCollidedHorizontally ? WALL_UP_SLIDE : WALL_UP;
         }
@@ -460,13 +471,24 @@ public final class SmartMovingJumper {
 
         sm.isWallJumping = true;
 
-        // 원본: rotationYaw = jumpAngle; isCollidedHorizontally = false; fallDistance = 0F
-        player.setYaw(jumpAngle);
-        player.bodyYaw = jumpAngle;
+        // 원본: tryJump(angle != null) → getJumpMoving 경유 수평 속도 재방향 설정
+        // horizontalFactor = _wallUpJumpHorizontalFactor(0.15F) / _wallHeadJumpHorizontalFactor(0.15F)
+        float horizontalFactor = grabPressed ? cfg.wallHeadJumpHorizontalFactor : cfg.wallUpJumpHorizontalFactor;
+        double jumpDirX = -Math.sin(Math.toRadians(jumpAngle));
+        double jumpDirZ =  Math.cos(Math.toRadians(jumpAngle));
+        double preVelH = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX + sm.jumpMotionZ * sm.jumpMotionZ);
+        double horizontal = Math.max(preVelH, horizontalFactor);
+        double newVx = getJumpMoving(sm.jumpMotionX, jumpDirX, true, horizontal, horizontalFactor);
+        double newVz = getJumpMoving(sm.jumpMotionZ, jumpDirZ, true, horizontal, horizontalFactor);
+        player.setVelocity(newVx, vel.y, newVz);
+
+        // 원본: rotationYaw = jumpAngle (tryJump 성공 후); isCollidedHorizontally = false; fallDistance = 0F
         player.horizontalCollision = false;
         player.fallDistance = 0F;
 
         tryJump(player, sm, jumpType, 0F);
+        player.setYaw(jumpAngle);
+        player.bodyYaw = jumpAngle;
         // 원본: continueWallJumping = !isHeadJumping (tryJump 성공 후 — WallHead 시 false)
         sm.continueWallJumping = !sm.isHeadJumping;
     }

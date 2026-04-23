@@ -65,12 +65,26 @@ public class SmartMovingConfig {
     public float diveSpeedFactor = 1F;
 
     // ── Jumping ─────────────────────────────────────────────────
+    // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
+    public boolean wallUpJump = true;
+    // 원본: _wallHeadJump = Unmodified("move.jump.wall.head") → 기본값 true
+    public boolean wallHeadJump = true;
     // 원본: _wallUpJumpFallMaximumDistance = Positive(...).defaults(2F)
     public float wallUpJumpFallMaximumDistance = 2F;
     // 원본: _wallHeadJumpFallMaximumDistance = Positive(...).defaults(3F)
     public float wallHeadJumpFallMaximumDistance = 3F;
     // 원본: _wallUpJumpOrthogonalTolerance = Positive(...).defaults(5F)
     public float wallUpJumpOrthogonalTolerance = 5F;
+    // 원본: _wallUpJumpVerticalFactor = DecreasingFactor(...).defaults(0.4F)
+    // tryJump(WallUp, angle!=null): verticalMotion = -0.078 + 0.498 * wallUpJumpVerticalFactor
+    public float wallUpJumpVerticalFactor = 0.4F;
+    // 원본: _wallHeadJumpVerticalFactor = DecreasingFactor(...).defaults(0.3F)
+    // tryJump(WallHead): verticalMotion = -0.078 + 0.498 * (wallUpJumpVerticalFactor + wallHeadJumpVerticalFactor)
+    public float wallHeadJumpVerticalFactor = 0.3F;
+    // 원본: _wallUpJumpHorizontalFactor = DecreasingFactor(...).defaults(0.15F)
+    public float wallUpJumpHorizontalFactor = 0.15F;
+    // 원본: _wallHeadJumpHorizontalFactor = DecreasingFactor(...).defaults(0.15F)
+    public float wallHeadJumpHorizontalFactor = 0.15F;
     public boolean jumpCharge = true;
     public float jumpChargeMaximum = 20F;
     public float jumpChargeFactor = 1.3F;
@@ -253,9 +267,15 @@ public class SmartMovingConfig {
         swimSpeedFactor          = getFloat(p,  "move.swim.speed.factor",         swimSpeedFactor);
         dive                     = getBool(p,   "move.dive",                      dive);
         diveSpeedFactor          = getFloat(p,  "move.dive.speed.factor",         diveSpeedFactor);
-        wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",      wallUpJumpFallMaximumDistance);
-        wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum", wallHeadJumpFallMaximumDistance);
+        wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
+        wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
+        wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
+        wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum",  wallHeadJumpFallMaximumDistance);
         wallUpJumpOrthogonalTolerance   = getFloat(p, "move.jump.wall.orthogonal.tolerance", wallUpJumpOrthogonalTolerance);
+        wallUpJumpVerticalFactor       = getFloat(p, "move.jump.wall.vertical.factor",     wallUpJumpVerticalFactor);
+        wallHeadJumpVerticalFactor     = getFloat(p, "move.jump.wall.head.vertical.factor", wallHeadJumpVerticalFactor);
+        wallUpJumpHorizontalFactor     = getFloat(p, "move.jump.wall.horizontal.factor",   wallUpJumpHorizontalFactor);
+        wallHeadJumpHorizontalFactor   = getFloat(p, "move.jump.wall.head.horizontal.factor", wallHeadJumpHorizontalFactor);
         jumpCharge               = getBool(p,   "move.jump.charge",               jumpCharge);
         jumpChargeMaximum        = getFloat(p,  "move.jump.charge.maximum",       jumpChargeMaximum);
         jumpChargeFactor         = getFloat(p,  "move.jump.charge.factor",        jumpChargeFactor);
@@ -322,9 +342,15 @@ public class SmartMovingConfig {
         p.setProperty("move.swim.speed.factor",          String.valueOf(swimSpeedFactor));
         p.setProperty("move.dive",                       String.valueOf(dive));
         p.setProperty("move.dive.speed.factor",          String.valueOf(diveSpeedFactor));
-        p.setProperty("move.jump.wall.fall.maximum",      String.valueOf(wallUpJumpFallMaximumDistance));
-        p.setProperty("move.jump.wall.head.fall.maximum",   String.valueOf(wallHeadJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
+        p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
+        p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall.head.fall.maximum",    String.valueOf(wallHeadJumpFallMaximumDistance));
         p.setProperty("move.jump.wall.orthogonal.tolerance", String.valueOf(wallUpJumpOrthogonalTolerance));
+        p.setProperty("move.jump.wall.vertical.factor",      String.valueOf(wallUpJumpVerticalFactor));
+        p.setProperty("move.jump.wall.head.vertical.factor", String.valueOf(wallHeadJumpVerticalFactor));
+        p.setProperty("move.jump.wall.horizontal.factor",    String.valueOf(wallUpJumpHorizontalFactor));
+        p.setProperty("move.jump.wall.head.horizontal.factor", String.valueOf(wallHeadJumpHorizontalFactor));
         p.setProperty("move.jump.charge",                String.valueOf(jumpCharge));
         p.setProperty("move.jump.charge.maximum",        String.valueOf(jumpChargeMaximum));
         p.setProperty("move.jump.charge.factor",         String.valueOf(jumpChargeFactor));
