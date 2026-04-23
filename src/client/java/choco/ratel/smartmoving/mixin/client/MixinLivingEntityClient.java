@@ -278,6 +278,40 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
+     * B-2 (세션 26): Land 이동 User 배율 이식. 원본 `SmartMovingSelf.java` L119
+     *   `speedFactor = getConfigSpeedFactor() * getPotionSpeedFactor() * ...`
+     * 의 `getConfigSpeedFactor()` 부분을 vanilla travel() 이 처리하는 Land 경로에 주입.
+     *
+     * **옵션 A (Mixin inject on getMovementSpeed)** 선택: vanilla 의 `LivingEntity.
+     * getMovementSpeed()` HEAD inject 로 반환값에 `getConfigSpeedFactor(player, cfg)` 곱셈.
+     *
+     * 적용 범위:
+     *   - Land (걷기/달리기/스프린트/점프) — vanilla travel() 이 getMovementSpeed() 참조 → 영향
+     *   - 비행/수영/잠수/클라이밍 — SM 이 `sm_travel_client` 에서 vanilla travel() cancel
+     *     → getMovementSpeed 안 불림 → 영향 0 (각자 경로에서 getCombinedSpeedFactor 별도 적용)
+     *
+     * Creative 게이트는 `Mover.getConfigSpeedFactor` 가 내부 `isCreative()` 로 처리 —
+     *   Creative 아니면 userSpeedFactor=1F → speedFactor(기본 1F) 만 반영. 체감 변화 0.
+     *
+     * ⚠️ 이중 적용 주의: SM 경로 (Swimmer/Climber/Flyer) 는 getPotionSpeedFactor 에서
+     *   GENERIC_MOVEMENT_SPEED attribute 를 별도 읽음. 이 mixin 은 getMovementSpeed 반환값만
+     *   바꾸는데, getPotionSpeedFactor 는 attribute 를 직접 읽으므로 이중 곱 안 됨. OK.
+     *
+     * ClientPlayerEntity 만 대상 — 서버 플레이어는 server-side travel 처리 (클라→서버 동기).
+     */
+    @Inject(method = "getMovementSpeed", at = @At("HEAD"), cancellable = true)
+    private void sm_getMovementSpeed(CallbackInfoReturnable<Float> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;  // SM 비활성 시 vanilla 값 그대로
+        float vanillaSpeed = (float) player.getAttributeValue(
+                net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED);
+        float configFactor = choco.ratel.smartmoving.client.SmartMovingMover
+                .getConfigSpeedFactor(player, cfg);
+        cir.setReturnValue(vanillaSpeed * configFactor);
+    }
+
+    /**
      * 6-2 (클라이언트): SM 크롤링 중 isInSwimmingPose() = false 강제.
      *
      * SM 크롤링은 SWIMMING 포즈를 사용하지만, vanilla isInSwimmingPose()=true가 되면:

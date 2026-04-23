@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1 + B-6 완료 (헬퍼 정비 + Creative 게이트) / ⏳ **B-2 진행 (Land 이동, 옵션 A)** |
+| 현재 단계 | ✅ A + B-1 + B-6 + B-2 완료 / ⏳ **B-3 진행 (Swim/Dive)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -239,10 +239,13 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
           기존 1.21.1 에 빠져있던 부분)
       (3) `Mover.getCombinedSpeedFactor(player, cfg)` 단일 헬퍼 신설 (원본 L149-152 1:1).
       Climber L250/L325 인라인 곱셈 2곳을 새 헬퍼로 교체. 빌드 ✓
-- [ ] B-2. **Land 이동 User 배율 이식** (핵심 누락 1) — vanilla travel() 경로에 User 배율
-      주입. `MixinLivingEntityClient.sm_travel_client` 또는 `LivingEntity.travel` 에 Inject 로
-      movementInput 을 `getUserSpeedFactor()` 곱 처리. 또는 `GENERIC_MOVEMENT_SPEED` attribute
-      modifier 로 적용. 두 접근 비교 후 선택.
+- [x] B-2. **Land 이동 User 배율 이식 (옵션 A)** — `MixinLivingEntityClient.sm_getMovementSpeed`
+      신설. `LivingEntity.getMovementSpeed()` HEAD inject (cancellable). `ClientPlayerEntity`
+      인스턴스 체크 후 vanilla attribute 값에 `Mover.getConfigSpeedFactor(player, cfg)` 곱셈.
+      - Land 경로 (vanilla travel 사용): 영향 O — getMovementSpeed 반영
+      - SM 경로 (비행/수영/클라이밍, vanilla travel cancel): 영향 0 — getMovementSpeed 안 불림
+      Creative 게이트는 Mover.getConfigSpeedFactor 내부에서 처리 (B-6). 이중 적용 없음
+      (SM 경로는 getPotionSpeedFactor 로 attribute 직접 읽음). 빌드 ✓
 - [ ] B-3. **Swim/Dive User 배율 이식** (핵심 누락 2) — `Swimmer.handleSwimming L190` 의
       `speedFactor = isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor` 직후 또는 동일 라인에
       `* cfg.getUserSpeedFactor()` 추가. 원본 Self L119 의 `getConfigSpeedFactor` 포함 구조와 정합.
@@ -463,6 +466,48 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 
 **다음 작업**: B-2 — Land 이동 User 배율 이식 (옵션 A: Mixin inject on movementInput).
 사용자 결정 옵션 A 로 확정.
+
+### 세션 26 (계속) — 2026-04-24 — B-2 (Land 이동 User 배율, 옵션 A)
+
+**진행한 작업**:
+- `MixinLivingEntityClient.sm_getMovementSpeed` 신설. `LivingEntity.getMovementSpeed()`
+  HEAD inject (cancellable).
+- 구조:
+  ```java
+  if (!(this instanceof ClientPlayerEntity)) return;
+  if (!cfg.enabled) return;
+  float vanillaSpeed = player.getAttributeValue(GENERIC_MOVEMENT_SPEED);
+  float configFactor = Mover.getConfigSpeedFactor(player, cfg);
+  cir.setReturnValue(vanillaSpeed * configFactor);
+  ```
+- 적용 범위:
+  - **Land (걷기/달리기/스프린트/점프)** — vanilla travel() 이 getMovementSpeed() 참조 →
+    새 inject 반영 ✓
+  - **SM 경로 (비행/수영/잠수/클라이밍)** — sm_travel_client 에서 vanilla travel() cancel →
+    getMovementSpeed 안 불림 → 영향 0. 각자 경로에서 getCombinedSpeedFactor 별도 적용.
+- Creative 게이트 B-6 재사용 — `Mover.getConfigSpeedFactor` 가 내부 `isCreative()` 체크
+  포함. Creative 아니면 userSpeedFactor=1F → speedFactor(기본 1F)만 반영 → 체감 변화 0.
+- 이중 적용 주의 검증: SM 경로는 `getPotionSpeedFactor` 에서 GENERIC_MOVEMENT_SPEED
+  attribute 를 직접 읽음. 이 mixin 은 getMovementSpeed 메서드만 바꾸고 attribute 자체는
+  안 건드림. 직접 참조 vs 메서드 반환값 → 이중 적용 없음. ✓
+
+**완료 전 검증 체크리스트 (B-2 기준)**:
+- [근거] 원본 Self L119 `speedFactor = getConfigSpeedFactor * getPotionSpeedFactor * ...` ✓
+- [근거] 세션 24 A-1 에서 getConfigSpeedFactor → 모든 land/swim/fly 경로 확산 확인 ✓
+- [대응] 원본 speedFactor 진입점 1곳 ↔ 1.21.1 getMovementSpeed inject 1곳 1:1 ✓
+- [분기] `!cfg.enabled` 가드 / ClientPlayerEntity 인스턴스 체크 ✓
+- [상수] 해당 없음 (공식만)
+- [타이밍] vanilla travel() HEAD 에서 getMovementSpeed() 호출 → SM cancel 여부 무관하게
+  land 경로에서만 적용됨 (cancel 되면 메서드 호출 자체 안 됨)
+- [근사] getNonSlowInputSpeedFactor (얼음/스프린트) 는 vanilla 가 자체 처리 — 완전 등가
+- [신규] 없음
+- [회귀] Easy(speedUser=false) 또는 !Creative 상태: configFactor = speedFactor × 1F
+  → vanillaSpeed × speedFactor. speedFactor 기본값 1F 이라 `!cfg.enabled` 아닌 상태에선
+  항상 vanillaSpeed 그대로 (변화 0). Creative + speedUser=true 에서만 userSpeedFactor 적용.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-3 — Swim/Dive User 배율. `Swimmer.handleSwimming L190` 의 speedFactor
+계산에 `Mover.getCombinedSpeedFactor(player, cfg)` 또는 `getConfigSpeedFactor` 추가.
 
 ---
 
