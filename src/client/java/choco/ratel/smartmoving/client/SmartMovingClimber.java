@@ -399,7 +399,12 @@ public final class SmartMovingClimber {
             }
         }
 
-        setOnlyShouldClimbSpeed(player, sm, value, isUp, 1.0D);
+        // B-4 (세션 27): Free climb User 배율 이식. 원본 Self L1522 `factor =
+        // getCombinedSpeedFactor()` 가 setOnlyShouldClimbSpeed 내부 계산에 곱해짐.
+        // 1.21.1 setShouldClimbSpeed 는 combinedFactor 를 파라미터로 받아 내부에서 곱 →
+        // 호출자가 getCombinedSpeedFactor 전달해야 함. 기존 `1.0D` 는 User 배율 누락.
+        setOnlyShouldClimbSpeed(player, sm, value, isUp,
+                SmartMovingMover.getCombinedSpeedFactor(player, cfg));
 
         // fallDistance 리셋 (클라이밍 중 낙하 데미지 방지)
         player.fallDistance = 0;

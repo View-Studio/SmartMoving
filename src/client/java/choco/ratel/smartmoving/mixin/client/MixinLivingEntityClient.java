@@ -4,6 +4,7 @@ import choco.ratel.smartmoving.client.SmartMovingClimber;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
 import choco.ratel.smartmoving.client.SmartMovingFlyer;
 import choco.ratel.smartmoving.client.SmartMovingJumper;
+import choco.ratel.smartmoving.client.SmartMovingMover;
 import choco.ratel.smartmoving.client.SmartMovingSlider;
 import choco.ratel.smartmoving.client.SmartMovingSwimmer;
 import choco.ratel.smartmoving.climbing.ClimbGap;
@@ -155,8 +156,15 @@ public abstract class MixinLivingEntityClient {
         if (onClimbable) SmartMovingClimber.handleClimbing(player, sm);
         SmartMovingClimber.handleCeilingClimbing(player, sm);
 
+        // B-4 (세션 27): 하강 클램프 User 배율 이식. 원본 Self L780:
+        //   sp.motionY = Math.max(sp.motionY, -0.15 * getCombinedSpeedFactor());
+        // `-0.15D` 고정은 User 배율 미반영. 1.21.1 SmartMovingConfig cfg 로 getCombinedSpeedFactor
+        // 호출. Creative 게이트 자동 처리 (B-6). 기본(!enabled 또는 !Creative) 에서는
+        // combinedFactor≈1F → 동작 불변.
         Vec3d vel = player.getVelocity();
-        player.setVelocity(vel.x * 0.91F, Math.max(vel.y, -0.15D), vel.z * 0.91F);
+        double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
+                player, SmartMovingConfig.Config);
+        player.setVelocity(vel.x * 0.91F, Math.max(vel.y, clampFactor), vel.z * 0.91F);
         ci.cancel();
     }
 

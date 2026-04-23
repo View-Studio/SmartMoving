@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1/B-2/B-3/B-6 완료 / ⏳ **B-4 진행 (Climb 3갈래 점검)** |
+| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 완료 / ⏳ **B-5 진행 (Jump maxHorizontalMotion)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -252,11 +252,19 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       지역변수 (`getConfigSpeedFactor * getPotionSpeedFactor * ...`) 에서 시작하는데, 1.21.1
       은 vanilla travel() cancel 경로라 그 값을 받지 못함 → `getCombinedSpeedFactor` 로 재구성.
       Creative 게이트 B-6 내부에서 자동 처리. 빌드 ✓
-- [ ] B-4. **Climb 3갈래 확인/보완** — `SmartMovingClimber` 에서
-      (a) 사다리 하강 클램프 `motionY = max(motionY, -0.15 * combinedFactor)` 존재 여부
-      (b) Smart 모드 `motionY *= combinedFactor` 존재 여부
-      (c) Free climb / Ceiling climb motionY factor 에 User 배율 포함 여부
-      누락 시 각각 combinedFactor 곱셈 추가.
+- [x] B-4. **Climb 3갈래 확인/보완** — 3가지 점검 결과 2건 누락 발견, 수정:
+      (a) **하강 클램프 (원본 L780)**: `MixinLivingEntityClient L159` 의 `-0.15D` 고정 → User
+          배율 미반영 ⚠️ **수정**: `-0.15D * Mover.getCombinedSpeedFactor(player, cfg)` 로 변경.
+      (b) **Smart 모드 (원본 L893)**: `Climber L352/L354/L356` 에서 value 계산 시 이미
+          `* combinedFactor` 포함됨 ✓ (B-1 정비 결과). setOnlyShouldClimbSpeed 의 motionY
+          대입 경로에서 자연 반영.
+      (c) **Free climb (원본 L1522)**: `Climber L402` 의 `setOnlyShouldClimbSpeed(..., 1.0D)`
+          에서 combinedFactor=1.0D 하드코딩 → User 배율 누락 ⚠️ **수정**:
+          `getCombinedSpeedFactor(player, cfg)` 전달. setShouldClimbSpeed L200-L202 의
+          `freeClimbingUpSpeedFactor * combinedFactor` 곱셈에서 정상 반영.
+      신규 발견 (§16): 원본 L1522 의 `if(isFast) factor *= _sprintFactor.value` 및 사다리
+      substitute 별 `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeedFactor`
+      추가 곱 미이식 — 포커스 범위 외, 별도 이식 포인트.
 - [ ] B-5. **점프 maxHorizontalMotion User 배율 이식** — `SmartMovingJumper.tryJump` 또는 대응
       지점에서 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
       원본 Self L2045 1:1. 현재 getMaxHorizontalMotion 자체가 이식됐는지도 확인.
@@ -552,11 +560,64 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 (b) Smart 모드 motionY *= combinedFactor (L893), (c) Free climb / Ceiling climb 
 setOnlyShouldClimbSpeed 내 factor 에 User 배율 포함 여부 검증. 누락 시 추가.
 
+### 세션 27 (계속) — 2026-04-24 — B-4 (Climb 3갈래 점검/수정)
+
+**진행한 작업**: 3갈래 점검 → 2건 누락 발견 + 수정.
+
+1. **(a) 하강 클램프 (원본 L780) — 수정**
+   - 원본: `sp.motionY = Math.max(sp.motionY, -0.15 * getCombinedSpeedFactor())`
+   - 1.21.1 기존 `MixinLivingEntityClient L159`: `Math.max(vel.y, -0.15D)` 고정
+   - **수정**: `-0.15D * Mover.getCombinedSpeedFactor(player, cfg)` 로 변경. SmartMovingMover
+     import 추가.
+
+2. **(b) Smart 모드 (원본 L893) — 기존 정상 이식**
+   - `Climber L352/L354/L356` 에서 value 계산 시 `* combinedFactor` 포함됨 (B-1 정비 결과)
+   - setOnlyShouldClimbSpeed 의 motionY 대입에서 자연 반영
+   - 수정 불필요 ✓
+
+3. **(c) Free climb (원본 L1522) — 수정**
+   - 원본: `setOnlyShouldClimbSpeed` 내부 `factor = getCombinedSpeedFactor() (+ isFast
+     sprintFactor + 사다리별 추가 factor)` 곱
+   - 1.21.1 `Climber L402`: `setOnlyShouldClimbSpeed(player, sm, value, isUp, 1.0D)` —
+     combinedFactor 파라미터가 **1.0D 하드코딩** 으로 User 배율 차단
+   - **수정**: `getCombinedSpeedFactor(player, cfg)` 전달. setShouldClimbSpeed L200-L202 의
+     `freeClimbingUpSpeedFactor * combinedFactor` 곱셈에서 정상 반영.
+
+**신규 발견** (§16 세션 27 기록): 원본 L1522 의 추가 factor 보정 3종 미이식 (isFast
+sprintFactor / `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeedFactor`).
+본 포커스 범위 외 — 별도 원자 또는 후속 포커스.
+
+**완료 전 검증 체크리스트 (B-4 기준)**:
+- [근거] 원본 Self L780/L893/L1522 각 3갈래 확인 (세션 24 A-1) ✓
+- [근거] 1.21.1 Climber L352/L354/L356/L402 + MixinLivingEntityClient L159 검토 ✓
+- [대응] 누락 2건 (하강 클램프 / Free climb) 수정, 1건 (Smart) 기존 이식 확인 ✓
+- [분기] Free climb L402 의 1.0D → getCombinedSpeedFactor / 하강 클램프 L159 의 -0.15D →
+  -0.15D × combinedFactor ✓
+- [상수] `-0.15D` 원본 그대로 유지 (factor 만 곱 추가) ✓
+- [타이밍] handleClimbing 이후 travel() cancel 직전 하강 클램프 적용 — 원본 흐름과 일치
+- [근사] isFast sprintFactor / 사다리별 추가 factor 는 본 포커스 외 — §16 에 기록
+- [신규] L1522 보정 3종 §16 기록 ✓
+- [회귀] 기본 (!enabled / !Creative) 에서 combinedFactor≈1F → 곱셈 결과 기존과 동일.
+  Creative + speedUser 활성 시에만 Climb 속도 반영 — 원본 1:1.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-5 — 점프 maxHorizontalMotion User 배율 이식. `SmartMovingJumper.tryJump`
+에서 horizontal 수평 상한 계산 지점에 `getCombinedSpeedFactor` 추가. 먼저 `getMaxHorizontalMotion`
+자체가 이식됐는지 확인 필요.
+
 ---
 
 ## 16. 신규 발견
 
-_(비어있음)_
+### 세션 27 B-4 중 발견
+
+- **원본 Self L1522 `setOnlyShouldClimbSpeed` 내부 factor 보정 3종 미이식** — 본 포커스
+  범위 외 (User 배율 이식만 우선). 누락 내용:
+  1. `if (isFast) factor *= _sprintFactor.value` — Free climb 중 스프린트(grab+sprint) 시
+     배율 추가. 1.21.1 `setShouldClimbSpeed` 에 없음.
+  2. `switch (getOnLadder(...))` case 1/2 로 `_freeOneLadderClimbUpSpeedFactor` /
+     `_freeBothLadderClimbUpSpeedFactor` 추가 곱. 사다리 substitute 1개/2개 경우별 배율.
+  1.21.1 Config 에도 해당 필드 부재 — 별도 원자 작업 또는 후속 포커스에서 처리.
 
 ---
 
