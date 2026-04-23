@@ -87,14 +87,19 @@ public class MixinPlayerEntityRenderer {
                 || sm.isSliding || sm.isAngleJumping();
         if (!smActive) return;
 
-        // 원본 SmartMovingModel.md isSwim L474 / isDive L532:
-        //   isSwim: horizontalAngle = horizontalDistance < (isGenericSneaking ? 0.005 : 0.015)
-        //                             ? currentCameraAngle : currentHorizontalAngle
-        //   isDive: horizontalAngle = totalDistance < (isGenericSneaking ? 0.005 : 0.015)
-        //                             ? currentCameraAngle : currentHorizontalAngle
-        //   → bipedOuter.rotateAngleY = horizontalAngle (라디안). bipedOuter 계층 없는 1.21.1은
-        //     bodyYaw에 직접 적용하여 원본 렌더 최종 회전에 근사.
-        //   isGenericSneaking = moving.isSlow (SmartMovingRender.md L152)
+        // ── 원본 SmartMovingModel 상태별 bipedOuter.rotateAngleY 1:1 이식 ──────
+        // 1.21.1 은 bipedOuter 계층이 없어 bodyYaw 단일 경로로 근사. 라디안→도 변환.
+        // 원본 if-else 체인 우선순위 순서:
+        //   1. isRopeSliding (L279) — currentHorizontalAngle
+        //   2. isClimb/isClimbCrawling (L308) — forwardRotation / RadiantToAngle
+        //   4. isCeilingClimb (L463+L476) — rotateY + horizontalAngle (threshold 0.015)
+        //   5. isSwim (L495/L511) — horizontalAngle (threshold 0.005/0.015 isGenericSneaking)
+        //   6. isDive (L553/L564) — horizontalAngle (totalDistance 기준)
+        //   7. isCrawl (L668) — currentHorizontalAngle
+        //   9. isFlying (L704/L713) — horizontalAngle (threshold 0.05)
+        //  10. isHeadJumping (L740) — currentHorizontalAngle
+
+        // isSwim/isDive (원본 L495/L553)
         if (sm.isSwimming_sm || sm.isDiving) {
             float threshold = sm.isSlow ? 0.005F : 0.015F;
             double dist = sm.isDiving ? sm.stats.totalDistance : sm.stats.horizontalDistance;
@@ -106,10 +111,27 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // 원본 SmartMovingRender.rotatePlayer L269 [오역 복원]:
-        //   forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2
-        //   → renderYawOffset = forwardRotation (player yaw 보간값)
-        // 이전 구현은 atan2(-vel.x, vel.z) 로 이동 방향을 사용했으나 원본은 player yaw(카메라 방향).
+        // isFlying (원본 L704/L713) — 고정 threshold 0.05F
+        if (sm.isFlying) {
+            float horizontalAngle = sm.stats.horizontalDistance < 0.05F
+                    ? sm.stats.currentCameraAngle
+                    : sm.stats.currentHorizontalAngle;
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
+            return;
+        }
+
+        // isHeadJumping/isCrawling/isRopeSliding (원본 L740/L668/L279) — threshold 없이 currentHorizontalAngle
+        if (sm.isHeadJumping || sm.isCrawling || sm.isRopeSliding) {
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
+            return;
+        }
+
+        // 나머지(isClimb/isClimbCrawling/isCeilingClimb/isSliding/isAngleJumping) — 원본 rotatePlayer L269:
+        //   forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2 (player yaw 보간, 도)
+        // isClimb/ClimbCrawling 은 원본 L308 forwardRotation/RadiantToAngle(라디안) 과 동등.
+        // isCeilingClimb 의 `rotateY + horizontalAngle`(L476) 은 rotateY 공식 이식 필요 — 후속.
         smBodyYawActive = true;
         smBodyYawOverride = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
     }
