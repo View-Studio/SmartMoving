@@ -487,40 +487,14 @@ public class SmartMovingConfig {
     // H-18 (세션 23): configKeyName Map 삭제. 2상태 토글(configKeys={null}) 에서 currentKey
     // 는 항상 null 이므로 "Easy"/"Medium"/"Hard" 라벨 표시 경로 전부 제거됨. Medium/Hard
     // 프리셋 복원 시(`focus_09_difficulty_presets.md` 후속) 재도입.
+    //
+    // H-20 (세션 23): gameType 시스템 전체 삭제. 2상태 토글에선 gameType 감지/전환이
+    // 불필요. 원본 SmartMovingOptions.initializeForGameIfNeccessary / resetForNewGame /
+    // gameType 캐시 + GAME_TYPE_UNKNOWN/SURVIVAL/CREATIVE/ADVENTURE 4상수 + 게임타입별
+    // 6필드 (survival/creative/adventure × configKeys+defaultConfigKey) 전부 제거.
+    // 세이브 파일 호환: 기존 키(move.config.{survival,creative,adventure}.keys{,.default})
+    // 는 단순히 무시됨 (readFrom 호출 삭제). Medium/Hard 프리셋 복원 시 재도입.
 
-    // ── gameType 상수 (원본 SmartMovingConfig L630-L633) ────────────────────
-    /** 원본 `Unknown = -1`. initializeForGameIfNeccessary 캐시 초기값 및 default 분기 트리거. */
-    public static final int GAME_TYPE_UNKNOWN   = -1;
-    /** 원본 `Survival = 0` — GameMode.SURVIVAL.getId() 와 일치. */
-    public static final int GAME_TYPE_SURVIVAL  = 0;
-    /** 원본 `Creative = 1` — GameMode.CREATIVE.getId() 와 일치. */
-    public static final int GAME_TYPE_CREATIVE  = 1;
-    /** 원본 `Adventure = 2` — GameMode.ADVENTURE.getId() 와 일치. */
-    public static final int GAME_TYPE_ADVENTURE = 2;
-
-    /**
-     * 원본 SmartMovingOptions.gameType (L... 캐시 필드). 초기값 Unknown.
-     * `initializeForGameIfNeccessary()` 가 현재 게임 타입과 비교하여 변경 감지.
-     * `resetForNewGame()` 로 Unknown 리셋 시 다음 호출에서 재초기화.
-     */
-    private int gameType = GAME_TYPE_UNKNOWN;
-
-    // ── 게임타입별 config key 배열 + default key (원본 SmartMovingConfig L456-L463) ────
-    // 원본 Property<String[]> / Property<String> 대응. CSV 직렬화(원본 comment:
-    //   "entries seperated by ','"). `initializeForGameIfNeccessary()` 이식(F 섹션)에서
-    // gameType 판정 후 해당 배열/기본키를 `setKeys()` / `setCurrentKey()` 로 런타임 상태에 적용.
-    /** 원본 `_survivalConfigKeys = Strings("move.config.survival.keys").defaults({"e","m","h"})`. */
-    public String[] survivalConfigKeys       = new String[] { "e", "m", "h" };
-    /** 원본 `_survivalDefaultConfigKey = String("move.config.survival.keys.default").defaults("m")`. */
-    public String   survivalDefaultConfigKey = "m";
-    /** 원본 `_creativeConfigKeys = Strings("move.config.creative.keys").defaults({"c"})`. */
-    public String[] creativeConfigKeys       = new String[] { "c" };
-    /** 원본 `_creativeDefaultConfigKey = String("move.config.creative.keys.default").defaults("c")`. */
-    public String   creativeDefaultConfigKey = "c";
-    /** 원본 `_adventureConfigKeys = Strings("move.config.adventure.keys").defaults({"e","m","h"})`. */
-    public String[] adventureConfigKeys       = new String[] { "e", "m", "h" };
-    /** 원본 `_adventureDefaultConfigKey = String("move.config.adventure.keys.default").defaults("m")`. */
-    public String   adventureDefaultConfigKey = "m";
 
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
@@ -631,14 +605,8 @@ public class SmartMovingConfig {
 
     private void readFrom(Properties p) {
         enabled                  = getBool(p,   "move.enabled",                   enabled);
-        // 원본 SmartMovingConfig L456-L463: 게임타입별 config key 배열 + default key.
-        // String[] 은 CSV — 원본 Strings().comment("entries seperated by ','").
-        survivalConfigKeys        = getCsvArray(p, "move.config.survival.keys",         survivalConfigKeys);
-        survivalDefaultConfigKey  = p.getProperty("move.config.survival.keys.default",  survivalDefaultConfigKey);
-        creativeConfigKeys        = getCsvArray(p, "move.config.creative.keys",         creativeConfigKeys);
-        creativeDefaultConfigKey  = p.getProperty("move.config.creative.keys.default",  creativeDefaultConfigKey);
-        adventureConfigKeys       = getCsvArray(p, "move.config.adventure.keys",        adventureConfigKeys);
-        adventureDefaultConfigKey = p.getProperty("move.config.adventure.keys.default", adventureDefaultConfigKey);
+        // H-20 (세션 23): 게임타입별 6키 (move.config.{survival,creative,adventure}.keys{,.default})
+        // 읽기 삭제. 필드/메서드 제거와 함께. 기존 세이브 파일의 해당 키는 무시됨.
         speedFactor              = getFloat(p,  "move.speed.factor",              speedFactor);
         speedUser                = getBool(p,   "move.speed.user",                speedUser);
         speedUserFactor          = getFloat(p,  "move.speed.user.factor",         speedUserFactor);
@@ -757,13 +725,7 @@ public class SmartMovingConfig {
 
     private void writeTo(Properties p) {
         p.setProperty("move.enabled",                    String.valueOf(enabled));
-        // 원본 SmartMovingConfig L456-L463 대응 저장 (CSV + 단일 문자열)
-        p.setProperty("move.config.survival.keys",         csvJoin(survivalConfigKeys));
-        p.setProperty("move.config.survival.keys.default", survivalDefaultConfigKey);
-        p.setProperty("move.config.creative.keys",         csvJoin(creativeConfigKeys));
-        p.setProperty("move.config.creative.keys.default", creativeDefaultConfigKey);
-        p.setProperty("move.config.adventure.keys",        csvJoin(adventureConfigKeys));
-        p.setProperty("move.config.adventure.keys.default", adventureDefaultConfigKey);
+        // H-20 (세션 23): 게임타입별 6키 writeTo 삭제 (readFrom 과 대칭).
         p.setProperty("move.speed.factor",               String.valueOf(speedFactor));
         p.setProperty("move.speed.user",                 String.valueOf(speedUser));
         p.setProperty("move.speed.user.factor",          String.valueOf(speedUserFactor));
@@ -1195,79 +1157,10 @@ public class SmartMovingConfig {
         updateToggler();
     }
 
-    /**
-     * 원본 SmartMovingOptions.initializeForGameIfNeccessary() (L854-L903) 1:1 이식.
-     *
-     *   public void initializeForGameIfNeccessary() {
-     *       PlayerControllerMP controller = Minecraft.getMinecraft().playerController;
-     *       if (controller == null) return;
-     *       int currentGameType = ((GameType) Reflect.GetField(_currentGameType, controller)).getID();
-     *       if (currentGameType == gameType) return;
-     *       gameType = currentGameType;
-     *
-     *       String[] keys = null; String defaultKey = null;
-     *       switch (gameType) {
-     *           case Survival:  keys = _survivalConfigKeys.value;  defaultKey = _survivalDefaultConfigKey.value;  break;
-     *           case Creative:  keys = _creativeConfigKeys.value;  defaultKey = _creativeDefaultConfigKey.value;  break;
-     *           case Adventure: keys = _adventureConfigKeys.value; defaultKey = _adventureDefaultConfigKey.value; break;
-     *           default:        defaultKey = "";
-     *       }
-     *       setKeys(keys);
-     *       if (!defaultKey.isEmpty()) setCurrentKey(defaultKey);
-     *
-     *       if (_configChatInit.value) writeClientConfigMessageToChat(false);
-     *       if (isUserSpeedEnabled() && _speedChatInit.value) { ... }
-     *   }
-     *
-     * 1.21.1 차이:
-     *   - controller null 체크는 호출자 (`SmartMovingClientState`) 쪽에서 수행.
-     *   - 리플렉션 → `MinecraftClient.interactionManager.getCurrentGameMode().getId()` 주입.
-     *   - 채팅 초기화(_configChatInit / _speedChatInit) 분기는 범위 초과 — §16 기록.
-     *
-     * @param currentGameType GameMode.getId() 결과값 (Survival=0/Creative=1/Adventure=2/Spectator=3)
-     */
-    public void initializeForGameIfNeccessary(int currentGameType) {
-        if (currentGameType == gameType) return;
-        gameType = currentGameType;
-
-        String[] keys = null;
-        String defaultKey = null;
-
-        switch (gameType) {
-            case GAME_TYPE_SURVIVAL:
-                keys       = survivalConfigKeys;
-                defaultKey = survivalDefaultConfigKey;
-                break;
-            case GAME_TYPE_CREATIVE:
-                keys       = creativeConfigKeys;
-                defaultKey = creativeDefaultConfigKey;
-                break;
-            case GAME_TYPE_ADVENTURE:
-                keys       = adventureConfigKeys;
-                defaultKey = adventureDefaultConfigKey;
-                break;
-            default:
-                defaultKey = "";
-        }
-
-        setKeys(keys);
-        if (!defaultKey.isEmpty())
-            setCurrentKey(defaultKey);
-    }
-
-    /**
-     * 원본 SmartMovingOptions.resetForNewGame() (L844-L848) 1:1.
-     *
-     *   public void resetForNewGame() {
-     *       gameType = -1;
-     *   }
-     *
-     * 새 게임 시작(월드 진입/리스폰) 시 호출하여 다음 `initializeForGameIfNeccessary()`
-     * 호출에서 반드시 재초기화되도록 유도.
-     */
-    public void resetForNewGame() {
-        gameType = GAME_TYPE_UNKNOWN;
-    }
+    // H-20 (세션 23): initializeForGameIfNeccessary / resetForNewGame 메서드 삭제.
+    // 2상태 토글(configKeys={null}) 유지가 목표이므로 gameType 기반 setKeys 호출 경로 불필요.
+    // 원본 함수 본체는 focus_05 §5 리서치 파일에 보존. Medium/Hard 프리셋 복원 시
+    // `focus_09_difficulty_presets.md` 후속 포커스에서 재도입.
 
     public void changeSpeed(int difference) {
         speedUserExponent += difference;
@@ -1343,33 +1236,7 @@ public class SmartMovingConfig {
         return sb.toString();
     }
 
-    /**
-     * CSV 문자열 → String[] 파싱.
-     * 원본 `Strings("...").comment("entries seperated by ','")` 대응 (게임타입별 config keys).
-     * raw == null 또는 빈 문자열 → def 반환. 빈 배열(전체 비활성) 지원: raw=="" → `new String[0]`?
-     * 단순화: 빈 값은 def 유지. 공백 trim.
-     */
-    private static String[] getCsvArray(Properties p, String key, String[] def) {
-        String raw = p.getProperty(key);
-        if (raw == null) return def;
-        String trimmed = raw.trim();
-        if (trimmed.isEmpty()) return def;
-        String[] parts = trimmed.split(",");
-        for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
-        return parts;
-    }
-
-    /** String[] → CSV 직렬화. null → 빈 문자열. 배열 요소 중 null 은 제외. */
-    private static String csvJoin(String[] arr) {
-        if (arr == null) return "";
-        StringBuilder sb = new StringBuilder();
-        boolean first = true;
-        for (String s : arr) {
-            if (s == null) continue;
-            if (!first) sb.append(',');
-            sb.append(s);
-            first = false;
-        }
-        return sb.toString();
-    }
+    // H-20 (세션 23): getCsvArray / csvJoin 헬퍼 삭제. 게임타입별 String[] 필드 제거와
+    // 함께 호출처 전부 사라짐. (playerSpeedExponents 는 별도 헬퍼 parseIntegerMap/
+    // serializeIntegerMap 사용)
 }

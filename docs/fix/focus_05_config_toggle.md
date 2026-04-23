@@ -902,12 +902,20 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       (3) `en_us.json` `.named` / `.unnamed` 키 삭제 (.enabled / .disabled 유지)
       (4) `SmartMovingConfig.configKeyName` Map 필드 삭제
       `grep configKeyName` 확인: 주석/javadoc 참조만 남음 (코드 참조 0). 빌드 ✓
-- [ ] H-19. **호출 없는 메서드/상수 정리** — `getKey`/`getNextKey`/`hasKey`/`setCurrentKey`
-      메서드 4개 + `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 상수 2개 삭제. `DEFAULT_KEYS`/
-      `configKeys`/`toggler`/`toggle()`/`setKeys()`/`updateToggler()`/`getCurrentKey()` 유지.
-- [ ] H-20. **gameType 시스템 전체 정리** — `initializeForGameIfNeccessary`/`resetForNewGame`
-      메서드 + `gameType` 필드 + `GAME_TYPE_*` 4상수 + 게임타입별 6필드 + readFrom/writeTo
-      6키 전부 삭제. `getCsvArray`/`csvJoin` 헬퍼는 다른 참조 확인 후 결정.
+- [x] H-20. **gameType 시스템 전체 정리** (H-19 선행 완료) — 5종 삭제:
+      (1) 메서드 2개 `initializeForGameIfNeccessary(int)` / `resetForNewGame()`
+      (2) 필드 7개 `gameType` (private int) + 게임타입별 6필드 (survival/creative/adventure
+          각 configKeys+DefaultConfigKey)
+      (3) 상수 4개 `GAME_TYPE_UNKNOWN/SURVIVAL/CREATIVE/ADVENTURE`
+      (4) readFrom/writeTo 6키 처리 전부 제거
+      (5) 헬퍼 `getCsvArray`/`csvJoin` 삭제 (다른 호출처 0건 확인)
+      세이브 파일 호환: 기존 키는 단순 무시됨. Medium/Hard 프리셋 복원 시
+      `focus_09_difficulty_presets.md` 후속에서 재도입.
+      `grep initializeForGameIfNeccessary` → 주석/javadoc 만 (코드 0). 빌드 ✓
+- [ ] H-19. **호출 없는 메서드/상수 정리** (H-20 후) — `getKey`/`getNextKey`/`hasKey`/
+      `setCurrentKey` 메서드 4개 + `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 상수 2개 삭제.
+      `DEFAULT_KEYS`/`configKeys`/`toggler`/`toggle()`/`setKeys()`/`updateToggler()`/
+      `getCurrentKey()` 유지. `getCurrentKey` 도 H-18 정리 후 호출처 확인 — 남아있으면 정리.
 - [ ] H-21. **통합 빌드 + 회귀 감사 재실행** — clean build + §14 "H 섹션 회귀 감사" 확장
       (변경 3종 → 4종). checklist_original_audit.md 에 H-18~H-20 정리 기록 추가.
 - [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:
