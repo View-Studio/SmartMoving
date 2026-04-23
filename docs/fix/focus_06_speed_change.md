@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1 + B-6 + B-2 완료 / ⏳ **B-3 진행 (Swim/Dive)** |
+| 현재 단계 | ✅ A + B-1/B-2/B-3/B-6 완료 / ⏳ **B-4 진행 (Climb 3갈래 점검)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -246,9 +246,12 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       - SM 경로 (비행/수영/클라이밍, vanilla travel cancel): 영향 0 — getMovementSpeed 안 불림
       Creative 게이트는 Mover.getConfigSpeedFactor 내부에서 처리 (B-6). 이중 적용 없음
       (SM 경로는 getPotionSpeedFactor 로 attribute 직접 읽음). 빌드 ✓
-- [ ] B-3. **Swim/Dive User 배율 이식** (핵심 누락 2) — `Swimmer.handleSwimming L190` 의
-      `speedFactor = isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor` 직후 또는 동일 라인에
-      `* cfg.getUserSpeedFactor()` 추가. 원본 Self L119 의 `getConfigSpeedFactor` 포함 구조와 정합.
+- [x] B-3. **Swim/Dive User 배율 이식** — `SmartMovingSwimmer.handleSwimming L190` 의
+      speedFactor 계산에 `* SmartMovingMover.getCombinedSpeedFactor(player, cfg)` 곱셈 추가.
+      원본 Self L476-L494 의 `speedFactor *= _diveSpeedFactor/swimSpeedFactor` 는 Self L119
+      지역변수 (`getConfigSpeedFactor * getPotionSpeedFactor * ...`) 에서 시작하는데, 1.21.1
+      은 vanilla travel() cancel 경로라 그 값을 받지 못함 → `getCombinedSpeedFactor` 로 재구성.
+      Creative 게이트 B-6 내부에서 자동 처리. 빌드 ✓
 - [ ] B-4. **Climb 3갈래 확인/보완** — `SmartMovingClimber` 에서
       (a) 사다리 하강 클램프 `motionY = max(motionY, -0.15 * combinedFactor)` 존재 여부
       (b) Smart 모드 `motionY *= combinedFactor` 존재 여부
@@ -508,6 +511,46 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 
 **다음 작업**: B-3 — Swim/Dive User 배율. `Swimmer.handleSwimming L190` 의 speedFactor
 계산에 `Mover.getCombinedSpeedFactor(player, cfg)` 또는 `getConfigSpeedFactor` 추가.
+
+### 세션 27 — 2026-04-24 — B-3 (Swim/Dive User 배율)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.handleSwimming L190` 수정:
+  ```java
+  // 이전:
+  float speedFactor = sm.isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor;
+
+  // 이후 (B-3):
+  float speedFactor = (sm.isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor)
+                    * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+  ```
+- 원본 매핑: Self L476-L494 `speedFactor *= _diveSpeedFactor.value / _swimSpeedFactor.value`
+  는 Self L119 지역변수 (`getConfigSpeedFactor * getPotionSpeedFactor * ...`) 에서 시작.
+  1.21.1 는 vanilla travel() cancel 경로라 그 진입점 값을 받지 못함 — `getCombinedSpeedFactor`
+  로 재구성하여 Config/Potion 배율 포함.
+- Creative 게이트는 `Mover.getConfigSpeedFactor` 내부 `isCreative()` 체크 (B-6) 자동 적용.
+- speedFactor 는 이후 `BASE_SWIM_SPEED * speedFactor` / `0.05D * speedFactor` 등 3곳에서
+  소비됨 (isDipping / isSwimming_sm / isDiving 경로) — 모두 User 배율 자동 반영.
+
+**완료 전 검증 체크리스트 (B-3 기준)**:
+- [근거] 원본 Self L476-L494 swim/dive speedFactor 곱셈 구조 (세션 24 A-1) ✓
+- [근거] Self L119 `speedFactor = getConfigSpeedFactor * getPotionSpeedFactor * ...` 시작점 ✓
+- [대응] 원본 L119 진입점 ↔ 1.21.1 getCombinedSpeedFactor 호출 1:1 ✓
+- [분기] isDipping / isSwimming_sm / isDiving 3갈래 모두 동일 speedFactor 사용 → 일관 반영 ✓
+- [상수] 해당 없음
+- [타이밍] handleSwimming 진입 시 1회 계산, 3갈래 분기에서 소비 — 원본과 동일
+- [근사] `getNonSlowInputSpeedFactor` (얼음/스프린트/달리기) 제외 — 수중에선 스프린트 의미
+  없음, 원본도 물속에선 NonSlow 로 들어오는 값이 1F 인 경우가 대부분이라 등가
+- [신규] 없음
+- [회귀] Easy(speedUser=false) 또는 !Creative: getCombinedSpeedFactor = 1F × potionFactor.
+  potionFactor 는 GENERIC_MOVEMENT_SPEED × 10 / 1.3F 인데 기본값에서 ~1.0F. 따라서 수영/
+  잠수 속도 vanilla 대비 ~1배 (변화 0). 포션 효과 받을 때는 vanilla 보다 정확히 반영 —
+  원본 1:1.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-4 — Climb 3갈래 점검. Climber 에서 (a) 사다리 하강 클램프 (L780),
+(b) Smart 모드 motionY *= combinedFactor (L893), (c) Free climb / Ceiling climb 
+setOnlyShouldClimbSpeed 내 factor 에 User 배율 포함 여부 검증. 누락 시 추가.
 
 ---
 

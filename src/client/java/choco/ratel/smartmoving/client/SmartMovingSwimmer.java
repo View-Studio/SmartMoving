@@ -187,7 +187,14 @@ public final class SmartMovingSwimmer {
         float moveForward = (float) movementInput.z;
         float moveStrafe  = (float) movementInput.x;
 
-        float speedFactor = sm.isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor;
+        // B-3 (세션 27): User 배율 주입. 원본 SmartMovingSelf L476-L494 에서 speedFactor 는
+        // Self L119 지역변수(getConfigSpeedFactor * getPotionSpeedFactor * ...) 에서 시작,
+        // 이후 `*= _diveSpeedFactor.value` 또는 `*= _swimSpeedFactor.value` 로 곱셈.
+        // 1.21.1 는 vanilla travel() cancel 로 직접 계산 — getMovementSpeed inject (B-2) 영향
+        // 없음. Mover.getCombinedSpeedFactor(player, cfg) 로 User 배율 + 포션 효과 포함.
+        // Creative 게이트는 getConfigSpeedFactor 내부에서 자동 처리 (B-6).
+        float speedFactor = (sm.isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor)
+                          * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
 
         Vec3d vel = player.getVelocity();
         double motionX = vel.x;
