@@ -3297,3 +3297,324 @@ public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientS
 - **B-11**: 얕은 물 특수 분기 L513-L536 이식 (isSlow 조합 crawl/walking)
 - **B-12**: `waterMovementTicks` 증분 조건 정정 (dipping 시 0 리셋)
 - **B-13**: 크롤↔수영 전환 `isSliding` 조건 추가
+
+---
+
+## R-12 추가 리서치 — isClimbing/isCeilingClimbing/isCrawlClimbing/isClimbCrawling 등반 4상태 전수 덤프 (2026-04-24 세션 33 — 포커스 #2 A-3)
+
+포커스 #2 A-3 감사 — 등반 4상태 갱신 로직 전수 매핑. 기존 `handleClimbing` (L706-) /
+`handleCeilingClimbing` / 상태 전환 L2736-L2820 섹션 보완 + 1.21.1 `SmartMovingClimber`
+side-by-side.
+
+### R-12.1 관련 필드 선언
+
+```java
+// --- SmartMoving.java (부모) L30-L45 ---
+public boolean isClimbJumping;
+public boolean isClimbBackJumping;
+public boolean isWallJumping;
+public boolean isClimbCrawling;              // 등반 + 크롤 모드 (상단)
+public boolean isCrawlClimbing;              // 크롤 + 등반 모드 (하단 — 다른 상태!)
+public boolean isCeilingClimbing;            // 천장 등반
+public boolean isRopeSliding;
+// ...
+public boolean isHeadJumping;
+public boolean isCrawling;
+public boolean isSliding;
+public boolean isFlying;
+
+// --- SmartMovingSelf.java L1421-L1431 ---
+public boolean isVineOnlyClimbing;           // 덩굴만 (사다리 없이)
+public boolean isVineAnyClimbing;            // 덩굴 또는 사다리
+public boolean isClimbingStill;              // 등반 정지 상태
+public boolean isClimbHolding;               // 등반 홀드 (손 고정)
+public boolean isNeighborClimbing;           // 인접 블록 등반 가능
+public boolean hasClimbGap;                  // 등반 갭 (중간 빈 공간)
+public boolean hasClimbCrawlGap;             // 등반 크롤 갭 (상단)
+public boolean hasNeighborClimbGap;
+public boolean hasNeighborClimbCrawlGap;
+
+// --- SmartMovingSelf.java L1437-L1447 추가 ---
+public int actualHandsClimbType;
+public int actualFeetClimbType;
+public Block handsEdgeBlock;
+public int handsEdgeMeta;
+public Block feetEdgeBlock;
+public int feetEdgeMeta;
+public int climbIntoCount;                    // 크롤 등반 진입 카운터
+```
+
+**1.21.1 이식 상태** (ClientState grep):
+- **이식됨**: `isClimbing` / `isCeilingClimbing` / `isCrawlClimbing` / `isClimbCrawling` /
+  `isClimbJumping` / `isClimbHolding` / `isClimbBackJumping` / `isWallJumping` / `isRopeSliding` /
+  `isFeetVineClimbing` / `isHandsVineClimbing` / `climbIntoCount` / `hasClimbCrawlGap` /
+  `actualHandsClimbType` / `actualFeetClimbType` (대부분 필드 선언만)
+- **미이식**: `isNeighborClimbing` / `hasClimbGap` / `hasNeighborClimbGap` /
+  `hasNeighborClimbCrawlGap` / `isVineOnlyClimbing` / `isVineAnyClimbing` /
+  `isClimbingStill` / `handsEdgeBlock` / `feetEdgeBlock` (grep 0건)
+
+### R-12.2 갱신 위치 맵
+
+**원본** (SmartMovingSelf.java):
+| 위치 | 동작 | 대상 |
+|---|---|---|
+| L816 | `resetClimbing()` — 매 틱 handleClimbing 진입 시 전 필드 리셋 | 모든 등반 상태 |
+| L1072 | `isClimbing = false` — ClimbBackJump 성공 시 | isClimbing |
+| L1162 | `isCeilingClimbing = true` — handleCeilingClimbing 성공 시 | isCeilingClimbing |
+| L1476 | `isClimbing = false` — resetClimbing() 내부 | isClimbing |
+| L1485 | `isCeilingClimbing = false` — resetClimbing() 내부 | isCeilingClimbing |
+| L1515 | `isClimbing = true` — setOnlyShouldClimbSpeed() | isClimbing |
+| **L2737** | `isCrawlClimbing = (wasCrawling \|\| isCrawlClimbing) && isClimbing && isNeighborClimbing && (sneakButton.Pressed \|\| crawlToggled) && moveForward>0` | **isCrawlClimbing** 메인 공식 |
+| L2744 | `isCrawlClimbing = false` — canStandUp 분기 | isCrawlClimbing |
+| **L2795** | `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && climbIntoCount==0) \|\| climbIntoCount>1)` | **isClimbCrawling** 메인 공식 |
+| L2278/L2285/L2286/L2287 | `resetState()` — SM 비활성 시 | 4상태 전부 false |
+
+**1.21.1** (SmartMovingClimber + ClientState):
+| 위치 | 동작 | 대상 |
+|---|---|---|
+| `Climber.setOnlyShouldClimbSpeed` L221 | `sm.isClimbing = true` (Free 진입) | ✓ isClimbing |
+| `Climber.handleClimbBackJump` L479 | `sm.isClimbing = false` (ClimbBackJump 성공) | ✓ isClimbing |
+| `Climber.handleCeilingClimbing` L571 | `sm.isCeilingClimbing = true` | ✓ isCeilingClimbing |
+| `ClientState.resetState` L878/L881/L885/L886 | 4상태 false | ✓ resetState 만 |
+| **-** | **isCrawlClimbing 갱신 로직 없음** | ✗ 미이식 |
+| **-** | **isClimbCrawling 갱신 로직 없음** | ✗ 미이식 |
+| **-** | **resetClimbing() 메서드 없음** | ✗ 미이식 (매 틱 등반 상태 리셋 불가) |
+| **-** | **handleCeilingClimbing false 설정 위치 없음 (resetState 제외)** | ✗ 한 번 true 되면 해제 엣지 불명확 |
+
+### R-12.3 `handleClimbing` 구조 (원본 L814-L1110 요약)
+
+```java
+// --- SmartMovingSelf.java L814-L846 (요약) ---
+private void handleClimbing(boolean isOnLadder, boolean isOnVine, boolean wasClimbing)
+{
+    resetClimbing();                             // 모든 등반 상태 false
+
+    boolean isOnLadderOrVine = isOnLadder || isOnVine;
+
+    // Standard Base Climb — motionY 만 설정, isClimbing 설정 안 함
+    if(Config.isStandardBaseClimb() && collidedHorizontally && isOnLadderOrVine)
+        sp.motionY = 0.2 * getCombinedSpeedFactor();
+
+    // Simple Base Climb — feet/hands 판정 후 motionY, isClimbing 설정 안 함
+    if(Config.isSimpleBaseClimb() && collidedHorizontally && isOnLadderOrVine) { ... }
+
+    // Smart/Free Base Climb — 복잡한 판정, setOnlyShouldClimbSpeed 호출
+    if(Config.isSmartBaseClimb() || Config.isFreeClimbingEnabled())
+    {
+        // Smart Base Climb (L856-L894)
+        if(Config.isSmartBaseClimb() && isOnLadderOrVine && collidedHorizontally) { ... }
+
+        // Free Climbing (L896-L1108)
+        if(Config.isFreeClimbingEnabled() && fallDistance <= freeClimbFallMaximumDistance &&
+           (!isOnLadderOrVine || isFreeBaseClimb()))
+        {
+            // exhaustionAllowsClimbing 판정
+            // wantClimbUp/wantClimbDown → setShouldClimbSpeed / setOnlyShouldClimbSpeed
+            //   → 내부에서 isClimbing = true
+            // handsClimbType / feetClimbType 판정
+            // hasClimbGap / hasClimbCrawlGap 판정
+            // isNeighborClimbing / isClimbingStill / isVineOnlyClimbing 갱신
+            // ClimbJump / ClimbBackJump 처리 (isClimbJumping / isClimbBackJumping)
+        }
+    }
+}
+```
+
+**핵심 관찰**:
+- Standard/Simple Base Climb 는 **isClimbing 을 설정하지 않음** (vanilla ladder 물리 위임)
+- Smart/Free Base Climb 만 `setOnlyShouldClimbSpeed()` → `isClimbing = true`
+- **resetClimbing() 이 매 틱 호출** — 이전 틱 상태 무조건 false 후 새로 계산
+  → 1.21.1 미이식 시 이전 틱 상태가 잔존할 위험
+
+### R-12.4 `handleCeilingClimbing` 구조 (원본 L1112-L1174 요약)
+
+```java
+// --- SmartMovingSelf.java L1112-L1174 (요약) ---
+private void handleCeilingClimbing()
+{
+    // 조건: wantClimbCeiling && !isClimbing && (!isCrawling || conflict) && !isCrawlClimbing
+    if(wantClimbCeiling && !isClimbing && ... && !isCrawlClimbing)
+    {
+        // exhaustionAllowsCeilingClimbing 판정
+        // 천장 블록 판정 + jgap 계산
+        // 성공 조건 만족 시:
+        isCeilingClimbing = true;    // L1162
+        sp.motionY = ...;
+    }
+}
+```
+
+**핵심 관찰**:
+- 진입 조건 `!isClimbing && !isCrawlClimbing` — isCrawlClimbing 미이식 시 1.21.1 에서 이
+  게이트가 항상 true 로 평가되어 불필요한 진입 가능
+- **해제는 resetClimbing() 또는 resetState() 에서만** — 매 틱 handleClimbing 진입 시 전
+  필드 리셋되므로 자동 해제. 1.21.1 `resetClimbing()` 미이식 → 해제 엣지 불명확
+
+### R-12.5 `isCrawlClimbing` 메인 공식 (원본 L2737 + 전환 L2737-L2754)
+
+```java
+// --- SmartMovingSelf.java L2737-L2754 ---
+boolean wasCrawlClimbing = isCrawlClimbing;
+isCrawlClimbing = (wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing
+                  && (sneakButton.Pressed || crawlToggled) && esp.movementInput.moveForward > 0F;
+if(isCrawlClimbing)
+{
+    boolean canStandUp = !isPlayerInSolidBetween(
+        sp.boundingBox.minY - (isClimbCrawling ? 0.95D : 1D), sp.boundingBox.minY);
+    if(canStandUp)
+    {
+        wasCrawlClimbing = false;
+        isCrawlClimbing = false;
+        if(!isClimbCrawling)
+            resetHeightOffset();
+    }
+
+    if(!wasCrawlClimbing)
+    {
+        wasCrawling = false;
+        isCrawling = false;
+    }
+}
+else if(wasCrawlClimbing)
+{
+    boolean toCrawling = sneakButton.Pressed || crawlToggled;
+    if(!isClimbing) { /* 복합 해제 + 이동 조정 */ }
+    else if(moveForward <= 0F) { /* 전환 */ }
+    else if(!toCrawling) { /* 전환 */ }
+}
+```
+
+**5-AND 공식**:
+1. `wasCrawling || isCrawlClimbing` — 크롤 상태 연속성
+2. `isClimbing` — 등반 중
+3. `isNeighborClimbing` — 인접 블록 등반 가능 (**미이식**)
+4. `sneakButton.Pressed || crawlToggled` — 크롤 의도
+5. `moveForward > 0F` — 전진 입력
+
+**의존**: `wasCrawling` / `isClimbing` / `isNeighborClimbing` / `sneakButton.Pressed` /
+`crawlToggled` / `moveForward` / `isClimbCrawling` (canStandUp 분기에만)
+
+### R-12.6 `isClimbCrawling` 메인 공식 (원본 L2795 + 전환 L2786-L2820)
+
+```java
+// --- SmartMovingSelf.java L2786-L2820 ---
+boolean wasClimbCrawling = isClimbCrawling;
+boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
+boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
+
+if(climbIntoCount > 1)
+    climbIntoCount--;
+else if(isClimbCrawling && !needClimbCrawling && climbIntoCount == 0)
+    climbIntoCount = 6;
+
+isClimbCrawling = canClimbCrawling && ((needClimbCrawling && climbIntoCount == 0) || climbIntoCount > 1);
+if(isClimbCrawling && !wasClimbCrawling)
+{
+    setHeightOffset(-1F);
+    // "to avoid climb crawling into solid when standing with solid above head"
+    boolean wasCollidedHorizontally = sp.isCollidedHorizontally;
+    move(0, 0.05, 0, true);
+    sp.isCollidedHorizontally = wasCollidedHorizontally;
+}
+else if(!isClimbCrawling && wasClimbCrawling)
+{
+    climbIntoCount = 0;
+    // 크롤 전환 분기 + resetHeightOffset
+}
+```
+
+**공식**:
+- `needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding)` — **미이식 필드 2개**
+- `canClimbCrawling = wantClimbHolding && wantClimbUp` — **wantClimbHolding 지역변수 미이식**
+- `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && climbIntoCount==0) || climbIntoCount>1)`
+
+**카운터 로직 (climbIntoCount)**:
+- 6 → 5 → ... → 1 → 0 (감소)
+- isClimbCrawling && !needClimbCrawling && count==0 → count=6 (재장전)
+- count>1 이거나 (needClimbCrawling && count==0) 일 때 isClimbCrawling=true
+
+### R-12.7 `isClimbHolding` / `wantClimbHolding` (원본 L2721-L2732)
+
+```java
+// --- SmartMovingSelf.java L2721-L2732 ---
+boolean wantClimbHolding =
+    (isClimbHolding && sneakButton.Pressed) ||
+    (isClimbing && blocked) ||
+    (wantClimb && !isSwimming && !isDiving && !isCrawling && (sneakButton.Pressed || crawlToggled));
+
+isClimbHolding = wantClimbHolding && isClimbing;
+```
+
+**3-OR 계산** → `isClimbHolding = wantClimbHolding && isClimbing`. 1.21.1 필드 선언은
+있으나 이 **계산 블록 미이식** — isClimbHolding 은 항상 기본값 false 유지.
+
+### R-12.8 의존 필드 계산
+
+`isNeighborClimbing` / `hasClimbGap` / `hasClimbCrawlGap` / `actualHandsClimbType` /
+`actualFeetClimbType` 는 원본 handleClimbing 내부 Free Climbing 분기 (L896-L1108) 에서
+Orientation/ClimbGap 판정으로 갱신. 1.21.1 이식 여부:
+- `hasClimbCrawlGap` — ClientState 필드 선언만, 갱신 로직 확인 필요
+- `isNeighborClimbing` / `hasClimbGap` — 필드 자체 미이식
+
+### R-12.9 1.21.1 side-by-side + 불일치
+
+**1.21.1 `SmartMovingClimber.setOnlyShouldClimbSpeed`** (L216-L223):
+```java
+public static boolean setOnlyShouldClimbSpeed(ClientPlayerEntity player, SmartMovingClientState sm,
+        double value, boolean up, boolean down) {
+    boolean relevant = setShouldClimbSpeed(player, sm, value, up, down);
+    if (relevant) sm.isClimbing = true;
+    return relevant;
+}
+```
+
+**1.21.1 `SmartMovingClimber.handleClimbing`** L236-L422 — Free 모드 핵심 로직만. Standard/
+Simple Base Climb 은 vanilla 위임. **resetClimbing() 호출 없음** — 이전 상태 리셋 불명확.
+
+**1.21.1 `SmartMovingClimber.handleCeilingClimbing`** L511-L571:
+```java
+// 조건: wantClimbCeiling && !isClimbing && (!isCrawling || conflict) && !isCrawlClimbing
+if (sm.isClimbing || sm.isCrawlClimbing) return;
+// ... 판정 생략 ...
+sm.isCeilingClimbing = true;       // L571
+```
+
+**1.21.1 `MixinLivingEntityClient`** L117: `// 원본: SmartMovingSelf.resetClimbing() +
+resetState() 호출` 주석만 있고 실제 resetClimbing 호출 코드 없음 (또는 inline 으로 처리).
+
+### R-12.10 불일치 목록
+
+| # | 원본 | 1.21.1 | 분류 |
+|---|---|---|---|
+| 1 | L816 `resetClimbing()` 매 틱 handleClimbing 진입 시 호출 — 10+ 필드 리셋 | 대응 메서드 없음, 매 틱 리셋 누락 | [누락] |
+| 2 | L2737 `isCrawlClimbing = (wasCrawling\|\|isCrawlClimbing) && isClimbing && isNeighborClimbing && (sneakPressed\|\|crawlToggled) && moveForward>0` | 갱신 로직 없음 — 필드는 항상 false (packet 수신 제외) | [누락] |
+| 3 | L2737-L2754 canStandUp / wasCrawlClimbing 전환 블록 | 없음 | [누락] |
+| 4 | L2795 `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) \|\| count>1)` | 갱신 로직 없음 | [누락] |
+| 5 | L2786-L2820 climbIntoCount 카운터 + 진입/해제 엣지 블록 | 없음 (필드는 있으나 갱신 X) | [누락] |
+| 6 | L2730 `isClimbHolding = wantClimbHolding && isClimbing` | 갱신 로직 없음 (필드는 있으나 항상 false) | [누락] |
+| 7 | L2721-L2728 `wantClimbHolding` 3-OR 계산 | 없음 | [누락] |
+| 8 | `isNeighborClimbing` 필드 + 갱신 (handleClimbing 내부) | 필드 자체 미이식 | [누락] |
+| 9 | `hasClimbGap` 필드 + 갱신 | 필드 자체 미이식 | [누락] |
+| 10 | `hasClimbCrawlGap` 갱신 (handleClimbing 내부) | 필드 있으나 갱신 로직 없음 | [누락] |
+| 11 | `isVineOnlyClimbing` / `isVineAnyClimbing` / `isClimbingStill` 갱신 | 필드 미이식 | [누락] |
+| 12 | `handsEdgeBlock` / `feetEdgeBlock` | 필드 미이식 (애니메이션 참조 필드) | [누락] |
+| 13 | L1485 `isCeilingClimbing = false` — resetClimbing 경로 | resetClimbing 미이식 → 해제 엣지 없음 (resetState 만) | [누락] |
+| 14 | Standard/Simple Base Climb 분기 (L820-L844) — motionY 설정만, isClimbing 설정 안 함 | 1.21.1 Climber 는 Free 만 처리 — Standard/Simple 모드 미이식 | [누락] |
+
+### R-12.11 B-N 이식 우선순위 예비안
+
+- **B-14**: `resetClimbing()` 메서드 신설 + handleClimbing 진입 시 호출 (매 틱 리셋)
+- **B-15**: 미이식 필드 이식 — `isNeighborClimbing` / `hasClimbGap` / `hasNeighborClimbGap` /
+  `hasNeighborClimbCrawlGap` / `isVineOnlyClimbing` / `isVineAnyClimbing` / `isClimbingStill` /
+  `handsEdgeBlock` / `feetEdgeBlock` (ClientState 필드 추가)
+- **B-16**: `wantClimbHolding` / `isClimbHolding` 갱신 블록 이식 (원본 L2721-L2732)
+- **B-17**: `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (원본 L2736-L2754) —
+  의존 `isNeighborClimbing` 등 B-15 선행
+- **B-18**: `isClimbCrawling` 메인 공식 + 카운터 + 엣지 블록 이식 (원본 L2786-L2820) —
+  의존 `hasClimbGap` B-15 선행
+- **B-19**: `hasClimbCrawlGap` / `hasClimbGap` / `isNeighborClimbing` 갱신 로직 이식
+  (handleClimbing Free 분기 내부 — 원본 L896-L1108 에서 Orientation 판정) — 규모 큼, 서브원자 분해
+- **B-20**: Standard/Simple Base Climb 이식 (원본 L820-L844) — vanilla ladder 위임
+  유지할지 SM 물리 덮어쓸지 판단 필요
+- **B-21**: `isCeilingClimbing` 해제 엣지 이식 (원본 L1485 resetClimbing 대응) —
+  B-14 완료 후 자동 해결 가능

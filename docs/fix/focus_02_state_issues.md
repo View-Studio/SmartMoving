@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 32 — A-2 완료) |
-| 현재 단계 | A-0/A-1/A-2/B-0 완료 — A-2 불일치 11건 확정 + B-6~B-13 원자 추가 / ⏳ **A-3 (등반 4상태)** |
+| 상태 | 🟡 진행 중 (세션 33 — A-3 완료) |
+| 현재 단계 | A-0/A-1/A-2/A-3/B-0 완료 — A-3 불일치 14건 + B-14~B-21 원자 추가 / ⏳ **A-4 (전환 쌍 isHeadJumping/isSliding)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,14 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-12** (세션 33 — A-3 완료): `isClimbing`/`isCeilingClimbing`/`isCrawlClimbing`/
+  `isClimbCrawling` 등반 4상태 전수 감사 — `SmartMovingSelf.md` R-12 섹션 참조. 범위:
+  R-12.1 필드 선언 (9건 미이식 포함) / R-12.2 갱신 위치 맵 (원본 vs 1.21.1) /
+  R-12.3 handleClimbing 구조 / R-12.4 handleCeilingClimbing 구조 /
+  R-12.5 isCrawlClimbing 5-AND 공식 + 전환 블록 / R-12.6 isClimbCrawling 공식 +
+  climbIntoCount 카운터 / R-12.7 isClimbHolding/wantClimbHolding 3-OR / R-12.8 의존 필드 /
+  R-12.9 1.21.1 side-by-side / R-12.10 **불일치 14건** / R-12.11 B-14~B-21 원자 예비안.
+
 - **R-11** (세션 32 — A-2 완료): `isSwimming_sm`/`isDiving`/`isDipping` 수중 3상태 전수
   감사 — `SmartMovingSelf.md` R-11 섹션 참조. 범위: R-11.1 필드 선언 / R-11.2 진입 조건 /
   R-11.3 사전 준비 (AABB + couldStandUp + wantShallowSwim) / R-11.4 크롤 3-OR 강제 isDipping /
@@ -201,7 +209,14 @@
       누락 / 메인 분류 3-갈래 완전 대체 / isShallowDiveOrSwim·isJumpingOutOfWater·
       isStillSwimmingJump·isLevitating 필드 미이식 / 얕은 물 특수 분기 미이식 /
       waterMovementTicks 증분 조건 차이 / 크롤↔수영 전환 isSliding 누락. B-6~B-13 원자 추가.
-- [ ] A-3. **`isClimbing` / `isCeilingClimbing` / `isCrawlClimbing` / `isClimbCrawling`** 원본 덤프 (등반 계열 4상태)
+- [x] A-3. ✅ **세션 33 완료** — 등반 4상태 `isClimbing`/`isCeilingClimbing`/
+      `isCrawlClimbing`/`isClimbCrawling` 전수 감사. `SmartMovingSelf.md` R-12 섹션 덤프
+      완료. **불일치 14건 확정** (§16 세션 33): resetClimbing() 메서드 미이식 /
+      isCrawlClimbing+isClimbCrawling 갱신 로직 완전 미이식 / isClimbHolding+wantClimbHolding
+      계산 미이식 / 의존 필드 9건 미이식 (isNeighborClimbing / hasClimbGap /
+      isVineOnlyClimbing / isVineAnyClimbing / isClimbingStill / hasNeighborClimbGap /
+      hasNeighborClimbCrawlGap / handsEdgeBlock / feetEdgeBlock) / Standard·Simple Base
+      Climb 미이식 / isCeilingClimbing 해제 엣지 미이식. B-14~B-21 원자 추가.
 - [ ] A-4. **`isHeadJumping` / `isSliding`** 원본 덤프 (전환 쌍)
 - [ ] A-5. **`isCrawling` + `contextContinueCrawl`** 원본 덤프 (가장 복잡, 종합 의존)
 - [ ] A-6. **`wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`** 원본 스냅샷 위치 확인
@@ -328,7 +343,58 @@
 - [ ] B-13. `SmartMovingSwimmer.handleSwimming` L119/L124 SwimCrawlWater 전환 조건에
       원본 L418 `(isCrawling || isSliding)` 반영. 현재 `wasCrawling` 만 체크.
 
-#### B-N. A-3~A-6 추가 발견에 따라 동적 추가
+#### B-14. `resetClimbing()` 메서드 신설 + handleClimbing 진입 시 호출 (A-3 발견)
+- [ ] B-14. 원본 L1474-L1486 `resetClimbing()` 이식 — `isClimbing` / `isHandsVineClimbing` /
+      `isFeetVineClimbing` / `isVineOnlyClimbing` / `isVineAnyClimbing` / `isClimbingStill` /
+      `isNeighborClimbing` / `actualHandsClimbType` / `actualFeetClimbType` /
+      `isCeilingClimbing` 10 필드 리셋. `SmartMovingClimber.handleClimbing` 진입 시 호출
+      (원본 L816). 이식된 필드만 먼저 리셋, 미이식 필드는 B-15 이후.
+
+#### B-15. 미이식 등반 필드 9건 ClientState 이식 (A-3 발견)
+- [ ] B-15a. `isNeighborClimbing` 필드 추가 (원본 L1426)
+- [ ] B-15b. `hasClimbGap` 필드 추가 (원본 L1427) — B-18 선행 의존
+- [ ] B-15c. `hasNeighborClimbGap` / `hasNeighborClimbCrawlGap` 필드 (원본 L1429-L1430)
+- [ ] B-15d. `isVineOnlyClimbing` / `isVineAnyClimbing` 필드 (원본 L1421-L1422)
+- [ ] B-15e. `isClimbingStill` 필드 (원본 L1424)
+- [ ] B-15f. `handsEdgeBlock` / `feetEdgeBlock` / edgeMeta 필드 (원본 L1443-L1446) — 애니메이션 참조
+
+#### B-16. `wantClimbHolding` / `isClimbHolding` 갱신 블록 이식 (A-3 발견)
+- [ ] B-16. 원본 L2721-L2732 3-OR 공식 이식:
+      `wantClimbHolding = (isClimbHolding && sneakPressed) || (isClimbing && blocked) ||
+      (wantClimb && !isSwimming && !isDiving && !isCrawling && (sneakPressed || crawlToggled))`
+      → `isClimbHolding = wantClimbHolding && isClimbing`.
+      의존: `wantClimb` / `blocked` 필드 확인.
+
+#### B-17. `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (A-3 발견)
+- [ ] B-17. 원본 L2736-L2754 이식:
+      `isCrawlClimbing = (wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing
+      && (sneakPressed || crawlToggled) && moveForward > 0F`
+      + canStandUp 분기 (isPlayerInSolidBetween 근사 필요) + wasCrawlClimbing 전환 분기.
+      의존: B-15a `isNeighborClimbing` 선행 필수.
+
+#### B-18. `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 이식 (A-3 발견)
+- [ ] B-18. 원본 L2786-L2820 이식:
+      - `needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding)` (B-15b/B-16 선행)
+      - `canClimbCrawling = wantClimbHolding && wantClimbUp`
+      - climbIntoCount 카운터: `>1`감소 / `isClimbCrawling&&!needClimbCrawling&&count==0`→`6` 재장전
+      - `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1)`
+      - 진입 엣지 (setHeightOffset(-1) + move(0,0.05,0))
+      - 해제 엣지 (mustCrawl/sneak 상황별 crawl 전환 + resetHeightOffset)
+
+#### B-19. `hasClimbCrawlGap` / `hasClimbGap` / `isNeighborClimbing` 갱신 로직 이식 (A-3 발견)
+- [ ] B-19. 원본 handleClimbing Free Climbing 분기 (L896-L1108) 내부 Orientation 판정
+      → hasClimbCrawlGap / hasClimbGap / isNeighborClimbing 계산. 규모 큼 — 서브원자
+      분해 (B-19a: Orientation 4방향 판정 / B-19b: ClimbGap out 파라미터 / ...).
+
+#### B-20. Standard / Simple Base Climb 이식 (A-3 발견)
+- [ ] B-20. 원본 L820-L844 이식 — Config.isStandardBaseClimb / isSimpleBaseClimb 분기.
+      motionY 직접 설정 (FastUpMotion / SlowUpMotion 상수 이식). isClimbing 설정 안 함
+      (vanilla ladder 물리 위임). 1.21.1 은 Free 만 이식되어 있어 옵션 분기 전체 미이식.
+
+#### B-21. `isCeilingClimbing` 해제 엣지 이식 (A-3 발견)
+- [ ] B-21. 원본 L1485 resetClimbing 에서 false 설정. B-14 완료 후 자동 해결.
+
+#### B-N. A-4~A-6 추가 발견에 따라 동적 추가
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -631,6 +697,62 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 `handleClimbing` (L814-L1110) + `handleCeilingClimbing` (L1112-L1174) + 상태 전환
 (L2736-L2820) 덤프 → 1.21.1 `SmartMovingClimber` grep + 매핑.
 
+### 세션 33 — 2026-04-24 — A-3 (등반 4상태) 완료
+
+**진행한 작업**:
+- `.tmp_research/SmartMovingSelf.java` 원본 `handleClimbing` (L814-L1110) +
+  `handleCeilingClimbing` (L1112-L1174) + 상태 전환 블록 (L2721-L2820) +
+  `resetClimbing()` (L1474-L1486) + `setOnlyShouldClimbSpeed()` (L1515) +
+  `resetState()` (L2278-L2287) 전수 감사
+- `SmartMoving.java` 부모 필드 선언 (L30-L45) 추가 확인
+- `SmartMovingSelf.md` **R-12 섹션 신설** — 11 서브섹션:
+  * R-12.1 필드 선언 (9건 미이식 확인)
+  * R-12.2 갱신 위치 맵 (원본 vs 1.21.1 side-by-side)
+  * R-12.3 handleClimbing 구조 요약 (Standard/Simple/Smart/Free 4분기)
+  * R-12.4 handleCeilingClimbing 구조 요약
+  * R-12.5 isCrawlClimbing 5-AND 공식 + canStandUp 전환 블록
+  * R-12.6 isClimbCrawling 공식 + climbIntoCount 카운터 (6→1 재장전 로직)
+  * R-12.7 isClimbHolding/wantClimbHolding 3-OR 계산
+  * R-12.8 의존 필드 계산 (isNeighborClimbing / hasClimbGap 등)
+  * R-12.9 1.21.1 SmartMovingClimber side-by-side (L221/L479/L571/MixinL117)
+  * R-12.10 **불일치 14건 표** (모두 [누락] 분류 — 거대 미이식 구간)
+  * R-12.11 B-14~B-21 원자 예비안 (서브원자 분해 포함)
+- 1.21.1 grep 결과:
+  * 이식된 갱신: `isClimbing=true` L221 (setOnlyShouldClimbSpeed) + `isClimbing=false`
+    L479 (handleClimbBackJump) + `isCeilingClimbing=true` L571 (handleCeilingClimbing) +
+    resetState false 4건
+  * **미이식 필드 9건**: `isNeighborClimbing` / `hasClimbGap` / `hasNeighborClimbGap` /
+    `hasNeighborClimbCrawlGap` / `isVineOnlyClimbing` / `isVineAnyClimbing` /
+    `isClimbingStill` / `handsEdgeBlock` / `feetEdgeBlock`
+  * **갱신 로직 완전 미이식**: `isCrawlClimbing` / `isClimbCrawling` / `isClimbHolding` /
+    `wantClimbHolding` — 필드는 있으나 갱신 계산 블록 전부 없음
+  * **resetClimbing() 메서드 미이식** — Mixin L117 주석만 있고 실제 호출 없음
+- §10 B-14~B-21 원자 신설 (B-15/B-19 는 서브원자 분해 포함):
+  * B-14 resetClimbing 신설 / B-15a~f 미이식 필드 이식 / B-16 isClimbHolding 계산 /
+    B-17 isCrawlClimbing 공식 / B-18 isClimbCrawling 공식+카운터 / B-19 의존 필드 갱신 /
+    B-20 Standard/Simple Base Climb / B-21 isCeilingClimbing 해제 엣지
+
+**완료 전 검증 체크리스트 (A-3 기준)**:
+- [근거] 원본 handleClimbing + handleCeilingClimbing + 상태 전환 + resetClimbing +
+  setOnlyShouldClimbSpeed + resetState 전수 확보 ✓
+- [근거] 1.21.1 Climber + ClientState + MixinLivingEntityClient grep 확인 ✓
+- [대응] 원본 갱신 위치 ↔ 1.21.1 side-by-side 매핑 완료 ✓
+- [분기] 5-AND (isCrawlClimbing) + 카운터 로직 (climbIntoCount) + 3-OR (wantClimbHolding)
+  + 진입/해제 엣지 블록 전부 식별 ✓
+- [상수] `FAST_UP_MOTION` / `SLOW_UP_MOTION` / `MEDIUM_UP_MOTION` / `HOLD_MOTION` /
+  `SINK_DOWN_MOTION` / `CLIMB_DOWN_MOTION` / `CLIMB_PULL_MOTION` / `CATCH_CRAWL_GAP_MOTION`
+  / `climbIntoCount` 재장전값 6 기록 ✓
+- [타이밍] 갱신 순서 (resetClimbing → Standard/Simple 분기 → Free 내부 판정 →
+  setOnlyShouldClimbSpeed → isClimbHolding → isCrawlClimbing → isClimbCrawling) 기록 ✓
+- [근사] isPlayerInSolidBetween 는 1.21.1 에 direct 대응 없음 → B-17 에서 근사 필요 기록
+- [신규] §10 B-14~B-21 원자 8개 + 서브원자 (B-15a~f, B-19a~) 추가 ✓
+- [회귀] 코드 변경 없음 (리서치/문서만)
+- [빌드] 해당 없음
+
+**다음 작업**: A-4 — 전환 쌍 `isHeadJumping` / `isSliding` 전수 감사.
+`.tmp_research/SmartMovingSelf.java` L1607 toSlidingOrCrawling + L2524-L2560
+isAerodynamic + L2546-L2550 SlideToHeadJumping 전환 덤프 → 1.21.1 ClientState grep 매핑.
+
 ---
 
 ## 16. 신규 발견
@@ -813,6 +935,97 @@ R-11 섹션 (SmartMovingSelf.md L2508 이후) 에 원본 전수 덤프 + 1.21.1 
 - 3순위: B-12 (waterMovementTicks 증분) — B-10b 완료 후
 - 4순위: B-9 (메인 분류 재작성) — 가장 큰 작업, 여러 세션 분할
 - 5순위: B-7/B-8/B-11/B-13 — 순차 진행
+
+### 세션 33 A-3 — 등반 4상태 불일치 14건 확정 (모두 [누락])
+
+R-12 섹션 (SmartMovingSelf.md L3000+) 전수 덤프 기반. 1.21.1 Climber 는 **`isClimbing`
+진입/해제 + `isCeilingClimbing` 진입만 이식**, 나머지 대부분 미이식.
+
+1. **`resetClimbing()` 메서드 자체 미이식** (원본 L1474-L1486)
+   - 원본: handleClimbing 진입 시 매 틱 호출 — 10 필드 (isClimbing /
+     isHandsVineClimbing / isFeetVineClimbing / isVineOnlyClimbing / isVineAnyClimbing /
+     isClimbingStill / isNeighborClimbing / actualHandsClimbType / actualFeetClimbType /
+     isCeilingClimbing) 리셋
+   - 1.21.1: Mixin L117 주석만 있고 실제 호출 없음. handleClimbing 진입 시 이전 틱 상태
+     잔존 위험
+   - 분류: [누락] / 수정 B-14.
+
+2. **`isCrawlClimbing` 메인 공식 완전 미이식** (원본 L2737)
+   - 5-AND: `(wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing &&
+     (sneakPressed || crawlToggled) && moveForward > 0F`
+   - 1.21.1: 갱신 로직 없음 → 값 항상 false (packet 수신 외)
+   - 분류: [누락] / 수정 B-17.
+
+3. **`isCrawlClimbing` 전환 블록 미이식** (원본 L2737-L2754)
+   - canStandUp 판정 + wasCrawlClimbing 전환 + wasCrawling/isCrawling 전환
+   - 1.21.1: 없음
+   - 분류: [누락] / 수정 B-17.
+
+4. **`isClimbCrawling` 메인 공식 완전 미이식** (원본 L2795)
+   - `canClimbCrawling && ((needClimbCrawling && count==0) || count>1)`
+   - 1.21.1: 갱신 로직 없음
+   - 분류: [누락] / 수정 B-18.
+
+5. **`climbIntoCount` 카운터 로직 미이식** (원본 L2786-L2820)
+   - 6→5→...→1→0 감소 + 재장전 규칙
+   - 1.21.1: 필드는 있으나 카운터 갱신 로직 없음 (resetState 0 만)
+   - 분류: [누락] / 수정 B-18.
+
+6. **`isClimbHolding` 공식 미이식** (원본 L2730)
+   - `isClimbHolding = wantClimbHolding && isClimbing`
+   - 1.21.1: 필드는 있으나 항상 false
+   - 분류: [누락] / 수정 B-16.
+
+7. **`wantClimbHolding` 3-OR 계산 미이식** (원본 L2721-L2728)
+   - `(isClimbHolding && sneakPressed) || (isClimbing && blocked) || (wantClimb && !수영 && !다이빙 && !크롤 && 스니크/크롤토글)`
+   - 1.21.1: 없음
+   - 분류: [누락] / 수정 B-16.
+
+8. **`isNeighborClimbing` 필드 미이식** (원본 L1426)
+   - handleClimbing Free 분기 내부 Orientation 판정으로 갱신
+   - 1.21.1: 필드 없음 → isCrawlClimbing 공식 평가 불가능
+   - 분류: [누락] / 수정 B-15a + B-19.
+
+9. **`hasClimbGap` 필드 미이식** (원본 L1427)
+   - needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding) 에 필수
+   - 1.21.1: 필드 없음
+   - 분류: [누락] / 수정 B-15b + B-19.
+
+10. **`hasClimbCrawlGap` 갱신 로직 미이식**
+    - 1.21.1 ClientState 필드 선언은 있으나 갱신 로직 (handleClimbing 내부) 없음
+    - 분류: [누락] / 수정 B-19.
+
+11. **`isVineOnlyClimbing` / `isVineAnyClimbing` / `isClimbingStill` 필드 미이식**
+    - 애니메이션/상태 표시용. 1.21.1 필드 자체 없음
+    - 분류: [누락] / 수정 B-15d + B-15e.
+
+12. **`handsEdgeBlock` / `feetEdgeBlock` / edgeMeta 필드 미이식** (원본 L1443-L1446)
+    - 등반 애니메이션 파라미터. 1.21.1 필드 없음
+    - 분류: [누락] / 수정 B-15f.
+
+13. **`isCeilingClimbing` 해제 엣지 미이식** (원본 L1485)
+    - 원본 resetClimbing() 에서 매 틱 false. 1.21.1 resetState 만 있음
+    - 분류: [누락] / 수정 B-14 완료 시 자동 해결 (B-21).
+
+14. **Standard / Simple Base Climb 분기 완전 미이식** (원본 L820-L844)
+    - `Config.isStandardBaseClimb()` / `Config.isSimpleBaseClimb()` 옵션 분기. motionY
+      0.2 / FastUpMotion / SlowUpMotion 직접 설정 (isClimbing 은 설정 안 함)
+    - 1.21.1 Climber 는 Free 만 이식. Standard/Simple 선택 시 SM 물리 동작 안 함
+    - 분류: [누락] / 수정 B-20.
+
+**수정 범위**: §10 B-14~B-21 (8 원자 + B-15a~f 6 서브 + B-19 서브 2+ = 최대 18 원자).
+B-15 (필드 이식) 과 B-19 (갱신 로직) 가 전제 의존. 순서 권고:
+
+**우선순위 권고 (A-3)**:
+- 1순위: **B-14** (resetClimbing 신설) — 모든 등반 상태 리셋 매 틱 보장. 의존 없음.
+- 2순위: **B-15a~f** (미이식 필드 9건 이식) — 선언만 추가, 갱신은 B-19
+- 3순위: **B-16** (isClimbHolding 계산) — wantClimb / blocked 필드 확인 필요
+- 4순위: **B-19** (의존 필드 갱신) — handleClimbing Free 분기 내부 Orientation 판정.
+  규모 큼, 서브원자 분해 필수
+- 5순위: **B-17** (isCrawlClimbing 공식) — B-15a `isNeighborClimbing` 선행
+- 6순위: **B-18** (isClimbCrawling 공식 + 카운터) — B-15b / B-16 선행
+- 7순위: **B-20** (Standard/Simple Base Climb) — 독립 가능
+- 8순위: **B-21** (isCeilingClimbing 해제) — B-14 완료 시 자동
 
 ---
 
