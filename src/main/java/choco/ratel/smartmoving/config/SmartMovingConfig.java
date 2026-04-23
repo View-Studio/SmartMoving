@@ -72,6 +72,16 @@ public class SmartMovingConfig {
     public float swimSpeedFactor = 1F;
     public boolean dive = true;
     public float diveSpeedFactor = 1F;
+    /**
+     * 원본: _swimDownOnSneak = Unmodified("move.swim.down.sneak") → 기본값 true
+     * true → 수영 중 스니크 시 하강. SmartMovingSelf wouldWantSneak 및 swimDown 계산에 사용.
+     */
+    public boolean swimDownOnSneak = true;
+    /**
+     * 원본: _diveDownOnSneak = Unmodified("move.dive.down.sneak") → 기본값 true
+     * true → 잠수 중 스니크 시 하강. SmartMovingSelf wouldWantSneak 및 diveDown 계산에 사용.
+     */
+    public boolean diveDownOnSneak = true;
 
     // ── Jumping ─────────────────────────────────────────────────
     // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
@@ -350,6 +360,8 @@ public class SmartMovingConfig {
         swimSpeedFactor          = getFloat(p,  "move.swim.speed.factor",         swimSpeedFactor);
         dive                     = getBool(p,   "move.dive",                      dive);
         diveSpeedFactor          = getFloat(p,  "move.dive.speed.factor",         diveSpeedFactor);
+        swimDownOnSneak          = getBool(p,   "move.swim.down.sneak",           swimDownOnSneak);
+        diveDownOnSneak          = getBool(p,   "move.dive.down.sneak",           diveDownOnSneak);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
@@ -433,6 +445,8 @@ public class SmartMovingConfig {
         p.setProperty("move.swim.speed.factor",          String.valueOf(swimSpeedFactor));
         p.setProperty("move.dive",                       String.valueOf(dive));
         p.setProperty("move.dive.speed.factor",          String.valueOf(diveSpeedFactor));
+        p.setProperty("move.swim.down.sneak",            String.valueOf(swimDownOnSneak));
+        p.setProperty("move.dive.down.sneak",            String.valueOf(diveDownOnSneak));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));

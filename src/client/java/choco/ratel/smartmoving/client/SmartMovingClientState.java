@@ -205,6 +205,15 @@ public final class SmartMovingClientState {
      */
     public boolean sneakToggled;
 
+    /**
+     * 원본 SmartMovingSelf L95 `isFakeShallowWaterSneaking`.
+     * 얕은 물에서의 가짜 스니킹 제스처 판정. wouldWantSneak 의
+     *   !(isSwimming && swimDownOnSneak && !isFakeShallowWaterSneaking)
+     * 조건에 사용 — true 면 수영 + swimDownOnSneak 상태에서도 스니크 허용.
+     * 1.21.1: true 설정 경로는 현재 리서치 불충분 → 기본 false 유지, 후속 이식.
+     */
+    public boolean isFakeShallowWaterSneaking;
+
     /** 원본 L2717 `wasSneaking = isSlow` (이전 틱 isSlow 저장, willStartSneak/willStopSneak 조건용). */
     public boolean wasSneaking;
 
@@ -483,17 +492,38 @@ public final class SmartMovingClientState {
             wasClimbCrawling = isClimbCrawling;
 
             // C-15: isSlow / isFast / isFlying 매 틱 계산
-            // 원본 L2576 sneakContinueInput + L2717 isSlow 1:1 이식:
+            // 원본 L2576-L2586 sneakContinueInput + wouldWantSneak + L2711-2719 wouldIsSneaking/isSlow 1:1 이식.
             //   sneakContinueInput = isSneakToggleEnabled ? (sneakToggled || sneakStartPressed) : sneakPressed
-            //   isSlow = wantSneak && wouldIsSneaking
-            // 간결화: wouldWantSneak의 많은 조건(flying/sliding/headJumping/diveDownOnSneak/swimDownOnSneak/
-            //   wantCrawl/mustCrawl/grabPressed)은 후속 이식. 최소: sneakContinueInput + !sprint + !isClimbing.
+            //   wouldWantSneak = !flying && !sliding && !headJumping
+            //                    && !(diving && diveDownOnSneak)
+            //                    && !(swimming && swimDownOnSneak && !isFakeShallowWaterSneaking)
+            //                    && sneakContinueInput
+            //                    && !wantCrawl && !mustCrawl
+            //                    && (!isCrawlingEnabled || !grabPressed)
+            //   wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing
+            //   isSlow = wantSneak && wouldIsSneaking (wantSneak 은 sneakContinueInput 로 매핑)
+            //
+            // 잔여: wantCrawl/mustCrawl 참조는 현재 IMPL-01 크롤링 블록 내부 로컬 변수라 순서 문제.
+            //   원본은 L2419 wouldWantCrawl 이 L2577 wouldWantSneak 보다 앞에 계산됨 — 1.21.1 은
+            //   IMPL-01 블록이 isSlow 다음에 위치하여 접근 불가. 리팩토링 후속. 현재는 두 조건 생략.
             boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
             SmartMovingConfig cfg0 = SmartMovingConfig.Config;
             boolean sneakContinueInput = cfg0.sneakToggle
                     ? (sneakToggled || sneakKeyStartPressed)
                     : sneakPressedRaw;
-            isSlow = sneakContinueInput && !player.isSprinting() && !isClimbing;
+            boolean grabPressed0 = SmartMovingKeys.grab.isPressed();
+            boolean crawlingEnabled0 = cfg0.crawl && cfg0.enabled;
+            boolean wouldWantSneak =
+                    !isFlying
+                    && !isSliding
+                    && !isHeadJumping
+                    && !(isDiving && cfg0.diveDownOnSneak)
+                    && !(isSwimming_sm && cfg0.swimDownOnSneak && !isFakeShallowWaterSneaking)
+                    && sneakContinueInput
+                    // && !wantCrawl && !mustCrawl   // ← 후속 (순서 리팩토링 필요)
+                    && (!crawlingEnabled0 || !grabPressed0);
+            wouldIsSneaking = wouldWantSneak && !player.isSprinting() && !isClimbing;
+            isSlow = sneakContinueInput && wouldIsSneaking;
             // isFast 원본: grabButton.Pressed && isSprinting()
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
@@ -616,8 +646,7 @@ public final class SmartMovingClientState {
             // isCrawling/isSliding이 확정된 후 계산해야 정확함
             isSmall = isCrawling || isSliding || isHeadJumping;
 
-            // wouldIsSneaking 원본: wouldWantSneak && !wantSprint && !isClimbing → isSlow와 동일
-            wouldIsSneaking = isSlow;
+            // wouldIsSneaking 은 위 isSlow 계산 블록에서 이미 원본 L2711 공식으로 설정됨.
 
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
@@ -745,6 +774,7 @@ public final class SmartMovingClientState {
         isCrawling = false;
         crawlToggled = false;
         sneakToggled = false;
+        isFakeShallowWaterSneaking = false;
         ignoreNextStopSneakButtonPressed = false;
         wasSneaking = false;
         wasCrawling_st = false;
