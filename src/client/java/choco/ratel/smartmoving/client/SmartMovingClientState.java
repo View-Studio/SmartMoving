@@ -1010,15 +1010,28 @@ public final class SmartMovingClientState {
                 }
             }
 
-            // IMPL-02: 슬라이딩 진입 (스프린트+스니크 직접 진입)
-            // 원본: wantSlide = isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping
-            if (!isSliding && cfg.slide && !isCrawling) {
-                boolean wantSlide = player.isSneaking() && player.isSprinting()
-                        && player.isOnGround() && !isClimbing && !isHeadJumping;
-                if (wantSlide) {
-                    isSliding = true;
-                    isAerodynamic = false;  // 원본: 슬라이드 시작 시 isAerodynamic 리셋 (행 2560)
-                }
+            // B-25 (세션 55): IMPL-02 직접 진입 6-AND 조건 완전 복원 (원본 L2553-L2561).
+            //   기존 `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping`
+            //   간소 매핑 제거 → 원본 공식:
+            //     Config.isSlidingEnabled() && grabButton.Pressed &&
+            //     (isGroundSprinting || (wasRunning && !isRunning && onGround)) &&
+            //     !isCrawling && sneakButton.StartPressed && !isDipping
+            // 필드 세팅 (원본 L2558-L2560): isSliding=true + isHeadJumping=false + isAerodynamic=false.
+            // ※ 부수 동작 (setHeightOffset(-1) + move(0,-1,0) + tryJump(SlideDown, wasRunning))
+            //   은 B-26 (별도 원자) — Config.SlideDown 상수 + Jumper.tryJump 시그니처 조정 필요.
+            // ※ wasRunning 필드는 R-09 종료부 저장 (원본 L3043) 미이식 (B-43) → 항상 false.
+            //   `wasRunning && !isRunning && onGround` 분기 활성 안 됨. isGroundSprinting 분기만
+            //   활성. B-43 이식 후 완전 복원.
+            if (!isSliding && cfg0.slide && cfg0.enabled
+                    && SmartMovingKeys.grab.isPressed()
+                    && (isGroundSprinting
+                            || (wasRunning && !isRunning(player) && player.isOnGround()))
+                    && !isCrawling
+                    && sneakKeyStartPressed
+                    && !isDipping) {
+                isSliding = true;
+                isHeadJumping = false;     // 원본 L2559
+                isAerodynamic = false;     // 원본 L2560
             }
 
             // B-23 (세션 46): isHeadJumping 매 틱 재평가 5-AND 해제 공식 (원본 L2524-L2530)

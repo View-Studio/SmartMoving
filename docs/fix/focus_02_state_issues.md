@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 54 — B Phase 2 계속 / B-27 + B-29) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 21 원자 완료 / ⏳ **B Phase 2 잔여 ~19 원자** |
+| 상태 | 🟡 진행 중 (세션 55 — B Phase 2 계속 / B-25) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 22 원자 완료 / ⏳ **B Phase 2 잔여 ~18 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -708,10 +708,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       - standupIfPossible 은 미이식 (별도 B-N) — restoreFromFlying 필드 설정은 선행 가능.
 
 #### B-25. `isSliding` 직접 진입 6-AND 조건 복원 (A-4 발견)
-- [ ] B-25. ClientState L699 `wantSlide` 조건 원본 L2553 으로 정정:
-      `Config.isSlidingEnabled() && grabPressed && (isGroundSprinting || (wasRunning && !isRunning && onGround)) && !isCrawling && sneakStartPressed && !isDipping`
-      의존: B-1d `isGroundSprinting` + B-22b `wasRunning` + B-22c `isRunning` 선행.
-      `sneakStartPressed` 엣지 검출 — 기존 `sneakKeyStartPressed` 활용.
+- [x] B-25. ✅ **세션 55 완료** — IMPL-02 L1013-L1022 조건 원본 L2553 으로 정정:
+      `cfg.slide && cfg.enabled && SmartMovingKeys.grab.isPressed() &&
+      (isGroundSprinting || (wasRunning && !isRunning(player) && onGround)) &&
+      !isCrawling && sneakKeyStartPressed && !isDipping`.
+      필드 세팅: `isSliding=true; isHeadJumping=false; isAerodynamic=false` (원본 L2558-L2560).
+      ※ wasRunning 저장 (B-43) 미이식 → wasRunning 분기 비활성. isGroundSprinting 분기만 활성.
 
 #### B-26. 직접 진입 부수 동작 이식 (A-4 발견)
 - [ ] B-26. 원본 L2555-L2560 부수 동작 이식:
@@ -2261,6 +2263,48 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-25/B-26** (직접 진입 6-AND + 부수 동작) — 의존 필드 다수 필요 (wasRunning+isRunning+
   isGroundSprinting+sneakStartPressed — wasRunning/isRunning 이식 완료, isGroundSprinting
   이식 완료 → 가능). 규모 중간.
+- **B-48** (isGroundSprinting 전환 후처리) — Options 필드 선행.
+
+### 세션 55 — 2026-04-24 — B Phase 2 B-25 (isSliding 직접 진입 6-AND)
+
+**진행한 작업**:
+- IMPL-02 L1013-L1022 조건 원본 L2553-L2561 로 완전 정정:
+  * 기존: `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping` (간소)
+  * 정정: `cfg.slide && cfg.enabled && grabPressed && (isGroundSprinting ||
+    (wasRunning && !isRunning && onGround)) && !isCrawling && sneakKeyStartPressed &&
+    !isDipping`
+  * 필드 세팅 3건 추가 (원본 L2558-L2560): `isSliding=true; isHeadJumping=false;
+    isAerodynamic=false`
+- wasRunning 저장 (B-43 R-09 종료부) 미이식 → wasRunning 분기 항상 false.
+  isGroundSprinting 분기만 활성. B-43 이식 시 완전 복원.
+- B-28 검토: 원본 L985 은 wantClimbUp+handsClimbing.IsRelevant 조건부 — 단순 handleClimbing
+  진입 해제가 아님. B-19 (Free climb 분기) 의존. 보류.
+- B-26 검토: `Config.SlideDown=4` 상수 미이식 + Jumper.tryJump 시그니처 확장 필요.
+  규모 큼 — 별도 세션.
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 55)**:
+- [근거] 원본 L2553-L2561 직접 read (R-13.4) + 의존 필드 전수 확인 ✓
+- [대응] 6-AND + 필드 세팅 3건 원본 1:1 ✓
+- [분기] 6-AND 각 항 + 2갈래 OR + 필드 세팅 3건 ✓
+- [상수] 없음
+- [타이밍] wasRunning 저장 미이식 주석 명시 ✓
+- [근사] 기존 간소 매핑 완전 제거 ✓
+- [신규] 없음
+- [회귀] compileJava 성공 — IMPL-02 진입 조건 의미 변경 (기존보다 엄격) ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**R-13 A-4 불일치 현황**:
+- ✅ #1/#2/#6/#8 (이전 세션들)
+- ✅ **#3 직접 진입 6-AND** + **#5 isHeadJumping=false** (B-25 세션 55)
+- ⏳ #4 부수 동작 3건 (B-26) / #7 handleClimbing 해제 (B-28) / #9~#13 미이식
+
+**Phase 2 진행 상황**: 22 원자 완료 / 잔여 ~18
+
+**다음 작업 권고**:
+- **B-43** (R-09 종료부 `wasRunning=isRunning` + `wasLevitating=isLevitating` 저장) —
+  단순. B-25 의 wasRunning 분기 활성화 효과.
+- **B-26** (부수 동작) — Config.SlideDown 상수 + Jumper.tryJump 확장. 규모 중간.
 - **B-48** (isGroundSprinting 전환 후처리) — Options 필드 선행.
 
 ---
