@@ -17,8 +17,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ✅ **완료 (2026-04-24)** — 세션 15 범위 확정 (Easy 실사용 경로만) 후 H-3~H-14 + G-5 완료 |
-| 현재 단계 | ✅ 전 원자 작업 [x] — 포커스 #6 로 전환됨 |
+| 상태 | 🟡 **재개 (2026-04-24, 세션 22)** — 인게임 테스트 2건 문제 발견 (4상태 스위칭 잔존 / 허기 폭주) |
+| 현재 단계 | ✅ H-0~H-14 + G-5 완료 / ⏳ **H-15 (2상태 복원) + H-16 (허기 delta) 진행** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -770,6 +770,40 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] H-14. **`checklist_original_audit.md` 기록** — 신규 발견 표 말미에 포커스 #5 H 섹션
       전체 요약 1행 추가 (2026-04-24). H-3~H-11 작업 내용 + Easy 1:1 원칙 6종 + 배제
       범위 5종 + 잔여 §17 후속(focus_11_server_hunger_sync.md) 모두 기록.
+
+#### H-15 ~ H-16: 인게임 검증 후 수정 (세션 22 — 2026-04-24)
+
+**배경**: G-5 후 사용자 인게임 테스트 결과 2건 문제 발견:
+(1) **옵션 스위칭이 여전히 4상태** — §7.2 "잉여지만 무해" 판단 오류. F 섹션의
+    `initializeForGameIfNeccessary` 가 매 tick 호출되면서 `setKeys({"e","m","h"})` 로
+    configKeys 를 Easy/Medium/Hard 배열로 덮어써 configToggle 키 4상태 순환.
+(2) **허기 폭주** — H-12 §17 후속으로 미뤘던 3디테일 중 하나가 실사용에서 드러남.
+    클라 누적값 송신 + 서버 매 틱 `addExhaustion(누적값)` → 중복 적용. 5초 내 약
+    12 food 소비 (실제는 ~0.01 food 예상). 사용자 1:1 원칙에 어긋남.
+
+- [x] H-15. **`initializeForGameIfNeccessary` 호출 제거 (2상태 강제 복원)** —
+      `SmartMovingClientState.tickEssential` L471-L479 의 호출 블록을 주석 보존 + 삭제.
+      `configKeys = DEFAULT_KEYS = {null}` 초기값 유지 → `toggle()` 이 2상태(0 ↔ -1)
+      로만 순환. F 섹션 메서드는 코드상 유지 (후속 포커스
+      `focus_10_config_toggle_cleanup.md` 에서 잉여 일괄 정리). 빌드 ✓
+- [ ] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 측 `handleExhaustion` 말미 송신
+      로직을 **delta 전송** 으로 변경:
+      ```
+      float delta = hungerIncrease - lastHungerIncrease;
+      if (delta != 0F) {
+          ClientPlayNetworking.send(new HungerChangePayload(delta));
+          lastHungerIncrease = hungerIncrease;
+      }
+      ```
+      서버 수신자 (`SmartMoving.java` L108): `sm.hunger = payload.hunger()` →
+      `sm.hunger += payload.hunger()` 누적으로 변경. `MixinServerPlayerEntity` TAIL 구조
+      (`addExhaustion + sm.hunger = 0F` 리셋) 는 유지. 결과: 매 틱 정확히 delta 만
+      addExhaustion → 원본 체감 일치.
+      원본 엄격 1:1 주의: 원본 클라는 hungerIncrease 누적값 전체 전송 + 서버 덮어쓰기.
+      하지만 원본 서버 `addMovementStat` 흐름의 `withinOnLivingUpdate` 스킵 로직과
+      조합되어 결과적으로는 delta 적용과 근사. 1.21.1 에서는 `withinOnLivingUpdate` 이식
+      대신 delta 전송으로 동일 결과 달성 — §17 `focus_11_server_hunger_sync.md` 후속
+      포커스가 원본 구조 완전 복원 시 이 우회 해제 가능.
 
 ---
 

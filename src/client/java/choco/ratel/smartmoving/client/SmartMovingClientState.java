@@ -468,15 +468,20 @@ public final class SmartMovingClientState {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
 
-        // 원본 SmartMovingContext.interceptTick() L264: `Options.initializeForGameIfNeccessary()`.
-        // 매 tick gameType 변경 폴링. 로컬 설정(Config == INSTANCE) 일 때만 (서버 설정 덮어쓰기 방지).
-        // 리플렉션 `PlayerControllerMP.currentGameType` → `interactionManager.getCurrentGameMode().getId()`.
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE
-                && client.interactionManager != null) {
-            SmartMovingConfig.INSTANCE.initializeForGameIfNeccessary(
-                    client.interactionManager.getCurrentGameMode().getId());
-        }
+        // H-15 (세션 22): 2상태 토글 강제 복원. 원본 `initializeForGameIfNeccessary` 가
+        // setKeys({"e","m","h"}) 로 configKeys 를 덮어써 configToggle 이 4상태 순환하는
+        // 문제 — 사용자 결정 "disabled↔enabled 2상태" 에 위배. tickEssential 의 호출
+        // 제거. `configKeys = DEFAULT_KEYS = {null}` 초기값 유지되어 toggle() 이 2상태
+        // (0 ↔ -1) 로만 순환. F 섹션 메서드는 코드상 유지 (후속 포커스
+        // `focus_10_config_toggle_cleanup.md` 에서 잉여 코드 일괄 정리).
+        //
+        // 원본 호출 (보존만, 실행 안 함):
+        //   MinecraftClient client = MinecraftClient.getInstance();
+        //   if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE
+        //           && client.interactionManager != null) {
+        //       SmartMovingConfig.INSTANCE.initializeForGameIfNeccessary(
+        //               client.interactionManager.getCurrentGameMode().getId());
+        //   }
 
         // 원본 Button.update() 대응 — 이번 틱 키 엣지 감지.
         // jumpButton.StartPressed / StopPressed / sneakButton.StartPressed / StopPressed 대응.
