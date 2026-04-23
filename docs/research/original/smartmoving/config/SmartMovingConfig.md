@@ -607,18 +607,21 @@ Ropes+ 모드의 로프 클라이밍 대체 여부.
 
 ```java
 // survival / creative / adventure별 config key 목록과 기본값
-public final Property<String[]> _survivalConfigKeys       = Strings(...).singular().defaults(new String[]{"e", "m", "h"});
-public final Property<String>   _survivalDefaultConfigKey = String(...).singular().defaults("m");
+// (키 이름은 Agent WebFetch 세션 2 에서 확인 — originSource L456-L463)
+public final Property<String[]> _survivalConfigKeys       = Strings("move.config.survival.keys").singular().defaults(new String[]{"e", "m", "h"});
+public final Property<String>   _survivalDefaultConfigKey = String("move.config.survival.keys.default").singular().defaults("m");
 
-public final Property<String[]> _creativeConfigKeys       = Strings(...).singular().defaults(new String[]{"c"}).defaults(new String[0], _pre_sm_2_3);
-public final Property<String>   _creativeDefaultConfigKey = String(...).singular().defaults("c").defaults("", _pre_sm_2_3);
+public final Property<String[]> _creativeConfigKeys       = Strings("move.config.creative.keys").singular().defaults(new String[]{"c"}).defaults(new String[0], _pre_sm_2_3);
+public final Property<String>   _creativeDefaultConfigKey = String("move.config.creative.keys.default").singular().defaults("c").defaults("", _pre_sm_2_3);
 
-public final Property<String[]> _adventureConfigKeys       = Strings(...).singular().defaults(new String[]{"e", "m", "h"});
-public final Property<String>   _adventureDefaultConfigKey = String(...).singular().defaults("m");
+public final Property<String[]> _adventureConfigKeys       = Strings("move.config.adventure.keys").singular().defaults(new String[]{"e", "m", "h"});
+public final Property<String>   _adventureDefaultConfigKey = String("move.config.adventure.keys.default").singular().defaults("m");
 
 // key별 표시 이름: e=Easy, m=Medium, h=Hard
 public final Property<String> _configKeyName = String(...).defaults(Value((String)null).e("Easy").m("Medium").h("Hard"));
 ```
+
+**Property `Strings` 직렬화 포맷**: `comment("... entries seperated by ','")` 명시 — CSV (쉼표 구분).
 
 `.singular()` — 설정 파일에서 하나의 값만 허용(config key별 다중값 없음).
 

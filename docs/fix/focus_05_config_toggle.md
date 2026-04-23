@@ -10,7 +10,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 |
-| 현재 단계 | ✅ A 완료 (리서치 파일만으로 충분) / ⏳ B-1 대기 |
+| 현재 단계 | ✅ A/B 섹션 완료 / ⏳ C-1 대기 (toggle 재구현) |
 | 이전 판단 오류 | ⚠️ 기록됨 — 2-"이전 판단 오류" 참조 |
 | 컴파일 상태 | (수정 전) 정상 |
 
@@ -366,7 +366,12 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] B-2. `toggler` 필드 (int, default **-2** — 원본 L30 초기값 그대로). 상태표(−2 센티넬 / −1 disabled / 0..length−1 enabled) + 파생 규칙(`enabled = toggler != -1`) javadoc 기록.
 - [x] B-3. `configKeyName` 필드 (Map 근사, default 3개 매핑 e/m/h). Creative "c" 는 의도적 부재 —
       원본 `_configKeyName` 가 Creative key 에 defaults 없어 빈 문자열 반환하는 동작과 등가.
-- [ ] B-4. `readFrom`/`writeTo` 에 `move.config.key.current` / `move.config.keys` 추가 (원본 저장 포맷 확인 필요 — A-1/A-2 결과 기반)
+- [x] B-4. `readFrom`/`writeTo` 에 **6개 저장 포맷** 추가 — **§10 재정의**: 원본 `move.config.key.current`/`move.config.keys` 가 아니라, 원본 L456-L463 대로 게임타입별 6개:
+      `move.config.survival.keys` + `.keys.default`, `move.config.creative.keys` + `.keys.default`,
+      `move.config.adventure.keys` + `.keys.default`. CSV 직렬화(원본 comment `"entries seperated by ','"`).
+      6개 필드 신규 추가(`survivalConfigKeys`/`survivalDefaultConfigKey` 등) + `getCsvArray`/`csvJoin` 헬퍼.
+      현재 활성 key 상태는 별도 필드로 저장하지 않고 **해당 gameType 의 `defaultConfigKey` 값을
+      `toggle()` 이 갱신**하는 원본 방식 유지 (C/D 섹션에서 구현).
 
 ### C. `SmartMovingConfig` 메서드 이식
 - [ ] C-1. `toggle()` 재구현 — 원본 L325-L332 1:1
@@ -584,6 +589,41 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 `SmartMovingConfig.md` L456-L463 의 `move.config.survival.keys` / `move.config.survival.keys.default`
 식 키 이름을 1.21.1 에 어떻게 매핑할지 결정 필요. (원본은 `Property<String[]>` / `Property<String>`
 로 분리 저장, 1.21.1 은 단일 `configKeys` 필드 하나만 있으므로 저장 포맷 단순화.)
+
+### 세션 4 — 2026-04-23 — B-4
+
+**진행한 작업**:
+- **§10 B-4 재정의**: 원래 문구 "`move.config.key.current` / `move.config.keys`" 는
+  부정확. 원본은 **게임타입별 6개 필드** 로 저장 (SmartMovingConfig L456-L463). 재정의 후 이식.
+- 리서치 파일 보완: `SmartMovingConfig.md` L608-L620 의 `Strings(...)` 괄호 안 키 이름
+  명시로 교체 (`move.config.survival.keys` 등 6종). Agent 세션 2 결과 반영.
+- SmartMovingConfig 에 필드 6개 신규 추가:
+    `survivalConfigKeys`       = `{"e","m","h"}`
+    `survivalDefaultConfigKey` = `"m"`
+    `creativeConfigKeys`       = `{"c"}`
+    `creativeDefaultConfigKey` = `"c"`
+    `adventureConfigKeys`      = `{"e","m","h"}`
+    `adventureDefaultConfigKey`= `"m"`
+  원본 defaults 와 1:1.
+- readFrom/writeTo 에 6개 저장 포맷 추가. String[] 은 CSV (원본 comment `"entries seperated by ','"`
+  기반). 유틸 헬퍼 `getCsvArray(p, key, def)` / `csvJoin(arr)` 신규.
+- 현재 활성 key 는 별도 필드로 저장 안 함 — 원본처럼 `toggle()` 이 gameType 의 `defaultConfigKey`
+  값을 갱신하는 방식 유지 (C/D 섹션에서 구현).
+
+**완료 전 검증 체크리스트 (B-4 기준)**:
+- [근거] `SmartMovingConfig.md` L456-L463 (Agent 세션 2 확보 + 리서치 파일 보완) ✓
+- [대응] 원본 6 필드 ↔ 구현 6 필드 + 6 키 매칭 ✓
+- [상수] 기본값 `{"e","m","h"}` / `"m"` / `{"c"}` / `"c"` 모두 원본 그대로 ✓
+- [분기] 해당 없음
+- [타이밍] readFrom/writeTo 호출 시점 동일 (기존 enabled 옆에 추가)
+- [근사] CSV 포맷은 원본 Strings Property 와 동등 (comment 명시)
+- [신규] 없음
+- [회귀] 기존 readFrom/writeTo 다른 필드 처리 불변 ✓
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: C-1 — `toggle()` 재구현. 현재 `enabled = !enabled; save();` 를 원본
+`SmartMovingProperties.toggle()` L81-L88 (`toggler++; if (toggler == length) toggler = -1; update();`)
+으로 교체.
 
 ---
 

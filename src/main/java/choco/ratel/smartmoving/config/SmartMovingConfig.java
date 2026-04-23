@@ -268,6 +268,23 @@ public class SmartMovingConfig {
             "h", "Hard"
     );
 
+    // ── 게임타입별 config key 배열 + default key (원본 SmartMovingConfig L456-L463) ────
+    // 원본 Property<String[]> / Property<String> 대응. CSV 직렬화(원본 comment:
+    //   "entries seperated by ','"). `initializeForGameIfNeccessary()` 이식(F 섹션)에서
+    // gameType 판정 후 해당 배열/기본키를 `setKeys()` / `setCurrentKey()` 로 런타임 상태에 적용.
+    /** 원본 `_survivalConfigKeys = Strings("move.config.survival.keys").defaults({"e","m","h"})`. */
+    public String[] survivalConfigKeys       = new String[] { "e", "m", "h" };
+    /** 원본 `_survivalDefaultConfigKey = String("move.config.survival.keys.default").defaults("m")`. */
+    public String   survivalDefaultConfigKey = "m";
+    /** 원본 `_creativeConfigKeys = Strings("move.config.creative.keys").defaults({"c"})`. */
+    public String[] creativeConfigKeys       = new String[] { "c" };
+    /** 원본 `_creativeDefaultConfigKey = String("move.config.creative.keys.default").defaults("c")`. */
+    public String   creativeDefaultConfigKey = "c";
+    /** 원본 `_adventureConfigKeys = Strings("move.config.adventure.keys").defaults({"e","m","h"})`. */
+    public String[] adventureConfigKeys       = new String[] { "e", "m", "h" };
+    /** 원본 `_adventureDefaultConfigKey = String("move.config.adventure.keys.default").defaults("m")`. */
+    public String   adventureDefaultConfigKey = "m";
+
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
@@ -377,6 +394,14 @@ public class SmartMovingConfig {
 
     private void readFrom(Properties p) {
         enabled                  = getBool(p,   "move.enabled",                   enabled);
+        // 원본 SmartMovingConfig L456-L463: 게임타입별 config key 배열 + default key.
+        // String[] 은 CSV — 원본 Strings().comment("entries seperated by ','").
+        survivalConfigKeys        = getCsvArray(p, "move.config.survival.keys",         survivalConfigKeys);
+        survivalDefaultConfigKey  = p.getProperty("move.config.survival.keys.default",  survivalDefaultConfigKey);
+        creativeConfigKeys        = getCsvArray(p, "move.config.creative.keys",         creativeConfigKeys);
+        creativeDefaultConfigKey  = p.getProperty("move.config.creative.keys.default",  creativeDefaultConfigKey);
+        adventureConfigKeys       = getCsvArray(p, "move.config.adventure.keys",        adventureConfigKeys);
+        adventureDefaultConfigKey = p.getProperty("move.config.adventure.keys.default", adventureDefaultConfigKey);
         speedFactor              = getFloat(p,  "move.speed.factor",              speedFactor);
         speedUser                = getBool(p,   "move.speed.user",                speedUser);
         speedUserFactor          = getFloat(p,  "move.speed.user.factor",         speedUserFactor);
@@ -462,6 +487,13 @@ public class SmartMovingConfig {
 
     private void writeTo(Properties p) {
         p.setProperty("move.enabled",                    String.valueOf(enabled));
+        // 원본 SmartMovingConfig L456-L463 대응 저장 (CSV + 단일 문자열)
+        p.setProperty("move.config.survival.keys",         csvJoin(survivalConfigKeys));
+        p.setProperty("move.config.survival.keys.default", survivalDefaultConfigKey);
+        p.setProperty("move.config.creative.keys",         csvJoin(creativeConfigKeys));
+        p.setProperty("move.config.creative.keys.default", creativeDefaultConfigKey);
+        p.setProperty("move.config.adventure.keys",        csvJoin(adventureConfigKeys));
+        p.setProperty("move.config.adventure.keys.default", adventureDefaultConfigKey);
         p.setProperty("move.speed.factor",               String.valueOf(speedFactor));
         p.setProperty("move.speed.user",                 String.valueOf(speedUser));
         p.setProperty("move.speed.user.factor",          String.valueOf(speedUserFactor));
@@ -626,6 +658,36 @@ public class SmartMovingConfig {
         for (Map.Entry<String, Integer> e : map.entrySet()) {
             if (!first) sb.append(',');
             sb.append(e.getKey()).append(',').append(e.getValue());
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * CSV 문자열 → String[] 파싱.
+     * 원본 `Strings("...").comment("entries seperated by ','")` 대응 (게임타입별 config keys).
+     * raw == null 또는 빈 문자열 → def 반환. 빈 배열(전체 비활성) 지원: raw=="" → `new String[0]`?
+     * 단순화: 빈 값은 def 유지. 공백 trim.
+     */
+    private static String[] getCsvArray(Properties p, String key, String[] def) {
+        String raw = p.getProperty(key);
+        if (raw == null) return def;
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) return def;
+        String[] parts = trimmed.split(",");
+        for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+        return parts;
+    }
+
+    /** String[] → CSV 직렬화. null → 빈 문자열. 배열 요소 중 null 은 제외. */
+    private static String csvJoin(String[] arr) {
+        if (arr == null) return "";
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (String s : arr) {
+            if (s == null) continue;
+            if (!first) sb.append(',');
+            sb.append(s);
             first = false;
         }
         return sb.toString();
