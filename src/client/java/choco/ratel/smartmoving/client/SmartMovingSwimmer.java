@@ -6,7 +6,10 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.registry.tag.FluidTags;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 /**
  * 클라이언트 측 수영/잠수 물리 로직.
@@ -147,14 +150,30 @@ public final class SmartMovingSwimmer {
         //   couldStandUp = playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5
         //   swimDown = sneak && _swimDownOnSneak
         //   wantShallowSwim = couldStandUp && (wasSwimming || wasDiving)
-        //   (Orientation.getClimbingOrientations/isTunnelAhead 로 정제)
+        //   if (wantShallowSwim) {
+        //       for (Orientation o : getClimbingOrientations(sp, true, true))
+        //           if (o.isTunnelAhead(world, i, j, k)) wantShallowSwim = false;   // 터널 앞에선 차단
+        //   }
         //   if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false; isFakeShallowWaterSneaking=true; }
         //
         // 1.21.1 간소화:
         //   couldStandUp = dippingDepth>=0 && dippingDepth<=1.5F (수심 기반 근사)
-        //   Orientation.isTunnelAhead 검사 생략 — 1.21.1 Orientation 시스템 미이식.
+        //   getClimbingOrientations → Direction.Type.HORIZONTAL 4방향(대각 생략).
+        //   isTunnelAhead → 아래 private 헬퍼.
         boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
         boolean wantShallowSwim = couldStandUp && (wasSwimming || wasDiving);
+        if (wantShallowSwim) {
+            int px = (int) Math.floor(player.getX());
+            int py = (int) Math.floor(player.getY());
+            int pz = (int) Math.floor(player.getZ());
+            World world = player.getWorld();
+            for (Direction d : Direction.Type.HORIZONTAL) {
+                if (isTunnelAhead(world, px, py, pz, d)) {
+                    wantShallowSwim = false;
+                    break;
+                }
+            }
+        }
         // swimDown 지역 변수는 diving 분기에서 diveDown 과 분리되어 사용 — 여기서는 설정 블록만.
         if (wasSwimming && wantShallowSwim
                 && player.isSneaking() && cfg.swimDownOnSneak) {
@@ -318,5 +337,29 @@ public final class SmartMovingSwimmer {
     /** 4-인자 wrapper (수평 전용) — moveUpward=0, treeDimensional=false. */
     private static Vec3d moveFlying(ClientPlayerEntity player, float strafe, float forward, float speed) {
         return moveFlying(player, 0F, strafe, forward, speed, false);
+    }
+
+    /**
+     * 원본 Orientation.isTunnelAhead(world, i, j, k) 1:1 이식.
+     *   remoteId = world.getBlock(i+_i, j+1, k+_k)
+     *   if (isFullEmpty(remoteId)) {
+     *     aboveMat = world.getBlock(i+_i, j+2, k+_k).getMaterial()
+     *     if (aboveMat != null && isSolid(aboveMat)) return true
+     *   }
+     *   return false
+     *
+     * 1.21.1 매핑:
+     *   _i/_k → dir.getOffsetX/Z
+     *   isFullEmpty(block) → collisionShape.isEmpty() (간소; 간판/압력판 예외는 생략)
+     *   isSolid(material) → state.isOpaqueFullCube() 근사 (정확 대응 API 부재 시)
+     */
+    private static boolean isTunnelAhead(World world, int i, int j, int k, Direction dir) {
+        int ox = dir.getOffsetX();
+        int oz = dir.getOffsetZ();
+        BlockPos one = new BlockPos(i + ox, j + 1, k + oz);
+        BlockPos two = new BlockPos(i + ox, j + 2, k + oz);
+        boolean emptyAtOne = world.getBlockState(one).getCollisionShape(world, one).isEmpty();
+        if (!emptyAtOne) return false;
+        return !world.getBlockState(two).getCollisionShape(world, two).isEmpty();
     }
 }
