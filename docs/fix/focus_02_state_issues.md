@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 47 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 48 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -638,14 +638,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: `wantClimb` / `blocked` 필드 확인.
 
 #### B-17. `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (A-3 발견)
-- [~] B-17a. ✅ **세션 47 완료** — `isCrawlClimbing` 메인 5-AND 공식 이식 (원본 L2737):
-      `(wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing &&
-      (sneakPressed || crawlToggled) && moveForward > 0F`.
-      B-30 뒤, R-09 블록 앞에 배치 (원본 순서). `isNeighborClimbing` 갱신 미이식
-      (B-19) 이라 현재 값은 항상 false — 공식 결과 no-op 이나 B-19 완료 후 자동 활성.
-- [ ] B-17b. **잔여** — 원본 L2737-L2754 전환 블록 (canStandUp 판정 + wasCrawlClimbing
-      전환 + isCrawling 전환 + resetHeightOffset + move). isPlayerInSolidBetween
-      근사 필요.
+- [x] B-17a. ✅ **세션 47 완료** — `isCrawlClimbing` 메인 5-AND 공식 이식 (원본 L2737).
+- [x] B-17b1. ✅ **세션 48 완료** — 원본 L2738-L2754 canStandUp 분기 이식:
+      - `_wasCrawlClimbing17` 지역 변수 저장 (공식 직전, 원본 L2736)
+      - `isPlayerInSolidBetween(player, y1, y2)` 정밀 헬퍼 신설 (AABB 직접 스캔 — 근사 X)
+      - `canStandUp` 판정 시 → wasCrawlClimbing=false, isCrawlClimbing=false,
+        `!isClimbCrawling → heightOffset = 0F`
+      - `!wasCrawlClimbing → wasCrawling=false, isCrawling=false`
+- [ ] B-17b2. **잔여** — 원본 L2755-L2783 `else if(wasCrawlClimbing)` 복합 전환 3분기.
+      `wantClimbUp/wantClimbDown` 필드 + `move()` API 의존 — 별도 원자.
 
 #### B-18. `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 이식 (A-3 발견)
 - [ ] B-18. 원본 L2786-L2820 이식:
@@ -1898,6 +1899,51 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-46 + B-47 (blocked + wantClimb 이식)** — B-16 선행. 단순 2건.
 - **B-17b (canStandUp 전환 블록)** — B-17a 후속 — isPlayerInSolidBetween 근사 + move API.
 - **B-3b (wouldIsSneaking `!wantSprint` 정정)** — wantSprint 필드 없이는 위배. B-3a 선행 필요.
+
+### 세션 48 — 2026-04-24 — B Phase 2 B-17b1 (canStandUp 분기)
+
+**진행한 작업**:
+- 원본 `wantClimb` 은 지역 변수 (L2479 `isFreeClimbingEnabled() && wouldWantClimb`),
+  필드 아님 확인. B-47 "wantClimb 필드 승격" 불필요 — 원본 구조 유지.
+- `wouldWantClimb` (L2467-L2477) 공식이 `grabPressed || isClimbHolding+sneakPressed ||
+  auto-ladder/vine` 등 복잡 의존 → B-16 완전 이식은 의존 체인 큼, 분리.
+- 이번 세션 **B-17b1 (canStandUp 분기)** 진행:
+  * `isPlayerInSolidBetween(player, y1, y2)` **정밀 헬퍼 신설** (canStandUp 근처) —
+    vanilla `World.isSpaceEmpty(entity, box)` 로 원본 AABB 스캔 동치 (근사 X)
+  * B-17a 블록 확장: `_wasCrawlClimbing17` 지역 변수 저장 (원본 L2736 공식 직전) +
+    canStandUp 분기 (원본 L2738-L2754) 이식
+  * canStandUp 성립 시 `isCrawlClimbing=false` + `!isClimbCrawling → heightOffset=0F`
+  * 조건부 `wasCrawling=false, isCrawling=false` (원본 L2749-L2753)
+- B-17b2 (전환 3분기 `else if(wasCrawlClimbing)`) 는 `wantClimbUp/wantClimbDown` 필드
+  + `move()` API 의존 → 별도 원자
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 48 기준)**:
+- [근거] 원본 L2738-L2754 canStandUp 분기 직접 read (R-12.5) ✓
+- [근거] `isPlayerInSolidBetween` 의미 확인 (AABB 내 solid 블록 존재) ✓
+- [대응] 정밀 헬퍼 원본 1:1 (AABB 구성 + 공간 검사) ✓
+- [분기] canStandUp 성립/미성립 + isClimbCrawling 여부 + !wasCrawlClimbing 4-way 전수 ✓
+- [상수] `0.95D` (isClimbCrawling) / `1D` (else) 크롤 오프셋 원본 동일 ✓
+- [타이밍] 지역 저장 → 메인 공식 → canStandUp 분기 순서 원본 동일 ✓
+- [근사] **정밀 구현** (vanilla World.isSpaceEmpty 사용) — 근사 아님 ✓
+- [신규] 없음
+- [회귀] compileJava 성공 — isCrawlClimbing no-op 상태 유지 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 48 기준)**:
+- ✅ B-2 / B-44a / B-30 — 세션 43
+- ✅ B-32 / B-40 — 세션 44
+- ✅ B-45 — 세션 45
+- ✅ B-23 — 세션 46
+- ✅ B-17a — 세션 47
+- ✅ **B-17b1** — 세션 48
+- ⏳ 잔여 ~30 원자
+
+**다음 작업 권고**:
+- **B-17b2** — `else if(wasCrawlClimbing)` 전환 3분기. `wantClimbUp/wantClimbDown` 필드
+  승격 선행. `move()` 1.21.1 API 매핑. 중간 규모.
+- **B-3a (wantSprint 6조건 OR)** — 독립적. 의존 필드 대부분 이식됨. 공식 이식.
+- **B-18** — `isClimbCrawling` 공식 + climbIntoCount 카운터. B-16 선행 필요.
 
 ---
 

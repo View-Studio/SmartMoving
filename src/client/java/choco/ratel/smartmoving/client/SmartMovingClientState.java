@@ -961,19 +961,42 @@ public final class SmartMovingClientState {
             //                    && isNeighborClimbing
             //                    && (sneakButton.Pressed || crawlToggled)
             //                    && esp.movementInput.moveForward > 0F;
-            // ※ wasCrawlClimbing 은 원본 지역 변수 — 전환 블록 (L2737-L2754, B-17b) 에서만
-            //   사용. 현재는 메인 공식만 이식. B-17b 에서 전환 블록 추가 시 저장 위치 확장.
+            // B-17b1 (세션 48): canStandUp 분기 이식 (원본 L2738-L2754).
             // ※ isNeighborClimbing 갱신 로직 (B-19) 미이식 → 항상 false → 이 공식 결과도
             //   항상 false. B-19 완료 후 자동 활성화.
             {
                 boolean _sneakPressed17 = net.minecraft.client.MinecraftClient.getInstance()
                         .options.sneakKey.isPressed();
                 boolean _moveForward17 = player.input.movementForward > 0F;
+                // 원본 L2736 지역 변수 — 전환 블록에서 사용 (공식 직전 저장).
+                boolean _wasCrawlClimbing17 = isCrawlClimbing;
                 isCrawlClimbing = (wasCrawling || isCrawlClimbing)
                         && isClimbing
                         && isNeighborClimbing
                         && (_sneakPressed17 || crawlToggled)
                         && _moveForward17;
+
+                // B-17b1: 원본 L2738-L2754 — isCrawlClimbing true 시 canStandUp 판정.
+                if (isCrawlClimbing) {
+                    // 원본 L2740: canStandUp = !isPlayerInSolidBetween(
+                    //     minY - (isClimbCrawling ? 0.95D : 1D), minY)
+                    double _crawlOffset17 = isClimbCrawling ? 0.95D : 1D;
+                    boolean _canStandUp17 = !isPlayerInSolidBetween(player,
+                            player.getY() - _crawlOffset17, player.getY());
+                    if (_canStandUp17) {
+                        _wasCrawlClimbing17 = false;
+                        isCrawlClimbing = false;
+                        // 원본 L2746: if(!isClimbCrawling) resetHeightOffset();
+                        if (!isClimbCrawling) heightOffset = 0F;
+                    }
+                    // 원본 L2749-L2753: !wasCrawlClimbing 시 wasCrawling=false, isCrawling=false.
+                    if (!_wasCrawlClimbing17) {
+                        wasCrawling = false;
+                        isCrawling = false;
+                    }
+                }
+                // B-17b2 (미이식): 원본 L2755-L2783 else if(wasCrawlClimbing) 전환 3분기.
+                //   wantClimbUp/wantClimbDown 필드 + move() API 의존 — 별도 원자.
             }
 
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
@@ -1170,6 +1193,21 @@ public final class SmartMovingClientState {
                              .getBoxAt(player.getPos())
                              .contract(1.0E-7);
         return player.getWorld().isSpaceEmpty(player, standBox);
+    }
+
+    /**
+     * 원본 `SmartMovingSelf.isPlayerInSolidBetween(y1, y2)`: 플레이어 x/z 범위 + y1~y2
+     * Y 범위의 AABB 내 solid 블록 존재 여부.
+     * 1.21.1: vanilla `World.isSpaceEmpty(entity, box)` 로 정밀 구현 (근사 아님).
+     * 사용처: B-17b canStandUp 분기 (원본 L2740) — isCrawlClimbing 해제 판정.
+     * B-17b (세션 48).
+     */
+    private static boolean isPlayerInSolidBetween(ClientPlayerEntity player, double y1, double y2) {
+        Box box = new Box(
+                player.getBoundingBox().minX, y1, player.getBoundingBox().minZ,
+                player.getBoundingBox().maxX, y2, player.getBoundingBox().maxZ
+        );
+        return !player.getWorld().isSpaceEmpty(player, box);
     }
 
     // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
