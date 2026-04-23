@@ -78,10 +78,13 @@ public class MixinPlayerEntityRenderer {
         smBodyYawActive = false;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
-        boolean smActive = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
-                || sm.isSwimming_sm || sm.isDiving || sm.isSliding
-                || sm.isHeadJumping || sm.isCrawling
-                || sm.isFlying || sm.isAngleJumping();
+
+        // 원본 SmartMovingRender.rotatePlayer L271-274 조건 1:1.
+        // 원본에는 isRopeSliding/isCrawling 단독 없음, 대신 isClimbCrawling 포함.
+        boolean smActive = sm.isClimbing || sm.isClimbCrawling || sm.isCrawlClimbing
+                || sm.isFlying || sm.isSwimming_sm || sm.isDiving
+                || sm.isCeilingClimbing || sm.isHeadJumping
+                || sm.isSliding || sm.isAngleJumping();
         if (!smActive) return;
 
         // 원본 SmartMovingModel.md isSwim L474 / isDive L532:
@@ -89,7 +92,8 @@ public class MixinPlayerEntityRenderer {
         //                             ? currentCameraAngle : currentHorizontalAngle
         //   isDive: horizontalAngle = totalDistance < (isGenericSneaking ? 0.005 : 0.015)
         //                             ? currentCameraAngle : currentHorizontalAngle
-        //   → bipedOuter.rotateAngleY = horizontalAngle (라디안)
+        //   → bipedOuter.rotateAngleY = horizontalAngle (라디안). bipedOuter 계층 없는 1.21.1은
+        //     bodyYaw에 직접 적용하여 원본 렌더 최종 회전에 근사.
         //   isGenericSneaking = moving.isSlow (SmartMovingRender.md L152)
         if (sm.isSwimming_sm || sm.isDiving) {
             float threshold = sm.isSlow ? 0.005F : 0.015F;
@@ -102,11 +106,12 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // 그 외 SM 상태: forwardRotation = atan2(-vel.x, vel.z) (현재 이동 방향 즉석 계산)
-        Vec3d vel = localPlayer.getVelocity();
-        if (vel.x * vel.x + vel.z * vel.z < 1e-4) return;
+        // 원본 SmartMovingRender.rotatePlayer L269 [오역 복원]:
+        //   forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2
+        //   → renderYawOffset = forwardRotation (player yaw 보간값)
+        // 이전 구현은 atan2(-vel.x, vel.z) 로 이동 방향을 사용했으나 원본은 player yaw(카메라 방향).
         smBodyYawActive = true;
-        smBodyYawOverride = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
+        smBodyYawOverride = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
     }
 
     /**
