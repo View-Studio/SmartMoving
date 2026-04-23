@@ -592,6 +592,20 @@ private void writeClientConfigMessageToChat(boolean everyone)
 
 `SmartMovingProperties.Enabled` — "enabled" 문자열 상수 (SmartMovingProperties에서 확인 필요).
 
+#### 번역 키 원문 (en_US.lang)
+
+출처: `https://raw.githubusercontent.com/makamys/SmartMoving/master/src/main/resources/assets/smartmoving/lang/en_US.lang`
+
+```
+move.config.chat.client.enabled=Smart Moving enabled
+move.config.chat.client.disabled=Smart Moving disabled
+move.config.chat.client.named=Smart Moving set to '%s'
+move.config.chat.client.unnamed=Smart Moving set to key '%s'
+```
+
+1.21.1 포트: 기존 키 prefix `smartmoving.message.config.client.*` 유지 (기타 `.illegal.*`/
+`.server.*` 과 일관). `%s` 는 `Text.translatable(key, arg)` 로 전달.
+
 ---
 
 ### `writeClientSpeedMessageToChat(boolean everyone)`

@@ -480,10 +480,33 @@ public final class SmartMovingClientState {
         if (SmartMovingKeys.configToggle.wasPressed()) {
             if (SmartMovingConfig.Config == SmartMovingConfig.INSTANCE) {
                 SmartMovingConfig.INSTANCE.toggle();
-                String msgKey = SmartMovingConfig.INSTANCE.enabled
-                    ? "smartmoving.message.config.client.enabled"
-                    : "smartmoving.message.config.client.disabled";
-                if (player != null) player.sendMessage(Text.translatable(msgKey));
+                // 원본 SmartMovingOptions.writeClientConfigMessageToChat(false) (L560-L584) 1:1.
+                //   Config.enabled=false                                            → "...disabled"
+                //   name = _configKeyName.value (Map.getOrDefault 근사); isEmpty → null
+                //   unnamed && keyCount==1                                          → "...enabled"
+                //   name!=null (named)                                              → "...named" + name
+                //   name==null (unnamed) + keyCount>1                               → "...unnamed" + currentKey
+                SmartMovingConfig cfg = SmartMovingConfig.INSTANCE;
+                Text msg;
+                if (!cfg.enabled) {
+                    msg = Text.translatable("smartmoving.message.config.client.disabled");
+                } else {
+                    String currentKey = cfg.getCurrentKey();
+                    String name = cfg.configKeyName.getOrDefault(currentKey, "");
+                    if (name.isEmpty()) name = null;
+                    boolean unnamed = name == null;
+                    if (unnamed) name = currentKey;
+                    int keyCount = cfg.configKeys.length;
+                    if (SmartMovingConfig.CONFIG_KEY_ENABLED.equals(name)
+                            || (unnamed && keyCount == 1)) {
+                        msg = Text.translatable("smartmoving.message.config.client.enabled");
+                    } else if (unnamed) {
+                        msg = Text.translatable("smartmoving.message.config.client.unnamed", name);
+                    } else {
+                        msg = Text.translatable("smartmoving.message.config.client.named", name);
+                    }
+                }
+                if (player != null) player.sendMessage(msg);
             } else {
                 ClientPlayNetworking.send(new SmartMovingNetwork.ConfigChangePayload());
             }

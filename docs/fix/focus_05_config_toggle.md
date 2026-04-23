@@ -403,9 +403,15 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `config._configKeyName.value` 는 1.21.1 근사로 `configKeyName.getOrDefault(currentKey, "")`.
 
 ### E. 클라이언트 채팅 피드백 4상태
-- [ ] E-1. `SmartMovingClient.tickEssential` configToggle 블록의 msgKey 분기 4상태 확장
-- [ ] E-2. `en_us.json` 에 `smartmoving.message.config.client.default` / `.named` 추가
-- [ ] E-3. 기존 `.enabled` / `.disabled` 번역 키는 유지 (호환)
+- [x] E-1/E-2/E-3. **§10 재정의 (원본 4갈래 반영)**: 원본 `writeClientConfigMessageToChat()`
+      (SmartMovingOptions.md L560-L584) 은 `disabled`/`enabled`/`named`/`unnamed` **4갈래**
+      (§9.3 예상 diff 의 3갈래 `default/named` 보다 정확). 4갈래 단일 원자로 통합 처리:
+      - E-1: `SmartMovingClientState.configToggle` 블록 4갈래 분기 이식 (`unnamed && keyCount==1`,
+        `CONFIG_KEY_ENABLED.equals(name)` 조건 포함).
+      - E-2: `en_us.json` 에 `.named` / `.unnamed` 추가. **기존 `.enabled`/`.disabled` 텍스트도**
+        원본(`"Smart Moving enabled"`, `"Smart Moving disabled"`) 으로 정정 (발견 즉시 수정 원칙).
+      - E-3: 기존 키는 유지 (그대로). 텍스트만 정정됨.
+      - 번역 키 원본 텍스트: Agent WebFetch 로 `en_US.lang` 확보 → `SmartMovingOptions.md` 에 추가.
 
 ### F. 게임타입별 configKeys 적용
 - [ ] F-1. `SmartMovingServer.initialize` 에서 `player.interactionManager.getGameMode()` 로 gameType 판정
@@ -893,6 +899,58 @@ override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
 
 **다음 작업**: E-1 — `SmartMovingClient.tickEssential` configToggle 블록의 msgKey 분기 4상태
 확장 + E-2 번역 키 추가 + E-3 기존 키 유지.
+
+### 세션 9 — 2026-04-23 — E-1/E-2/E-3 (4갈래 통합)
+
+**진행한 작업**:
+- **§10 E 섹션 재정의**: 원본 `writeClientConfigMessageToChat()` 재독 후 §9.3 예상 diff 가
+  3갈래 (`disabled`/`default`/`named`) 였으나 실제 원본은 **4갈래** (`disabled`/`enabled`/
+  `named`/`unnamed`). 원본 1:1 우선 원칙에 따라 §10 E 재정의, E-1/E-2/E-3 묶음 처리.
+- **Agent WebFetch**: 원본 `en_US.lang` 에서 4개 키 값 확보:
+    ```
+    move.config.chat.client.enabled=Smart Moving enabled
+    move.config.chat.client.disabled=Smart Moving disabled
+    move.config.chat.client.named=Smart Moving set to '%s'
+    move.config.chat.client.unnamed=Smart Moving set to key '%s'
+    ```
+  리서치 파일 `SmartMovingOptions.md` §writeClientConfigMessageToChat 에 "번역 키 원문"
+  하위 섹션으로 보완.
+- **기존 `en_us.json` 텍스트 오역 정정** (발견 즉시 수정):
+    - `.enabled`: "Smart Moving is now enabled." → "Smart Moving enabled"
+    - `.disabled`: "Smart Moving is now disabled." → "Smart Moving disabled"
+- **신규 키 추가**:
+    - `.named` = "Smart Moving set to '%s'"
+    - `.unnamed` = "Smart Moving set to key '%s'"
+- **`SmartMovingClientState.tickEssential` configToggle 블록 4갈래 이식**:
+    ```java
+    if (!cfg.enabled) → "disabled"
+    else:
+      name = configKeyName.getOrDefault(currentKey, "");
+      if (name.isEmpty()) name = null;
+      unnamed = name == null;
+      if (unnamed) name = currentKey;
+      if (CONFIG_KEY_ENABLED.equals(name) || (unnamed && keyCount == 1)) → "enabled"
+      else if (unnamed) → "unnamed" + name
+      else → "named" + name
+    ```
+  원본 L567-L583 분기 13줄 1:1.
+
+**완료 전 검증 체크리스트 (E-1+E-2+E-3 기준)**:
+- [근거] `SmartMovingOptions.md` L560-L584 원본 분기 확인 ✓
+- [근거] `en_US.lang` 4키 원문 WebFetch 확보 + 리서치 파일 보완 ✓
+- [대응] 원본 4갈래 ↔ 구현 4갈래 1:1 ✓
+- [분기] `name.isEmpty() → null` / `unnamed = name==null` / `unnamed && keyCount==1` /
+  `"enabled".equals(name)` / 일반 `named` / `unnamed` 기본 경로 모두 재현 ✓
+- [상수] 4개 번역 키 텍스트 원본 그대로 `.lang` 확보 후 적용 ✓
+- [타이밍] `configToggle.wasPressed()` 직후 `toggle()` → 메시지 (원본 `super.toggle()` 후
+  `writeClientConfigMessageToChat` 순서와 등가)
+- [근사] `_configKeyName.value` Property key-scoped → Map.getOrDefault (B-3 근사 활용) ✓
+- [신규] 없음 (§9.3 예상 diff 오기 정정은 §10 재정의 로 반영)
+- [회귀] 기존 `.enabled`/`.disabled` 키 유지 — 텍스트만 원본 일치로 정정. 다른 참조처 없음.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: F-1 — `SmartMovingServer.initialize` 에서 gameType 기반 setKeys 호출 흐름 이식.
+`player.interactionManager.getGameMode()` 로 gameType 판정. `initializeForGameIfNeccessary` 포팅.
 
 ---
 
