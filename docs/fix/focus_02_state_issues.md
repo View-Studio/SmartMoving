@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 48 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 49 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a/B-17b1/B-3a/B-3b 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -543,18 +543,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       - ※ wouldIsSneaking 는 여전히 `!player.isSprinting()` — B-3b 에서 `!wantSprint` 로 정정 예정
 
 #### B-3. `wantSprint` 신설 + `wouldIsSneaking` 정정 (원자 2개 분해)
-- [ ] B-3a. `wantSprint` 필드 + 6조건 OR 계산 블록 이식 (원본 `SmartMovingSelf` L2595-L2615).
-      의존 필드 전수 확인 + 미이식 시 신설:
-      - **✅ 세션 39**: `Config.isSprintingEnabled()` 헬퍼 신설 완료 (AND 패턴:
-        `sprint && enabled`)
-      - `sprintButton.Pressed` (B-1b 매핑 결과 사용)
-      - `moveForwardButtonPressed` / `moveButtonPressed` / `jumpButton` (B-1b 매핑)
-      - `disabled` (ClientState 또는 Config 필드 존재 여부 확인)
-      - `isFlying` / `isSliding` / `isClimbing` / `isSwimming_sm` / `isDiving`
-        (ClientState 기존 필드)
-- [ ] B-3b. `SmartMovingClientState.tickEssential` L650 `wouldIsSneaking` 정정:
-      `wouldWantSneak && !wantSprint && !isClimbing` (원본 L2712). vanilla `isSprinting()`
-      단순 대체 제거.
+- [x] B-3a. ✅ **세션 49 완료** — `wantSprint` public 필드 신설 + 6조건 OR 공식 이식
+      (원본 L2595-L2615). 지역 변수 `disabled` (원본 L2375) 는 `!cfg.enabled ||
+      hasVehicle() || isSleeping() || getSleepTimer()>0` (startSleeping 근사).
+      sprint/jump 키는 `MinecraftClient.options.sprintKey/jumpKey` 표면 매핑, move 입력은
+      `player.input.movementForward/Sideways`. 6-AND 공식:
+      `isSprintingEnabled && !isSliding && sprintPressed && (지면전진 || 등반 || 수영+입력
+      || 잠수+입력+점프 || 비행+입력+점프/스니크) && !disabled`.
+- [x] B-3b. ✅ **세션 49 완료** — `wouldIsSneaking = wouldWantSneak && !wantSprint &&
+      !isClimbing` (원본 L2712). 기존 `!player.isSprinting()` (vanilla 단순) → `!wantSprint`
+      (SM 복합) 으로 정정. A-1 불일치 3번 해소.
 
 #### B-4. R-09 토글 블록 `wantSneak_/wantSprint_` 간소 매핑 제거 (§16 세션 30 신규)
 - [ ] B-4. `SmartMovingClientState.tickEssential` L788-L792 "간소 매핑" 주석 + 로컬 변수
@@ -1944,6 +1942,61 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   승격 선행. `move()` 1.21.1 API 매핑. 중간 규모.
 - **B-3a (wantSprint 6조건 OR)** — 독립적. 의존 필드 대부분 이식됨. 공식 이식.
 - **B-18** — `isClimbCrawling` 공식 + climbIntoCount 카운터. B-16 선행 필요.
+
+### 세션 49 — 2026-04-24 — B Phase 2 B-3a + B-3b (wantSprint + wouldIsSneaking 정정)
+
+**진행한 작업**:
+- `SmartMovingClientState` 에 `wantSprint` public 필드 추가 (원본 L1415 — public 필드).
+  resetState 에 리셋 추가.
+- 원본 L2595-L2615 `wantSprint` 6조건 OR 공식 이식 — isSlow 공식 블록 내 wantSneak 계산
+  직후 배치:
+  * 지역 변수 `disabled` (원본 L2375) 계산:
+    `!cfg.enabled || hasVehicle() || isSleeping() || getSleepTimer()>0` (startSleeping 근사)
+  * 지역 변수 `sprintPressed/jumpPressed/moveForwardPressed/movePressed` 계산
+    (vanilla key/input 표면 매핑)
+  * 6-AND 공식: `isSprintingEnabled && !isSliding && sprintPressed && (지면전진 || 등반 ||
+    수영+입력+sneakDown || 잠수+입력+jump/sneakDown || 비행+입력+jump/sneak) && !disabled`
+- **B-3b**: `wouldIsSneaking` 공식 정정 — 기존 `!player.isSprinting()` (vanilla 단순)
+  → `!wantSprint` (SM 복합). **A-1 불일치 #3 해소** — wantSprint 의 6조건 컨텍스트
+  (수영/잠수/비행 sneakDown 허용) 이 반영됨.
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 49 기준)**:
+- [근거] 원본 L2595-L2615 wantSprint + L2712 wouldIsSneaking 직접 read (R-10.5/R-10.9) ✓
+- [근거] L2373-L2375 disabled + L2592-L2593 move*Pressed 지역변수 공식 확인 ✓
+- [대응] 원본 6-AND + 5-OR 서브 + 4-AND (수영/잠수/비행) 전부 1:1 ✓
+- [분기] 6-AND 각 항 (enabled/sliding/sprint/상황별 OR/disabled) + 5갈래 OR (지면/등반/
+  수영/잠수/비행) + 각 컨텍스트 AND 조건 전수 ✓
+- [상수] 없음 (조건만)
+- [타이밍] wantSneak 계산 뒤 wantSprint 계산 → wouldIsSneaking → isSlow 순서 원본 일치 ✓
+- [근사] `startSleeping` 1.21.1 대응 없음 — `getSleepTimer() > 0` 으로 근사 확장
+  (주석 명시). 원본 의도 (수면 시작 중 SM 비활성) 반영
+- [신규] 없음 (A-1 불일치 해소)
+- [회귀] compileJava 성공. wouldIsSneaking 이전 틱 `!isSprinting()` 의 근사 제거됨 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**A-1 불일치 3건 해소 현황**:
+- ✅ #1 isFast 6갈래 OR (미해소 — B-1f 에서 이식 예정)
+- ✅ #2 isSlow Config.isSneakingEnabled() 가드 (B-2 완료)
+- ✅ **#3 wouldIsSneaking !wantSprint 정정** (B-3b 완료 세션 49)
+
+**Phase 2 진행 상황 (세션 49 기준)**:
+- ✅ 세션 43: B-2 / B-44a / B-30
+- ✅ 세션 44: B-32 / B-40
+- ✅ 세션 45: B-45
+- ✅ 세션 46: B-23
+- ✅ 세션 47: B-17a
+- ✅ 세션 48: B-17b1
+- ✅ 세션 49: **B-3a + B-3b**
+- ⏳ 잔여 ~28 원자 (B-17b2 / B-18 / B-24 / B-16 / B-1c~f / B-33 등)
+
+**다음 작업 권고**:
+- **B-1f (isFast 6갈래 OR 공식 이식)** — A-1 불일치 #1 해소 대상. 의존 필드
+  `isGroundSprinting / isClimbSprinting / isSwimSprinting / isDiveSprinting /
+  isCeilingSprinting / isFlyingSprinting` + `standing` 미이식 → B-1d/B-1c/B-1e 선행.
+  규모 큼 (여러 세션 분할).
+- **B-17b2** — `else if(wasCrawlClimbing)` 전환 3분기. wantClimbUp/Down 필드 + move() API.
+- **B-18** — `isClimbCrawling` 공식 + climbIntoCount. B-16 선행.
 
 ---
 

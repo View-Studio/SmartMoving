@@ -147,6 +147,18 @@ public final class SmartMovingClientState {
      */
     public boolean isFlying;
 
+    /**
+     * 원본 SmartMovingSelf L1415 `public boolean wantSprint;` — **public 필드**.
+     * 매 틱 tickEssential L2595-L2615 에서 계산 (6조건 OR).
+     * 사용처:
+     *   - L2647 `if(wantSprint && !wantSneak)` — preferSprint 판정
+     *   - L2713 `wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing`
+     *   - L2990 R-09 `wantSneak && wantSprint && sneakStartPressed && sneakToggled`
+     *   - handleLand / handleJumping 등
+     * B-3a (세션 49).
+     */
+    public boolean wantSprint;
+
     /** 크롤링 상태 */
     public boolean isCrawling;
 
@@ -803,7 +815,50 @@ public final class SmartMovingClientState {
                     && (!crawlingEnabled0 || !grabPressed0);
             // B-2 (세션 43): wantSneak 신설. Config.isSneakingEnabled() = sneak || !enabled (OR 패턴).
             boolean wantSneak = cfg0.isSneakingEnabled() && wouldWantSneak;
-            wouldIsSneaking = wouldWantSneak && !player.isSprinting() && !isClimbing;
+
+            // B-3a (세션 49): wantSprint 6조건 OR 공식 (원본 L2595-L2615).
+            // 지역 변수 (원본 L2373-L2375 + L2592-L2593 + 여러 Button):
+            //   disabled = !Config.enabled || isRiding || isSleeping || startSleeping
+            //     - 1.21.1: isRiding=hasVehicle(), isSleeping=isSleeping(),
+            //       startSleeping 은 정확 대응 없어 getSleepTimer()>0 으로 근사 확장.
+            //   moveForwardButtonPressed = esp.movementInput.moveForward > 0F
+            //   moveButtonPressed = moveForward != 0 || moveStrafe != 0
+            //   sprintButton.Pressed = vanilla sprintKey.isPressed()
+            //   jumpButton.Pressed   = vanilla jumpKey.isPressed()
+            //   sneakButton.Pressed  = 이미 sneakPressedRaw 변수로 존재
+            boolean _disabled3a = !cfg0.enabled
+                    || player.hasVehicle()
+                    || player.isSleeping()
+                    || player.getSleepTimer() > 0;
+            net.minecraft.client.MinecraftClient _mc3a = net.minecraft.client.MinecraftClient.getInstance();
+            boolean _sprintPressed3a = _mc3a.options.sprintKey.isPressed();
+            boolean _jumpPressed3a   = _mc3a.options.jumpKey.isPressed();
+            boolean _moveForwardPressed3a = player.input.movementForward > 0F;
+            boolean _movePressed3a = player.input.movementForward != 0F
+                                   || player.input.movementSideways != 0F;
+            // 원본 L2595-L2615: 6-AND — Config.isSprintingEnabled() && !isSliding && sprintPressed
+            //   && (지면 전진 || 등반 || (수영+입력) || (잠수+입력+점프) || (비행+입력+점프/스니크))
+            //   && !disabled.
+            wantSprint = cfg0.isSprintingEnabled()
+                    && !isSliding
+                    && _sprintPressed3a
+                    && (
+                            _moveForwardPressed3a
+                            || isClimbing
+                            || (isSwimming_sm
+                                    && (_movePressed3a
+                                            || (sneakPressedRaw && cfg0.swimDownOnSneak)))
+                            || (isDiving
+                                    && (_movePressed3a || _jumpPressed3a
+                                            || (sneakPressedRaw && cfg0.diveDownOnSneak)))
+                            || (isFlying
+                                    && (_movePressed3a || _jumpPressed3a || sneakPressedRaw))
+                    )
+                    && !_disabled3a;
+
+            // B-3b (세션 49): wouldIsSneaking 정정 — 원본 L2712 `!wantSprint` (SM 복합)
+            //   기존 `!player.isSprinting()` (vanilla 단순) 제거. 이제 SM 컨텍스트 조건 전부 반영.
+            wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing;
             // B-44a (세션 43): wasSneaking 저장을 isSlow 공식 직전으로 이동 (원본 L2716).
             wasSneaking = isSlow;
             // B-2 (세션 43): 기존 `sneakContinueInput && wouldIsSneaking` 중복 제거 → 원본 1:1.
@@ -1176,6 +1231,7 @@ public final class SmartMovingClientState {
         isStillSwimmingJump     = false;
         wantCrawlNotClimb       = false;
         initializeCrawling      = false;
+        wantSprint              = false;
         // B Phase 1 (세션 40) 등반 9 필드 리셋
         isVineOnlyClimbing      = false;
         isVineAnyClimbing       = false;
