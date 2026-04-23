@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 29 — A-0 감사 계획 수립) |
-| 현재 단계 | A 단계 (원본 grep 기반 감사). 재현 케이스 없이도 진행 — 포커스 #5/#6 선례 |
+| 현재 단계 | A-1 완료 (isSlow/isFast 3건 불일치 발견) / ⏳ **A-2 (수중 3상태)** 또는 **B-1/B-2/B-3 선행 수정** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -160,7 +160,20 @@
 **감사 그룹 분해** (우선순위 + 공통성 기준):
 
 - [x] A-0. 감사 계획 수립 (이 블록)
-- [ ] A-1. **`isSlow` / `isFast`** 원본 덤프 (레벨 1, 광범위 사용, R-09 연관)
+- [x] A-1. **`isSlow` / `isFast`** 원본 덤프 완료 — 원본 `SmartMovingSelf.java` 전수 감사
+      (Agent WebFetch). **불일치 3건 확정** (§16 세션 29 기록):
+      (1) **`isFast` 완전 오역**: 원본 L2688-L2695 6갈래 OR (`isGroundSprinting \|\|
+          isClimbSprinting \|\| isSwimSprinting \|\| isDiveSprinting \|\| isCeilingSprinting \|\|
+          isFlyingSprinting \|\| isClimbSprinting(중복)`) vs 1.21.1 L653 `grab.isPressed()
+          && player.isSprinting()` 단순.
+      (2) **`isSlow` 부분 오역**: 원본 L2718 `isSlow = wantSneak && wouldIsSneaking` where
+          `wantSneak = Config.isSneakingEnabled() && wouldWantSneak` vs 1.21.1 L651
+          `isSlow = sneakContinueInput && wouldIsSneaking` — `Config.isSneakingEnabled()`
+          체크 누락, `sneakContinueInput` 중복 사용.
+      (3) **`wouldIsSneaking` 부분 오역**: 원본 L2712 `wouldWantSneak && !wantSprint &&
+          !isClimbing` vs 1.21.1 L650 `wouldWantSneak && !player.isSprinting() && !isClimbing`
+          — `wantSprint` (SM 복합) 을 vanilla `isSprinting()` 로 대체. `wantSprint` 은 6조건
+          OR (sprintButton + 수영/비행/등반/크롤 컨텍스트 + disabled 체크) 필수.
 - [ ] A-2. **`isSwimming_sm` / `isDiving` / `isDipping`** 원본 덤프 (수중 3상태)
 - [ ] A-3. **`isClimbing` / `isCeilingClimbing` / `isCrawlClimbing` / `isClimbCrawling`** 원본 덤프 (등반 계열 4상태)
 - [ ] A-4. **`isHeadJumping` / `isSliding`** 원본 덤프 (전환 쌍)
@@ -174,9 +187,26 @@
 **세션 규모 예상**: 각 A-N 그룹이 Agent 1회 + grep 여러 번 + 매핑 — 적정 세션당 1-2 그룹.
 전체 A 단계 완료까지 3-4 세션. B 단계 (수정) 는 매핑 결과에 따라 변동.
 
-### B. 각 필드별 불일치 수정 (A-9 매핑 결과 기반)
+### B. 각 필드별 불일치 수정 (A-N 매핑 결과 기반)
 
-- [ ] B-N. (A-9 결과에 따라 필드별로 원자 작업 분해. 각 B-N 은 1 필드 또는 1 불일치 블록.)
+- [ ] B-1. **`isFast` 공식 교체** (A-1 발견) — 원본 6갈래 OR 이식. 선행 필요:
+      - `isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` / `isDiveSprinting` /
+        `isCeilingSprinting` / `isFlyingSprinting` 6개 로컬 변수 신설
+      - `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed` 의존
+        필드 1.21.1 이식 여부 확인 (미이식 시 별도 원자)
+      - `standing = onGround && !isSliding && !isCrawling` 신설
+      - `Config._sprintEnableStanding` 필드 확인/이식
+      - 원본 L2688-L2695 isClimbSprinting 중복 포함 1:1 보존
+- [ ] B-2. **`isSlow` 공식 정정** (A-1 발견) — `isSlow = wantSneak && wouldIsSneaking`.
+      `wantSneak = cfg.sneak && cfg.enabled && wouldWantSneak` 추가. `Config.isSneakingEnabled()`
+      대응은 `cfg.sneak && cfg.enabled` — 기존 `sneakContinueInput` 중복 제거.
+- [ ] B-3. **`wouldIsSneaking` 에서 `wantSprint` 이식** (A-1 발견) — 원본 L2595-L2615 6조건
+      OR 공식 이식. `wantSprint` 필드 + 계산 블록 신설. 의존 필드 전체 확인:
+      `Config.isSprintingEnabled()` / `sprintButton` / `moveForwardButtonPressed` /
+      `moveButtonPressed` / `jumpButton` / `disabled` / `isFlying` / `isSliding` /
+      `isClimbing` / `isSwimming_sm` / `isDiving` 등. vanilla `player.isSprinting()` 로 단순
+      대체된 부분 정정.
+- [ ] B-N. (A-2 ~ A-6 추가 발견에 따라 동적 추가)
 
 ### C. 검증
 - [ ] C-1. `./gradlew clean build` 성공
@@ -266,11 +296,89 @@
 두 필드가 갱신되는 모든 위치 덤프 → 1.21.1 `tickEssential` 갱신 위치와 side-by-side 비교.
 R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 
+### 세션 29 (계속) — 2026-04-24 — A-1 (isSlow/isFast) 완료
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 `SmartMovingSelf.java` 전수 감사 (`isSlow`/`isFast` 필드 선언 +
+  할당 위치 + 의존 공식 + 버튼 필드 + R-09 토글 블록).
+- **원본 할당 위치 정확히 3곳**:
+  - Self L2275-L2276 `resetState()` 리셋
+  - Self L2688-L2695 `isFast` 메인 공식 (6갈래 OR)
+  - Self L2716-L2719 `isSlow` 메인 공식 (wantSneak && wouldIsSneaking)
+- 1.21.1 `SmartMovingClientState` L637/L651/L653 비교 → **3건 불일치 확정** (§16 세션 29 상세):
+  1. isFast 완전 오역 (원본 6갈래 OR vs 1.21.1 grab+isSprinting)
+  2. isSlow 중복 + 가드 누락 (sneakingEnabled 체크 빠짐)
+  3. wouldIsSneaking 의 wantSprint 이 vanilla isSprinting() 으로 대체
+- 이전 세션 추정 정정:
+  - 기존 주석 "isFast = grabButton.Pressed && isSprinting()" → **틀림**
+  - 기존 주석 "wantSneak = sneakContinueInput 로 매핑" → **틀림** (wantSneak 은 별도)
+- §10 B-1/B-2/B-3 신규 원자 작업 추가 — A-2 진행 전 선행 수정 가능 (추천) 또는 A 전체 완료
+  후 일괄 수정.
+
+**완료 전 검증 체크리스트 (A-1 기준)**:
+- [근거] 원본 3곳 할당 위치 전수 덤프 ✓
+- [근거] 의존 공식 (wantSneak / wouldWantSneak / wouldIsSneaking / wantSprint) 전부 확인 ✓
+- [대응] 원본 3곳 ↔ 1.21.1 3곳 side-by-side — 불일치 3건 ✓
+- [분기] 원본 6갈래 OR / 가드 조건 / 조건 순서 전부 식별 ✓
+- [상수] 해당 없음 (공식만)
+- [타이밍] isFast 는 isGroundSprinting/isClimbSprinting 등 계산 직후, isSlow 는 wasSneaking
+  저장 직후 — 타이밍 원본과 다름 없음 확인
+- [근사] 해당 없음 (엄밀 1:1 위반)
+- [신규] B-1/B-2/B-3 원자 작업 추가 ✓
+- [회귀] 코드 변경 없음 (감사)
+- [빌드] 해당 없음
+
+**다음 작업 선택지**:
+- **옵션 A**: B-1/B-2/B-3 선행 수정 후 A-2 진행 — A-1 발견 즉시 수정. 불일치 쌓이기 전에
+  고치는 원칙 (세션 29 내 규모 큼).
+- **옵션 B**: A-2~A-6 먼저 진행 후 B-N 일괄 — 매핑 전체 완성 후 일관성 있게 수정. 세션
+  여러 회에 걸쳐 감사 먼저.
+- 기본 추천: **옵션 A** — A-1 불일치가 크고 의존 필드 많아 B-1 부터 단계적 수정 필요.
+  B-1 의존 필드 (canHorizontallySprint 등) 가 미이식이면 규모 더 커짐 — 먼저 확인.
+
 ---
 
 ## 16. 신규 발견
 
-_(비어있음)_
+### 세션 29 A-1 — `isSlow`/`isFast` 3건 불일치 확정
+
+**Agent WebFetch 로 원본 `SmartMovingSelf.java` 전수 감사 결과**:
+
+1. **`isFast` 공식 완전 오역**
+   - 원본 (Self L2688-L2695): 6갈래 OR 합성 — `isGroundSprinting || isClimbSprinting ||
+     isSwimSprinting || isDiveSprinting || isCeilingSprinting || isFlyingSprinting ||
+     isClimbSprinting(중복)`
+   - 의존: `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed` /
+     `standing = onGround && !isSliding && !isCrawling` / `Config._sprintEnableStanding`
+   - 1.21.1 (ClientState L653): `grab.isPressed() && player.isSprinting()` 단순 이식 — 원본과
+     완전 다름. `grab` 은 원본의 `grabButton` 이나 원본 isFast 계산에 쓰이지 않음.
+
+2. **`isSlow` 공식 부분 오역**
+   - 원본 (Self L2718): `isSlow = wantSneak && wouldIsSneaking`
+     where `wantSneak = Config.isSneakingEnabled() && wouldWantSneak` (L2588-L2590)
+   - 1.21.1 (ClientState L651): `isSlow = sneakContinueInput && wouldIsSneaking`
+     — `sneakContinueInput` 은 `wouldWantSneak` 계산에 이미 포함되므로 **중복 곱**.
+     + `Config.isSneakingEnabled()` 체크 **누락**. 결과: `cfg.sneak` / `cfg.enabled` 가 false
+     라도 isSlow 가 true 될 수 있는 버그.
+
+3. **`wouldIsSneaking` 공식 부분 오역**
+   - 원본 (Self L2712): `wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing`
+   - 1.21.1 (ClientState L650): `wouldIsSneaking = wouldWantSneak && !player.isSprinting() &&
+     !isClimbing` — `wantSprint` 을 vanilla `isSprinting()` 로 대체.
+   - 원본 `wantSprint` (Self L2595-L2615): `Config.isSprintingEnabled() && !isSliding &&
+     sprintButton.Pressed && (moveForwardButtonPressed || isClimbing || 수영/잠수/비행
+     컨텍스트별 세부 조건) && !disabled` — 6조건 복합.
+   - vanilla `isSprinting()` 은 단순히 스프린트 중 attribute 상태 — SM 컨텍스트 조건 전부 누락.
+
+**영향**:
+- `isFast` 오역은 특히 심각 — 원본에서 비행/수영/잠수/등반 중에도 Fast 가 될 수 있는데
+  (컨텍스트별 조건), 1.21.1 에선 **지면 스프린트 + grab 키** 만 인식.
+- `isSlow` 중복 + 가드 누락: `cfg.sneak=false` 설정 시에도 sneak 동작 가능 (원본과 불일치).
+- `wouldIsSneaking` 의 `!wantSprint` 를 `!isSprinting()` 으로 대체: 수영 중 sneakDown 활성
+  시점에 미세 차이 가능.
+
+**수정 범위**: §10 B-1 (isFast) / B-2 (isSlow) / B-3 (wouldIsSneaking + wantSprint) 3건.
+각 B-N 은 의존 필드 신설 포함이라 적당한 규모.
 
 ---
 
