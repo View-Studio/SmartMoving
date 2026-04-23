@@ -223,34 +223,47 @@ public abstract class MixinPlayerEntityModelClient {
             leftArm.yaw  = leftArm.yaw  * (1f + 0.6662f) + EIGHTH;
         }
 
-        // 발: isFeetVineClimbing → vine 공식, else feetClimbType 분기 (R-10b)
-        // FeetClimbing ordinal: SLOW_UP_WITH_HOLD_WITHOUT_HANDS(4)/SLOW_UP_WITH_SINK_WITHOUT_HANDS(5)/FAST_UP(6) → UpGrab
-        if (sm.isFeetVineClimbing) {
-            float total = (MathHelper.cos(limbSwing + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
-            rightLeg.pitch = -total;
-            leftLeg.pitch  = -total;
-            float diff = Math.max(0f, MathHelper.cos(limbSwing - QUARTER)) * SIXTYFOURTH;
-            rightLeg.roll  =  diff;
-            leftLeg.roll   = -diff;
-            rightLeg.yaw   = 0f;
-            leftLeg.yaw    = 0f;
-        } else {
-            int fOrd = sm.actualFeetClimbType;
-            if (fOrd >= 4 && verticalSpeed > 0f) {
+        // 발 각도 — 원본 SmartMovingModel.java L219-L239 1:1 이식.
+        // 핵심: pitch(rotateAngleX)는 `if(!isFeetVineClimbing)` 가드 블록에서만 할당 →
+        //       vine 시 일반 경로 스킵 + vine 블록에서 `= -total` 단독 할당.
+        // 핵심: roll(rotateAngleZ)은 **무조건** 일반 경로 할당 →
+        //       vine 시 그 위에 `+=` 로 누적.
+        // FeetClimbing ordinal≥4: SLOW_UP_WITH_HOLD_WITHOUT_HANDS(4)/SLOW_UP_WITH_SINK_WITHOUT_HANDS(5)/FAST_UP(6) → UpGrab.
+        // UpGrab 파라미터(SmartMovingModel.md L331-333): feetDistSideFactor=0.5, feetDistSideOffset=0.
+        int fOrd = sm.actualFeetClimbType;
+        boolean isUpGrab = fOrd >= 4;
+
+        // pitch 일반 경로 — 원본 L219-L223 `if(!isFeetVineClimbing)` 가드.
+        if (!sm.isFeetVineClimbing) {
+            if (isUpGrab && verticalSpeed > 0f) {
                 float feetDistUp = 0.3f / verticalSpeed;
                 rightLeg.pitch = MathHelper.cos(limbSwing * 0.6662f)        * feetDistUp * verticalSpeed - 0.3f;
                 leftLeg.pitch  = MathHelper.cos(limbSwing * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f;
-                rightLeg.roll  = -(MathHelper.cos(limbSwing * 0.6662f) - 1f)          * horizontalSpeed * 0.5f;
-                leftLeg.roll   = -(MathHelper.cos(limbSwing * 0.6662f + QUARTER) + 1f) * horizontalSpeed * 0.5f;
             } else {
                 rightLeg.pitch = 0f;
                 leftLeg.pitch  = 0f;
-                rightLeg.roll  = 0f;
-                leftLeg.roll   = 0f;
             }
-            rightLeg.yaw = 0f;
-            leftLeg.yaw  = 0f;
         }
+
+        // roll 일반 경로 — 원본 L225-L226 무조건 할당.
+        // default feetClimbType: feetDistSideFactor=0 → roll=0. UpGrab: 0.5.
+        float feetDistSideFactor = isUpGrab ? 0.5f : 0f;
+        rightLeg.roll = -(MathHelper.cos(limbSwing * 0.6662f) - 1f)          * horizontalSpeed * feetDistSideFactor;
+        leftLeg.roll  = -(MathHelper.cos(limbSwing * 0.6662f + QUARTER) + 1f) * horizontalSpeed * feetDistSideFactor;
+
+        // vine 전용 — 원본 L228-L239.
+        if (sm.isFeetVineClimbing) {
+            float total = (MathHelper.cos(limbSwing + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
+            rightLeg.pitch = -total;   // pitch 덮어쓰기
+            leftLeg.pitch  = -total;
+
+            float diff = Math.max(0f, MathHelper.cos(limbSwing - QUARTER)) * SIXTYFOURTH;
+            leftLeg.roll  += -diff;    // roll 누적 (원본 `+=`)
+            rightLeg.roll +=  diff;
+        }
+
+        rightLeg.yaw = 0f;
+        leftLeg.yaw  = 0f;
 
         // isCrawlClimbing 추가 보정: 몸통 X 기울기 + 다리 roll (R-10c)
         if (sm.isCrawlClimbing) {

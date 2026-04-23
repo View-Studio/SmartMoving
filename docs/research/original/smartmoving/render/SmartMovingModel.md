@@ -363,18 +363,39 @@ bipedRightLeg.rotateAngleZ = -(cos(totalHorizontalDistance * feetFrequenceSideFa
 bipedLeftLeg.rotateAngleZ  = -(cos(totalHorizontalDistance * feetFrequenceSideFactor + Quarter) + 1.0F) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
 ```
 
-**isFeetVineClimbing 대체**:
+**isFeetVineClimbing 대체** (R-10b 추가 검증, 원본 L219-L239 직접 덤프 확인):
+
+원본 코드 구조가 **pitch 와 roll 이 서로 다른 분기 규칙**을 가진다는 점이 핵심:
+
 ```java
-float total = (cos(totalDistance + Half) + 1) * Thirtytwoth + Sixteenth;
-bipedRightLeg.rotateAngleX = -total;
-bipedLeftLeg.rotateAngleX  = -total;
+// 원본 L219-L223: pitch 일반 경로 — vine 이 아닐 때만 실행.
+if(!isFeetVineClimbing) {
+    bipedRightLeg.rotateAngleX = cos(totalVerticalDistance * feetFrequenceUpFactor)      * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
+    bipedLeftLeg.rotateAngleX  = cos(totalVerticalDistance * feetFrequenceUpFactor + Half) * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
+}
 
-float difference = Math.max(0, cos(totalDistance - Quarter)) * Sixtyfourth;
-bipedLeftLeg.rotateAngleZ += -difference;
-bipedRightLeg.rotateAngleZ += difference;
+// 원본 L225-L226: roll 일반 경로 — **무조건** 실행 (isFeetVineClimbing 여부와 무관).
+bipedRightLeg.rotateAngleZ = -(cos(totalHorizontalDistance * feetFrequenceSideFactor) - 1.0F)          * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
+bipedLeftLeg.rotateAngleZ  = -(cos(totalHorizontalDistance * feetFrequenceSideFactor + Quarter) + 1.0F) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
 
-setLegScales(Math.abs(cos(bipedRightLeg.rotateAngleX)), Math.abs(cos(bipedLeftLeg.rotateAngleX)));
+// 원본 L228-L239: vine 전용 — pitch 덮어쓰기 + roll 누적.
+if(isFeetVineClimbing) {
+    float total = (cos(totalDistance + Half) + 1) * Thirtytwoth + Sixteenth;
+    bipedRightLeg.rotateAngleX = -total;    // pitch '=' 덮어쓰기 (일반 경로 스킵한 자리)
+    bipedLeftLeg.rotateAngleX  = -total;
+
+    float difference = Math.max(0, cos(totalDistance - Quarter)) * Sixtyfourth;
+    bipedLeftLeg.rotateAngleZ  += -difference;  // roll '+=' 누적 (L225-226 값 위에)
+    bipedRightLeg.rotateAngleZ +=  difference;
+
+    setLegScales(Math.abs(cos(bipedRightLeg.rotateAngleX)), Math.abs(cos(bipedLeftLeg.rotateAngleX)));
+}
 ```
+
+**포팅 시 실수 패턴 (체크리스트 기록된 희귀 케이스)**:
+1. `rotateAngleZ` 를 vine 블록 안에서 `=` 로 덮어쓰지 말 것 — 반드시 `+=`.
+2. `rotateAngleX` vine 경로는 일반 경로의 cos 식과 **독립**된 `-total` 상수식 — sin/cos 분해 근사 금지.
+3. `!isFeetVineClimbing` 가드는 **pitch 에만** 적용됨. roll 에 가드를 걸면 UpGrab+vine 조합에서 side-swing 값이 없어지는 버그.
 
 **isCrawlClimb 추가 보정**:
 ```java
