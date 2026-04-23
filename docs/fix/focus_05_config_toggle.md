@@ -364,7 +364,8 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       = "enabled" / `CONFIG_KEY_DISABLED` = "disabled" 도 함께 추가 (원본 L26-L27). 게임타입별
       `{"e","m","h"}` / `{"c"}` 는 F 섹션의 `initializeForGameIfNeccessary()` 에서 setKeys 로 설정.
 - [x] B-2. `toggler` 필드 (int, default **-2** — 원본 L30 초기값 그대로). 상태표(−2 센티넬 / −1 disabled / 0..length−1 enabled) + 파생 규칙(`enabled = toggler != -1`) javadoc 기록.
-- [ ] B-3. `configKeyName` 필드 (Map, default 4개 매핑)
+- [x] B-3. `configKeyName` 필드 (Map 근사, default 3개 매핑 e/m/h). Creative "c" 는 의도적 부재 —
+      원본 `_configKeyName` 가 Creative key 에 defaults 없어 빈 문자열 반환하는 동작과 등가.
 - [ ] B-4. `readFrom`/`writeTo` 에 `move.config.key.current` / `move.config.keys` 추가 (원본 저장 포맷 확인 필요 — A-1/A-2 결과 기반)
 
 ### C. `SmartMovingConfig` 메서드 이식
@@ -557,6 +558,32 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 **다음 작업**: B-3 — `configKeyName` 필드 (Map, default 4개 매핑). 원본
 `_configKeyName = String(...).defaults(Value(null).e("Easy").m("Medium").h("Hard"))`
 대응 근사 (1.21.1 단순 Map).
+
+### 세션 3 — 2026-04-23 — B-3
+
+**진행한 작업**:
+- B-3: `SmartMovingConfig.configKeyName` Map 필드 추가.
+  - 원본 `_configKeyName = String(...).defaults(Value(null).e("Easy").m("Medium").h("Hard"))` 근사.
+  - Property key-scoped defaults → `Map<String,String>` 으로 단순화.
+  - 기본 매핑: `{"e":"Easy", "m":"Medium", "h":"Hard"}` — 3개만 (원본도 3개).
+  - Creative "c" 는 원본 `_configKeyName` 에 defaults 없음 → `logConfigState` 에서 `"with
+    key X"` 분기로 빠지는 동작과 등가 (`getOrDefault(key, "")` 로 구현).
+  - 문서 §9 예상 diff 의 4번째 매핑("c":"Creative") 은 **잉여**였으므로 제외.
+
+**완료 전 검증 체크리스트 (B-3 기준)**:
+- [근거] `SmartMovingConfig.md` L620 원본 코드 재확인 ✓
+- [대응] 원본 `_configKeyName` key-scoped defaults ↔ 구현 `Map.of(...)` 3개 키 근사 ✓
+- [상수] 3개 키/값 원본 그대로 ✓
+- [분기/타이밍] 해당 없음
+- [근사] Property 시스템 단순화 — javadoc 에 "1.21.1 근사" 명시 ✓
+- [신규] 없음
+- [회귀] 해당 없음
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-4 — `readFrom`/`writeTo` 에 `toggler` / `configKeys` 저장 포맷 추가. 원본
+`SmartMovingConfig.md` L456-L463 의 `move.config.survival.keys` / `move.config.survival.keys.default`
+식 키 이름을 1.21.1 에 어떻게 매핑할지 결정 필요. (원본은 `Property<String[]>` / `Property<String>`
+로 분리 저장, 1.21.1 은 단일 `configKeys` 필드 하나만 있으므로 저장 포맷 단순화.)
 
 ---
 

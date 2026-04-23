@@ -254,6 +254,20 @@ public class SmartMovingConfig {
      */
     public int toggler = -2;
 
+    /**
+     * 원본 SmartMovingConfig._configKeyName (SmartMovingConfig.md L620):
+     *   `_configKeyName = String(...).defaults(Value((String)null).e("Easy").m("Medium").h("Hard"))`.
+     * 각 config key 별 표시 이름. 1.21.1 근사: Property key-scoped defaults 시스템을
+     * `Map<String,String>` 으로 단순화. Map 에 없는 key (예: Creative "c") 는 빈 문자열 반환 —
+     * 원본 `_configKeyName.value` 가 "c" key 일 때 비어 있어 `logConfigState` 에서 `"with key X"`
+     * 분기로 빠지는 동작과 등가.
+     */
+    public final java.util.Map<String, String> configKeyName = java.util.Map.of(
+            "e", "Easy",
+            "m", "Medium",
+            "h", "Hard"
+    );
+
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
