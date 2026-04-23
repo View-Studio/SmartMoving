@@ -1905,9 +1905,149 @@ wantWallJumping = canWallJumping &&
 - 타이머 > 0 → 두 번째 클릭 → `-1` (트리거)
 - 복합 조건: -1이고 다른 방향도 진행 중이면 -2로 변환 (대각 처리)
 
-### 스닉/크롤 토글 (2968-3041줄)
+### 스닉/크롤 토글 (2966-3045줄) — 원본 전체 덤프 (R-09)
 
-sneakToggled, crawlToggled 상태 전환. ignoreNextStopSneakButtonPressed로 오입력 방지.
+**필드**:
+```java
+// L3099-3100
+private boolean sneakToggled = false;
+private boolean crawlToggled = false;
+// L3078
+private boolean ignoreNextStopSneakButtonPressed;  // default false
+```
+
+**L2576 sneakContinueInput 계산** (isSneaking 연결 시작점):
+```java
+boolean sneakContinueInput = Options.isSneakToggleEnabled()
+    ? sneakToggled || sneakButton.StartPressed
+    : sneakButton.Pressed;
+```
+
+**L2577-2586 wouldWantSneak / wouldIsSneaking / isSlow 체인**:
+```java
+boolean wouldWantSneak =
+    !isFlying &&
+    !isSliding &&
+    !isHeadJumping &&
+    !(isDiving && Config._diveDownOnSneak.value) &&
+    !(isSwimming && Config._swimDownOnSneak.value && !isFakeShallowWaterSneaking) &&
+    sneakContinueInput &&
+    !wantCrawl &&
+    !mustCrawl &&
+    (!Config.isCrawlingEnabled() || !grabButton.Pressed);
+
+// L2711-2719
+wouldIsSneaking =
+    wouldWantSneak &&
+    !wantSprint &&
+    !isClimbing;
+
+boolean wasSneaking = isSlow;
+isSlow =
+    wantSneak &&
+    wouldIsSneaking;
+```
+
+**L2966-3045 상태 전환 블록 전체**:
+```java
+isRopeSliding = isRopeSliding();
+
+boolean isSneakToggleEnabled = Options.isSneakToggleEnabled();
+boolean isCrawlToggleEnabled = Options.isCrawlToggleEnabled();
+
+boolean willStopCrawl = false;
+boolean willStopCrawlStartSneak = false;
+if(isSneakToggleEnabled || isCrawlToggleEnabled)
+{
+    if(isCrawling && jumpButton.StopPressed)
+        willStopCrawlStartSneak = true;
+    if(isCrawling && sneakButton.StopPressed && !ignoreNextStopSneakButtonPressed)
+        willStopCrawlStartSneak = true;
+    if(!isCrawling && !isCrawlClimbing && !isClimbCrawling)
+        willStopCrawl = true;
+
+    willStopCrawl |= willStopCrawlStartSneak;
+}
+
+boolean willStopSneak = false;
+if(isSneakToggleEnabled)
+{
+    if(isCrawling && !willStopCrawlStartSneak)
+        willStopSneak = true;
+    if(wantSneak && wantSprint && sneakButton.StartPressed && sneakToggled)
+    {
+        willStopSneak = true;
+        ignoreNextStopSneakButtonPressed = true;
+    }
+    if(wasSneaking && sneakButton.StartPressed)
+        willStopSneak = true;
+    if(!isSwimming && !isDiving && jumpButton.StopPressed)
+        willStopSneak = true;
+}
+
+boolean willStartSneak = false;
+if(isSneakToggleEnabled)
+{
+    if(willStopCrawlStartSneak && sneakButton.StopPressed)
+        willStartSneak = true;
+    if(isFast && sneakButton.StopPressed && !ignoreNextStopSneakButtonPressed)
+        willStartSneak = true;
+    if(isSlow && !wasSneaking)
+        willStartSneak = true;
+}
+
+boolean willStartCrawl = false;
+if(isCrawlToggleEnabled)
+{
+    if(isCrawling && !wasCrawling)
+        willStartCrawl = true;
+    if(isClimbCrawling && !wasClimbCrawling)
+        willStartCrawl = true;
+}
+
+if(isSneakToggleEnabled)
+{
+    if(willStartSneak)
+        sneakToggled = true;
+    if(willStopSneak)
+        sneakToggled = false;
+}
+
+if(isCrawlToggleEnabled)
+{
+    if(willStartCrawl)
+    {
+        crawlToggled = true;
+        ignoreNextStopSneakButtonPressed = sneakButton.Pressed;
+    }
+    if(willStopCrawl)
+        crawlToggled = false;
+}
+
+if(sneakButton.StopPressed)
+    ignoreNextStopSneakButtonPressed = false;
+
+wasRunning = isRunning;
+wasLevitating = isLevitating;
+```
+
+**L2419-2432 wouldWantCrawl (sneakToggled 참조)**:
+```java
+boolean wouldWantCrawl =
+    !esp.capabilities.isFlying &&
+    (
+        (isCrawling && (inputContinueCrawl || contextContinueCrawl)) ||
+        (
+            grabButton.StartPressed &&
+            (sneakToggled || sneakButton.Pressed) &&
+            sp.onGround
+        )
+    );
+```
+
+**L1570 beforeMoveEntity (sneakToggled 참조)**: ySize 보정 조건에 `esp.movementInput.sneak || sneakToggled`.
+
+**연결 흐름 요약**: `sneakToggled` → `sneakContinueInput`(L2576) → `wouldWantSneak`(L2577) → `wouldIsSneaking`(L2711) → `isSlow`(L2717) → `isSneaking()`(L3231).
 
 ---
 

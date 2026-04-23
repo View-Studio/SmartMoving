@@ -198,6 +198,32 @@ public final class SmartMovingClientState {
     /** toCrawling() 직후 한 틱 스니크 StopPressed 무시 플래그 */
     public boolean ignoreNextStopSneakButtonPressed;
 
+    /**
+     * 원본 SmartMovingSelf L3099 `sneakToggled = false`.
+     * 스닉 토글 모드에서 sneak 활성 상태 유지. L2576 sneakContinueInput 계산에 사용:
+     *   sneakContinueInput = isSneakToggleEnabled ? sneakToggled || sneakStartPressed : sneakPressed.
+     */
+    public boolean sneakToggled;
+
+    /** 원본 L2717 `wasSneaking = isSlow` (이전 틱 isSlow 저장, willStartSneak/willStopSneak 조건용). */
+    public boolean wasSneaking;
+
+    /** 원본 wasCrawling — 이전 틱 isCrawling 저장 (willStartCrawl 조건 `isCrawling && !wasCrawling`). */
+    public boolean wasCrawling_st;
+
+    /** 원본 wasClimbCrawling — 이전 틱 isClimbCrawling 저장. */
+    public boolean wasClimbCrawling;
+
+    /** 원본 sneakButton.StartPressed — 이번 틱 스닉키 엣지(새로 눌림). */
+    public boolean sneakKeyStartPressed;
+    /** 원본 sneakButton.StopPressed — 이번 틱 스닉키 엣지(새로 뗌). */
+    public boolean sneakKeyStopPressed;
+    /** sneakKey.isPressed() 이전 틱 값 — 엣지 감지 내부 추적. */
+    public boolean prevSneakKeyPressed;
+
+    /** 원본 jumpButton.StopPressed — 이번 틱 점프키 엣지(새로 뗌). StartPressed는 jumpKeyStartPressed. */
+    public boolean jumpKeyStopPressed;
+
     // ── IMPL-03: 더블클릭 방향 점프 카운터 ──────────────────────────────
     /** A키 더블클릭 카운터. 0=비활성, >0=첫 클릭 대기, -1=발동 예약, -2=대각선 대기. */
     public int leftJumpCount;
@@ -394,11 +420,19 @@ public final class SmartMovingClientState {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
 
-        // 원본 jumpButton.StartPressed 대응 — 이번 틱에 새로 눌림 엣지 감지.
-        // 매 틱 시작에 계산되어 sm_travel_client 내 여러 핸들러에서 재참조 가능.
-        boolean curJumpPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
+        // 원본 Button.update() 대응 — 이번 틱 키 엣지 감지.
+        // jumpButton.StartPressed / StopPressed / sneakButton.StartPressed / StopPressed 대응.
+        // sm_travel_client 내 여러 핸들러에서 재참조 가능.
+        var opts = MinecraftClient.getInstance().options;
+        boolean curJumpPressed = opts.jumpKey.isPressed();
         jumpKeyStartPressed = curJumpPressed && !prevJumpKeyPressed;
+        jumpKeyStopPressed  = !curJumpPressed && prevJumpKeyPressed;
         prevJumpKeyPressed = curJumpPressed;
+
+        boolean curSneakPressed = opts.sneakKey.isPressed();
+        sneakKeyStartPressed = curSneakPressed && !prevSneakKeyPressed;
+        sneakKeyStopPressed  = !curSneakPressed && prevSneakKeyPressed;
+        prevSneakKeyPressed = curSneakPressed;
 
         // 원본 SmartMovingSelf triggerWallJumping — 매 틱 시작에 리셋.
         // 리서치 파일에 원본 리셋 위치 기록 없음 → 보수적으로 "매 틱 1회용 이벤트" 로 처리.
@@ -442,11 +476,24 @@ public final class SmartMovingClientState {
         if (!SmartMovingConfig.Config.enabled || player.isSpectator() || player.isFallFlying()) {
             resetState();
         } else {
+            // 원본 R-09 토글 블록 이전 값 저장 (willStartSneak/willStartCrawl 엣지 계산용).
+            // 원본 L2717 `wasSneaking = isSlow`, 원본 willStartCrawl `isCrawling && !wasCrawling`.
+            wasSneaking = isSlow;
+            wasCrawling_st = isCrawling;
+            wasClimbCrawling = isClimbCrawling;
+
             // C-15: isSlow / isFast / isFlying 매 틱 계산
-            // isSlow 원본: wantSneak && !wantSprint && !isClimbing
-            // wantSneak = sneakButton.Pressed → 키 입력 직접 (sm_isSneaking override 순환 방지)
-            boolean wantSneak = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
-            isSlow = wantSneak && !player.isSprinting() && !isClimbing;
+            // 원본 L2576 sneakContinueInput + L2717 isSlow 1:1 이식:
+            //   sneakContinueInput = isSneakToggleEnabled ? (sneakToggled || sneakStartPressed) : sneakPressed
+            //   isSlow = wantSneak && wouldIsSneaking
+            // 간결화: wouldWantSneak의 많은 조건(flying/sliding/headJumping/diveDownOnSneak/swimDownOnSneak/
+            //   wantCrawl/mustCrawl/grabPressed)은 후속 이식. 최소: sneakContinueInput + !sprint + !isClimbing.
+            boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
+            SmartMovingConfig cfg0 = SmartMovingConfig.Config;
+            boolean sneakContinueInput = cfg0.sneakToggle
+                    ? (sneakToggled || sneakKeyStartPressed)
+                    : sneakPressedRaw;
+            isSlow = sneakContinueInput && !player.isSprinting() && !isClimbing;
             // isFast 원본: grabButton.Pressed && isSprinting()
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
@@ -572,6 +619,79 @@ public final class SmartMovingClientState {
             // wouldIsSneaking 원본: wouldWantSneak && !wantSprint && !isClimbing → isSlow와 동일
             wouldIsSneaking = isSlow;
 
+            // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
+            // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
+            // wasSneaking/wasCrawling_st/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
+            {
+                boolean isSneakToggleEnabled = cfg.sneakToggle && cfg.enabled;
+                boolean isCrawlToggleEnabled = cfg.crawlToggle && cfg.enabled;
+
+                boolean willStopCrawl = false;
+                boolean willStopCrawlStartSneak = false;
+                if (isSneakToggleEnabled || isCrawlToggleEnabled) {
+                    if (isCrawling && jumpKeyStopPressed)
+                        willStopCrawlStartSneak = true;
+                    if (isCrawling && sneakKeyStopPressed && !ignoreNextStopSneakButtonPressed)
+                        willStopCrawlStartSneak = true;
+                    if (!isCrawling && !isCrawlClimbing && !isClimbCrawling)
+                        willStopCrawl = true;
+                    willStopCrawl |= willStopCrawlStartSneak;
+                }
+
+                // 원본 L2986: wantSneak/wantSprint 참조. 간소 매핑: wantSneak=sneakContinueInput, wantSprint=isSprinting.
+                boolean wantSneak_ = cfg.sneakToggle
+                        ? (sneakToggled || sneakKeyStartPressed)
+                        : MinecraftClient.getInstance().options.sneakKey.isPressed();
+                boolean wantSprint_ = player.isSprinting();
+
+                boolean willStopSneak = false;
+                if (isSneakToggleEnabled) {
+                    if (isCrawling && !willStopCrawlStartSneak)
+                        willStopSneak = true;
+                    if (wantSneak_ && wantSprint_ && sneakKeyStartPressed && sneakToggled) {
+                        willStopSneak = true;
+                        ignoreNextStopSneakButtonPressed = true;
+                    }
+                    if (wasSneaking && sneakKeyStartPressed)
+                        willStopSneak = true;
+                    if (!isSwimming_sm && !isDiving && jumpKeyStopPressed)
+                        willStopSneak = true;
+                }
+
+                boolean willStartSneak = false;
+                if (isSneakToggleEnabled) {
+                    if (willStopCrawlStartSneak && sneakKeyStopPressed)
+                        willStartSneak = true;
+                    if (isFast && sneakKeyStopPressed && !ignoreNextStopSneakButtonPressed)
+                        willStartSneak = true;
+                    if (isSlow && !wasSneaking)
+                        willStartSneak = true;
+                }
+
+                boolean willStartCrawl = false;
+                if (isCrawlToggleEnabled) {
+                    if (isCrawling && !wasCrawling_st)
+                        willStartCrawl = true;
+                    if (isClimbCrawling && !wasClimbCrawling)
+                        willStartCrawl = true;
+                }
+
+                if (isSneakToggleEnabled) {
+                    if (willStartSneak) sneakToggled = true;
+                    if (willStopSneak)  sneakToggled = false;
+                }
+
+                if (isCrawlToggleEnabled) {
+                    if (willStartCrawl) {
+                        crawlToggled = true;
+                        ignoreNextStopSneakButtonPressed = MinecraftClient.getInstance().options.sneakKey.isPressed();
+                    }
+                    if (willStopCrawl) crawlToggled = false;
+                }
+
+                if (sneakKeyStopPressed) ignoreNextStopSneakButtonPressed = false;
+            }
+
             // fadingPerspectiveFactor EMA 계산 (원본: SmartMovingSelf.tickEssential L1317-1336)
             // getLandMovementFactor() → 1.21.1: player.getMovementSpeed()
             float landMovementFactor = player.getMovementSpeed();
@@ -624,7 +744,15 @@ public final class SmartMovingClientState {
         isHeadJumping = false;
         isCrawling = false;
         crawlToggled = false;
+        sneakToggled = false;
         ignoreNextStopSneakButtonPressed = false;
+        wasSneaking = false;
+        wasCrawling_st = false;
+        wasClimbCrawling = false;
+        sneakKeyStartPressed = false;
+        sneakKeyStopPressed = false;
+        prevSneakKeyPressed = false;
+        jumpKeyStopPressed = false;
         isSliding = false;
         leftJumpCount  = 0;
         rightJumpCount = 0;

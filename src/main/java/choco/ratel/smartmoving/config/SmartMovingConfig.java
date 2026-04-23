@@ -150,6 +150,12 @@ public class SmartMovingConfig {
     // 원본: Options._crawlToggle = Modified("move.crawl.toggle") → 기본값 false
     // false=홀드(스닉키 누름 유지), true=토글(grab 한 번 눌러 크롤링 고정/해제)
     public boolean crawlToggle = false;
+    /**
+     * 원본: _sneakToggle = Modified("move.sneak.toggle") → 기본값 false
+     * false=홀드(스닉키 누름 유지), true=토글(스닉키 한 번 눌러 스닉 고정/해제).
+     * 원본 isSneakToggleEnabled() = _sneakToggle.value && enabled.
+     */
+    public boolean sneakToggle = false;
 
     // ── Name tag display ────────────────────────────────────────
     // 원본: _sneakNameTag = Modified("move.sneak.name") → 기본값 true
@@ -379,6 +385,7 @@ public class SmartMovingConfig {
         crawl                    = getBool(p,   "move.crawl",                     crawl);
         crawlOverEdge            = getBool(p,   "move.crawl.edge",                crawlOverEdge);
         crawlToggle              = getBool(p,   "move.crawl.toggle",              crawlToggle);
+        sneakToggle              = getBool(p,   "move.sneak.toggle",              sneakToggle);
         sneakNameTag             = getBool(p,   "move.sneak.name",                sneakNameTag);
         crawlNameTag             = getBool(p,   "move.crawl.name",                crawlNameTag);
         displayExhaustionBar     = getBool(p,   "move.gui.exhaustion.bar",        displayExhaustionBar);
@@ -461,6 +468,7 @@ public class SmartMovingConfig {
         p.setProperty("move.crawl",                      String.valueOf(crawl));
         p.setProperty("move.crawl.edge",                 String.valueOf(crawlOverEdge));
         p.setProperty("move.crawl.toggle",               String.valueOf(crawlToggle));
+        p.setProperty("move.sneak.toggle",               String.valueOf(sneakToggle));
         p.setProperty("move.sneak.name",                 String.valueOf(sneakNameTag));
         p.setProperty("move.crawl.name",                 String.valueOf(crawlNameTag));
         p.setProperty("move.gui.exhaustion.bar",         String.valueOf(displayExhaustionBar));
