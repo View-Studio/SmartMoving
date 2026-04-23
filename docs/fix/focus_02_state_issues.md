@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 30 — 1:1 원칙 재확인 + §10 B 원자 분해) |
-| 현재 단계 | A-0/A-1 완료 + §10 B 원자 분해 완료 / ⏳ **B-0 (리서치 보강)** 또는 **A-2 (수중 3상태)** |
+| 상태 | 🟡 진행 중 (세션 31 — B-0 완료) |
+| 현재 단계 | A-0/A-1/B-0 완료 / ⏳ **A-2 (수중 3상태 isSwimming_sm/isDiving/isDipping)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -74,6 +74,19 @@
 
 - R-09 블록 전체는 `SmartMovingSelf.md` 에 덤프됨 (이전 세션)
 - `handleSwimming` 의 offset 3분류 경계값 0.65/0.6/0.55/1.9 확보됨
+- **R-10** (세션 31 — B-0 완료): `isFast`/`isSlow`/`wouldIsSneaking` 의존 체인 완전 덤프
+  — `SmartMovingSelf.md` L2508 이후 R-10 섹션 참조. 범위:
+  - R-10.1 필드 선언 (L1413-L1448)
+  - R-10.2 `disabled` (L2373-L2375)
+  - R-10.3 `sneakContinueInput` / `wouldWantSneak` / `wantSneak` (L2576-L2590)
+  - R-10.4 `moveButtonPressed` / `moveForwardButtonPressed` (L2592-L2593)
+  - R-10.5 `wantSprint` 6조건 (L2595-L2615)
+  - R-10.6 `isSprintJump` / `exhaustionAllowsSprinting` / `preferSprint` (L2633-L2657)
+  - R-10.7 `isClimbSprintSpeed` + `can*` 4 + 6 Sprint 변종 (L2659-L2684)
+  - R-10.8 `standing` + `isFast` + isGroundSprinting 전환 후처리 (L2686-L2709)
+  - R-10.9 `wouldIsSneaking` + `isSlow` (L2711-L2719)
+  - R-10.10 `isFast`/`isSlow` 전수 사용처 (grep)
+  - R-10.11 1.21.1 이식 매핑 예비안 (Config 헬퍼 / KeyBinding / 순환 의존 주의)
 
 ### 5.3. 확보 필요 — 재현 케이스별 원본 해당 블록
 
@@ -194,16 +207,13 @@
 > 표면 매핑만 허용, 로직 구조는 원본 1:1. 컨텍스트 압박 시 각 원자를 더 쪼개도 됨.
 
 #### B-0. 원본 리서치 보강 (B-1/B-3 선행 필수)
-- [ ] B-0. Agent WebFetch 로 `SmartMovingSelf.java` 에서 다음 블록 전수 덤프 →
-      `docs/research/original/smartmoving/moving/SmartMovingSelf.md` 임베드 + §5 에도 인용:
-      - `canHorizontallySprint` / `canAllSprint` / `canAnySprint` / `isClimbSprintSpeed`
-        필드 선언 + 계산 블록 (모든 사용처 포함)
-      - 6 Sprint 변종 (`isGroundSprinting` / `isClimbSprinting` / `isSwimSprinting` /
-        `isDiveSprinting` / `isCeilingSprinting` / `isFlyingSprinting`) 필드 선언 +
-        계산 블록
-      - `standing` / `disabled` 필드 선언 + 사용처
-      - `wantSprint` 계산 블록 L2595-L2615 주변 20줄 맥락 포함
-      - `isFast` / `isSlow` / `wouldIsSneaking` 계산 블록 L2688-L2719 전체
+- [x] B-0. ✅ **세션 31 완료** — `.tmp_research/SmartMovingSelf.java` (원본) 에서 전수 덤프 →
+      `SmartMovingSelf.md` R-10 섹션 (L2508+) 임베드. 포함 블록:
+      - R-10.1 필드 선언 / R-10.2 `disabled` / R-10.3 wouldWantSneak+wantSneak /
+        R-10.4 move*Pressed / R-10.5 wantSprint / R-10.6 isSprintJump+preferSprint /
+        R-10.7 isClimbSprintSpeed+can*+6 Sprint 변종 / R-10.8 standing+isFast+전환 후처리 /
+        R-10.9 wouldIsSneaking+isSlow / R-10.10 전수 사용처 / R-10.11 이식 매핑 예비안.
+      §5.2 에도 인용 링크 + 범위 목록 추가.
 
 #### B-1. `isFast` 공식 6갈래 OR 이식 (원자 6개 분해)
 - [ ] B-1a. `Config._sprintEnableStanding` 1.21.1 `SmartMovingConfig` 이식 확인
@@ -439,6 +449,69 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
   B-3a~b → B-4 → B-5 → C. A-2~A-6 에서 수중/등반 필드의 sprint 의존 교차 발견 가능.
 - 또는 B-0 → B-1a~f → B-2 → B-3a~b 먼저 완결 후 A-2~A-6 감사. 사용자 판단.
 
+### 세션 31 — 2026-04-24 — 경로 A 확정 + B-0 (리서치 보강) 완료
+
+**배경**: 사용자 판단 "1:1 번역 관점에서 어느 쪽이 나은가?" → 경로 A 확정
+(B-0 → A-2~A-6 → A-7 → B-N → C). 완전 추출 원칙 + 미확인 차단 원칙 근거.
+
+**진행한 작업**:
+- `.tmp_research/SmartMovingSelf.java` (원본 전체 3345줄) 활용 — Agent WebFetch 대신
+  로컬 파일 직접 읽기로 B-0 전수 덤프 수행
+- `SmartMovingSelf.md` L2508 이후 **R-10 섹션 신설** — isFast/isSlow/wouldIsSneaking
+  의존 체인 완전 덤프:
+  * R-10.1 필드 선언 (L1413-L1448) — wantSprint/wouldIsSneaking/isGroundSprinting public
+  * R-10.2 disabled 지역변수 (L2373-L2375)
+  * R-10.3 sneakContinueInput / wouldWantSneak / wantSneak (L2576-L2590)
+  * R-10.4 moveButtonPressed / moveForwardButtonPressed (L2592-L2593)
+  * R-10.5 wantSprint 6조건 OR (L2595-L2615)
+  * R-10.6 isSprintJump / exhaustionAllowsSprinting / preferSprint (L2633-L2657)
+    — 순환 의존 발견: isFast 이전 틱 값 참조 (L2633/L2640)
+  * R-10.7 isClimbSprintSpeed + can* 4 + 6 Sprint 변종 (L2659-L2684)
+    — 의존 발견: SmartStatisticsFactory.getTickDistance (SmartRender 측, 1.21.1 이식
+    확인 필요), collidedHorizontallyTickCount (미이식 가능성)
+  * R-10.8 standing + isFast + isGroundSprinting 전환 후처리 (L2686-L2709)
+    — vanilla setSprinting 호출 포함 (운전자 엣지 처리)
+  * R-10.9 wouldIsSneaking + isSlow (L2711-L2719) — wasSneaking 지역변수 R-09 연결
+  * R-10.10 isFast/isSlow 전수 사용처 (grep 25+ 위치) — A-7 매핑 기초 자료
+  * R-10.11 1.21.1 이식 매핑 예비안 — Config 헬퍼 / KeyBinding / 순환 의존 / 미이식
+    필드 신설 결정 지점
+- focus_02 §5.2 에 R-10 인용 링크 + 범위 목록 추가
+- 오타 정정 1건 (`다이비` → `다이빙`, SmartMovingSelf.md L2505 — 기존 문서 흔적)
+
+**신규 발견 (B-N 후보 원자 추가 대상)**:
+- **순환 의존**: `isSprintJump` L2633/L2640 이 이전 틱 `isFast` 참조 — B-1f 수정 시
+  `wasFast` 저장 또는 계산 순서 재설계 필요
+- **미이식 필드 2건 후보**:
+  * `SmartStatisticsFactory.getTickDistance()` — 등반 sprint 속도 게이트 — 1.21.1 이식
+    여부 확인 후 미이식이면 `true` 근사 또는 신설 원자
+  * `collidedHorizontallyTickCount` — can* 판정 — 미이식이면 신설 원자 (B-1c 범위)
+- **isGroundSprinting 전환 후처리** (L2697-L2709): vanilla `setSprinting()` 호출 +
+  `Options._runOnSprintRelease` / `_walkOnSprintRelease` / `wasRunningWhenSprintStarted`
+  필드 — 1.21.1 이식 여부 확인 필요. 미이식이면 B-N 추가 원자.
+
+**완료 전 검증 체크리스트 (B-0 기준)**:
+- [근거] 원본 SmartMovingSelf.java 전체 3345줄 로컬 확보 ✓
+- [근거] grep 으로 isFast/isSlow/wouldIsSneaking + 의존 필드 전수 위치 확인 ✓
+- [대응] 원본 L2373-L2719 범위 전체 덤프 (필드 선언 + 계산 블록 + 사용처) ✓
+- [분기] 6 Sprint 변종 각 공식 / wantSprint 5 OR 게이트 / wouldWantSneak 7 && 조건
+  전부 보존 ✓
+- [상수] `_sprintEnableStanding` / `_diveDownOnSneak` / `_swimDownOnSneak` /
+  `_sprintFactor` / `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor` /
+  `_sprintExhaustionStart` / `_sprintExhaustionStop` / `_sprintDuringItemUsage` 전부
+  R-10.11 매핑 테이블 기록 ✓
+- [타이밍] 계산 순서 (disabled → wouldWantSneak → wantSprint → Sprint 변종 → isFast
+  → wouldIsSneaking → isSlow) 명시 + 순환 의존 isSprintJump 주의사항 기록 ✓
+- [근사] 없음 (원본 덤프 단계)
+- [신규] §16 에 순환 의존 + 미이식 2건 + setSprinting 후처리 발견 등록 (아래)
+- [회귀] 코드 변경 없음 (리서치 문서만)
+- [빌드] 해당 없음
+
+**다음 작업**: A-2 — 수중 3상태 (`isSwimming_sm` / `isDiving` / `isDipping`) 원본
+전수 감사. `.tmp_research/SmartMovingSelf.java` `handleSwimming` (L229-L576) +
+필드 선언 + 사용처 덤프 → `SmartMovingSelf.md` R-11 섹션 또는 기존 handleSwimming
+섹션 확장 → 1.21.1 `SmartMovingSwimmer.updateSwimState` grep + 매핑. B-5 (Swimmer
+간소화 원본 대조) 함께 수행.
+
 ---
 
 ## 16. 신규 발견
@@ -500,6 +573,40 @@ R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 
 **원칙 (세션 30)**: 1:1 번역 절대 원칙 — 근사·간소·대체 매핑 전부 금지. 의존 필드 규모
 크면 체크리스트 쪼개서 여러 세션 분산 (§10 B-1a~f 선례). 컨텍스트 압박 ≠ 축약 허용 근거.
+
+### 세션 31 B-0 — 원본 의존 체인 전수 덤프 중 발견 3건
+
+R-10 섹션 작성 중 1.21.1 이식 시 주의·추가 원자 필요 지점:
+
+1. **순환 의존: `isSprintJump` ↔ `isFast`** (원본 L2633/L2640)
+   - `isSprintJump = true` 조건이 `isFast` 이전 틱 값 참조
+   - 1.21.1 `tickEssential` 은 매 틱 `isFast` 를 덮어쓰므로 순환 끊기 위해:
+     * `wasFast` 필드 신설 + beforeOnLivingUpdate 에서 저장, 또는
+     * `isSprintJump` 계산을 `isFast` 확정 이전으로 이동 (단 L2633-L2640 은 실제
+       `isFast` 계산 L2688 이전에 위치 — 원본도 이전 틱 값 참조로 구조 일관성)
+   - 수정: B-1f (isFast 공식 교체) 원자 설계 시 계산 순서 주의 — 이전 틱 저장 패턴 사용.
+
+2. **미이식 필드 2건 후보** — B-1c 원자 범위에서 판단:
+   - `SmartStatisticsFactory.getInstance(sp).getTickDistance()` — SmartRender 측 통계.
+     등반 sprint 속도 게이트 (`isClimbSprintSpeed` L2670). 1.21.1 이식 여부 grep 확인 →
+     미이식 시 옵션:
+     (a) 1.21.1 전용 틱 거리 통계 별도 이식 (원자 신설)
+     (b) `true` 근사 → 등반 sprint 항상 가능 (원본 게이트 의미 약화, 1:1 위배)
+     → **원칙상 (a)** 하지만 포커스 #2 범위 판단 필요. 포커스 #12/#13 으로 분리 후보.
+   - `collidedHorizontallyTickCount` — 수평 충돌 연속 틱 카운터 (`canHorizontallySprint`
+     L2675). 1.21.1 이식 여부 grep 확인 → 미이식 시 `ClientState` 또는 Jumper 측에 신설.
+
+3. **isGroundSprinting 전환 후처리** (원본 L2697-L2709):
+   - `wasGroundSprinting = isGroundSprinting` 이전 틱 저장 → Sprint 시작/종료 엣지에서
+     vanilla `setSprinting()` 호출
+   - 의존: `Options._runOnSprintRelease` / `_walkOnSprintRelease` /
+     `wasRunningWhenSprintStarted` / `isStandupSprintingOrRunning()` 메서드
+   - 1.21.1 이식 여부 grep 확인 필요. 미이식 시 B-N 추가 원자 (Options 필드 + 메서드
+     + 후처리 블록 이식).
+
+**수정 범위**: §10 B-1 서브원자 설계 시 위 3건 반영. 특히 B-1c (can* 4 판정) 에서
+`collidedHorizontallyTickCount` / `SmartStatisticsFactory` 이식 여부 grep 전용 하위
+원자 추가. 필요 시 별도 포커스로 분리.
 
 ---
 

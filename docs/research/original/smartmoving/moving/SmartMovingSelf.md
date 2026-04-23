@@ -2503,3 +2503,370 @@ public float dippingDepth;   // resetSwimming()에서 -1 로 초기화
 - `dippingDepth < 0.65F` → 계속 크롤링 (얕은 물)
 - `0.65F ≤ dippingDepth < 1.0F` → 수영으로 전환
 - `dippingDepth ≥ 1.0F` → 일반 다이빙 물리 적용
+
+---
+
+## R-10 추가 리서치 — isFast/isSlow/wouldIsSneaking 의존 체인 완전 덤프 (2026-04-24 세션 31 — 포커스 #2 B-0)
+
+포커스 #2 A-1 에서 isFast/isSlow/wouldIsSneaking 3건 불일치 확정. 1:1 이식을 위한
+전수 덤프 — 원본 `SmartMovingSelf.java` 에서 필드 선언 + 계산 블록 + 사용처 전체.
+
+### R-10.1 관련 필드 선언 (L1413-L1448)
+
+```java
+// --- SmartMovingSelf.java L1413-L1448 ---
+public boolean wantClimbUp;
+public boolean wantClimbDown;
+public boolean wantSprint;                  // L1415 — R-10.5 계산
+public boolean wantCrawlNotClimb;
+public boolean wantClimbCeiling;
+
+public boolean isStanding;
+public boolean wouldIsSneaking;             // L1420 — R-10.9 계산
+public boolean isVineOnlyClimbing;
+public boolean isVineAnyClimbing;
+
+public boolean isClimbingStill;
+public boolean isClimbHolding;
+public boolean isNeighborClimbing;
+public boolean hasClimbGap;
+public boolean hasClimbCrawlGap;
+public boolean hasNeighborClimbGap;
+public boolean hasNeighborClimbCrawlGap;
+
+public float dippingDepth;
+
+public boolean isJumping;
+public boolean isJumpingOutOfWater;
+public boolean isShallowDiveOrSwim;
+public boolean isFakeShallowWaterSneaking;
+public boolean isStillSwimmingJump;
+public boolean isGroundSprinting;           // L1439 — R-10.7 계산 (public 필드)
+public boolean isSprintJump;
+public boolean isAerodynamic;
+```
+
+**주의**: `isGroundSprinting` 만 public 필드. 나머지 5 Sprint 변종
+(`isClimbSprinting`/`isSwimSprinting`/`isDiveSprinting`/`isCeilingSprinting`/
+`isFlyingSprinting`) + `isClimbSprintSpeed` / `canAnySprint` / `canVerticallySprint` /
+`canHorizontallySprint` / `canAllSprint` / `standing` / `preferSprint` / `disabled` /
+`wasGroundSprinting` 은 **지역 변수**.
+
+### R-10.2 `disabled` 지역 변수 (L2373-L2375)
+
+```java
+// --- SmartMovingSelf.java L2373-L2375 ---
+boolean isRiding = sp.ridingEntity != null;
+boolean isSleeping = isp.getSleepingField();
+boolean disabled = !Config.enabled || isRiding || isSleeping || startSleeping;
+```
+
+`wantSprint` L2615 에서 사용. 그 외 `wouldWantClimb` / `wantClimbCeiling` 등에서도 사용.
+
+### R-10.3 `sneakContinueInput` / `wouldWantSneak` / `wantSneak` (L2576-L2590)
+
+```java
+// --- SmartMovingSelf.java L2576-L2590 ---
+boolean sneakContinueInput = Options.isSneakToggleEnabled() ? sneakToggled || sneakButton.StartPressed : sneakButton.Pressed;
+boolean wouldWantSneak =
+    !isFlying &&
+    !isSliding &&
+    !isHeadJumping &&
+    !(isDiving && Config._diveDownOnSneak.value) &&
+    !(isSwimming && Config._swimDownOnSneak.value && !isFakeShallowWaterSneaking) &&
+    sneakContinueInput &&
+    !wantCrawl &&
+    !mustCrawl &&
+    (!Config.isCrawlingEnabled() || !grabButton.Pressed);
+
+boolean wantSneak =
+    Config.isSneakingEnabled() &&
+    wouldWantSneak;
+```
+
+**핵심**: `wantSneak` = `Config.isSneakingEnabled() && wouldWantSneak`. 1.21.1 매핑:
+`Config.isSneakingEnabled()` = `cfg.sneak && cfg.enabled` (Config 에 헬퍼 신설 권장).
+
+### R-10.4 `moveButtonPressed` / `moveForwardButtonPressed` (L2592-L2593)
+
+```java
+// --- SmartMovingSelf.java L2592-L2593 ---
+boolean moveButtonPressed = esp.movementInput.moveForward != 0F || esp.movementInput.moveStrafe != 0F;
+boolean moveForwardButtonPressed = esp.movementInput.moveForward > 0F;
+```
+
+**1.21.1 매핑**: `MinecraftClient.getInstance().options.forwardKey` 등 KeyBinding 직접 참조
+또는 `player.input.movementForward`. `esp.movementInput` 은 vanilla `MovementInput` — 1.21.1 `Input` 클래스.
+
+### R-10.5 `wantSprint` 6조건 OR 계산 (L2595-L2615)
+
+```java
+// --- SmartMovingSelf.java L2595-L2615 ---
+wantSprint =
+    Config.isSprintingEnabled() &&
+    !isSliding &&
+    sprintButton.Pressed &&
+    (
+        moveForwardButtonPressed ||
+        isClimbing ||
+        (
+            isSwimming &&
+            (moveButtonPressed || (sneakButton.Pressed && Config._swimDownOnSneak.value))
+        ) ||
+        (
+            isDiving &&
+            (moveButtonPressed || jumpButton.Pressed || (sneakButton.Pressed && Config._diveDownOnSneak.value))
+        ) ||
+        (
+            isFlying &&
+            (moveButtonPressed || jumpButton.Pressed || sneakButton.Pressed)
+        )
+    ) &&
+    !disabled;
+```
+
+**조건 분해** (6 게이트):
+1. `Config.isSprintingEnabled()` — 1.21.1 매핑 `cfg.sprint && cfg.enabled`
+2. `!isSliding` — ClientState 기존 필드
+3. `sprintButton.Pressed` — vanilla sprint KeyBinding
+4. **상황별 OR 5갈래**:
+   - 지상: `moveForwardButtonPressed`
+   - 등반: `isClimbing`
+   - 수영: `isSwimming && (moveAny || (sneakDown && Config._swimDownOnSneak))`
+   - 잠수: `isDiving && (moveAny || jump || (sneakDown && Config._diveDownOnSneak))`
+   - 비행: `isFlying && (moveAny || jump || sneakDown)`
+5. `!disabled` — R-10.2 지역 변수
+
+### R-10.6 `isSprintJump` / `exhaustionAllowsSprinting` / `preferSprint` (L2633-L2657)
+
+```java
+// --- SmartMovingSelf.java L2633-L2657 ---
+if(!sp.onGround && isFast && !isClimbing && !isCeilingClimbing && !isDiving && !isSwimming)
+    isSprintJump = true;
+
+boolean exhaustionAllowsSprinting =
+    !Config.isSprintExhaustionEnabled() ||
+    (
+            exhaustion <= Config._sprintExhaustionStop.value &&
+            (isFast || isSprintJump || exhaustion <= Config._sprintExhaustionStart.value)
+    );
+
+if(sp.onGround || isFlying || sp.capabilities.isFlying || isSwimming || isDiving || sp.handleLavaMovement())
+    isSprintJump = false;
+
+boolean preferSprint = false;
+if(wantSprint && !wantSneak)
+{
+    if(!isSprintJump && Config.isSprintExhaustionEnabled())
+    {
+        maxExhaustionForAction = Math.min(maxExhaustionForAction, Config._sprintExhaustionStop.value);
+        maxExhaustionToStartAction = Math.min(maxExhaustionToStartAction, Config._sprintExhaustionStart.value);
+    }
+
+    if(exhaustionAllowsSprinting)
+        preferSprint = true;
+}
+```
+
+**핵심**: `preferSprint = wantSprint && !wantSneak && exhaustionAllowsSprinting`.
+`isSprintJump` 갱신은 `isFast` 이전 틱 값 참조 (순환 의존 주의). Sprint 변종 전부
+`preferSprint` (또는 `canAnySprint` 파생) 에 의존.
+
+**순환 의존 처리**: `isSprintJump` 은 이전 틱 `isFast` 사용. 1.21.1 이식 시 `isFast` 는 매 틱
+계산되므로 이전 틱 값 저장 필요 (`wasFast` 또는 `isFast` 이 덮어쓰기 전).
+
+### R-10.7 `isClimbSprintSpeed` + can* 4 판정 + 6 Sprint 변종 (L2659-L2684)
+
+```java
+// --- SmartMovingSelf.java L2659-L2684 ---
+boolean isClimbSprintSpeed = true;
+if(isClimbing && preferSprint)
+{
+    double minTickDistance;
+    if(wantClimbUp)
+        minTickDistance = 0.07 * Config._freeClimbingUpSpeedFactor.value;
+    else if(wantClimbDown)
+        minTickDistance = 0.11 * Config._freeClimbingDownSpeedFactor.value;
+    else
+        minTickDistance = 0.07;
+
+    isClimbSprintSpeed = net.smart.render.statistics.SmartStatisticsFactory.getInstance(sp).getTickDistance() >= minTickDistance;
+}
+
+boolean canAnySprint = preferSprint && !sp.isBurning() && (Config._sprintDuringItemUsage.value || !sp.isUsingItem());
+boolean canVerticallySprint = canAnySprint && !sp.isCollidedVertically;
+boolean canHorizontallySprint = canAnySprint && collidedHorizontallyTickCount < 3;
+boolean canAllSprint = canHorizontallySprint && canVerticallySprint;
+
+boolean wasGroundSprinting = isGroundSprinting;
+isGroundSprinting = canHorizontallySprint && (sp.onGround || isLevitating()) && !isSwimming && !isDiving && !isClimbing;
+boolean isSwimSprinting = canHorizontallySprint && isSwimming;
+boolean isDiveSprinting = canAllSprint && isDiving;
+boolean isCeilingSprinting = canHorizontallySprint && isCeilingClimbing;
+boolean isFlyingSprinting = canAllSprint && isFlying;
+boolean isClimbSprinting = canAnySprint && isClimbing && isClimbSprintSpeed;
+```
+
+**isClimbSprintSpeed 의존** (등반 전용 속도 게이트):
+- `SmartStatisticsFactory.getInstance(sp).getTickDistance()` 는 SmartRender 측 통계.
+  1.21.1 에 이식된 statistics 있는지 확인 필요. 없으면 `true` 기본값 유지 (원본 게이트 의미 약화).
+- `_freeClimbingUpSpeedFactor` / `_freeClimbingDownSpeedFactor` Config 필드.
+
+**can* 4 판정 의존**:
+- `sp.isBurning()` → `player.isOnFire()`
+- `Config._sprintDuringItemUsage` Config 필드
+- `sp.isUsingItem()` → `player.isUsingItem()` (1.21.1)
+- `sp.isCollidedVertically` → `player.verticalCollision`
+- `collidedHorizontallyTickCount` — ClientState 또는 별도 필드 (미이식 가능성 높음)
+
+**6 Sprint 변종 의존**:
+- `isLevitating()` — Self 메서드 (potion 레비테이션 체크)
+- `isSwimming` / `isDiving` / `isClimbing` / `isCeilingClimbing` / `isFlying` — 전부 ClientState 기존 필드
+- `sp.onGround` → `player.isOnGround()`
+
+**참고**: `isClimbSprinting` 은 isFast 공식 L2690/L2695 에 **2회 등장** (중복). 원본 그대로 유지.
+
+### R-10.8 `standing` + `isFast` (L2686-L2695) + isGroundSprinting 전환 후처리 (L2697-L2709)
+
+```java
+// --- SmartMovingSelf.java L2686-L2709 ---
+boolean standing = sp.onGround && !isSliding && !isCrawling;
+
+isFast =
+    (isGroundSprinting && (!standing || Config._sprintEnableStanding.value)) ||
+    isClimbSprinting ||
+    isSwimSprinting ||
+    isDiveSprinting ||
+    isCeilingSprinting ||
+    isFlyingSprinting ||
+    isClimbSprinting;
+
+if(isGroundSprinting && !wasGroundSprinting)
+{
+    wasRunningWhenSprintStarted = sp.isSprinting();
+    sp.setSprinting(isStandupSprintingOrRunning());
+}
+else if(wasGroundSprinting && !isGroundSprinting)
+{
+    sp.setSprinting(Options._runOnSprintRelease.value || wasRunningWhenSprintStarted);
+}
+if(Options._walkOnSprintRelease.value && sprintButton.StopPressed)
+{
+    sp.setSprinting(false);
+}
+```
+
+**`_sprintEnableStanding`**: `Config.java` L313 `Unmodified("move.sprint.enable.ground")` (기본값
+false). true 로 설정 시 standing 상태에서도 Ground Sprint 인정.
+
+**isGroundSprinting 전환 후처리**:
+- Sprint 시작 엣지: `wasRunningWhenSprintStarted` 저장 + vanilla sprinting 재설정
+- Sprint 종료 엣지: `_runOnSprintRelease` 에 따라 vanilla sprinting 유지
+- `walkOnSprintRelease` + `sprintButton.StopPressed` → vanilla sprinting false
+
+이 후처리는 vanilla `setSprinting()` 호출. 1.21.1 이식 시 `player.setSprinting(...)` 직접 호출.
+
+### R-10.9 `wouldIsSneaking` + `isSlow` (L2711-L2719)
+
+```java
+// --- SmartMovingSelf.java L2711-L2719 ---
+wouldIsSneaking =
+    wouldWantSneak &&
+    !wantSprint &&
+    !isClimbing;
+
+boolean wasSneaking = isSlow;
+isSlow =
+    wantSneak &&
+    wouldIsSneaking;
+```
+
+**핵심**:
+- `wouldIsSneaking` = `wouldWantSneak && !wantSprint && !isClimbing` (L2712 `!wantSprint` —
+  SM 복합 6조건, vanilla `isSprinting()` 아님)
+- `isSlow` = `wantSneak && wouldIsSneaking` (L2718 — `wantSneak` 은 R-10.3, 이미
+  `Config.isSneakingEnabled() && wouldWantSneak` 포함)
+- `wasSneaking` 지역 변수 — R-09 토글 블록 L3008 (`if(isSlow && !wasSneaking)`) 에서 사용
+
+### R-10.10 `isFast` / `isSlow` 주요 사용처 (grep 전수)
+
+```
+L188     else if(isSlow)                                             — getSlowInputSpeedFactor
+L201     if(isFast)                                                  — getSlowInputSpeedFactor
+L321     motionYDiff = -0.05D * (isFast ? Config._sprintFactor.value : 1F);  — handleSwimming
+L353     motionYDiff = 0.05D * (isFast ? Config._sprintFactor.value : 1F);   — handleSwimming
+L404     if(isFast && playerSwimWaterBorder < 2.5 && sp.worldObj.isAirBlock(i, j + 3, k))  — handleSwimming
+L486     wantJumpOutOfWater = (...) && diveUp && !isSlow;            — handleSwimming
+L515     if(isSlow)                                                  — handleSwimming (dive jump height)
+L686     if(esp.movementInput.jump && isFast && Config.isJumpingEnabled(Config.Sprinting, Config.Up))  — handleLand
+L712     if(Config.isRunningEnabled() && isRunning() && !isFast)     — handleLand
+L1202    hungerGainFactor = Config.getFactor(..., isSlow, isRunning, isFast, ...);  — handleExhaustion
+L1239    if(isFast && Config.isSprintExhaustionEnabled())            — handleExhaustion
+L1278    exhaustionLossFactor = Config.getFactor(..., isSlow, isRunning, isFast, ...);  — handleExhaustion
+L1395    if(isSlow && crawlStandUpBottom > sp.boundingBox.minY + 0.5D)  — landMotionPost
+L1523    if(isFast)                                                  — handleJumping (sprint jump factor)
+L1573    else if(isSlow)                                             — handleJumping
+L1779    if(isFast || isSprintJump || isRunning())                   — tryJump
+L1784    if(isFast || isSprintJump)                                  — tryJump
+L1860    isJumpCharging = isJumpChargingPossible && wouldIsSneaking;  — handleJumping (jumpCharge)
+L1862    boolean actualJumpCharging = isJumpChargingPossible && (!Config._jumpChargeCancelOnSneakRelease.value || wouldIsSneaking);
+L1864    if(esp.movementInput.jump && (Config._jumpChargeCancelOnSneakRelease.value || wouldIsSneaking))
+L1902    if(sp.posY - MathHelper.floor_double(sp.posY) > (isSlow ? 0.37 : 0.6))  — handleJumping (dip jump offset)
+L2014    int speed = getJumpSpeed(isStanding, isSlow, isRunning, isFast, angle);
+L2117    isSprintJump = isFast;                                      — tryJump
+L2275    this.isSlow = false;                                        — resetState
+L2276    this.isFast = false;                                        — resetState
+L2369    !(Config.isJumpChargingEnabled() && wouldIsSneaking && sp.onGround && isStanding)  — updateEntityActionState
+L2633    if(!sp.onGround && isFast && ...)                           — R-10.6 (순환 의존 이전 틱)
+L2640    (isFast || isSprintJump || ...)                             — R-10.6 exhaustionAllowsSprinting
+L2990    if(wantSneak && wantSprint && sneakButton.StartPressed && sneakToggled)  — R-09 토글
+L3006    if(isFast && sneakButton.StopPressed && !ignoreNextStopSneakButtonPressed)
+L3008    if(isSlow && !wasSneaking)                                  — R-09 토글
+L3122    state |= isFast ? 1 : 0;                                    — StatePacket 송신
+L3125    state |= isSlow ? 1 : 0;                                    — StatePacket 송신
+L3231    return (isSlow && (sp.onGround || isp.getIsInWebField())) || ...;  — localIsSneaking override
+L3236    return (isFast || sp.isSprinting()) && sp.onGround && !isSliding && !isCrawling;  — getIsSprinting override
+L3241    return sp.isSprinting() && !isFast && (sp.onGround || vanilla());  — isRunning override
+```
+
+**포커스 #2 중요 사용처**:
+- L2275/L2276 `resetState` 리셋 (1.21.1 동일 위치 대응 필요)
+- L2716-L2719 **공식** 자체 (A-1 에서 발견된 불일치 위치)
+- L3122/L3125 StatePacket 송신 (state 필드 비트 매핑)
+- L3231/L3236 override 메서드 (vanilla 메서드 재정의)
+
+### R-10.11 1.21.1 이식 매핑 예비안
+
+| 원본 | 1.21.1 매핑 | 상태 |
+|---|---|---|
+| `Config._sprintEnableStanding.value` | `SmartMovingConfig.sprintEnableStanding` (미이식) | **신설 B-1a** |
+| `Config.isSprintingEnabled()` | `cfg.sprint && cfg.enabled` 헬퍼 신설 | **신설 B-3a** |
+| `Config.isSneakingEnabled()` | `cfg.sneak && cfg.enabled` 헬퍼 신설 | **신설 B-2** |
+| `Config._swimDownOnSneak.value` | `cfg.swimDownOnSneak` | 이식됨 (`SmartMovingConfig`) |
+| `Config._diveDownOnSneak.value` | `cfg.diveDownOnSneak` | 이식됨 |
+| `Config._sprintDuringItemUsage.value` | 미이식 가능성 | **신설 검토 (B-1c)** |
+| `Config._sprintFactor.value` | `cfg.sprintFactor` 확인 | 이식됨 추정 |
+| `Config._freeClimbingUpSpeedFactor.value` | 이식됨 확인 필요 | — |
+| `Config._freeClimbingDownSpeedFactor.value` | 이식됨 확인 필요 | — |
+| `sprintButton.Pressed` | `MinecraftClient.options.sprintKey.isPressed()` | **B-1b 매핑** |
+| `jumpButton.Pressed` | `MinecraftClient.options.jumpKey.isPressed()` | **B-1b 매핑** |
+| `sneakButton.Pressed` | `MinecraftClient.options.sneakKey.isPressed()` | **B-1b 매핑** |
+| `grabButton.Pressed` | `SmartMovingKeys.grab.isPressed()` | 이식됨 |
+| `sprintButton.StopPressed` | `SmartMovingKeys.*` 엣지 또는 이전 틱 비교 | **B-1b 매핑** |
+| `esp.movementInput.moveForward/moveStrafe` | `player.input.movementForward/movementSideways` | **매핑** |
+| `sp.isCollidedVertically` | `player.verticalCollision` | — |
+| `collidedHorizontallyTickCount` | 별도 필드 필요 (미이식) | **신설 검토 (B-1c)** |
+| `isLevitating()` | vanilla levitation status effect 체크 | — |
+| `SmartStatisticsFactory.getTickDistance()` | SmartRender 측 — 1.21.1 이식 여부 확인 | — |
+| `sp.isBurning()` | `player.isOnFire()` | — |
+| `sp.isUsingItem()` | `player.isUsingItem()` | — |
+| `isSprintJump` (이전 틱 순환) | `wasFast` 저장 또는 동일 틱 이전 계산 | **B-1 설계 시 주의** |
+
+**1.21.1 이식 시 주의사항**:
+- **계산 순서 엄수**: `disabled` → `wouldWantSneak/wantSneak` → `wantSprint` → Sprint 변종 →
+  `standing` → `isFast` → `wouldIsSneaking` → `isSlow`. 순환 의존 (`isSprintJump`) 은
+  이전 틱 값 저장으로 해결.
+- **isGroundSprinting 전환 후처리** (L2697-L2709) 의 vanilla `setSprinting(...)` 호출은
+  1.21.1 이식 시 동일하게 `player.setSprinting(...)`. Options 필드 매핑 필요.
+- **collidedHorizontallyTickCount** / **SmartStatisticsFactory** 미이식 시 각각
+  `0` / `true` 근사 또는 신설 원자로 분리 — 포커스 #2 범위 내 판단.
