@@ -447,6 +447,16 @@ public class SmartMovingConfig {
     public boolean sprint = true;
     public boolean ceilingClimbing = true;
 
+    /**
+     * 원본 `SmartMovingConfig.java` L313:
+     *   `public final Property<Boolean> _sprintEnableStanding = Unmodified("move.sprint.enable.ground");`
+     * 기본값 false — `Unmodified` 는 기본 생성자에서 `value=false`.
+     * 사용처: isFast 공식 `isGroundSprinting && (!standing || _sprintEnableStanding)` (원본 L2689).
+     * true 설정 시 standing 상태에서도 Ground Sprint 인정 (정지 스프린트 허용).
+     * B-1a (세션 40).
+     */
+    public boolean sprintEnableStanding = false;
+
     // ── 활성화 플래그 ──────────────────────────────────────────
     /**
      * SM 활성화 상태. 원본 SmartMovingProperties.enabled (L33).

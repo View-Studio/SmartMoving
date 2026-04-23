@@ -180,6 +180,78 @@ public final class SmartMovingClientState {
     /** 크롤 갭 진입 카운터. > 0이면 setShouldClimbSpeed에서 HoldMotion 강제. */
     public int climbIntoCount;
 
+    // ── B Phase 1 등반 9 필드 (세션 40) — 원본 SmartMovingSelf.java L1421-L1446 ──────
+
+    /**
+     * 원본 SmartMovingSelf L1421 `public boolean isVineOnlyClimbing;`.
+     * 덩굴만 잡은 상태 (사다리 없이). handleClimbing Free 분기에서 갱신.
+     * 애니메이션 파라미터. B-15d.
+     */
+    public boolean isVineOnlyClimbing;
+
+    /**
+     * 원본 SmartMovingSelf L1422 `public boolean isVineAnyClimbing;`.
+     * 덩굴 또는 사다리 클라이밍 중. wantClimbUp (L1827) 조건에 사용.
+     * B-15d.
+     */
+    public boolean isVineAnyClimbing;
+
+    /**
+     * 원본 SmartMovingSelf L1424 `public boolean isClimbingStill;`.
+     * 클라이밍 정지 상태. 애니메이션 파라미터.
+     * B-15e.
+     */
+    public boolean isClimbingStill;
+
+    /**
+     * 원본 SmartMovingSelf L1426 `public boolean isNeighborClimbing;`.
+     * 인접 블록 등반 가능 여부. handleClimbing Free 분기에서 갱신.
+     * **isCrawlClimbing 메인 공식 (원본 L2737)** 의 5-AND 중 하나로 필수.
+     * B-15a / B-17 의존.
+     */
+    public boolean isNeighborClimbing;
+
+    /**
+     * 원본 SmartMovingSelf L1427 `public boolean hasClimbGap;`.
+     * 등반 갭 (중간 빈 공간) 존재 여부.
+     * **isClimbCrawling 메인 공식 (원본 L2787)** 의 needClimbCrawling = hasClimbCrawlGap
+     * || (hasClimbGap && isClimbHolding) 에 필수.
+     * B-15b / B-18 의존.
+     */
+    public boolean hasClimbGap;
+
+    /**
+     * 원본 SmartMovingSelf L1429 `public boolean hasNeighborClimbGap;`.
+     * 인접 블록 등반 갭. handleClimbing Free 분기 판정용.
+     * B-15c.
+     */
+    public boolean hasNeighborClimbGap;
+
+    /**
+     * 원본 SmartMovingSelf L1430 `public boolean hasNeighborClimbCrawlGap;`.
+     * 인접 블록 등반 크롤 갭.
+     * B-15c.
+     */
+    public boolean hasNeighborClimbCrawlGap;
+
+    /**
+     * 원본 SmartMovingSelf L1443 `public Block handsEdgeBlock;`.
+     * 손이 잡은 edge 블록. 원본 Block + L1444 meta 는 1.21.1 BlockState 에 흡수
+     * (vanilla API 표면 매핑 — metadata 정보 BlockState 가 내포).
+     * 애니메이션 파라미터 (hands edge 렌더).
+     * B-15f.
+     */
+    public net.minecraft.block.BlockState handsEdgeBlock;
+
+    /**
+     * 원본 SmartMovingSelf L1445 `public Block feetEdgeBlock;`.
+     * 발이 잡은 edge 블록. L1446 meta 는 BlockState 에 흡수.
+     * B-15f.
+     */
+    public net.minecraft.block.BlockState feetEdgeBlock;
+
+    // ─────────────────────────────────────────────────────────────────
+
     /** 로프 슬라이딩 상태 */
     public boolean isRopeSliding;
 
@@ -1008,6 +1080,16 @@ public final class SmartMovingClientState {
         isStillSwimmingJump     = false;
         wantCrawlNotClimb       = false;
         initializeCrawling      = false;
+        // B Phase 1 (세션 40) 등반 9 필드 리셋
+        isVineOnlyClimbing      = false;
+        isVineAnyClimbing       = false;
+        isClimbingStill         = false;
+        isNeighborClimbing      = false;
+        hasClimbGap             = false;
+        hasNeighborClimbGap     = false;
+        hasNeighborClimbCrawlGap = false;
+        handsEdgeBlock          = null;
+        feetEdgeBlock           = null;
     }
 
     private static boolean canStandUp(ClientPlayerEntity player) {

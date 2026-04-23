@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 39 — B Phase 1 Config 헬퍼 4종) |
-| 현재 단계 | A 완료 + B Phase 1: 필드 8건 + Config 헬퍼 4종 완료 / ⏳ **Phase 1 잔여 (B-22c / B-31a / B-1a Config 필드 / B-15a~f 등반 9건)** |
+| 상태 | 🟡 진행 중 (세션 40 — B Phase 1 등반 9 + Config 필드) |
+| 현재 단계 | A 완료 + B Phase 1: 필드 17건 + Config 헬퍼 4종 + Config 필드 1건 완료 / ⏳ **Phase 1 잔여 (B-22c isRunning 승격 / B-31a wasCrawling)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -517,9 +517,7 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       §5.2 에도 인용 링크 + 범위 목록 추가.
 
 #### B-1. `isFast` 공식 6갈래 OR 이식 (원자 6개 분해)
-- [ ] B-1a. `Config._sprintEnableStanding` 1.21.1 `SmartMovingConfig` 이식 확인
-      (원본 `SmartMovingConfig.java` L313 `Unmodified("move.sprint.enable.ground")`).
-      필드 grep → 미이식 시 신설 + `SmartMovingProperties` 확장.
+- [x] B-1a. ✅ **세션 40 완료** — `Config._sprintEnableStanding` → `SmartMovingConfig.sprintEnableStanding = false` (원본 `SmartMovingConfig.java` L313 `Unmodified("move.sprint.enable.ground")`).
 - [ ] B-1b. Button 클래스 ↔ 1.21.1 KeyBinding 매핑 테이블 §6 에 작성:
       `sprintButton` / `jumpButton` / `grabButton` / `sneakButton` /
       `moveForwardButton` / `moveBackwardButton` / `moveLeftButton` / `moveRightButton` —
@@ -626,12 +624,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (원본 L816). 이식된 필드만 먼저 리셋, 미이식 필드는 B-15 이후.
 
 #### B-15. 미이식 등반 필드 9건 ClientState 이식 (A-3 발견)
-- [ ] B-15a. `isNeighborClimbing` 필드 추가 (원본 L1426)
-- [ ] B-15b. `hasClimbGap` 필드 추가 (원본 L1427) — B-18 선행 의존
-- [ ] B-15c. `hasNeighborClimbGap` / `hasNeighborClimbCrawlGap` 필드 (원본 L1429-L1430)
-- [ ] B-15d. `isVineOnlyClimbing` / `isVineAnyClimbing` 필드 (원본 L1421-L1422)
-- [ ] B-15e. `isClimbingStill` 필드 (원본 L1424)
-- [ ] B-15f. `handsEdgeBlock` / `feetEdgeBlock` / edgeMeta 필드 (원본 L1443-L1446) — 애니메이션 참조
+- [x] B-15a. ✅ **세션 40 완료** — `isNeighborClimbing` 필드 추가 + resetState 리셋
+- [x] B-15b. ✅ **세션 40 완료** — `hasClimbGap` 필드 추가 + resetState 리셋 — B-18 의존 해소
+- [x] B-15c. ✅ **세션 40 완료** — `hasNeighborClimbGap` / `hasNeighborClimbCrawlGap` 필드 추가 + resetState 리셋
+- [x] B-15d. ✅ **세션 40 완료** — `isVineOnlyClimbing` / `isVineAnyClimbing` 필드 추가 + resetState 리셋
+- [x] B-15e. ✅ **세션 40 완료** — `isClimbingStill` 필드 추가 + resetState 리셋
+- [x] B-15f. ✅ **세션 40 완료** — `handsEdgeBlock` / `feetEdgeBlock` BlockState 필드 추가 (원본 Block+meta → 1.21.1 BlockState 흡수 — vanilla API 표면 매핑) + resetState null 리셋. 갱신 로직은 B-19 범위.
 
 #### B-16. `wantClimbHolding` / `isClimbHolding` 갱신 블록 이식 (A-3 발견)
 - [ ] B-16. 원본 L2721-L2732 3-OR 공식 이식:
@@ -1471,6 +1469,51 @@ B-10a~d / B-15a~f 등) 은 병렬 가능.
 **다음 작업 권고**:
 - **B-1a** `Config._sprintEnableStanding` (`SmartMovingConfig.java` 추가) — 단순
 - **B-15a~f** 등반 9 필드 (ClientState 추가 + resetState 리셋) — 세션 38 패턴 재사용
+
+### 세션 40 — 2026-04-24 — B Phase 1 Config 필드 B-1a + 등반 9 필드 B-15a~f
+
+**진행한 작업**:
+- `SmartMovingConfig.java` 에 `sprintEnableStanding = false` 필드 추가
+  (원본 L313 `Unmodified("move.sprint.enable.ground")`) — 주석에 원본 라인 + 기본값
+  + 사용처 (isFast 공식 L2689) + 의존 B-1a 기록
+- `SmartMovingClientState.java` 에 등반 9 필드 추가 (원본 L1421-L1446 매핑):
+  * `isVineOnlyClimbing` (L1421) / `isVineAnyClimbing` (L1422) (B-15d)
+  * `isClimbingStill` (L1424) (B-15e)
+  * `isNeighborClimbing` (L1426) — **isCrawlClimbing 공식 필수 (B-17)** (B-15a)
+  * `hasClimbGap` (L1427) — **isClimbCrawling 공식 필수 (B-18)** (B-15b)
+  * `hasNeighborClimbGap` (L1429) / `hasNeighborClimbCrawlGap` (L1430) (B-15c)
+  * `handsEdgeBlock` / `feetEdgeBlock` (L1443-L1446) — **BlockState** 타입 (B-15f)
+- **Block+meta → BlockState 흡수**: 원본 `Block handsEdgeBlock; int handsEdgeMeta`
+  2필드 → 1.21.1 `BlockState handsEdgeBlock` 1필드. vanilla API 표면 매핑 (metadata
+  정보 BlockState 가 내포) — 1:1 원칙 하 표면 매핑 허용 범위.
+- resetState 에 9 필드 리셋 추가 (boolean false / BlockState null)
+- 각 필드에 원본 라인 + 사용처 + 의존 B-N 원자 상세 주석
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 40 기준)**:
+- [근거] 원본 SmartMovingSelf L1421-L1446 필드 선언 직접 read ✓
+- [근거] `SmartMovingConfig.md` L313 원본 `_sprintEnableStanding` 확보 ✓
+- [대응] 원본 9 필드 + Config 1 필드 1:1 이식 (Block+meta → BlockState 표면 매핑) ✓
+- [분기] 필드 사용처 (isCrawlClimbing 공식 / isClimbCrawling 공식 / 애니메이션 파라미터)
+  주석 기록 ✓
+- [상수] `sprintEnableStanding = false` 원본 Unmodified 기본값 동일 ✓
+- [타이밍] 필드 선언만 — 갱신 공식은 후속 B-N 에서 ✓
+- [근사] Block+meta → BlockState 는 vanilla API 표면 매핑 (근사 아님) ✓
+- [신규] 없음 (계획된 원자 수행)
+- [회귀] compileJava 성공 — 기존 코드 영향 없음 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**B Phase 1 진행 상황 (세션 40 기준)**:
+- ✅ 독립 필드 8건 — 세션 38
+- ✅ Config 헬퍼 4종 — 세션 39
+- ✅ **Config 필드 1건 + 등반 9 필드 (B-1a + B-15a~f) — 세션 40**
+- ⏳ B-22c `isRunning` 필드 승격 (handleExhaustion 수정 포함 — 별도 세션)
+- ⏳ B-31a `wasCrawling` 필드 (wasCrawling_st 와 구분 — 용도 정리 검토)
+
+**다음 작업 권고**: B-22c 또는 B-31a — 둘 다 기존 로컬 변수/필드와 용도 중첩이 있어
+신중한 접근 필요. B-31a 는 wasCrawling_st 를 공용으로 쓸지 별도 필드 신설할지 판단
+필요. B-22c 는 handleExhaustion 의 로컬 `isRunning` (L995) 을 필드로 승격하고 기존
+호출 정합성 검증 필요.
 
 ---
 
