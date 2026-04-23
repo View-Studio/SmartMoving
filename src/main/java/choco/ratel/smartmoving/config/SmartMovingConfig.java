@@ -243,6 +243,17 @@ public class SmartMovingConfig {
      */
     public String[] configKeys = DEFAULT_KEYS;
 
+    /**
+     * 원본 SmartMovingProperties.toggler (L30) 대응. 초기값 -2 (load 전 센티넬).
+     * 상태표:
+     *   -2 : 초기화 전 (load() 미호출)
+     *   -1 : disabled (enabled = false)
+     *   0..configKeys.length-1 : enabled, 현재 key 인덱스
+     * 파생: `enabled = (toggler != -1)` — `update()` 에서 동기화. 직접 쓰기 금지, toggle()/
+     *   setCurrentKey() 경유.
+     */
+    public int toggler = -2;
+
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
