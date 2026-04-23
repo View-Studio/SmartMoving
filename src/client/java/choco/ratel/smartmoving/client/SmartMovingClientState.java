@@ -498,8 +498,9 @@ public final class SmartMovingClientState {
 
         // C-33: wasClimbing = 이전 틱의 isClimbing 값 저장
         wasClimbing = isClimbing;
-        // 매 틱 exhaustion 감소 (클라이밍 중 증가량으로 상쇄됨)
-        exhaustion = Math.max(0F, exhaustion - 1.0F);
+        // 원본 간소 감소 `exhaustion -= 1.0F` 은 H-9 handleExhaustion 의
+        // `exhaustion -= exhaustionLoss(=1F*factor)` 로 교체됨 (tickEssential 말미 호출).
+        // 비활성 경로에서는 resetState() 가 exhaustion=0 리셋.
 
         // IMPL-04: 설정 토글 키 처리 (원본: toggleButton.update() + StartPressed 분기)
         // 싱글: toggle() 직접 호출 + 채팅 피드백 / 멀티: 서버에 변경 요청 패킷 전송
@@ -862,6 +863,11 @@ public final class SmartMovingClientState {
                 fadingPerspectiveFactor += (perspectiveFactor - fadingPerspectiveFactor) * cfg.perspectiveFadeFactor;
             else
                 fadingPerspectiveFactor = landMovementFactor;
+
+            // H-10: 허기/소진 계산 — 원본 SmartMovingSelf.onLivingUpdate 말미에서 updateHunger 호출.
+            // 모든 이동 상태(isSlow/isFast/isClimbing/etc) 결정 후 이 시점에서 실행.
+            // cfg.enabled 블록 안 — 비활성 상태에선 호출 안 됨.
+            handleExhaustion(player);
         }
     }
 

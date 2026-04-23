@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-9 완료 / ⏳ **H-10 진행 (tickEssential 호출 삽입)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-10 완료 / ⏳ **H-11 진행 (허기 패킷 클라→서버)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -742,9 +742,11 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       클램프 유지) → 허기-소진 연동. Easy 배제 블록 5종(클라이밍/천장/스프린트 피로 + exhaustion==0
       NaN 리셋 + 패킷 전송) javadoc 에 각각 이유 명시. getFactor 파라미터 매핑 주의사항
       (isSneaking↔isSlow / isRunning↔로컬 / isSprinting↔isFast / isSwimming↔isSwimming_sm).
-- [ ] H-10. **`tickEssential` 호출 삽입** — `handleExhaustion(player)` 호출 위치:
-      원본 `SmartMovingSelf.onLivingUpdate` 에서 호출. 1.21.1 대응은 tickEssential 말미
-      (상태 캡처 이후) 적절.
+- [x] H-10. **`tickEssential` 호출 삽입** — tickEssential 의 `cfg.enabled` else 블록
+      말미 (fadingPerspectiveFactor 계산 뒤, 이동 상태 전부 결정 후) 에 `handleExhaustion(player)`
+      호출 삽입. 기존 L502 `exhaustion = Math.max(0F, exhaustion - 1.0F)` 간소 감소 로직
+      제거 (handleExhaustion 의 `exhaustion -= exhaustionLoss` 가 담당). 비활성 경로에선
+      호출 안 됨 (resetState() 가 exhaustion=0 리셋).
 - [ ] H-11. **허기 패킷 (클라→서버)** — 기존 `HungerPayload` 확인 + 클라 측 변경
       감지(`hungerIncrease != lastHungerIncrease`) 후 전송 로직 추가. 원본
       `SmartMovingPacketStream.sendHungerChange` 1:1.
@@ -1854,6 +1856,34 @@ exhaustion 감소 → hungerIncrease 허기연동. 점프/클라이밍/스프린
 **다음 작업**: H-10 — `SmartMovingClientState.tickEssential` 에 `handleExhaustion(player)`
 호출 삽입. 기존 `exhaustion -= 1.0F` 단순 감소 로직과의 관계 정리 (중복 방지).
 원본 호출 타이밍은 `SmartMovingSelf.onLivingUpdate` — 1.21.1 대응 tickEssential.
+
+### 세션 19 — 2026-04-24 — H-10 (tickEssential 호출 삽입)
+
+**진행한 작업**:
+- `tickEssential` 구조 파악: L557 `if (!cfg.enabled || spectator || fallFlying)` else 블록
+  (L559-L865) 안에서 이동 상태 전부 계산. 그 블록 **끝** (fadingPerspectiveFactor 계산 뒤)
+  에 `handleExhaustion(player)` 호출 삽입.
+- 기존 간소 로직 제거: L502 `exhaustion = Math.max(0F, exhaustion - 1.0F)` 삭제. 주석으로
+  "H-9 handleExhaustion 의 `exhaustion -= exhaustionLoss` 로 교체됨" 명시.
+- 비활성 경로 영향 없음: `!cfg.enabled || spectator || fallFlying` 시 resetState() 호출로
+  exhaustion=0 초기화. handleExhaustion 호출도 안 됨 — 깔끔.
+
+**완료 전 검증 체크리스트 (H-10 기준)**:
+- [근거] 원본 `SmartMovingSelf.onLivingUpdate` 가 updateHunger 호출 (상태 결정 후) 확인 ✓
+- [대응] 1.21.1 tickEssential 말미 = 원본 onLivingUpdate 말미 ✓
+- [분기] cfg.enabled 블록 안에서만 호출 (비활성 시 resetState 경로) ✓
+- [상수] 해당 없음
+- [타이밍] 이동 상태(isSlow/isFast/isClimbing/isSwimming_sm 등) 전부 결정 후 호출 ✓
+- [근사] 해당 없음
+- [신규] 없음
+- [회귀] L502 제거로 비활성 경로 로직 변경 없음 (이미 resetState 가 exhaustion=0) ✓
+  활성 경로의 exhaustion 감소량은 `-1.0F` → `-exhaustionLoss` (factor 기반). Easy 에서
+  exhaustionLoss 는 base 1.2F × 1단계 × 2단계 — 값이 미세하게 다름. 원본 1:1 일치.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-11 — 허기 패킷 (클라→서버). 기존 `HungerPayload` 확인 + `hungerIncrease !=
+lastHungerIncrease` 변화 감지 후 전송 로직. 원본 `SmartMovingPacketStream.sendHungerChange`
+L913 1:1.
 
 ---
 
