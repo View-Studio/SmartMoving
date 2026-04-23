@@ -6,6 +6,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,6 +21,9 @@ import java.util.UUID;
  * 플레이어 생명주기(JOIN/DISCONNECT)와 결합하면 Map 방식이 더 안전하다.
  */
 public final class SmartMovingServer {
+
+    /** 서버 콘솔 로그. 원본: FMLLog (Forge). 1.21.1: SLF4J (vanilla 로거 체인). */
+    private static final Logger LOGGER = LoggerFactory.getLogger("smartmoving");
 
     /** 크롤링 중 아이템 습득 Y방향 확장 범위. 원본: SmartMovingServer.SmallSizeItemGrabHeight = 0.25F */
     public static final double SMALL_SIZE_ITEM_GRAB_HEIGHT = 0.25;
@@ -202,6 +207,52 @@ public final class SmartMovingServer {
                 : new String[0];
         ServerPlayNetworking.send(player,
                 new SmartMovingNetwork.ConfigContentPayload(lines, null));
+        // 원본: SmartMovingServerOptions 생성자 끝에서 logConfigState(config, null, false) 호출.
+        // 1.21.1: initialize가 접속 시 매번 호출되므로 첫 접속자만 로그 남기도록 initialized 가드 뒤에 배치.
+        logConfigState(SmartMovingConfig.INSTANCE, null, false);
+    }
+
+    // ── 3-11: 서버 콘솔 로그 (원본: SmartMovingServerOptions 로그 메서드) ─────────
+
+    /**
+     * 원본: SmartMovingServerOptions.logConfigState(config, username, reconfig).
+     *
+     * globalConfig=true 경로:
+     *   reconfig=false → "Smart Moving overrides client configurations" 먼저 출력.
+     *   enabled=true   → "... uses|changed to default server configuration [by user 'X']"
+     *   enabled=false  → "... disabled [by user 'X']"
+     * globalConfig=false:
+     *   → "Smart Moving allows client configurations"
+     *
+     * 1.21.1 범위 제한: SmartMovingConfig의 config key 시스템(`_configKeyName`/`currentKey`)은
+     * 미이식이므로 원본의 `currentKey==null` 경로("default server configuration")만 구현.
+     * 키 이름 경로는 toggle(player) 및 config key 시스템 이식 시 추가.
+     */
+    static void logConfigState(SmartMovingConfig config, String username, boolean reconfig) {
+        String message = "Smart Moving ";
+        if (config.globalConfig) {
+            if (!reconfig) LOGGER.info("{}overrides client configurations", message);
+            String postfix = getPostfix(username);
+            if (config.enabled) {
+                LOGGER.info("{}{}default server configuration{}",
+                        message, reconfig ? "changed to " : "uses ", postfix);
+            } else {
+                LOGGER.info("{}disabled{}", message, postfix);
+            }
+        } else {
+            LOGGER.info("{}allows client configurations", message);
+        }
+    }
+
+    /** 원본: SmartMovingServerOptions.logSpeedState(config, username). */
+    static void logSpeedState(SmartMovingConfig config, String username) {
+        LOGGER.info("Smart Moving speed set to {}%{}", config.getSpeedPercent(), getPostfix(username));
+    }
+
+    /** 원본: SmartMovingServerOptions.getPostfix(username). username=null → 빈 문자열. */
+    private static String getPostfix(String username) {
+        if (username == null) return "";
+        return " by user '" + username + "'";
     }
 
     // ── C-16: ConfigInfo 수신 — 클라이언트 SM 버전 저장 ─────────────
@@ -225,12 +276,21 @@ public final class SmartMovingServer {
 
     /**
      * 클라이언트 속도 변경 요청 처리.
-     * speedUser=true → 허용: difference 그대로 반환 → 클라이언트가 changeSpeed() 적용.
+     * speedUser=true → 허용: 원본 options.changeSpeed(diff, player) 흐름 이식 →
+     *                  config.changeSpeed + saveToOptionsFile + logSpeedState → difference 응답.
      * speedUser=false → 거부: difference=0 반환 → 클라이언트 "no rights" 메시지 표시.
+     *
+     * 원본: SmartMovingServerOptions.changeSpeed(difference, player) 호출.
      */
     public static void processSpeedChangePacket(ServerPlayerEntity player, int difference) {
-        int response = SmartMovingConfig.Config.speedUser ? difference : 0;
-        ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(response, null));
+        if (!SmartMovingConfig.Config.speedUser) {
+            ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(0, null));
+            return;
+        }
+        SmartMovingConfig.INSTANCE.changeSpeed(difference);
+        SmartMovingConfig.save();
+        logSpeedState(SmartMovingConfig.INSTANCE, player.getName().getString());
+        ServerPlayNetworking.send(player, new SmartMovingNetwork.SpeedChangePayload(difference, null));
     }
 
     // ── 3-8: 권한 확인 ───────────────────────────────────────────

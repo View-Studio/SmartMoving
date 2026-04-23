@@ -164,8 +164,12 @@ public class SmartMovingConfig {
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
     public static final SmartMovingConfig INSTANCE = new SmartMovingConfig();
 
-    /** 서버 수신 설정 인스턴스. loadFromArray()로 갱신. */
-    public static final SmartMovingConfig SERVER_CONFIG = new SmartMovingConfig();
+    /**
+     * 서버 수신 설정 인스턴스. loadFromArray()로 갱신.
+     * 연결 해제 시 resetServerConfig() 호출로 새 인스턴스 교체 — 원본 SmartMovingServerConfig.reset() 대응.
+     * volatile — 클라이언트 렌더/틱 스레드 간 가시성 보장.
+     */
+    public static volatile SmartMovingConfig SERVER_CONFIG = new SmartMovingConfig();
 
     /**
      * 현재 활성 설정 참조 (원본: SmartMovingContext.Config).
@@ -194,6 +198,16 @@ public class SmartMovingConfig {
             return;
         }
         INSTANCE.readFrom(props);
+    }
+
+    /**
+     * 서버 수신 설정 인스턴스를 기본값으로 리셋한다.
+     * 원본: SmartMovingServerConfig.reset() — properties/topProperties 저장소 clear.
+     * 1.21.1: 단일 저장소 구조이므로 새 인스턴스로 교체하여 모든 필드를 기본값으로 복원.
+     * 호출: 서버 연결 해제 시 (SmartMovingClient.DISCONNECT).
+     */
+    public static void resetServerConfig() {
+        SERVER_CONFIG = new SmartMovingConfig();
     }
 
     public static void save() {

@@ -31,6 +31,9 @@ public class SmartMovingClient implements ClientModInitializer {
             }
             // 서버 설정 전환을 복원 — 다음 서버 접속까지 클라이언트 설정 사용
             SmartMovingConfig.Config = SmartMovingConfig.INSTANCE;
+            // 원본 SmartMovingServerConfig.reset() 대응 — SERVER_CONFIG 인스턴스 초기화.
+            // 다음 서버 접속 시 이전 서버 설정 잔류 방지.
+            SmartMovingConfig.resetServerConfig();
         });
     }
 

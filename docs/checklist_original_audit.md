@@ -938,9 +938,11 @@ N/A (구조적 변환):
 - `Config` 전환 로직은 `SmartMovingClient.processConfigContentPacket()` 에서 처리 ✓
 
 구조적 N/A (1.21.1 아키텍처 차이):
-- **top/일반 2-레이어 우선순위** — 1.21.1 서버 측 `SmartMovingServer.initialize()` 는 `globalConfig=true` 일 때만 `INSTANCE.toArray()` 전송, 그 외 빈 배열. 개인별 설정(`_globalConfig=false` 기반 클라이언트별 전송 경로) 자체가 미구현. 주석 명시: `"serverConfig(개인별 설정) 지원은 미구현 — globalConfig 우선"`
-- **`reset()` 메서드** — `SERVER_CONFIG`는 단일 인스턴스, 연결 해제 시 `Config = INSTANCE` 복원만 수행. 현재 전체 설정 덮어쓰기 구조에서는 잔류 위험 없음(모든 키가 매번 덮어씌워짐). 부분 설정 전송 경로가 없으므로 실질 문제 없음.
-- **`loadFromProperties` boolean top 파라미터** — `loadFromArray`는 단일 인자만 받음. top 레이어링 필요 없으므로 N/A.
+- **top/일반 2-레이어 우선순위** — 1.21.1 서버 측 `SmartMovingServer.initialize()` 는 `globalConfig=true` 일 때만 `INSTANCE.toArray()` 전송, 그 외 빈 배열. 개인별 설정(`_globalConfig=false` 기반 클라이언트별 전송 경로) 자체가 미구현. 피드백 규칙에 따라 후속 세션에서 SmartMovingConfig 확장과 함께 이식 예정.
+- **`loadFromProperties` boolean top 파라미터** — `loadFromArray`는 단일 인자만 받음. top 레이어링 이식 시 함께 확장 예정.
+
+처리 완료 (이번 세션):
+- **`reset()` 메서드** — SmartMovingConfig.SERVER_CONFIG: final 제거 + volatile 추가, `resetServerConfig()` 정적 메서드(새 인스턴스 교체) 추가, SmartMovingClient.DISCONNECT 에서 호출. 다음 서버 접속 시 이전 서버 설정 잔류 방지. BUILD SUCCESSFUL ✓
 
 불일치 없음 (기능적 대응):
 - flat 배열 파싱 (`i += 2`, 홀수 길이 무시): 1.21.1 `loadFromArray`의 `if (content.length % 2 != 0) return;` + `for (int i = 0; i + 1 < content.length; i += 2)` 와 동등 ✓
@@ -948,7 +950,7 @@ N/A (구조적 변환):
 - 서버 config 수신 → Config 전환: 1.21.1 `SmartMovingClient.processConfigContentPacket` 에서 `first=true` 판별 후 `Config = SERVER_CONFIG` 전환 ✓
 
 신규 발견 미구현:
-- 없음 — 개인별 설정(top=false) 전송 경로는 서버 측 미구현이므로 top 우선순위 시스템 도입 불필요. 전체 설정 전송만 지원하는 현 구조에서 원본 기능과 기능적으로 동등.
+- top/일반 2-레이어 우선순위 + 개인별 설정 전송 경로 — 후속 세션에서 SmartMovingConfig 확장과 함께 이식 예정 (피드백 규칙: "미구현 전부 즉시 이식").
 
 ---
 
@@ -969,27 +971,25 @@ N/A (구조적 변환):
 - `processConfigChangePacket(player)` — 권한 거부 응답 (항상 ConfigChange S2C 전송)
 - `hasPermission(expected, actual)` — equals 기반 권한 검증
 
-구조적 N/A (1.21.1 아키텍처 차이):
-- **gameType별 configKey 시스템** (Survival/Creative/Adventure × `_configKey`/`_configKeys`/`_userConfigKeys`): SmartMovingConfig 복잡 config 변형 시스템 전체가 1.21.1 단일 파일 구조에서 N/A (SmartMovingConfig.md 감사 시 이미 확인됨)
-- **disabled 단축 경로** (원본 `key==null && !enabled` → `{globalConfigKey, globalConfigValue}` 2원소 반환): 1.21.1 `toArray()`가 enabled 키 포함 전체 직렬화 → 클라이언트 `readFrom()`에서 `enabled=false` 적용으로 기능 동등. 네트워크 효율만 차이.
-- **`SmartMovingProperties.Disabled` 참조 비교** (`key == "disabled"` 상수): 1.21.1은 Property/Properties 계층 자체 없음 → N/A
-- **FMLLog → Fabric Logger**: 서버 콘솔 로그 전체 미이식 (1.21.1 주석에 `username=null: 설정 편집 권한 없음` 만 명시)
-
-미구현 기능 (신규 발견):
-- `toggle(player)` — 서버 관리자가 config key를 순환하는 명령 경로 (클라이언트 `/smoving config toggle` 커맨드 대응). SM 채팅 커맨드 시스템 전체가 1.21.1에 미이식.
-- `changeSpeed(diff, player)` — 서버 관리자 자발적 속도 변경. `processSpeedChangePacket`은 클라이언트 요청 처리만, 서버측 자발적 변경 경로 없음.
-- `changeSingleSpeed(player, diff)` + `_speedUsersExponents` 맵 — 플레이어별 개인 속도 지수 관리. `writeToProperties(mp, key)` 의 entry.setValue 치환 로직 자체가 미구현.
-- `writeToProperties(player, toggle)` + `_userConfigKeys` 맵 + `getPlayerConfigurationKey`/`setPlayerConfigurationKey` — 플레이어별 개인 config key 관리.
-- `logConfigState` / `logSpeedState` / `getPostfix` — 서버 콘솔 로그 전체.
-- `synchronized` 접근자 (`setPlayerSpeedExponent`, `setPlayerConfigurationKey`) — 맵 관리 자체가 미구현이므로 해당 없음.
+처리 완료 (이번 세션):
+- **서버 콘솔 로그** (`logConfigState`/`logSpeedState`/`getPostfix`) — SmartMovingServer.java: SLF4J Logger("smartmoving") 필드 추가, 원본 분기표 1:1 이식(globalConfig/enabled × reconfig). `currentKey==null` 경로만 이식(default server configuration); 키 이름 경로는 toggle 이식 시 추가. `initialize()` 끝에서 `logConfigState(INSTANCE, null, false)` 호출.
+- **`processSpeedChangePacket` 서버측 config 적용 누락 [오역]** — 원본 `options.changeSpeed(diff, player) → config.changeSpeed + save + logSpeedState` 복원. speedUser=true 경로에서 `INSTANCE.changeSpeed(diff) + save() + logSpeedState(INSTANCE, player.getName().getString())` 추가.
 
 불일치 없음 (정상 경로):
 - flat `[k1,v1,k2,v2,...]` 직렬화 형식: `toArray()` 의 `for` 루프(`props.stringPropertyNames()` 순회 + i/i+1 채움) 와 원본 iterator 패턴 동등 ✓
 - 서버→클라이언트 `ConfigContent` 패킷 흐름: 원본 `writeToProperties() → SmartMovingPacketStream` 과 동등한 `SmartMovingConfig.INSTANCE.toArray() → ConfigContentPayload` ✓
 - globalConfig=true/false 분기: 1.21.1 `initialize()`의 `globalConfig ? toArray() : new String[0]` → 원본 설계 정확히 반영 ✓
+- **disabled 단축 경로** (원본 `key==null && !enabled` → `{globalConfigKey, globalConfigValue}` 2원소 반환): 1.21.1 `toArray()`가 enabled 키 포함 전체 직렬화 → 클라이언트 `readFrom()`에서 `enabled=false` 적용으로 기능 동등. 네트워크 효율만 차이 — 원본 기능 유실 없음.
+
+후속 세션 이식 대상 (피드백 규칙: "미구현 전부 즉시 수정/구현"):
+- **`toggle(player)`** — 서버 관리자 config key 순환 명령. SmartMovingConfig에 config key 시스템(`configKeys`/`currentKey`/`setKeys`/`setCurrentKey`/`getNextKey`/`configKeyName`) + 서버 커맨드(`/smoving config toggle`) 이식 필요. 리서치 보완 선행.
+- **`changeSpeed(diff, player)`** 서버 자발적 경로 — 서버 커맨드(`/smoving speed +1` 등) 이식과 함께 구현. logSpeedState 호출처 추가.
+- **`changeSingleSpeed(player, diff)` + `_speedUsersExponents` 맵 + `writeToProperties(mp, key)` entry.setValue 치환** — 플레이어별 개인 속도 지수 관리. SmartMovingConfig에 `Map<UUID,Integer> playerSpeedExponents` 추가 + `toArray(player)` 플레이어별 치환 버전 필요.
+- **`writeToProperties(player, toggle)` + `_userConfigKeys` 맵** — 플레이어별 개인 config key 관리. 위 config key 시스템 이식 선행 후 구현.
+- **SmartMovingProperties.Disabled 참조 비교** — 1.21.1 Property 계층 자체 없으므로 enabled=false 경로로 기능 동등. 이식 불필요.
 
 신규 발견 미구현:
-- 위 미구현 기능들 → 신규 발견 항목 테이블에 일괄 기록. SmartMovingConfig의 복잡 config 시스템 + 채팅 커맨드 + 플레이어별 개인화는 1.21.1에서 의도적으로 단순화됨.
+- 위 "후속 세션 이식 대상" 5종 → 리서치 파일 보완 후 후속 세션에서 구현.
 
 ---
 
@@ -1063,10 +1063,11 @@ N/A (구조적 변환):
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [누락] `wallUpJump`(true), `wallHeadJump`(true) 불리언 필드 + `wallUpJumpVerticalFactor`(0.4F), `wallHeadJumpVerticalFactor`(0.3F), `wallUpJumpHorizontalFactor`(0.15F), `wallHeadJumpHorizontalFactor`(0.15F) 팩터 필드 전부 누락. | **처리 완료** — SmartMovingConfig.java: 6개 필드+readFrom+writeTo 추가. BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() WALL_UP/WALL_HEAD 수직 속도 오류 — 원본: `angle!=null` 경로 = `-0.078 + 0.498 * wallUpJumpVerticalFactor(0.4F)` → 0.121D, WALL_HEAD += wallHeadJumpVerticalFactor(0.3F) → 0.271D. 버그: `angle==null` 경로와 같은 vanilla 0.419D 사용. | **처리 완료** — SmartMovingJumper.tryJump(): WALL_UP/WALL_HEAD 전용 분기 추가(공식 경로). BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingClientConfig.md` | [오역] tryJump() 스프린트 수평 보정을 WALL_UP/WALL_HEAD에 적용 — 원본: 스프린트 보정은 `angle==null`(vanilla Up) 블록 내부에만 존재 → 벽점프 시 미적용. 버그: fast이면 항상 적용. | **처리 완료** — `if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD)` 조건으로 수정. BUILD SUCCESSFUL ✓ |
-| 2026-04-23 | `config/SmartMovingServerConfig.md` | 없음 — 서버 수신 설정 파싱 + top/일반 2-레이어 우선순위 어댑터. 1.21.1은 `SmartMovingConfig.SERVER_CONFIG` + `loadFromArray()` + `readFrom()` 체인으로 분산 대응. top 레이어링은 개인별 설정 전송 경로 미구현으로 N/A, `reset()`은 전체 설정 덮어쓰기 구조에서 실질 불필요. | N/A (구조적 대응) |
+| 2026-04-23 | `config/SmartMovingServerConfig.md` | [누락] `reset()` 대응 — 원본: properties/topProperties 저장소 clear. 1.21.1: SERVER_CONFIG 인스턴스 필드가 연결 해제 후 잔류. | **처리 완료** — SmartMovingConfig.SERVER_CONFIG → volatile + final 제거, `resetServerConfig()` 정적 메서드 추가(새 인스턴스 교체), SmartMovingClient.DISCONNECT에서 호출. BUILD SUCCESSFUL ✓ |
 | 2026-04-23 | `config/SmartMovingServerOptions.md` | 서버 측 플레이어별 개인화 + 서버 관리자 명령 어댑터. 정상 경로(globalConfig 전역 직렬화)는 `SmartMovingConfig.INSTANCE.toArray()` + `SmartMovingServer.initialize()` 로 기능 동등 대응. disabled 단축 경로도 `readFrom()` 에서 `enabled=false` 적용으로 기능 동등. | N/A (전역 경로 대응 완료) |
-| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `toggle(player)` — 서버 관리자가 config key를 순환하는 명령. SM 채팅 커맨드 시스템 전체가 1.21.1 미이식. | 미구현 (SmartMovingConfig 복잡 config 변형 시스템 의존) |
-| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSpeed(diff, player)` — 서버 관리자 자발적 속도 변경 (클라이언트 요청 응답 `processSpeedChangePacket`과 별개). | 미구현 (서버 커맨드 경로 없음) |
-| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSingleSpeed` + `_speedUsersExponents` 맵 + `writeToProperties(mp, key)` 의 entry.setValue 치환 — 플레이어별 개인 속도 지수 관리. | 미구현 (전역 speedUserExponent만 지원) |
-| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `writeToProperties(player, toggle)` + `_userConfigKeys` 맵 + `getPlayerConfigurationKey`/`setPlayerConfigurationKey` — 플레이어별 개인 config key 관리. | 미구현 (SmartMovingConfig 복잡 config key 시스템 자체 N/A) |
-| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `logConfigState` / `logSpeedState` / `getPostfix` — 서버 콘솔 로그. `"overrides client configurations"`, `"allows client configurations"`, `"speed set to X%"` 등. | 미구현 (FMLLog → Fabric Logger 이식 필요) |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `logConfigState` / `logSpeedState` / `getPostfix` — 서버 콘솔 로그. `"overrides client configurations"`, `"allows client configurations"`, `"speed set to X%"` 등. | **처리 완료** — SmartMovingServer.java: SLF4J Logger("smartmoving") 추가, `logConfigState`/`logSpeedState`/`getPostfix` 이식(원본 분기표 1:1), `initialize()`에서 `logConfigState(INSTANCE, null, false)` 호출. config key 시스템 미이식이므로 `currentKey==null` 경로(default server configuration)만 이식; 키 이름 경로는 toggle 이식 시 추가. BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [오역] `processSpeedChangePacket` 서버측 config 적용 누락 — 원본: `options.changeSpeed(diff, player)` → `config.changeSpeed(diff) + saveToOptionsFile + logSpeedState`. 1.21.1: 응답만 전송. | **처리 완료** — SmartMovingServer.processSpeedChangePacket: speedUser=true 시 `INSTANCE.changeSpeed(diff) + save() + logSpeedState(INSTANCE, player.getName().getString())` 추가. BUILD SUCCESSFUL ✓ |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `toggle(player)` — 서버 관리자가 config key를 순환하는 명령. SmartMovingConfig의 config key 시스템(`_configKeyName`/`currentKey`/`getNextKey`/`setCurrentKey`/`setKeys`) + 채팅 커맨드 기반. | **후속 세션** — 리서치 보완 필요(SmartMovingConfig.md 의 Property system + _survivalConfigKeys 등 키 시스템 세부). 피드백 규칙에 따라 이식 예정. |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSpeed(diff, player)` 서버 관리자 자발적 — `processSpeedChangePacket` 의 클라이언트 요청 수락 경로와 별개로, 서버측에서 커맨드로 호출되는 자발적 변경. | **후속 세션** — SM 서버 커맨드(`/smoving speed`) 이식과 함께 구현 예정. |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `changeSingleSpeed(player, diff)` + `_speedUsersExponents` 맵 + `writeToProperties(mp, key)` 의 entry.setValue 치환 — 플레이어별 개인 속도 지수 관리. | **후속 세션** — SmartMovingConfig에 `Map<UUID,Integer> playerSpeedExponents` 필드 추가 + `toArray(player)` 치환 버전 필요. 이식 예정. |
+| 2026-04-23 | `config/SmartMovingServerOptions.md` | [미이식] `writeToProperties(player, toggle)` + `_userConfigKeys` 맵 + `getPlayerConfigurationKey`/`setPlayerConfigurationKey` — 플레이어별 개인 config key 관리. | **후속 세션** — config key 시스템(toggle 이식) 선행 후 구현 예정. |
