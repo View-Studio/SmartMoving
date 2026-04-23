@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 46 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 47 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23/B-17a 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -638,11 +638,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: `wantClimb` / `blocked` 필드 확인.
 
 #### B-17. `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (A-3 발견)
-- [ ] B-17. 원본 L2736-L2754 이식:
-      `isCrawlClimbing = (wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing
-      && (sneakPressed || crawlToggled) && moveForward > 0F`
-      + canStandUp 분기 (isPlayerInSolidBetween 근사 필요) + wasCrawlClimbing 전환 분기.
-      의존: B-15a `isNeighborClimbing` 선행 필수.
+- [~] B-17a. ✅ **세션 47 완료** — `isCrawlClimbing` 메인 5-AND 공식 이식 (원본 L2737):
+      `(wasCrawling || isCrawlClimbing) && isClimbing && isNeighborClimbing &&
+      (sneakPressed || crawlToggled) && moveForward > 0F`.
+      B-30 뒤, R-09 블록 앞에 배치 (원본 순서). `isNeighborClimbing` 갱신 미이식
+      (B-19) 이라 현재 값은 항상 false — 공식 결과 no-op 이나 B-19 완료 후 자동 활성.
+- [ ] B-17b. **잔여** — 원본 L2737-L2754 전환 블록 (canStandUp 판정 + wasCrawlClimbing
+      전환 + isCrawling 전환 + resetHeightOffset + move). isPlayerInSolidBetween
+      근사 필요.
 
 #### B-18. `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 이식 (A-3 발견)
 - [ ] B-18. 원본 L2786-L2820 이식:
@@ -1844,6 +1847,57 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   필드 이식 여부 + handleCrash 메서드 위치 확인 필요.
 - **B-17 (isCrawlClimbing 공식)** — B-15a `isNeighborClimbing` 이식됨, 의존 해소. 규모 중간.
 - **B-16 (isClimbHolding / wantClimbHolding)** — 후속 B-18 의 선행 조건.
+
+### 세션 47 — 2026-04-24 — B Phase 2 B-17a (isCrawlClimbing 메인 공식)
+
+**진행한 작업**:
+- 의존 필드 확인: `isNeighborClimbing` / `wasCrawling` / `isClimbing` / `crawlToggled` 전부
+  이식됨. `sneakPressed` / `moveForward` 는 MinecraftClient / player.input 에서 직접 참조.
+- B-16 시도 무산: `blocked` (UI 열림 판정) / `wantClimb` (Climber 로컬 변수) 둘 다 미이식.
+  B-46 (blocked 이식) + B-47 (wantClimb 필드 승격) 선행 원자 신설 필요 — 별도 세션.
+- B-24 시도 무산: `_headFallDamageStartDistance/Factor` Config 미이식 +
+  `handleCrash` Climber private + `restoreFromFlying` 필드 미이식 — 세션 여러 개 필요.
+- **B-17a 채택**: isCrawlClimbing 메인 5-AND 공식 이식 (원본 L2737):
+  ```java
+  isCrawlClimbing = (wasCrawling || isCrawlClimbing)
+                 && isClimbing
+                 && isNeighborClimbing
+                 && (sneakPressed || crawlToggled)
+                 && moveForward > 0F;
+  ```
+  B-30 뒤, R-09 블록 앞에 배치 — 원본 순서 (wantClimbHolding → isStanding → isCrawlClimbing
+  → isClimbCrawling) 준수.
+- **no-op 상태 인식**: `isNeighborClimbing` 갱신 로직 (B-19) 미이식 — 값 항상 false →
+  isCrawlClimbing 공식 결과도 항상 false. B-19 완료 후 자동 활성화.
+- B-17b 전환 블록 (원본 L2737-L2754 canStandUp + wasCrawlClimbing 전환) 은 다음 원자로
+  분리 (isPlayerInSolidBetween 근사 필요).
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 47 기준)**:
+- [근거] 원본 SmartMovingSelf L2737 5-AND 공식 직접 read (R-12.5) ✓
+- [근거] 의존 필드 전수 이식 확인 grep ✓
+- [대응] 원본 5-AND 1:1 이식 ✓
+- [분기] 5조건 (wasCrawling||isCrawlClimbing / isClimbing / isNeighborClimbing /
+  sneakPressed||crawlToggled / moveForward>0) 전부 ✓
+- [상수] 없음 (공식만)
+- [타이밍] B-30 뒤 / R-09 앞 위치 — 원본 L2734 isStanding → L2737 isCrawlClimbing 순서 ✓
+- [근사] 없음 — `sneakKey.isPressed()` 는 vanilla 표면 매핑 (원본 sneakButton.Pressed)
+- [신규] no-op 상태 + B-19 의존 관계 기록 ✓
+- [회귀] compileJava 성공 — isNeighborClimbing=false 때문에 기존 동작과 동일 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 47 기준)**:
+- ✅ B-2 / B-44a / B-30 — 세션 43
+- ✅ B-32 / B-40 — 세션 44
+- ✅ B-45 — 세션 45
+- ✅ B-23 — 세션 46
+- ✅ **B-17a** — 세션 47
+- ⏳ 잔여 ~31 원자 (B-17b / B-18 / B-24 / B-16 / B-3a~b / B-1c~f / B-33 등)
+
+**다음 작업 권고**:
+- **B-46 + B-47 (blocked + wantClimb 이식)** — B-16 선행. 단순 2건.
+- **B-17b (canStandUp 전환 블록)** — B-17a 후속 — isPlayerInSolidBetween 근사 + move API.
+- **B-3b (wouldIsSneaking `!wantSprint` 정정)** — wantSprint 필드 없이는 위배. B-3a 선행 필요.
 
 ---
 

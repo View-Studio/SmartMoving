@@ -956,6 +956,26 @@ public final class SmartMovingClientState {
                 isStanding = _horizontalSpeedSquare < 0.0005;
             }
 
+            // B-17a (세션 47): isCrawlClimbing 메인 5-AND 공식 (원본 L2737).
+            //   isCrawlClimbing = (wasCrawling || isCrawlClimbing) && isClimbing
+            //                    && isNeighborClimbing
+            //                    && (sneakButton.Pressed || crawlToggled)
+            //                    && esp.movementInput.moveForward > 0F;
+            // ※ wasCrawlClimbing 은 원본 지역 변수 — 전환 블록 (L2737-L2754, B-17b) 에서만
+            //   사용. 현재는 메인 공식만 이식. B-17b 에서 전환 블록 추가 시 저장 위치 확장.
+            // ※ isNeighborClimbing 갱신 로직 (B-19) 미이식 → 항상 false → 이 공식 결과도
+            //   항상 false. B-19 완료 후 자동 활성화.
+            {
+                boolean _sneakPressed17 = net.minecraft.client.MinecraftClient.getInstance()
+                        .options.sneakKey.isPressed();
+                boolean _moveForward17 = player.input.movementForward > 0F;
+                isCrawlClimbing = (wasCrawling || isCrawlClimbing)
+                        && isClimbing
+                        && isNeighborClimbing
+                        && (_sneakPressed17 || crawlToggled)
+                        && _moveForward17;
+            }
+
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
             // wasSneaking/wasCrawling/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
