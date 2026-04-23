@@ -524,7 +524,13 @@ public final class SmartMovingClientState {
                     msg = Text.translatable("smartmoving.message.config.client.disabled");
                 } else {
                     String currentKey = cfg.getCurrentKey();
-                    String name = cfg.configKeyName.getOrDefault(currentKey, "");
+                    // H-17 (세션 22): currentKey==null NPE 방어.
+                    // configKeyName = Map.of(...) 는 ImmutableMap — null key 조회 시 NPE.
+                    // 2상태 토글(configKeys={null}) 환경에서 currentKey=null 경로 필수.
+                    // 원본 `_configKeyName.value` 는 Property 시스템에서 빈 문자열 반환 → 1.21.1 근사.
+                    String name = currentKey == null
+                            ? ""
+                            : cfg.configKeyName.getOrDefault(currentKey, "");
                     if (name.isEmpty()) name = null;
                     boolean unnamed = name == null;
                     if (unnamed) name = currentKey;

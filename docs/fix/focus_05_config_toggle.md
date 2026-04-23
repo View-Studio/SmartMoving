@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | ✅ **재완료 (2026-04-24, 세션 22)** — H-15/H-16 수정 완료 |
-| 현재 단계 | ✅ H-0~H-16 + G-5 완료 / ⏳ 사용자 인게임 재검증 → 통과 시 포커스 #6 재전환 |
+| 현재 단계 | ✅ H-0~H-17 + G-5 완료 (H-17: disabled→enabled NPE 긴급 수정) / ⏳ 사용자 인게임 재검증 |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -786,6 +786,16 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `configKeys = DEFAULT_KEYS = {null}` 초기값 유지 → `toggle()` 이 2상태(0 ↔ -1)
       로만 순환. F 섹션 메서드는 코드상 유지 (후속 포커스
       `focus_10_config_toggle_cleanup.md` 에서 잉여 일괄 정리). 빌드 ✓
+- [x] H-17. **configToggle 키 NPE 크래시 수정** — 인게임 테스트에서 `disabled → enabled`
+      재전환 시 크래시 발견 (`SmartMovingClientState.java:527`, `ImmutableCollections.MapN.
+      probe NullPointerException`). 원인: `configKeyName = Map.of("e","Easy","m","Medium",
+      "h","Hard")` 는 ImmutableMap — null key 조회 시 NPE. 2상태 토글(`configKeys={null}`)
+      환경에서 `currentKey = configKeys[0] = null` → `getOrDefault(null, "")` NPE.
+      수정: `currentKey == null ? "" : cfg.configKeyName.getOrDefault(currentKey, "")` 가드 추가.
+      이후 `isEmpty() → name=null → unnamed=true → keyCount==1 → "enabled" 메시지 분기` 로 정상 진행.
+      원본 `_configKeyName.value` 는 Property 시스템에서 null 미반환 (빈 문자열) — 1.21.1
+      ImmutableMap 근사의 한계. 서버측 `SmartMovingServer.logConfigState` 는 이미
+      `if (currentKey == null)` 분기로 안전 처리되어 있어 수정 불필요.
 - [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:
       - `ClientState.handleExhaustion` 말미: `hungerIncrease != lastHungerIncrease` →
         `float delta = hungerIncrease - lastHungerIncrease; if (delta != 0F) send(delta);`.
