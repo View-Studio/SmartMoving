@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-10 완료 / ⏳ **H-11 진행 (허기 패킷 클라→서버)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-11 완료 / ⏳ **H-12 진행 (서버 addExhaustion 연동 검증)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -747,9 +747,12 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       호출 삽입. 기존 L502 `exhaustion = Math.max(0F, exhaustion - 1.0F)` 간소 감소 로직
       제거 (handleExhaustion 의 `exhaustion -= exhaustionLoss` 가 담당). 비활성 경로에선
       호출 안 됨 (resetState() 가 exhaustion=0 리셋).
-- [ ] H-11. **허기 패킷 (클라→서버)** — 기존 `HungerPayload` 확인 + 클라 측 변경
-      감지(`hungerIncrease != lastHungerIncrease`) 후 전송 로직 추가. 원본
-      `SmartMovingPacketStream.sendHungerChange` 1:1.
+- [x] H-11. **허기 패킷 (클라→서버)** — 기존 `HungerChangePayload(float hunger)` 완비
+      확인 (서버 수신자 `SmartMoving.java` L106-L109 + `MixinServerPlayerEntity` L50
+      addExhaustion 연동). 클라측 송신 로직만 추가: `handleExhaustion` 말미에
+      원본 L911-L915 1:1 이식 — `hungerIncrease != lastHungerIncrease` 변화 감지 →
+      `ClientPlayNetworking.send(new HungerChangePayload(hungerIncrease))` + lastHungerIncrease 갱신.
+      `canSend` 체크로 SM 없는 서버 안전장치. H-9 javadoc 의 "H-11 별도" 문구도 정정.
 - [ ] H-12. **서버 `addExhaustion(sm.hunger)` 연동 검증** — 기존 구조 이미 이식됨
       (`MixinServerPlayerEntity:50`). 클라 전송 활성 후 정상 작동 확인.
 - [ ] H-13. **통합 빌드 + 회귀 감사** — vanilla 이동 허기 회귀 없는지 / SM 이동 중 허기
@@ -1884,6 +1887,46 @@ exhaustion 감소 → hungerIncrease 허기연동. 점프/클라이밍/스프린
 **다음 작업**: H-11 — 허기 패킷 (클라→서버). 기존 `HungerPayload` 확인 + `hungerIncrease !=
 lastHungerIncrease` 변화 감지 후 전송 로직. 원본 `SmartMovingPacketStream.sendHungerChange`
 L913 1:1.
+
+### 세션 20 — 2026-04-24 — H-11 (허기 패킷 클라→서버)
+
+**진행한 작업**:
+- 기존 패킷 구조 확인 — 이미 완비:
+  - `SmartMovingNetwork.HungerChangePayload(float hunger)` C2S 레코드 정의됨 (L130-L143).
+  - `SmartMoving.java` L106-L109 서버 수신자: `sm.hunger = payload.hunger()` 갱신.
+  - `MixinServerPlayerEntity:50`: `player.addExhaustion(sm.hunger)` vanilla 연동 후 `sm.hunger = 0F` 리셋.
+- **클라 측 송신만 누락되어 있었음** — `handleExhaustion` 의 어디에도 `ClientPlayNetworking.send`
+  호출 없었음. 이게 H-2 매트릭스에서 P.1/P.2/P.3 가 dead 였던 원인 중 하나.
+- `handleExhaustion` 메서드 말미 (허기-소진 연동 직후) 에 원본 L911-L915 1:1 이식:
+  ```java
+  if (hungerIncrease != lastHungerIncrease) {
+      if (ClientPlayNetworking.canSend(SmartMovingNetwork.HungerChangePayload.ID)) {
+          ClientPlayNetworking.send(new SmartMovingNetwork.HungerChangePayload(hungerIncrease));
+      }
+      lastHungerIncrease = hungerIncrease;
+  }
+  ```
+- `canSend` 체크: SM 미설치 서버 연결 시 안전장치 (원본엔 없지만 Fabric 환경 상식적 추가).
+- H-9 javadoc 의 "L911-L915 허기 패킷 전송 (H-11 별도)" 문구를 "H-11 에서 메서드 말미에
+  1:1 추가" 로 정정 (별도 메서드 아닌 handleExhaustion 안에 추가됨).
+
+**완료 전 검증 체크리스트 (H-11 기준)**:
+- [근거] 원본 SmartMovingSelf L911-L915 + `SmartMovingPacketStream.sendHungerChange` 호출
+  확인 ✓
+- [근거] 기존 `HungerChangePayload` / 서버 수신자 / addExhaustion 연동 전부 이식됨 확인 ✓
+- [대응] 원본 5줄 ↔ 구현 6줄(canSend 추가) 1:1 ✓
+- [분기] `hungerIncrease != lastHungerIncrease` 변화 감지 조건 그대로 ✓
+- [상수] 해당 없음
+- [타이밍] handleExhaustion 말미 = 원본 updateHunger 말미와 동일 위치 ✓
+- [근사] `canSend` 안전장치는 근사 (원본 Forge 에는 대응 없음) — 의미 영향 없음
+- [신규] 없음
+- [회귀] 서버 `sm.hunger` 가 이제 실제 값으로 갱신됨 — 기존에는 `sm.hunger=0` 유지.
+  `MixinServerPlayerEntity` 의 `if (sm.hunger > 0F) addExhaustion(sm.hunger)` 분기가
+  활성화됨. Easy 에서 SM 이동 시 미세한 허기 증가 발생 — 원본 Easy 체감과 일치.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-12 — 서버 `addExhaustion(sm.hunger)` 연동 검증. 이미 이식된 로직이 정상
+작동하는지 코드 리뷰 + 의도된 동작 확인.
 
 ---
 

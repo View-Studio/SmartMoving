@@ -963,7 +963,8 @@ public final class SmartMovingClientState {
      * - L877-L879 천장 피로 (`_ceilingClimbExhaustion=false`)
      * - L881-L883 스프린트 피로 (`_sprintExhaustion=false`)
      * - L897-L899 exhaustion==0 리셋 (maxExhaustionForAction 필드 N/A)
-     * - L911-L915 허기 패킷 전송 (H-11 별도)
+     * - L911-L915 허기 패킷 전송 → **H-11 에서 메서드 말미에 1:1 추가**
+     *   (ClientPlayNetworking.send(HungerChangePayload) + lastHungerIncrease 갱신)
      *
      * **getFactor 파라미터 매핑** (원본 L862/L888 호출):
      * - isSneaking 자리 → `isSlow` (SM 의 sneak+!sprint+!climbing)
@@ -1020,6 +1021,20 @@ public final class SmartMovingClientState {
 
         // 원본 L893 허기-소진 연동
         hungerIncrease += cfg.exhaustionLossHungerFactor * exhaustionLoss;
+
+        // 원본 L911-L915 허기 변화 패킷 전송 — 변화 감지로 중복 전송 방지.
+        //   if (hungerIncrease != lastHungerIncrease) {
+        //       SmartMovingPacketStream.sendHungerChange(SmartMovingComm.instance, hungerIncrease);
+        //       lastHungerIncrease = hungerIncrease;
+        //   }
+        // 1.21.1: ClientPlayNetworking.send(HungerChangePayload). 서버 수신: SmartMoving.java L106-L109
+        // 에서 sm.hunger 갱신 → MixinServerPlayerEntity:50 에서 vanilla addExhaustion(sm.hunger) 연동.
+        if (hungerIncrease != lastHungerIncrease) {
+            if (ClientPlayNetworking.canSend(SmartMovingNetwork.HungerChangePayload.ID)) {
+                ClientPlayNetworking.send(new SmartMovingNetwork.HungerChangePayload(hungerIncrease));
+            }
+            lastHungerIncrease = hungerIncrease;
+        }
     }
 
     /**
