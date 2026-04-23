@@ -454,6 +454,49 @@ public class SmartMovingConfig {
      */
     public boolean enabled = true;
 
+    // ── B 단계 Phase 1 헬퍼 (세션 39) — 원본 SmartMovingClientConfig.java ────────
+    // 원본 `enabled` 패턴 (리서치 L428):
+    //   SM 비활성 시 vanilla 동작 허용 → `|| !enabled` (isSneakingEnabled 등)
+    //   SM 전용 기능 → `&& enabled` (isSwim/Diving/Sprinting 등)
+
+    /**
+     * 원본 SmartMovingClientConfig L69 `isSneakingEnabled() = _sneak.value || !enabled`.
+     * **OR 패턴** — SM 비활성 시에도 vanilla sneak 허용.
+     * 사용처: wantSneak (원본 L2588-L2590) → isSlow 공식 (원본 L2718).
+     * B-2 의존.
+     */
+    public boolean isSneakingEnabled() {
+        return sneak || !enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L95 `isSprintingEnabled() = _sprint.value && enabled`.
+     * **AND 패턴** — SM 비활성 시 SM sprint 비허용.
+     * 사용처: wantSprint 6조건 OR (원본 L2595-L2615) → wouldIsSneaking (L2712).
+     * B-3a 의존.
+     */
+    public boolean isSprintingEnabled() {
+        return sprint && enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L87 `isSwimmingEnabled() = _swim.value && enabled`.
+     * 사용처: handleSwimming 진입 게이트 (원본 L239/L438) — useStandard 진입 판정.
+     * B-7 / B-8 의존.
+     */
+    public boolean isSwimmingEnabled() {
+        return swim && enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L88 `isDivingEnabled() = _dive.value && enabled`.
+     * 사용처: handleSwimming 진입 게이트 + dive 분류 활성화 판정.
+     * B-7 / B-8 의존.
+     */
+    public boolean isDivingEnabled() {
+        return dive && enabled;
+    }
+
     // ── Config key 토글 시스템 (원본 SmartMovingProperties L26-L31) ─────────────────
     // H-19 (세션 23): CONFIG_KEY_ENABLED/DISABLED 상수 삭제. getCurrentKey/getKey/getNextKey/
     //   hasKey/setCurrentKey 메서드 5개도 삭제 (외부 호출처 0건 확인). DEFAULT_KEYS 만 유지

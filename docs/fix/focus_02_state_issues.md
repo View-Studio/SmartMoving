@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 38 — B Phase 1 일부) |
-| 현재 단계 | A 완료 + B-22a/b/d + B-10a/b/c + B-31b/c (필드 선언 8건) 완료 / ⏳ **Phase 1 잔여 (B-22c / B-31a / B-1a / B-2 헬퍼 / B-3a 헬퍼 / B-8 헬퍼 / B-15a~f 등반 9건)** |
+| 상태 | 🟡 진행 중 (세션 39 — B Phase 1 Config 헬퍼 4종) |
+| 현재 단계 | A 완료 + B Phase 1: 필드 8건 + Config 헬퍼 4종 완료 / ⏳ **Phase 1 잔여 (B-22c / B-31a / B-1a Config 필드 / B-15a~f 등반 9건)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -300,10 +300,10 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `Options._flyCloseToGround.value` | — | ✗ 미이식 (B-23 후처리) |
 | `Options._diveControlVertical.value` | — | ✗ 미이식 |
 | `Config.isCrawlingEnabled()` | `cfg.crawl && cfg.enabled` (inline) | ✓ |
-| `Config.isSneakingEnabled()` | — | ✗ 헬퍼 신설 (B-2) |
-| `Config.isSprintingEnabled()` | — | ✗ 헬퍼 신설 (B-3a) |
-| `Config.isSwimmingEnabled()` | — | ✗ 헬퍼 신설 (B-8) |
-| `Config.isDivingEnabled()` | — | ✗ 헬퍼 신설 (B-8) |
+| `Config.isSneakingEnabled()` = `_sneak.value \|\| !enabled` (**OR**) | `cfg.isSneakingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
+| `Config.isSprintingEnabled()` = `_sprint.value && enabled` | `cfg.isSprintingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
+| `Config.isSwimmingEnabled()` = `_swim.value && enabled` | `cfg.isSwimmingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
+| `Config.isDivingEnabled()` = `_dive.value && enabled` | `cfg.isDivingEnabled()` (✅ 세션 39) | ✓ 이식 완료 |
 | `Config.isLavaLikeWaterEnabled()` | — | ✗ 미이식 (B-7) |
 | `Config.isFreeClimbingEnabled()` | `cfg.freeClimb` (확인) | ✓? |
 | `Config.isSmartBaseClimb()` / `isSimpleBaseClimb()` / `isStandardBaseClimb()` | — | ✗ 미이식 (B-20) |
@@ -538,8 +538,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 #### B-2. `isSlow` 공식 정정 (단일 원자)
 - [ ] B-2. `SmartMovingClientState.tickEssential` L650-L651 정정 (원본 L2588-L2590 / L2718):
       - `wantSneak = Config.isSneakingEnabled() && wouldWantSneak` 신설
-      - `Config.isSneakingEnabled()` 1.21.1 매핑은 `cfg.sneak && cfg.enabled` 로 원자 B-2
-        범위 내 헬퍼 메서드 신설 (Config 에 `boolean isSneakingEnabled()`)
+      - **✅ 세션 39**: `Config.isSneakingEnabled()` 헬퍼 신설 완료 (원본 **OR 패턴**:
+        `sneak || !enabled`). **주의: 기존 매핑 테이블의 `cfg.sneak && cfg.enabled`
+        는 오역이었음 — 원본은 OR 패턴**.
       - `isSlow = wantSneak && wouldIsSneaking`
       - 기존 `sneakContinueInput` 중복 곱 제거
       - ※ `wouldIsSneaking` 은 B-3b 에서 처리 — B-2 는 `isSlow` 우변만 교체
@@ -547,7 +548,8 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 #### B-3. `wantSprint` 신설 + `wouldIsSneaking` 정정 (원자 2개 분해)
 - [ ] B-3a. `wantSprint` 필드 + 6조건 OR 계산 블록 이식 (원본 `SmartMovingSelf` L2595-L2615).
       의존 필드 전수 확인 + 미이식 시 신설:
-      - `Config.isSprintingEnabled()` 1.21.1 매핑 (`cfg.sprint && cfg.enabled`) 헬퍼 메서드
+      - **✅ 세션 39**: `Config.isSprintingEnabled()` 헬퍼 신설 완료 (AND 패턴:
+        `sprint && enabled`)
       - `sprintButton.Pressed` (B-1b 매핑 결과 사용)
       - `moveForwardButtonPressed` / `moveButtonPressed` / `jumpButton` (B-1b 매핑)
       - `disabled` (ClientState 또는 Config 필드 존재 여부 확인)
@@ -577,9 +579,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       미이식 시 각각 신설 원자 분해 (B-7a/b/c).
 
 #### B-8. `Config.isSwimmingEnabled() / isDivingEnabled()` 게이트 추가 (A-2 발견)
-- [ ] B-8. Config 에 `isSwimmingEnabled()` / `isDivingEnabled()` 헬퍼 메서드 신설
-      (`cfg.swim && cfg.enabled` / `cfg.dive && cfg.enabled` — B-2/B-3a 와 동일 패턴) +
-      `updateSwimState` 에서 게이트 적용 (원본 L239/L438-L440 대응).
+- [~] B-8. **헬퍼 신설 완료 (세션 39)** — `cfg.isSwimmingEnabled()` /
+      `cfg.isDivingEnabled()` 이식됨. 남은 작업: `updateSwimState` 에서 게이트 적용
+      (원본 L239/L438-L440 대응) — B-7 와 함께 진행.
 
 #### B-9. 메인 분류 공식 재작성 (A-2 발견 — 가장 큰 수정)
 - [ ] B-9. 원본 L303-L414 3-갈래 메인 분류 이식:
@@ -1425,6 +1427,51 @@ B-10a~d / B-15a~f 등) 은 병렬 가능.
   hasNeighborClimbCrawlGap / isVineOnlyClimbing / isVineAnyClimbing / isClimbingStill /
   handsEdgeBlock / feetEdgeBlock)
 
+### 세션 39 — 2026-04-24 — B Phase 1 Config 헬퍼 4종 이식 (B-2/B-3a/B-8)
+
+**진행한 작업**:
+- 원본 `SmartMovingClientConfig.java` 헬퍼 메서드 공식 확인 (리서치 L69-L100):
+  * `isSneakingEnabled() = _sneak.value || !enabled` — **OR 패턴** (vanilla 스닉 허용)
+  * `isSprintingEnabled() = _sprint.value && enabled` — AND 패턴
+  * `isSwimmingEnabled() = _swim.value && enabled` — AND 패턴
+  * `isDivingEnabled() = _dive.value && enabled` — AND 패턴
+- `SmartMovingConfig.java` L456-L502 에 4개 헬퍼 메서드 추가 (원본 L69/L87/L88/L95 대응):
+  * `isSneakingEnabled()` → `sneak || !enabled` ← **OR 패턴**
+  * `isSprintingEnabled()` → `sprint && enabled`
+  * `isSwimmingEnabled()` → `swim && enabled`
+  * `isDivingEnabled()` → `dive && enabled`
+- 각 메서드에 원본 파일/라인 + `enabled` 패턴 주석 (리서치 L428 인용) + 사용처 + 의존
+  B-N 원자 상세 주석
+- **🚨 신규 발견 (§16 세션 39)**: 기존 §6.7 매핑 테이블 및 §10 B-2 설명에서
+  `isSneakingEnabled` 를 `cfg.sneak && cfg.enabled` (AND 패턴) 으로 잘못 매핑했던
+  오류 발견 및 수정. 원본은 OR 패턴 — "SM 비활성 시 vanilla 스닉 허용" 용도.
+  매핑 테이블 §6.7 정정 완료.
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 39 기준)**:
+- [근거] 원본 `SmartMovingClientConfig.java` L69/L87/L88/L95 리서치 확보 ✓
+- [근거] 리서치 L428 `enabled` 패턴 주석 (|| !enabled vs && enabled) 참조 ✓
+- [대응] 4 헬퍼 메서드 원본 공식 1:1 ✓
+- [분기] OR/AND 패턴 차이 구분 (isSneaking 유일 OR) ✓
+- [상수] 없음 (메서드 본문만)
+- [타이밍] 헬퍼 메서드 — 호출 시점 영향 없음 ✓
+- [근사] 없음 (1:1)
+- [신규] 기존 매핑 오류 1건 발견 + §6.7 정정 ✓
+- [회귀] compileJava 성공 — 기존 호출처 없음 (신규 메서드) ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**B Phase 1 진행 상황**:
+- ✅ 독립 필드 8건 (B-22a/b/d + B-10a/b/c + B-31b/c) — 세션 38
+- ✅ Config 헬퍼 4종 (B-2 + B-3a 일부 + B-8) — 세션 39
+- ⏳ B-1a Config 필드 (`_sprintEnableStanding`)
+- ⏳ B-15a~f 등반 9 필드
+- ⏳ B-22c `isRunning` 필드 승격 (handleExhaustion 수정 포함)
+- ⏳ B-31a `wasCrawling` 필드
+
+**다음 작업 권고**:
+- **B-1a** `Config._sprintEnableStanding` (`SmartMovingConfig.java` 추가) — 단순
+- **B-15a~f** 등반 9 필드 (ClientState 추가 + resetState 리셋) — 세션 38 패턴 재사용
+
 ---
 
 ## 16. 신규 발견
@@ -1607,6 +1654,35 @@ R-11 섹션 (SmartMovingSelf.md L2508 이후) 에 원본 전수 덤프 + 1.21.1 
 - 3순위: B-12 (waterMovementTicks 증분) — B-10b 완료 후
 - 4순위: B-9 (메인 분류 재작성) — 가장 큰 작업, 여러 세션 분할
 - 5순위: B-7/B-8/B-11/B-13 — 순차 진행
+
+### 세션 39 B-2/B-3a/B-8 — Config.isSneakingEnabled 매핑 오류 정정
+
+**발견**: 세션 31 B-0 R-10.11 매핑 예비안 + A-1 §16 기록 + §10 B-2 설명에서
+`Config.isSneakingEnabled()` 를 `cfg.sneak && cfg.enabled` (AND 패턴) 으로 잘못
+매핑했음. 원본 `SmartMovingClientConfig.java` L69 확인 결과:
+
+```java
+public boolean isSneakingEnabled()   { return _sneak.value || !enabled; }  // OR!
+```
+
+**원본 주석 (리서치 L428)**: "SmartMoving 전체 비활성화 시 vanilla 동작 허용하는 메서드는
+`|| !enabled`, SmartMoving 전용 기능은 `&& enabled`. `isSneakingEnabled`,
+`isStandardBaseClimb`, `isRunningEnabled`, `isHungerGainEnabled`가 전자."
+
+**영향**:
+- `wantSneak = isSneakingEnabled() && wouldWantSneak` (원본 L2588-L2590)
+- AND 매핑 시 `cfg.enabled=false` 에서 wantSneak 항상 false → vanilla 스닉도 막힘 (버그)
+- OR 매핑 시 `cfg.enabled=false` 에서도 `_sneak.value=true` 면 wantSneak 정상 → vanilla 스닉 허용
+
+**수정**:
+- §6.7 매핑 테이블에 원본 공식 명시 + AND/OR 구분
+- §10 B-2 설명에 OR 패턴 강조
+- `SmartMovingConfig.isSneakingEnabled()` 구현: `sneak || !enabled` (세션 39)
+
+**교훈**: 다른 헬퍼들(`isRunningEnabled`/`isStandardBaseClimb`/`isHungerGainEnabled`) 도
+OR 패턴 가능성. B-N 진행 시 각 헬퍼 이식 전 원본 `SmartMovingClientConfig` 재확인 필수.
+
+---
 
 ### 세션 33 A-3 — 등반 4상태 불일치 14건 확정 (모두 [누락])
 
