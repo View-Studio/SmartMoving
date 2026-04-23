@@ -17,10 +17,10 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (방향 전환 후 재착수) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1 완료 / ⏳ **H-2 진행 (소비처 확인)** |
-| 이식 대상 | **20개 필드 확정** (Float 6 + Boolean 신규 13 + Boolean 정정 1) |
-| 잔여 섹션 | H-2~H-9 + G-2(수동 테스트) + G-5(포커스 전환) |
+| 상태 | 🟡 진행 중 — **사용자 재결정 대기** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0/H-1/H-2 완료 / ⏳ H-2 결과 공유 → A/B/C 3안 중 선택 |
+| 이식 대상 | 20개 필드 식별 완료, **live 1 / dead 19** (H-2 매트릭스) |
+| 잔여 섹션 | H-3~H-9 (범위는 사용자 결정에 따라) + G-2(수동 테스트) + G-5(포커스 전환) |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 사용자 지적으로 정정) |
 | 컴파일 상태 | ✅ 빌드 성공 (H 코드 변경 전) |
 
@@ -142,10 +142,42 @@
 **총 이식 대상 20개**: Float 6 (P.1 + P.2) + Boolean 신규 13 (P.3 `lavaLikeWater` + P.4
 5개 + P.5 7개) + Boolean 정정 1 (P.3 `speedUser`).
 
-**리스크 — dead field 가능성**: 위 20개 중 소진/허기/속도 시스템 소비처가 1.21.1 에
-없는 것은 필드만 추가해도 동작 영향 0 — **H-2 에서 각각 `grep` 확인**. 소비처 있는
-것만 포커스 #5 완료 조건에 포함; 없는 것은 §17 후속 (해당 시스템 이식 포커스와
-묶음) 또는 "필드만 선언, 후속 연결" 로 처리.
+### H-2 소비처 매트릭스 — 1.21.1 현재 구현 여부 (세션 14)
+
+각 필드를 **원본 소비처** (리서치 파일 grep) × **1.21.1 소비처** (소스 grep) 교차 확인.
+
+| # | 필드 | 원본 소비처 | 1.21.1 현재 | 분류 |
+|---|---|---|---|---|
+| P-1 | `baseExhautionLossFactor` | `Config.getFactor(false, 상태들)` → exhaustionLoss (Self L888-890) | `getFactor` 메서드 **없음** / `exhaustionLoss` 변수 **없음** | 💀 dead |
+| P-2 | `exhaustionLossHungerFactor` | `hungerIncrease += ELHF * exhaustionLoss` (Self L893) | `hungerIncrease` 변수 **없음** | 💀 dead |
+| P-3 | `baseHungerGainFactor` | `Config.getFactor(true, 상태들)` → hungerGainFactor (Self L862) | `getFactor` 없음 | 💀 dead |
+| P-4 | `runFactorLevitate` | `isLevitating` 분기 달리기 배율 | `isLevitating` 항상 false (로프 미구현, ClientState:992) | 💀 dead |
+| P-5 | `sprintFactorLevitate` | `isLevitating` 분기 스프린트 배율 | 동일 | 💀 dead |
+| P-6 | `alwaysHungerGain` | `hungerIncrease += alwaysHungerGain + ...` (Self L863) | hungerIncrease 없음 | 💀 dead |
+| **P-7** | **`speedUser`** | **`isUserSpeedAlwaysDefault() = !_speedUser.value \|\| factor==1F` (ClientConfig 의 속도 계산)** | **`SmartMovingConfig.getUserSpeedFactor() L580-585` 참조 중** | ✅ **live** |
+| P-8 | `lavaLikeWater` | `Base.getLavaBorder / isLava fluid 분기` (Base L222-L226) | `lavaLikeWater` 필드 **없음**, 라바 수영 분기 **없음** | 💀 dead |
+| P-9 | `runExhaustion` | `handleRunning` 게이트 | 소진 축적 자체 미이식 | 💀 dead |
+| P-10 | `climbJumpExhaustion` | 클라이밍 점프 게이트 | 미이식 | 💀 dead |
+| P-11 | `standJumpExhaustion` | stand 점프 게이트 | 미이식 | 💀 dead |
+| P-12 | `sneakJumpExhaustion` | sneak 점프 게이트 | 미이식 | 💀 dead |
+| P-13 | `walkJumpExhaustion` | walk 점프 게이트 | 미이식 | 💀 dead |
+| P-14 | `sprintExhaustion` | `additionalExhaustion * _sprintExhaustionGainFactor` (Self L883) | 미이식 | 💀 dead |
+| P-15 | `wallJumpExhaustion` | 벽 점프 게이트 | 미이식 | 💀 dead |
+| P-16 | `runJumpExhaustion` | run 점프 게이트 | 미이식 | 💀 dead |
+| P-17 | `sprintJumpExhaustion` | sprint 점프 게이트 | 미이식 | 💀 dead |
+| P-18 | `jumpChargeExhaustion` | 차지 점프 게이트 | 미이식 | 💀 dead |
+| P-19 | `jumpSlideExhaustion` | 슬라이드 점프 게이트 | 미이식 | 💀 dead |
+| P-20 | `hungerGain` | `hungerIncrease` 계산 진입 게이트 (Self L862 이전) | hungerIncrease 없음 | 💀 dead |
+
+**요약**: **live 1개** (`speedUser` 정정) / **dead 19개** (소비처 전체 미이식).
+
+**공통 미이식 시스템**:
+- `Config.getFactor(hunger, 상태들)` 공용 헬퍼 (SmartMovingClientConfig.md L389 섹션)
+- `SmartMovingSelf.updateExhaustion` / `updateHunger` 틱당 축적 루프 (Self L860-L895)
+- 라바 수영 처리 (`SmartMovingBase.getNormalWaterBorder`/`isLava` 분기 — Base L222-L241)
+
+→ **1.21.1 포트에서 Easy 프리셋의 "동작 층위" 1:1 은 위 3개 시스템 이식 완료를 전제**.
+각 시스템은 포커스 #5 범위를 훨씬 초과. §17 후속 포커스 후보.
 
 ---
 
@@ -559,10 +591,11 @@ Easy key 가 반환하는 **모든** 필드 값을 1.21.1 의 필드 기본값�
       **20개로 확장** (Float P-1~P-6, Creative P-7~P-8, Hard P-9~P-13, Medium P-14~P-20).
       `_old_*` 4개 + `climbExhaustion` / `ceilingClimbExhaustion` (이미 일치) +
       `_configKeyName` (이미 이식) 제외. 원본 키 오타 `"move.jump.walkexhaustion"` 확인.
-- [ ] H-2. **각 필드 소비처 확인 (dead field 방지)** — H-1 에서 확정된 전체 목록
-      각각에 대해 `grep` 으로 1.21.1 소비처 존재 여부 확인. 소비처 없는 필드는
-      포커스 #5 범위 외 (해당 시스템 이식 후속 포커스에서 함께). §3 표에 "소비처 있음/
-      없음" 컬럼 추가 후 분류.
+- [x] H-2. **각 필드 소비처 확인 (dead field 방지)** — 20개 × 원본 소비처(리서치 grep)
+      × 1.21.1 소비처(소스 grep) 전수 매트릭스 작성. 결과: **live 1 / dead 19**.
+      `speedUser` (P-7) 만 즉시 효과. 나머지 19개는 `Config.getFactor` 헬퍼 + 허기/
+      소진 축적 루프 + 라바 수영 분기 등 **공통 미이식 시스템 3종** 이식이 선행
+      되어야 동작 의미 있음. **사용자 재확인 필요** — 포커스 #5 범위 결정.
 - [ ] H-3. **Float 값 차이 필드 이식** (P-1~P-3, 소비처 있는 것만) — `baseExhautionLossFactor`
       등. 각 필드 신규 선언 + default Easy 값 + readFrom/writeTo + javadoc 에 원본
       `Value(d).e(v).h(v2)` 전체 key 별 값 기록.
@@ -1356,9 +1389,73 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
 **다음 작업**: H-2 — 20개 필드 각각 1.21.1 소비처 존재 여부 `grep` 확인. dead field
 분류. 소비처 있는 것만 H-3~H-6 이식 대상 확정.
 
+### 세션 14 (계속) — 2026-04-23 — H-2 (소비처 매트릭스)
+
+**진행한 작업**:
+- 20개 필드 각각 원본 소비처 (리서치 grep) + 1.21.1 소비처 (소스 grep) 전수 확인.
+- §3 에 H-2 소비처 매트릭스 20행 추가 (원본/현재/분류 3컬럼).
+- **결과**: live 1 / dead 19.
+  - `speedUser` (P-7) 만 live — `SmartMovingConfig.getUserSpeedFactor()` 에서 참조.
+    Easy=false 로 정정 시 `!speedUser || factor==1F || exponent==0 → 1F 반환` 조기
+    반환이 활성화되어 실제 gameplay 에 영향 (사용자 속도 조정 기능 기본 OFF).
+  - 나머지 19개는 전부 dead. 공통 원인:
+    1. `Config.getFactor(hunger|false, 상태들...)` 공용 factor 헬퍼 **미이식**
+    2. `SmartMovingSelf` 의 틱당 소진/허기 축적 루프 (Self L860-L895) **미이식**
+    3. 라바 수영 처리 (`SmartMovingBase.getNormalWaterBorder` 라바 분기, Base L222-L241) **미이식**
+- **사용자 재확인 사항 추가** — §16 신규 발견 + 사용자 선택지 3안 제시 (아래).
+
+**완료 전 검증 체크리스트 (H-2 기준)**:
+- [근거] 원본 소비처 — SmartMovingSelf.md L862-L895 / SmartMovingClientConfig.md L389 /
+  SmartMovingBase.md L222-L241 grep 완료 ✓
+- [근거] 1.21.1 소비처 — `getFactor` / `exhaustionLoss` / `hungerIncrease` /
+  `lavaLikeWater` / 각 exhaustion boolean 필드 전수 grep, 전부 0건 확인 ✓
+- [대응] 20개 매트릭스 20행 작성 ✓
+- [분기] live / dead 2분류 명확 ✓
+- [상수] 해당 없음 (분석 단계)
+- [타이밍] 해당 없음
+- [근사] 해당 없음
+- [신규] **19개 dead field** + 공통 3종 미이식 시스템 발견 — §16 에 추가 기록
+- [회귀] 코드 변경 없음
+- [빌드] 해당 없음 (문서만)
+
+**다음 작업**: **사용자 결정 대기**. 선택지 3안(§16 세션 14 하단) 중 하나 확정 후
+H-3~H-6 진행 범위 재정의. 내 추천: **B안** (speedUser 정정만 포커스 #5 내에서 처리,
+dead 19개는 "소진/허기/라바 시스템 이식" 별도 포커스 `focus_11_exhaustion_hunger_system.md`).
+
 ---
 
 ## 16. 신규 발견 (구현 중 발견한 누락/오역)
+
+### 세션 14 (2026-04-23) — H-2 대규모 dead field 발견
+
+- **Easy 프리셋 20개 중 19개 dead** — 1.21.1 에 원본 소비처 전체 미이식.
+  `speedUser` (P-7) 만 live (`getUserSpeedFactor()` 에서 참조 중).
+- **공통 미이식 시스템 3종** (이것이 이식되어야 나머지 19개가 live 가 됨):
+  1. **`Config.getFactor(hunger|false, 이동상태들...)` 헬퍼** — 이동 상태(airBorne/
+     sprint/run/sneak/stand/walk × hunger/exhaustion) 매트릭스 배율. 소진/허기 축적
+     공식의 곱셈 계수 계산.
+  2. **`SmartMovingSelf` 의 소진/허기 틱 축적 루프** (Self L860-L895) — 매 틱
+     `exhaustion -= exhaustionLoss`, `hungerIncrease += alwaysHungerGain + ...` 계산.
+     1.21.1 은 현재 `SmartMovingClientState.exhaustion -= 1.0F` 단순 감소 + 클라이밍
+     시 `+= 2.0F` 고정 축적만 존재. 상태별 factor 계산 공식 없음.
+  3. **라바 수영** (SmartMovingBase L222-L241) — `_lavaLikeWater` 이 true 면 라바를
+     물처럼 처리해서 `swim`/`dive` 동작. 1.21.1 에 해당 분기 없음.
+- **사용자 재확인 필요 — 선택지 3안**:
+
+  **A안 (껍데기)**: 20개 필드 전부 Easy 값으로 선언만 추가. 저장/로드는 작동
+  (`enabled=false` 등 파일에 기록됨). 하지만 P-1~P-6, P-8~P-20 은 gameplay 영향 0.
+  `speedUser` 만 즉시 효과. → "미래 대비 Easy 기본값 준비" 상태. 포커스 #5 범위 최소.
+
+  **B안 (추천)**: `speedUser` (P-7) 만 포커스 #5 내에서 정정 (live field). dead 19개는
+  **§17 후속 포커스 `focus_11_exhaustion_hunger_system.md`** 로 분리 — Config.getFactor
+  + 소진/허기 축적 + 라바 수영 3종 시스템과 함께 이식. 포커스 #5 는 "2상태 토글 +
+  speedUser Easy 정정" 으로 완료.
+
+  **C안 (전체)**: 포커스 #5 를 "Easy 1:1 + 소진/허기/라바 시스템 전체 이식" 으로
+  대폭 확장. 원본 SmartMovingSelf L860-L895 + getFactor 헬퍼 + SmartMovingBase 라바
+  분기 전체 이식. 작업량 수십 배 증가. 진정한 "Easy 1:1 동작 재현".
+
+  A/B/C 중 선택 필요. 포커스 #5 를 여기서 어떻게 마무리할지 사용자 결정 대기.
 
 ### 세션 13 (2026-04-23) — 방향 전환 + §7.1 오판 정정
 
@@ -1366,13 +1463,6 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
   실제로는 "N/A" 가 아니라 "이식하지 않은 것". 포커스 #5 시작 시 내가 사용자 확인
   없이 범위 축소 결정을 했고, "원본 특징 그대로 가져왔나?" 사용자 질문에서 드러남.
   사용자 결정: enabled = 원본 Easy 1:1 이식. §10 H 섹션 신설.
-- **dead field 리스크 — H-2 에서 확인 필요**: `runExhaustion` / `sprintExhaustion` /
-  `wallJumpExhaustion` / `jumpChargeExhaustion` / `jumpSlideExhaustion` /
-  `climbJumpExhaustion` / `hungerGain` / `baseHungerGainFactor` /
-  `exhaustionLossHungerFactor` / `baseExhautionLossFactor` / `alwaysHungerGain` /
-  `lavaLikeWater` — 이 필드들은 소진/허기/라바 시스템 소비처가 1.21.1 에 있는지
-  불명확. H-2 에서 `grep` 으로 소비처 존재 여부 확인. 없으면 필드만 추가해도
-  동작 영향 0 — 해당 시스템 이식 후속 포커스에서 본격 이식.
 
 ### 세션 12 (2026-04-23) — G-3 회귀 감사 중 발견
 
@@ -1442,6 +1532,17 @@ G-2 는 사용자 수동 검증 대기. G-5 는 G-2 통과 후.
   값이 다른 필드들(`_baseExhautionLossFactor` Medium=1F/Hard=0.8F 등) 의 런타임
   토글은 구현 안 함. 필요 시 `focus_09_difficulty_presets.md` 로 분리. Property<T>
   시스템 전체 이식 또는 프리셋 룩업 테이블 방식 중 선택.
+- **소진/허기/라바 시스템 전체 이식** (세션 14 발견 — Easy 1:1 동작 재현 전제):
+  → `focus_11_exhaustion_hunger_system.md` 후보. 3개 구성:
+  (1) `Config.getFactor(hunger, airBorne/sprint/run/sneak/stand/walk)` 공용 factor
+      헬퍼 (원본 SmartMovingClientConfig L387-L395). 상태별 배율 매트릭스.
+  (2) `SmartMovingSelf` 소진/허기 틱 축적 루프 (원본 L860-L895). `exhaustionLoss` /
+      `hungerIncrease` 계산. 축적된 hunger 서버 전송 → vanilla addExhaustion 연동.
+  (3) 라바 수영 — `SmartMovingBase.getNormalWaterBorder` 의 `_lavaLikeWater` 분기
+      (원본 L222-L241). 라바를 물처럼 취급하여 swim/dive 로직 활성.
+  이 3종 이식 완료 시 H-2 dead 19개가 전부 live 로 전환됨. Easy 프리셋 필드 값은
+  그때 현재 코드에 이미 올라가 있어야 하므로 H-3 이후에서 선행 이식 or 시스템
+  이식과 동시 이식 중 선택.
 - **4상태 라벨 순환 잉여 코드 정리** (세션 13 방향 전환 후): `configKeys` 6필드
   (`survivalConfigKeys` 등) + `configKeyName` Map + `getKey`/`getNextKey`/`hasKey`/
   `setCurrentKey` + `initializeForGameIfNeccessary` 체인 — 모두 `configKeys={null}`
