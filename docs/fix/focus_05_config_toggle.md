@@ -912,10 +912,15 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       세이브 파일 호환: 기존 키는 단순 무시됨. Medium/Hard 프리셋 복원 시
       `focus_09_difficulty_presets.md` 후속에서 재도입.
       `grep initializeForGameIfNeccessary` → 주석/javadoc 만 (코드 0). 빌드 ✓
-- [ ] H-19. **호출 없는 메서드/상수 정리** (H-20 후) — `getKey`/`getNextKey`/`hasKey`/
-      `setCurrentKey` 메서드 4개 + `CONFIG_KEY_ENABLED`/`CONFIG_KEY_DISABLED` 상수 2개 삭제.
-      `DEFAULT_KEYS`/`configKeys`/`toggler`/`toggle()`/`setKeys()`/`updateToggler()`/
-      `getCurrentKey()` 유지. `getCurrentKey` 도 H-18 정리 후 호출처 확인 — 남아있으면 정리.
+- [x] H-19. **호출 없는 메서드/상수 정리** (H-20 후) — 총 7개 삭제:
+      (1) 메서드 5개 `getCurrentKey()` / `getKey(int)` / `getNextKey(String)` /
+          `hasKey(String)` / `setCurrentKey(String)` — `getCurrentKey` 도 H-18 후 외부
+          호출 0건 확인되어 함께 삭제.
+      (2) 상수 2개 `CONFIG_KEY_ENABLED` / `CONFIG_KEY_DISABLED` (각 "enabled"/"disabled")
+      유지: `DEFAULT_KEYS` (`setKeys(null)` fallback) / `configKeys` / `toggler` /
+      `toggle()` / `setKeys(String[])` / `updateToggler()` — `toggle()` 순환에 필요.
+      원본 본체는 `docs/research/original/smartmoving/config/SmartMovingProperties.md`
+      L99-L156 에 보존. 빌드 ✓
 - [ ] H-21. **통합 빌드 + 회귀 감사 재실행** — clean build + §14 "H 섹션 회귀 감사" 확장
       (변경 3종 → 4종). checklist_original_audit.md 에 H-18~H-20 정리 기록 추가.
 - [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:

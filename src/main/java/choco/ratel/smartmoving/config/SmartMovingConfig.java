@@ -455,10 +455,9 @@ public class SmartMovingConfig {
     public boolean enabled = true;
 
     // ── Config key 토글 시스템 (원본 SmartMovingProperties L26-L31) ─────────────────
-    /** 원본 SmartMovingProperties.Enabled — `getKey(0)` 이 null 일 때 반환되는 문자열. */
-    public static final String CONFIG_KEY_ENABLED  = "enabled";
-    /** 원본 SmartMovingProperties.Disabled — `getNextKey`/`setCurrentKey`/`hasKey` 에서 비활성 표시. */
-    public static final String CONFIG_KEY_DISABLED = "disabled";
+    // H-19 (세션 23): CONFIG_KEY_ENABLED/DISABLED 상수 삭제. getCurrentKey/getKey/getNextKey/
+    //   hasKey/setCurrentKey 메서드 5개도 삭제 (외부 호출처 0건 확인). DEFAULT_KEYS 만 유지
+    //   — setKeys(null) 시 fallback 으로 사용됨.
     /**
      * 원본 SmartMovingProperties._defaultKeys = new String[1] = {null}.
      * 단일 null 요소 — `keys[0] == null` 이면 단순 on/off 토글 모드.
@@ -999,163 +998,11 @@ public class SmartMovingConfig {
         updateToggler();
     }
 
-    /**
-     * 원본 SmartMovingProperties.getCurrentKey() (L138-L143) 1:1 이식.
-     *
-     * 원본:
-     *   public String getCurrentKey() {
-     *       if (toggler == -1)
-     *           return Disabled;        // "disabled"
-     *       return keys[toggler];
-     *   }
-     *
-     * 반환값:
-     *   toggler == -1                    → CONFIG_KEY_DISABLED ("disabled")
-     *   toggler >= 0 && keys[toggler]==null → null (DEFAULT_KEYS {null} 케이스, 단순 on/off)
-     *   toggler >= 0 && keys[toggler]!=null → 해당 key 이름 ("e"/"m"/"h"/"c")
-     *
-     * logConfigState 분기 (원본 L352-L366):
-     *   currentKey == null   → "default server configuration"  (단순 on/off enabled 상태)
-     *   currentKey == "disabled" 는 enabled==false 분기에서 필터 (원본 L368 `disabled`)
-     *   그 외 → configKeyName[currentKey] 참조하여 "Easy"/"Medium"/"Hard" 또는 "with key \"c\"" 출력
-     *
-     * 주의: toggler == -2 (초기 센티넬) 상태에서 호출 시 `configKeys[-2]` 예외 방지 위해 방어 코드
-     *   — 원본은 load() 가 반드시 호출 후에만 사용되므로 -2 케이스 미정의. 1.21.1 은 F 섹션
-     *   이식 전 과도기 상태에서 발생 가능 → null 반환 (단순 on/off enabled 처리).
-     */
-    public String getCurrentKey() {
-        if (toggler == -1) return CONFIG_KEY_DISABLED;
-        if (toggler < 0 || configKeys == null || toggler >= configKeys.length) return null;
-        return configKeys[toggler];
-    }
-
-    /**
-     * 원본 SmartMovingProperties.getKey(int index) (L99-L104) 1:1.
-     *
-     *   public String getKey(int index) {
-     *       if (keys[index] == null)
-     *           return Enabled;     // "enabled" (null key → 표시용 "enabled" 문자열)
-     *       return keys[index];
-     *   }
-     *
-     * `_defaultKeys[0] == null` 이면 getKey(0) = "enabled" 반환. 실제 key 배열({"e","m","h"} 등)
-     * 에서는 해당 문자열 그대로.
-     */
-    public String getKey(int index) {
-        if (configKeys[index] == null) return CONFIG_KEY_ENABLED;
-        return configKeys[index];
-    }
-
-    /**
-     * 원본 SmartMovingProperties.getNextKey(String key) (L106-L118) 1:1.
-     *
-     *   public String getNextKey(String key) {
-     *       if (key == null || key.equals("disabled"))
-     *           return getKey(0);
-     *       int index;
-     *       for (index = 0; index < keys.length; index++)
-     *           if (key.equals(keys[index])) break;
-     *       index++;
-     *       if (index < keys.length)
-     *           return keys[index];
-     *       return Disabled;
-     *   }
-     *
-     * 동작:
-     *   key == null || "disabled"       → getKey(0) ({null}→"enabled", {"c"}→"c", {"e","m","h"}→"e")
-     *   keys 내에서 key 의 다음 인덱스 → 해당 값 반환 (null 일 수도 있음, {null} 케이스)
-     *   마지막 또는 미매칭                → "disabled"
-     *
-     * 예시:
-     *   keys={"e","m","h"}: "e"→"m", "m"→"h", "h"→"disabled", "disabled"→"e", null→"e"
-     *   keys={"c"}        : "c"→"disabled", "disabled"→"c"
-     *   keys={null}       : null→"enabled", "enabled"→"disabled", "disabled"→"enabled"
-     */
-    public String getNextKey(String key) {
-        if (key == null || key.equals(CONFIG_KEY_DISABLED))
-            return getKey(0);
-        int index;
-        for (index = 0; index < configKeys.length; index++)
-            if (key.equals(configKeys[index]))
-                break;
-        index++;
-        if (index < configKeys.length)
-            return configKeys[index];
-        return CONFIG_KEY_DISABLED;
-    }
-
-    /**
-     * 원본 SmartMovingProperties.hasKey(String key) (L145-L156) 1:1 이식.
-     *
-     *   public boolean hasKey(String key) {
-     *       if (Enabled.equals(key))
-     *           return keys[0] == null;     // {null} (DEFAULT_KEYS) 일 때만 true
-     *       if (Disabled.equals(key))
-     *           return true;                 // "disabled" 는 항상 유효
-     *       for (int i = 0; i < keys.length; i++)
-     *           if (key == null && keys[i] == null || key != null && key.equals(keys[i]))
-     *               return true;
-     *       return false;
-     *   }
-     *
-     * 동작:
-     *   "enabled"  → configKeys[0]==null 일 때만 true (DEFAULT_KEYS 단순 on/off 모드)
-     *   "disabled" → 항상 true
-     *   그 외      → configKeys 내 존재 여부 (null 도 비교)
-     */
-    public boolean hasKey(String key) {
-        if (CONFIG_KEY_ENABLED.equals(key))
-            return configKeys[0] == null;
-        if (CONFIG_KEY_DISABLED.equals(key))
-            return true;
-        for (int i = 0; i < configKeys.length; i++)
-            if (key == null && configKeys[i] == null
-                    || key != null && key.equals(configKeys[i]))
-                return true;
-        return false;
-    }
-
-    /**
-     * 원본 SmartMovingProperties.setCurrentKey(String key) (L120-L136) 1:1 이식.
-     *
-     *   public void setCurrentKey(String key) {
-     *       if (key == null || key.equals(Disabled))
-     *           toggler = -1;
-     *       else if (keys.length == 1 && keys[0] == null && key.equals(Enabled))
-     *           toggler = 0;
-     *       else {
-     *           for (toggler = 0; toggler < keys.length; toggler++)
-     *               if (key.equals(keys[toggler]))
-     *                   break;
-     *           if (toggler == keys.length)
-     *               toggler = -1;
-     *       }
-     *       update();
-     *   }
-     *
-     * 3갈래:
-     *   (1) key == null || "disabled"                              → toggler = -1
-     *   (2) keys == {null} (DEFAULT_KEYS) && key == "enabled"      → toggler = 0 (단순 on/off enabled)
-     *   (3) else: 배열 탐색 + 미매칭 시 toggler = -1
-     * 끝에 updateToggler() 호출 (원본 update() 의 ② enabled 파생 재계산).
-     *
-     * 호출: F 섹션 `initializeForGameIfNeccessary()` 에서 gameType 별 defaultKey 적용 시.
-     */
-    public void setCurrentKey(String key) {
-        if (key == null || key.equals(CONFIG_KEY_DISABLED))
-            toggler = -1;
-        else if (configKeys.length == 1 && configKeys[0] == null
-                && key.equals(CONFIG_KEY_ENABLED))
-            toggler = 0;
-        else {
-            for (toggler = 0; toggler < configKeys.length; toggler++)
-                if (key.equals(configKeys[toggler]))
-                    break;
-            if (toggler == configKeys.length)
-                toggler = -1;
-        }
-        updateToggler();
-    }
+    // H-19 (세션 23): getCurrentKey / getKey / getNextKey / hasKey / setCurrentKey 메서드
+    // 5개 삭제. H-18 후 외부 호출처 0건 확인. 2상태 토글(toggle/setKeys/updateToggler 만
+    // 유지)에 불필요. Medium/Hard 프리셋 복원 시 `focus_09_difficulty_presets.md` 에서 재도입.
+    // 원본 메서드 본체는 `docs/research/original/smartmoving/config/SmartMovingProperties.md`
+    // L99-L156 에 보존.
 
     // H-20 (세션 23): initializeForGameIfNeccessary / resetForNewGame 메서드 삭제.
     // 2상태 토글(configKeys={null}) 유지가 목표이므로 gameType 기반 setKeys 호출 경로 불필요.
