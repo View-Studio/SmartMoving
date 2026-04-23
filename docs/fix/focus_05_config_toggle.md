@@ -398,7 +398,9 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       배열 내 null 포함 검색. 호출처는 `setCurrentKey(String)` 이식 시 유효성 체크로 연결 예정.
 
 ### D. 서버 로그 4상태 확장
-- [ ] D-1. `SmartMovingServer.logConfigState` 의 `currentKey==null` / `configName==""` / `configName!=""` 3갈래 분기 복원
+- [x] D-1. `SmartMovingServer.logConfigState` 의 `currentKey==null` / `configName==""` /
+      `configName!=""` 3갈래 분기 복원. 원본 SmartMovingServerOptions.md L80-L113 1:1.
+      `config._configKeyName.value` 는 1.21.1 근사로 `configKeyName.getOrDefault(currentKey, "")`.
 
 ### E. 클라이언트 채팅 피드백 4상태
 - [ ] E-1. `SmartMovingClient.tickEssential` configToggle 블록의 msgKey 분기 4상태 확장
@@ -852,6 +854,45 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 **다음 작업**: C-7 (신규 등록 필요) — `setCurrentKey(String)` 이식 + Options.toggle()
 override 추가 동작(_configChat 채팅 + gameType 별 defaultKey 갱신).
 또는 D 섹션 진입(`SmartMovingServer.logConfigState` 4상태 분기 복원) 중 선택.
+
+### 세션 8 — 2026-04-23 — D-1
+
+**진행한 작업**:
+- D-1: `SmartMovingServer.logConfigState` 의 enabled=true 경로 3갈래 분기 복원.
+- 원본 근거: `SmartMovingServerOptions.md` L80-L113 1:1 (리서치 파일 grep 확인 후 해당 섹션 재독).
+- 3갈래:
+    ```java
+    String currentKey = config.getCurrentKey();
+    String action = reconfig ? "changed to " : "uses ";
+    if (currentKey == null) {
+        LOGGER.info("{}{}default server configuration{}", message, action, postfix);
+    } else {
+        String configName = config.configKeyName.getOrDefault(currentKey, "");
+        if (configName.isEmpty()) {
+            LOGGER.info("{}{}server configuration with key \"{}\"{}", message, action, currentKey, postfix);
+        } else {
+            LOGGER.info("{}{}server configuration \"{}\"{}", message, action, configName, postfix);
+        }
+    }
+    ```
+- `config._configKeyName.value` 원본 의미 = Property key-scoped defaults 기반 현재 key의 표시 이름.
+  1.21.1 근사: C-4 (`getCurrentKey()`) + B-3 (`configKeyName` Map) 조합으로 `getOrDefault(currentKey, "")`.
+- Creative "c" → 매핑 부재 → "" → `"with key \"c\""` 분기 (원본 `_configKeyName` 가 "c" 에 defaults 없음과 등가).
+- 기존 주석의 "1.21.1 범위 제한" / "키 이름 경로는 추후 추가" 문구 제거 — 본 원자 작업으로 해소.
+
+**완료 전 검증 체크리스트 (D-1 기준)**:
+- [근거] `SmartMovingServerOptions.md` L80-L113 리서치 파일 확인 ✓
+- [대응] 원본 3갈래 분기 + 출력 포맷 8패턴 (§379-L388 표) ↔ 구현 3갈래 1:1 ✓
+- [분기] `currentKey==null` / `configName.isEmpty()` / else 모두 복원 ✓
+- [상수] 문자열 리터럴 "default server configuration" / "server configuration with key" / "server configuration" 원본 그대로 ✓
+- [타이밍] 기존 호출처(initialize/adminToggleConfig) 변경 없음 — 출력 내용만 확장
+- [근사] `_configKeyName.value` Property key-scoped → Map.getOrDefault 근사, javadoc 명시 ✓
+- [신규] 없음
+- [회귀] globalConfig=false 경로 / enabled=false 경로 / reconfig=false 의 "overrides" 출력 모두 불변 ✓
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: E-1 — `SmartMovingClient.tickEssential` configToggle 블록의 msgKey 분기 4상태
+확장 + E-2 번역 키 추가 + E-3 기존 키 유지.
 
 ---
 
