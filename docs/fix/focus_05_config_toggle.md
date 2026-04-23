@@ -17,8 +17,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ✅ **재완료 (2026-04-24, 세션 22)** — H-15/H-16 수정 완료 |
-| 현재 단계 | ✅ H-0~H-17 + G-5 완료 / ⏳ **H-18~H-21 진행 (잉여 코드 정리)** |
+| 상태 | ✅ **재완료 (2026-04-24, 세션 23)** — H-18~H-21 잉여 정리 완료 |
+| 현재 단계 | ✅ H-0~H-21 + G-5 완료. 포커스 #5 최종 종료 — 포커스 #6 재전환 |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -921,8 +921,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       `toggle()` / `setKeys(String[])` / `updateToggler()` — `toggle()` 순환에 필요.
       원본 본체는 `docs/research/original/smartmoving/config/SmartMovingProperties.md`
       L99-L156 에 보존. 빌드 ✓
-- [ ] H-21. **통합 빌드 + 회귀 감사 재실행** — clean build + §14 "H 섹션 회귀 감사" 확장
-      (변경 3종 → 4종). checklist_original_audit.md 에 H-18~H-20 정리 기록 추가.
+- [x] H-21. **통합 빌드 + 회귀 감사 재실행** — `./gradlew clean build` BUILD SUCCESSFUL.
+      §14 에 "H 섹션 재개 회귀 감사 (세션 23 — H-15~H-21)" 섹션 신설, 추가 변경 6종 영향
+      분석 + grep 6건 전부 통과 확인. checklist_original_audit.md L1098 에 H-15~H-21
+      정리 기록 추가. 회귀 0건.
 - [x] H-16. **허기 delta 전송 수정 (폭주 차단)** — 클라 + 서버 동반 수정 완료:
       - `ClientState.handleExhaustion` 말미: `hungerIncrease != lastHungerIncrease` →
         `float delta = hungerIncrease - lastHungerIncrease; if (delta != 0F) send(delta);`.
@@ -1048,6 +1050,33 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 **결론**: H 섹션 변경 전부 Easy 1:1 의도된 동작. 회귀 0건. 근사 1건(서버 허기 연동
 3디테일 §17 후속) 은 구조적 한계 수용.
+
+### H 섹션 재개 회귀 감사 (세션 23 — H-15~H-21)
+
+**clean build**: `./gradlew clean build` — BUILD SUCCESSFUL in 7s ✓
+
+**추가 변경 (H-15~H-20) × 영향 분석**:
+
+| 변경 | 영향 포인트 | 확인 결과 |
+|------|-----------|----------|
+| `initializeForGameIfNeccessary` 호출 제거 (H-15) | `configKeys = DEFAULT_KEYS = {null}` 초기값 유지 → 2상태 토글 복원 | [x] 인게임 확인: "Smart Moving disabled/enabled" 2상태 순환. H-17 NPE 수정 후 왕복 정상 |
+| 허기 패킷 delta 전송 (H-16) | 클라 `handleExhaustion` 말미 + 서버 `SmartMoving.java` 수신자 | [x] 클라 `delta = hungerIncrease - lastHungerIncrease` 전송 / 서버 `sm.hunger += delta` 누적 / `MixinServerPlayerEntity` TAIL 기존 `addExhaustion + reset 0F` 유지. 폭주 차단 — 원본 체감 일치 |
+| configToggle NPE 수정 (H-17) | H-18 에서 `configKeyName` Map 삭제로 원인 완전 제거 | [x] 가드 코드도 H-18 에서 함께 삭제됨 |
+| 클라 4갈래 → 2갈래 / 서버 3갈래 → 1갈래 (H-18) | 채팅 피드백 + 서버 콘솔 로그 단순화 | [x] Easy 1:1 기준 (configKeys={null}) 에서 Medium/Hard/Creative 분기 도달 불가능 — 삭제 안전 |
+| `getCurrentKey`/`getKey`/`getNextKey`/`hasKey`/`setCurrentKey` 삭제 (H-19) | 외부 호출처 0건 확인 후 삭제 | [x] `grep` 결과 주석/javadoc 만 남음. 컴파일 오류 0 |
+| gameType 시스템 전체 삭제 (H-20) | 메서드 2 + 필드 7 + 상수 4 + readFrom/writeTo 6키 + 헬퍼 2 | [x] 세이브 파일 호환: 기존 키 무시. 외부 참조 0 |
+
+**H 섹션 정리 grep 스캔**:
+
+- [x] `grep "// TODO\|// \[미확인\]"` — 0건
+- [x] `grep "configKeyName\|CONFIG_KEY_ENABLED\|CONFIG_KEY_DISABLED"` — 코드 참조 0 (주석만)
+- [x] `grep "getKey\\b\|getNextKey\|hasKey\|setCurrentKey\|getCurrentKey"` — `Map.Entry.getKey()` 1건만
+  (vanilla API, 본 정리 대상 아님)
+- [x] `grep "initializeForGameIfNeccessary\|resetForNewGame\|GAME_TYPE_"` — 코드 참조 0
+- [x] `grep "survivalConfigKeys\|creativeConfigKeys\|adventureConfigKeys"` — 코드 참조 0
+- [x] `grep "getCsvArray\|csvJoin"` — 참조 0 (정의 삭제됨)
+
+**결론**: 잉여 정리 4단계 (H-18~H-21) 완료. 회귀 0건. 포커스 #5 최종 완료 조건 달성.
 
 ---
 
