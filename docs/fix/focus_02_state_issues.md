@@ -8,9 +8,9 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ⚪ 대기 (재현 케이스 수집 필요) |
-| 현재 단계 | 재현 케이스 수집 — §3 표 채우기 전까진 진입 금지 |
-| 선행 의존 | 없음 |
+| 상태 | 🟡 진행 중 (세션 29 — A-0 감사 계획 수립) |
+| 현재 단계 | A 단계 (원본 grep 기반 감사). 재현 케이스 없이도 진행 — 포커스 #5/#6 선례 |
+| 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
 
@@ -25,9 +25,12 @@
 
 ---
 
-## 3. 재현 케이스 표 ⚠️ **진입 전 필수 수집**
+## 3. 재현 케이스 표 (보조 참고용 — 세션 29 제약 완화)
 
-플레이테스트로 아래 표를 채워야 진입 가능. 각 행은 1 상태 × 1 상황 → 1 불일치.
+**방식 전환** (세션 29): "진입 전 필수" 제약 완화. 포커스 #5/#6 처럼 **원본 grep + 1:1
+코드 감사** 기반 진행. 재현 케이스 있으면 A-N 우선순위 판정용 보조, 없어도 감사 진행 가능.
+
+각 행은 1 상태 × 1 상황 → 1 불일치.
 
 | # | 시나리오 (입력/환경) | 대상 상태 | 원본 기대 | 1.21.1 실제 | 비교 기준 |
 |---|-------------------|----------|---------|-----------|----------|
@@ -123,21 +126,64 @@
 
 ## 10. 원자 단위 작업 목록
 
-### P. 재현 케이스 수집 (진입 전 단계)
-- [ ] P-1. 플레이테스트로 §3 재현 케이스 표 최소 3행 채움
-- [ ] P-2. 각 케이스의 원본 기대 값을 리서치 파일 라인 근거로 확인 (근거 없으면 WebFetch)
+> **방식 전환 (세션 29)**: 재현 케이스 "진입 전 필수" 제약 완화. 포커스 #5/#6 처럼
+> **원본 grep + 1:1 코드 감사** 기반으로 진행. 재현 케이스는 있으면 우선순위 판정용 보조,
+> 없어도 감사 진행 가능. 원본 `SmartMovingSelf.java` 에서 각 상태 필드가 갱신되는 전수
+> 위치를 Agent WebFetch 로 덤프 → 1.21.1 `grep` 으로 갱신 위치 전수 확인 → 불일치 매핑.
 
-### A. 원인 분석 (케이스마다)
-- [ ] A-N. (케이스 #N 별 — 원본 코드 vs 1.21.1 구현 side-by-side 비교)
+### A. 상태 필드별 원본 감사 (Agent WebFetch + grep 기반)
 
-### B. 수정 (원자 단위)
-- [ ] B-N. (원인별 수정)
+#### A-0 감사 계획 (세션 29)
+
+**13개 상태 필드 의존 그래프**:
+
+```
+레벨 0 (vanilla 입력):
+  onGround / sprint attribute / sneak key / jump key
+레벨 1 (SM 직접 파생):
+  isSlow    ← sneakKey 엣지 + 토글(R-09) + wouldWantSneak
+               (flying/sliding/headJumping/dive/swim/crawl 상호 의존)
+  isFast    ← grab.isPressed() && sprint
+레벨 2 (수중/등반/전환 1차 상태):
+  isSwimming_sm / isDiving / isDipping   ← Swimmer.updateSwimState 의 offset 3갈래
+  isClimbing / isCeilingClimbing          ← Climber feet/hands 판정
+  isHeadJumping                            ← grab + sprint + jump 조합 (Jumper)
+  isSliding                                ← sneak + sprint + onGround (Slider)
+레벨 3 (복합/이력 파생):
+  isCrawling              ← wantCrawl + mustCrawl + canCrawl + inputContinueCrawl + contextContinueCrawl
+  isCrawlClimbing         ← isCrawling + Climber 관련
+  isClimbCrawling         ← (파생 조합)
+  contextContinueCrawl    ← isCrawling 토글 + fromSwimmingOrDiving
+  wasCrawling_st / wasSneaking / wasClimbCrawling ← 이전 틱 스냅샷
+```
+
+**감사 그룹 분해** (우선순위 + 공통성 기준):
+
+- [x] A-0. 감사 계획 수립 (이 블록)
+- [ ] A-1. **`isSlow` / `isFast`** 원본 덤프 (레벨 1, 광범위 사용, R-09 연관)
+- [ ] A-2. **`isSwimming_sm` / `isDiving` / `isDipping`** 원본 덤프 (수중 3상태)
+- [ ] A-3. **`isClimbing` / `isCeilingClimbing` / `isCrawlClimbing` / `isClimbCrawling`** 원본 덤프 (등반 계열 4상태)
+- [ ] A-4. **`isHeadJumping` / `isSliding`** 원본 덤프 (전환 쌍)
+- [ ] A-5. **`isCrawling` + `contextContinueCrawl`** 원본 덤프 (가장 복잡, 종합 의존)
+- [ ] A-6. **`wasCrawling_st` / `wasSneaking` / `wasClimbCrawling`** 원본 스냅샷 위치 확인
+- [ ] A-7. 각 A-1~A-6 그룹별 1.21.1 grep + side-by-side 매핑 테이블 작성
+
+**각 A-N 그룹은 Agent WebFetch 로 원본 갱신 위치 전수 덤프 + 1.21.1 grep + 매핑**.
+불일치 발견 시 해당 그룹에서 B-N 원자 작업 추가하여 수정. 포커스 #6 A→B-N 확장 패턴과 동일.
+
+**세션 규모 예상**: 각 A-N 그룹이 Agent 1회 + grep 여러 번 + 매핑 — 적정 세션당 1-2 그룹.
+전체 A 단계 완료까지 3-4 세션. B 단계 (수정) 는 매핑 결과에 따라 변동.
+
+### B. 각 필드별 불일치 수정 (A-9 매핑 결과 기반)
+
+- [ ] B-N. (A-9 결과에 따라 필드별로 원자 작업 분해. 각 B-N 은 1 필드 또는 1 불일치 블록.)
 
 ### C. 검증
-- [ ] C-1. 빌드 성공
-- [ ] C-2. 재현 케이스 전부 "예상 == 실제" 매칭
-- [ ] C-3. 회귀 방지 감사
-- [ ] C-4. `playtest_fixes.md` "현재 포커스" → `#3` 갱신
+- [ ] C-1. `./gradlew clean build` 성공
+- [ ] C-2. §14 회귀 방지 감사 (상태 소비처 — 애니메이션/전환/키 커맨드 영향 확인)
+- [ ] C-3. checklist_original_audit.md 에 포커스 #2 결과 기록
+- [ ] C-4. 사용자 인게임 재검증 (§3 재현 케이스 실제 채워지면 매칭 확인)
+- [ ] C-5. `playtest_fixes.md` "현재 포커스" → `#3` 갱신
 
 ---
 
@@ -181,7 +227,44 @@
 
 ## 15. 작업 기록
 
-_(비어있음)_
+### 세션 29 — 2026-04-24 — 방식 전환 + A-0 감사 계획
+
+**배경**: 사용자 지적 "원본 코드와 비교해서 1:1 번역 되어있는지 원자 단위까지 검수하면
+고쳐지는 거 아니냐" — 세션 29 시작 시점 프롬프트의 "재현 케이스 진입 전 필수" 제약에
+대한 의문 제기. 포커스 #5/#6 는 실제로 grep + 1:1 비교 기반으로 진행했음을 확인 →
+포커스 #2 에도 동일 패턴 적용으로 방식 전환.
+
+**진행한 작업**:
+- §3 "진입 전 필수" 제약 완화 — "보조 참고용" 으로 전환. 재현 케이스 있으면 A-N 우선순위
+  판정용, 없어도 감사 진행 가능.
+- §10 재정의:
+  - P 단계 (재현 케이스) 제거 → A 단계 (grep 기반 감사) + B 단계 (매핑 결과 기반 수정)
+    + C 단계 (검증) 로 단순화. 포커스 #6 A-1/A-2/A-3/B-N 패턴 그대로 적용.
+  - A-0 감사 계획 수립 — 13필드 의존 그래프 + 그룹 분해 A-1~A-7.
+  - B-N 은 A-7 매핑 결과에 따라 동적 추가 (포커스 #6 선례).
+- §1 상태 "대기" → "진행 중 (A-0 감사 계획 수립)".
+
+**A-0 감사 그룹 결정** (우선순위 근거):
+- A-1 `isSlow`/`isFast` — 레벨 1, 광범위 사용, R-09 토글 연관
+- A-2 수중 3상태 `isSwimming_sm`/`isDiving`/`isDipping` — Swimmer 집중
+- A-3 등반 계열 4상태 `isClimbing`/`isCeilingClimbing`/`isCrawlClimbing`/`isClimbCrawling`
+- A-4 전환 쌍 `isHeadJumping`/`isSliding`
+- A-5 가장 복잡 `isCrawling`+`contextContinueCrawl`
+- A-6 이력 스냅샷 3개
+- A-7 전체 1.21.1 grep + 매핑 테이블
+
+**완료 전 검증 체크리스트 (A-0 기준)**:
+- [근거] `grep "public boolean is*"` 로 ClientState 13필드 전부 선언 확인 ✓
+- [대응] 포커스 #6 A-1/A-2/A-3 패턴 재사용 — 방식 일관성 ✓
+- [분기] 13필드 의존 그래프 레벨 0-3 분류 완료 ✓
+- [상수/타이밍/근사] 해당 없음 (계획 단계)
+- [신규] A-N 그룹 6개 + A-7 매핑 정의 ✓
+- [회귀] 문서만 — 코드 영향 없음
+- [빌드] 해당 없음
+
+**다음 작업**: A-1 — `isSlow`/`isFast` Agent WebFetch. 원본 `SmartMovingSelf.java` 에서
+두 필드가 갱신되는 모든 위치 덤프 → 1.21.1 `tickEssential` 갱신 위치와 side-by-side 비교.
+R-09 토글 블록 + wouldWantSneak/wouldIsSneaking 공식 정합성 확인.
 
 ---
 
