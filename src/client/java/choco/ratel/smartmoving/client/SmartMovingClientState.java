@@ -497,19 +497,21 @@ public final class SmartMovingClientState {
                 prevPressRight = pressRight;
                 prevPressBack  = pressBack;
 
-                // 원본: if(StartPressed) { count==0→3, else→-1 } else if(count>0) count--
+                // 원본: if(StartPressed) { count==0→angleJumpDoubleClickTicks(), else→-1 } else if(count>0) count--
+                // 원본 _angleJumpDoubleClickTicks: Positive("...").up(3F, 2F), (int)Math.ceil(value) 정수화.
+                int angleTicks = (int) Math.ceil(cfg.angleJumpDoubleClickTicks);
                 if (cfg.angleJumpSide) {
                     if (startLeft) {
-                        if (leftJumpCount  == 0) leftJumpCount  = 3; else leftJumpCount  = -1;
+                        if (leftJumpCount  == 0) leftJumpCount  = angleTicks; else leftJumpCount  = -1;
                     } else if (leftJumpCount  > 0) leftJumpCount--;
 
                     if (startRight) {
-                        if (rightJumpCount == 0) rightJumpCount = 3; else rightJumpCount = -1;
+                        if (rightJumpCount == 0) rightJumpCount = angleTicks; else rightJumpCount = -1;
                     } else if (rightJumpCount > 0) rightJumpCount--;
                 }
                 if (cfg.angleJumpBack) {
                     if (startBack) {
-                        if (backJumpCount  == 0) backJumpCount  = 3; else backJumpCount  = -1;
+                        if (backJumpCount  == 0) backJumpCount  = angleTicks; else backJumpCount  = -1;
                     } else if (backJumpCount  > 0) backJumpCount--;
                 }
 

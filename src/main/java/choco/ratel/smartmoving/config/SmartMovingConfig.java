@@ -104,6 +104,22 @@ public class SmartMovingConfig {
     public boolean angleJumpBack = true;
     public float angleJumpHorizontalFactor = 0.3F;
     public float angleJumpVerticalFactor = 0.2F;
+    /**
+     * 원본: _angleJumpDoubleClickTicks = Positive("move.jump.angle.double.click.ticks").singular().up(3F, 2F)
+     * 각도 점프 더블클릭 감지 타이머(틱). 첫 클릭 후 이 시간 내에 두 번째 클릭 시 트리거.
+     * 기본 3F, 최솟값 2F. 사용 시 (int)Math.ceil(value).
+     */
+    public float angleJumpDoubleClickTicks = 3F;
+    /**
+     * 원본: _wallJumpDoubleClick = Unmodified("move.jump.wall.double.click").singular()
+     * true=더블클릭+홀드로 벽 점프 발동 / false=싱글클릭+홀드. Unmodified 기본값 true.
+     */
+    public boolean wallJumpDoubleClick = true;
+    /**
+     * 원본: _wallJumpDoubleClickTicks = Positive("move.jump.wall.double.click.ticks").singular().up(3F, 2F)
+     * 벽 점프 더블클릭 타이머(틱). 기본 3F, 최솟값 2F.
+     */
+    public float wallJumpDoubleClickTicks = 3F;
 
     // ── Sliding ─────────────────────────────────────────────────
     // 원본: SmartMovingConfig._slideSlipperinessFactor (PositiveFactor, 기본값 1F)
@@ -327,6 +343,9 @@ public class SmartMovingConfig {
         angleJumpBack            = getBool(p,   "move.jump.angle.back",           angleJumpBack);
         angleJumpHorizontalFactor = getFloat(p, "move.jump.angle.horizontal.factor", angleJumpHorizontalFactor);
         angleJumpVerticalFactor  = getFloat(p,  "move.jump.angle.vertical.factor", angleJumpVerticalFactor);
+        angleJumpDoubleClickTicks = getFloat(p, "move.jump.angle.double.click.ticks", angleJumpDoubleClickTicks);
+        wallJumpDoubleClick      = getBool(p,   "move.jump.wall.double.click",    wallJumpDoubleClick);
+        wallJumpDoubleClickTicks = getFloat(p,  "move.jump.wall.double.click.ticks", wallJumpDoubleClickTicks);
         slideSlipperinessFactor  = getFloat(p,  "move.slide.slipperiness.factor", slideSlipperinessFactor);
         slideParticlePeriodFactor = getFloat(p, "move.slide.particle.period.factor", slideParticlePeriodFactor);
         slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
@@ -403,6 +422,9 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.angle.back",            String.valueOf(angleJumpBack));
         p.setProperty("move.jump.angle.horizontal.factor", String.valueOf(angleJumpHorizontalFactor));
         p.setProperty("move.jump.angle.vertical.factor", String.valueOf(angleJumpVerticalFactor));
+        p.setProperty("move.jump.angle.double.click.ticks", String.valueOf(angleJumpDoubleClickTicks));
+        p.setProperty("move.jump.wall.double.click",     String.valueOf(wallJumpDoubleClick));
+        p.setProperty("move.jump.wall.double.click.ticks", String.valueOf(wallJumpDoubleClickTicks));
         p.setProperty("move.slide.slipperiness.factor",  String.valueOf(slideSlipperinessFactor));
         p.setProperty("move.slide.particle.period.factor", String.valueOf(slideParticlePeriodFactor));
         p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
