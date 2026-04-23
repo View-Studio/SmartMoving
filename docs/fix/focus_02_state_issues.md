@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 40 — B Phase 1 등반 9 + Config 필드) |
-| 현재 단계 | A 완료 + B Phase 1: 필드 17건 + Config 헬퍼 4종 + Config 필드 1건 완료 / ⏳ **Phase 1 잔여 (B-22c isRunning 승격 / B-31a wasCrawling)** |
+| 상태 | 🟡 진행 중 (세션 41 — B Phase 1 wasCrawling 개명) |
+| 현재 단계 | A 완료 + B Phase 1: 필드 17 + wasCrawling 개명 + Config 헬퍼 4 + Config 필드 1 완료 / ⏳ **Phase 1 잔여 (B-22c isRunning 필드 승격)** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -170,7 +170,7 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 |---|---|---|---|
 | `wasSneaking` (지역) | `wasSneaking` (L241) | ✓ 이식, 저장 시점 조정 가능 | B-44a |
 | `wasClimbCrawling` (지역) | `wasClimbCrawling` (L247) | ✓ 이식, 저장 시점 조정 가능 | B-44c |
-| `wasCrawling` (필드 L3074, 다용도) | `wasCrawling_st` (L244, R-09 전용) | ⚠️ 부분 이식 (다용도 필드 별도 신설 필요) | B-31a + B-44b |
+| `wasCrawling` (필드 L3074, 다용도) | `wasCrawling` (개명 완료 세션 41) | ✓ 필드 개명 완료, 나머지 갱신 위치는 B-33 이후 | B-44b |
 | `wasHeadJumping` | — | ✗ 미이식 | **B-22a** |
 | `wasRunning` | — | ✗ 미이식 | **B-22b** |
 | `wasLevitating` | — | ✗ 미이식 (isLevitating 의존) | B-10d + B-43 |
@@ -724,9 +724,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: B-22d `isStanding` 필드 선행.
 
 #### B-31. 미이식 필드 3건 이식 (A-5 발견)
-- [ ] B-31a. `wasCrawling` 필드 ClientState 추가 (wasCrawling_st 와 구분 — tickEssential
-      이전 틱 저장 전용, L2441 대응). **B-33 메인 공식 재작성 시 wasCrawling_st 와 용도
-      통합 검토**.
+- [x] B-31a. ✅ **세션 41 완료** — 기존 `wasCrawling_st` (R-09 전용) 을 `wasCrawling` 으로
+      개명하여 원본 L3074 public 필드와 이름 일치시킴. 5곳 참조 일괄 갱신 (L383/L700/
+      L910/L959/L1045). 개명 후 동일 필드가 다용도로 사용됨 — 현재 이식된 용도는
+      (1) tickEssential 이전 틱 저장 + (2) R-09 willStartCrawl 판정 2건. 나머지 (3)(4)(5)
+      갱신 위치는 B-33/B-34/B-35/B-36/B-41 수정 시 추가 등록.
 - [~] B-31b. **필드만 이식 완료 (세션 38)** — `wantCrawlNotClimb` 필드 추가. L2452-L2461
       갱신 블록은 B-41 범위.
 - [~] B-31c. **필드만 이식 완료 (세션 38)** — `initializeCrawling` 필드 추가. 관련 로직은
@@ -1514,6 +1516,52 @@ B-10a~d / B-15a~f 등) 은 병렬 가능.
 신중한 접근 필요. B-31a 는 wasCrawling_st 를 공용으로 쓸지 별도 필드 신설할지 판단
 필요. B-22c 는 handleExhaustion 의 로컬 `isRunning` (L995) 을 필드로 승격하고 기존
 호출 정합성 검증 필요.
+
+### 세션 41 — 2026-04-24 — B Phase 1 B-31a (wasCrawling 개명)
+
+**진행한 작업**:
+- 결정: `wasCrawling_st` → `wasCrawling` **개명** 으로 원본 이름과 일치 (옵션 B).
+  별도 필드 신설 (옵션 A) 대신 — 원본이 단일 필드로 다용도 사용하므로 1:1 에 부합.
+- `SmartMovingClientState.java` 5곳 일괄 개명 (`Edit replace_all` 사용):
+  * L383 필드 선언 → 원본 L3074 `public boolean wasCrawling` 매핑 주석 확장
+  * L700 저장: `wasCrawling_st = isCrawling` → `wasCrawling = isCrawling`
+  * L910 주석
+  * L959 R-09 조건: `isCrawling && !wasCrawling`
+  * L1045 resetState 리셋
+- 필드 주석에 원본 5가지 사용 용도 상세 기록:
+  * (1) tickEssential 저장 ✓ 이식
+  * (2) R-09 willStartCrawl 판정 ✓ 이식
+  * (3) L2449 capabilities.flying 해제 점프 — B-34
+  * (4) L2457 wantCrawlNotClimb 계산 — B-41
+  * (5) L2566/L2572/L2751/L2760/L2767/L2812/L2835/L2860 여러 전환 블록 재설정 —
+    B-33/B-35/B-36 수정 시 등록
+- Swimmer L116 로컬 변수 `wasCrawling` 과 이름 충돌 확인 — **별도 스코프라 무관** (Swimmer
+  메서드 내 지역 변수 vs ClientState 필드)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 41 기준)**:
+- [근거] 원본 SmartMovingSelf L3074 `public boolean wasCrawling` + 사용처 grep ✓
+- [근거] 기존 `wasCrawling_st` 5곳 참조 전수 확인 + 원본 대응 위치 매핑 ✓
+- [대응] 개명 후 원본 필드 이름과 1:1 일치 ✓
+- [분기] 저장 (L700) + R-09 판정 (L959) + resetState (L1045) 3곳 일관 갱신 ✓
+- [상수] 없음 (이름만 변경)
+- [타이밍] 개명은 의미 변경 없음 — 타이밍 동치 ✓
+- [근사] 없음 (순수 이름 변경)
+- [신규] 없음 (계획된 작업)
+- [회귀] compileJava 성공 — Swimmer 로컬 변수와 스코프 충돌 없음 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**B Phase 1 진행 상황 (세션 41 기준)**:
+- ✅ 독립 필드 8건 — 세션 38
+- ✅ Config 헬퍼 4종 — 세션 39
+- ✅ Config 필드 1건 + 등반 9 필드 — 세션 40
+- ✅ **wasCrawling 개명 (B-31a) — 세션 41**
+- ⏳ **B-22c `isRunning` 필드 승격** (handleExhaustion 수정 포함)
+
+**다음 작업**: B-22c (Phase 1 마지막 원자). 원본 `isRunning` 은 **메서드 override**
+(L3241 `public boolean isRunning() { return isSprinting() && !isFast && (onGround || vanilla()); }`)
++ **필드** 조합. 1.21.1 에서는 필드 신설 + 메서드 추가로 처리. 기존 handleExhaustion
+L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드 갱신 위치 결정 필요.
 
 ---
 

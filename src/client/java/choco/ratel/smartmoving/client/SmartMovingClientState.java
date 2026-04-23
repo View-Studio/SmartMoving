@@ -379,8 +379,18 @@ public final class SmartMovingClientState {
     /** 원본 L2717 `wasSneaking = isSlow` (이전 틱 isSlow 저장, willStartSneak/willStopSneak 조건용). */
     public boolean wasSneaking;
 
-    /** 원본 wasCrawling — 이전 틱 isCrawling 저장 (willStartCrawl 조건 `isCrawling && !wasCrawling`). */
-    public boolean wasCrawling_st;
+    /**
+     * 원본 SmartMovingSelf L3074 `public boolean wasCrawling;` — 다용도 필드.
+     * 주요 역할:
+     *   (1) L2441 tickEssential `wasCrawling = isCrawling` — isCrawling 공식 직전 저장
+     *   (2) L3015 R-09 `isCrawling && !wasCrawling` — willStartCrawl 판정
+     *   (3) L2449 `wasCrawling && !isCrawling && capabilities.flying` — tryJump(Up) 트리거 (B-34)
+     *   (4) L2457 `!wasCrawling` — wantCrawlNotClimb 계산 (B-41)
+     *   (5) L2566/L2572/L2751/L2760/L2767/L2812/L2835/L2860 — 여러 전환 블록 재설정
+     * B-31a (세션 41): 기존 `wasCrawling_st` → `wasCrawling` 개명 (원본과 이름 일치).
+     * 현재는 (1)+(2) 이식 상태 — 나머지는 해당 B-N 에서 추가 갱신 위치 등록.
+     */
+    public boolean wasCrawling;
 
     /** 원본 wasClimbCrawling — 이전 틱 isClimbCrawling 저장. */
     public boolean wasClimbCrawling;
@@ -697,7 +707,7 @@ public final class SmartMovingClientState {
             // 원본 R-09 토글 블록 이전 값 저장 (willStartSneak/willStartCrawl 엣지 계산용).
             // 원본 L2717 `wasSneaking = isSlow`, 원본 willStartCrawl `isCrawling && !wasCrawling`.
             wasSneaking = isSlow;
-            wasCrawling_st = isCrawling;
+            wasCrawling = isCrawling;
             wasClimbCrawling = isClimbCrawling;
 
             // ── mustCrawl / inputContinueCrawl / contextContinueCrawl 해제 / wantCrawl pre-compute ─
@@ -907,7 +917,7 @@ public final class SmartMovingClientState {
 
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
-            // wasSneaking/wasCrawling_st/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
+            // wasSneaking/wasCrawling/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
             {
                 boolean isSneakToggleEnabled = cfg.sneakToggle && cfg.enabled;
                 boolean isCrawlToggleEnabled = cfg.crawlToggle && cfg.enabled;
@@ -956,7 +966,7 @@ public final class SmartMovingClientState {
 
                 boolean willStartCrawl = false;
                 if (isCrawlToggleEnabled) {
-                    if (isCrawling && !wasCrawling_st)
+                    if (isCrawling && !wasCrawling)
                         willStartCrawl = true;
                     if (isClimbCrawling && !wasClimbCrawling)
                         willStartCrawl = true;
@@ -1042,7 +1052,7 @@ public final class SmartMovingClientState {
         contextContinueCrawl = false;
         ignoreNextStopSneakButtonPressed = false;
         wasSneaking = false;
-        wasCrawling_st = false;
+        wasCrawling = false;
         wasClimbCrawling = false;
         sneakKeyStartPressed = false;
         sneakKeyStopPressed = false;
