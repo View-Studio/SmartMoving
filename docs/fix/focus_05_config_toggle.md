@@ -359,8 +359,11 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 - [x] A-3. 리서치 파일 이미 완전 — 보완 불필요.
 
 ### B. `SmartMovingConfig` 필드 추가
-- [ ] B-1. `configKeys` 필드 (String[], default `{"e","m","h"}`)
-- [ ] B-2. `toggler` 필드 (int, default 1 — survival `defaultConfigKey="m"` 위치)
+- [x] B-1. `configKeys` 필드 (String[]) — **원본 1:1 수정**: 초기값을 survival 기본이 아닌
+      원본 `_defaultKeys = {null}` 그대로 (`DEFAULT_KEYS` 상수). 보조 상수 `CONFIG_KEY_ENABLED`
+      = "enabled" / `CONFIG_KEY_DISABLED` = "disabled" 도 함께 추가 (원본 L26-L27). 게임타입별
+      `{"e","m","h"}` / `{"c"}` 는 F 섹션의 `initializeForGameIfNeccessary()` 에서 setKeys 로 설정.
+- [ ] B-2. `toggler` 필드 (int, default **-2** — 원본 L30 초기값 그대로, `load()` 후 0, `setCurrentKey(default)` 후 특정 인덱스)
 - [ ] B-3. `configKeyName` 필드 (Map, default 4개 매핑)
 - [ ] B-4. `readFrom`/`writeTo` 에 `move.config.key.current` / `move.config.keys` 추가 (원본 저장 포맷 확인 필요 — A-1/A-2 결과 기반)
 
@@ -509,6 +512,31 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
 
 **다음 작업**: B-1 — `SmartMovingConfig` 에 `configKeys` / `toggler` / `currentConfigKey` /
 `configKeyName` 필드 추가.
+
+### 세션 3 — 2026-04-23 — B-1
+
+**진행한 작업**:
+- B-1: `SmartMovingConfig` 에 원본 `SmartMovingProperties` L26-L31 대응 필드/상수 추가.
+  - `CONFIG_KEY_ENABLED = "enabled"` (public static final String)
+  - `CONFIG_KEY_DISABLED = "disabled"` (public static final String)
+  - `DEFAULT_KEYS = new String[] { null }` (private static final)
+  - `public String[] configKeys = DEFAULT_KEYS` — 원본 `keys = _defaultKeys` 1:1
+- **§9 예상 diff 원본 1:1 방향으로 정정**: 초기값을 `{"e","m","h"}` 가 아닌 `DEFAULT_KEYS`
+  ({null}) 로. 게임타입별 배열 설정은 F 섹션 (`initializeForGameIfNeccessary`) 이식 시
+  `setKeys()` 호출로 교체되는 원본 흐름 재현.
+
+**완료 전 검증 체크리스트 (B-1 기준)**:
+- [근거] `SmartMovingProperties.md` L15-L174 재확인, 특히 L26-L31 임베드 소스 확인 ✓
+- [대응] 원본 4심볼(Enabled/Disabled/_defaultKeys/keys) ↔ 구현 4심볼 1:1 매핑 ✓
+- [상수] 원본 상수값 그대로 ("enabled" / "disabled" / `new String[1]`) ✓
+- [분기] 해당 없음 (필드 선언만)
+- [타이밍] 해당 없음
+- [근사] 해당 없음 (완전 재현)
+- [신규] 없음
+- [회귀] 기존 `enabled = true` 초기값 유지 (아직 `update()` 파생으로 변경 안 함 — C 섹션 예정)
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-2 — `toggler` 필드 (int, default -2 원본 그대로).
 
 ---
 

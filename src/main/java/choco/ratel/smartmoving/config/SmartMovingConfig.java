@@ -218,8 +218,30 @@ public class SmartMovingConfig {
     public boolean ceilingClimbing = true;
 
     // ── 활성화 플래그 ──────────────────────────────────────────
-    /** SM 전체 on/off. toggle() 으로 반전 후 저장. */
+    /**
+     * SM 활성화 상태. 원본 SmartMovingProperties.enabled (L33).
+     * `update()` 호출 시 `toggler != -1` 로 파생 — 직접 쓰기 금지, toggle()/setCurrentKey 경유.
+     */
     public boolean enabled = true;
+
+    // ── Config key 토글 시스템 (원본 SmartMovingProperties L26-L31) ─────────────────
+    /** 원본 SmartMovingProperties.Enabled — `getKey(0)` 이 null 일 때 반환되는 문자열. */
+    public static final String CONFIG_KEY_ENABLED  = "enabled";
+    /** 원본 SmartMovingProperties.Disabled — `getNextKey`/`setCurrentKey`/`hasKey` 에서 비활성 표시. */
+    public static final String CONFIG_KEY_DISABLED = "disabled";
+    /**
+     * 원본 SmartMovingProperties._defaultKeys = new String[1] = {null}.
+     * 단일 null 요소 — `keys[0] == null` 이면 단순 on/off 토글 모드.
+     */
+    private static final String[] DEFAULT_KEYS = new String[] { null };
+
+    /**
+     * 원본 SmartMovingProperties.keys (L31) 대응.
+     * 현재 유효한 config key 배열. 초기값 {null} (단순 on/off) — `setKeys(...)` 호출로
+     * 게임타입별 배열({"e","m","h"} / {"c"} 등) 로 교체. `initializeForGameIfNeccessary()`
+     * 이식(F 섹션)에서 gameType 판정 후 setKeys 호출.
+     */
+    public String[] configKeys = DEFAULT_KEYS;
 
     // ── Singleton / Config 전환 ────────────────────────────────
     /** 클라이언트 파일 기반 설정 (Options). 불변 싱글톤. */
