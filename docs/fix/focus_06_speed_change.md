@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 완료 / ⏳ **B-5 진행 (Jump maxHorizontalMotion)** |
+| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 완료 / [~] B-5 범위 초과 (§17 후속) / ⏳ **C 단계 (동기화 정합)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -265,9 +265,15 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
       신규 발견 (§16): 원본 L1522 의 `if(isFast) factor *= _sprintFactor.value` 및 사다리
       substitute 별 `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeedFactor`
       추가 곱 미이식 — 포커스 범위 외, 별도 이식 포인트.
-- [ ] B-5. **점프 maxHorizontalMotion User 배율 이식** — `SmartMovingJumper.tryJump` 또는 대응
-      지점에서 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
-      원본 Self L2045 1:1. 현재 getMaxHorizontalMotion 자체가 이식됐는지도 확인.
+- [~] B-5. **점프 maxHorizontalMotion User 배율 이식** — **범위 초과 판정 (세션 28)**.
+      확인 결과: `getMaxHorizontalMotion` **시스템 전체가 1.21.1 에 미이식**.
+      - `Config.getMaxHorizontalMotion(speed, type, inWater)` 메서드 부재 (원본 L305-L321)
+      - 점프 타입별 `getJumpHorizontalFactor` 헬퍼 부재
+      - `horizontalJumpFactor > 1F` 판정 + maxHorizontalMotion 클램프 로직 전체 부재
+      포커스 #6 정의("getUserSpeedFactor 누락 곱셈 복원") 범위 초과 — 곱셈을 주입할 상위
+      시스템 자체 부재. §17 후속 포커스 후보로 이동: `focus_12_max_horizontal_motion.md`.
+      체감 영향: Creative + speedUser 활성 시에도 점프 거리 상한이 User 배율 반영 안 됨
+      (수평 속도 일반 이동은 B-2 로 이미 반영 — 점프 순간의 "도약 거리" 클램프만 미반영).
 
 - [x] B-6. **Creative 전용 게이트 이식 (세션 26)** — 4곳 완료:
       (a) `Mover.isCreative(player)` private 헬퍼 신설 — `MinecraftClient.getInstance().
@@ -605,9 +611,54 @@ sprintFactor / `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeed
 에서 horizontal 수평 상한 계산 지점에 `getCombinedSpeedFactor` 추가. 먼저 `getMaxHorizontalMotion`
 자체가 이식됐는지 확인 필요.
 
+### 세션 28 — 2026-04-24 — B-5 범위 초과 판정 → §17 후속 이동
+
+**진행한 작업**:
+- 1.21.1 `SmartMovingJumper.tryJump` + grep 검토: `maxHorizontalMotion` /
+  `getMaxHorizontalMotion` / `horizontalJumpFactor` 관련 로직 **0건**.
+- 원본 Self L2045 는 단순 `* getCombinedSpeedFactor()` 가 아니라 **상위 시스템 전체** 기반:
+  1. `Config.getMaxHorizontalMotion(speed, type, inWater)` — 원본 L305-L321 13줄 공식
+  2. `getJumpHorizontalFactor(speed, type, jumpCharge)` 헬퍼 (점프 타입 14종 × 속도 5)
+  3. `horizontalJumpFactor > 1F && !isCollidedHorizontally` 판정
+  4. Jumper.tryJump 에 maxHorizontalMotion 클램프 적용
+- 1.21.1 에 이 4단계 전체 부재 → User 배율 "곱셈 주입" 대상 자체 없음.
+- 포커스 #6 정의("getUserSpeedFactor 누락 곱셈 복원")는 상위 시스템 부재 시 적용 불가.
+
+**결정**: B-5 **범위 초과 판정**, `focus_12_max_horizontal_motion.md` 후속 신설.
+- §10 B-5 체크박스를 [~] (지연) 로 표기, 범위 초과 이유 + 대체 후속 포커스 명시
+- §16 세션 28 에 신규 발견 기록 (시스템 3종 부재)
+- §17 에 `focus_12` 후보 신설 — B-4 세션 27 의 Free climb 보정 3종과 묶음
+
+**체감 영향**: Creative + speedUser 활성 시 점프 도약 거리 상한이 User 배율 반영 안 됨.
+일반 수평 이동은 B-2 로 이미 반영 (점프 순간의 "클램프" 만 미반영). 우선순위 낮음.
+
+**완료 전 검증 체크리스트 (B-5 판정 기준)**:
+- [근거] 1.21.1 Jumper grep + 원본 Self L2045 비교 ✓
+- [대응] 상위 시스템 3종 부재 확인 — 곱셈 주입 대상 자체 없음 ✓
+- [분기/상수/타이밍/근사] 해당 없음 (범위 초과 판정)
+- [신규] focus_12 후속 포커스 후보 신설 §17 기록 ✓
+- [회귀] 코드 변경 없음
+- [빌드] 해당 없음
+
+**다음 작업**: C 단계 (서버-클라 Config 동기화 정합). `processSpeedChangePacket` 이
+`changeSingleSpeed` 로 서버측 개인값 갱신 후 클라에 재전송 여부 / `SERVER_CONFIG` 경로
+상태 확인.
+
 ---
 
 ## 16. 신규 발견
+
+### 세션 28 B-5 범위 초과 발견
+
+- **`getMaxHorizontalMotion` 시스템 전체 미이식** — 원본 Self L2045 의 `maxHorizontalMotion =
+  Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()` 는 User 배율 주입 대상이나,
+  1.21.1 에 다음 상위 시스템 전체 부재:
+  - `getMaxHorizontalMotion(speed, type, inWater)` — 13줄 공식 (base 0.117852F / water
+    0.0783960F + speed별 sprint/run/sneak factor 곱)
+  - 점프 타입별 `getJumpHorizontalFactor` / `getJumpVerticalFactor` 헬퍼
+  - `horizontalJumpFactor > 1F && !isCollidedHorizontally` 판정 블록
+  - maxHorizontalMotion 클램프 적용 로직 (Jumper.tryJump 수평 속도 상한)
+  포커스 #6 범위 초과 — §17 후속 포커스 `focus_12_max_horizontal_motion.md` 후보.
 
 ### 세션 27 B-4 중 발견
 
@@ -625,3 +676,14 @@ sprintFactor / `_freeOneLadderClimbUpSpeedFactor` / `_freeBothLadderClimbUpSpeed
 
 - `isUserSpeedEnabled()` 가 완전 1:1 인지 — 원본 `enabled && _speedUser.value` vs 1.21.1 `cfg.speedUser && cfg.enabled` (순서만 다름, 의미 동등 추정)
 - 속도 표시 UI(HUD 등)에 속도% 게이지 같은 원본 기능이 있는지 확인 — 없으면 별도 포커스
+- **`focus_12_max_horizontal_motion.md` 신규 후보** (세션 28 발견) — B-5 범위 초과로 분리.
+  원본 Self L2045 `maxHorizontalMotion = Config.getMaxHorizontalMotion(...) * getCombinedSpeedFactor()`
+  에 대응하는 상위 시스템 3종 신규 이식:
+  1. `Config.getMaxHorizontalMotion(speed, type, inWater)` 메서드 (원본 L305-L321) —
+     base 0.117852F / water 0.0783960F + speed 별 sprint/run/sneak factor 곱
+  2. `getJumpHorizontalFactor(speed, type, jumpCharge)` + `getJumpVerticalFactor` 헬퍼
+     (점프 타입 14종 × 속도 5)
+  3. Jumper.tryJump 에 maxHorizontalMotion 클램프 적용 로직
+  + 본 포커스 세션 27 §16 의 Free climb 보정 3종 (isFast sprintFactor / 사다리별 factor) 도
+  이 후속 포커스에서 함께 처리 가능.
+- **B-4 §16 세션 27 Free climb 보정 3종** (이미 기록됨, 위 focus_12 와 묶음 후보)
