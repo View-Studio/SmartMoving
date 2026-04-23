@@ -280,6 +280,22 @@ public final class SmartMovingClientState {
     /** SM 독자 피로도 (0 ~ climbExhaustionStop 사이). 매 틱 감소, 클라이밍 중 증가. */
     public float exhaustion;
 
+    // ── H-8: SM 허기 축적 (원본 SmartMovingSelf L863/L893/L911) ────────────
+    /**
+     * 원본 SmartMovingSelf 의 `hungerIncrease` 필드. 매 틱 `handleExhaustion` 에서 누적:
+     *   L863: `hungerIncrease += _alwaysHungerGain + movement * 0.0001F * hungerGainFactor`
+     *   L893: `hungerIncrease += _exhaustionLossHungerFactor * exhaustionLoss`
+     * 틱 끝에서 `lastHungerIncrease` 와 비교하여 변화 시 서버 전송 (원본 L911-L915).
+     * 누적값 — reset 없음 (서버가 수신해서 vanilla addExhaustion 연동).
+     */
+    public float hungerIncrease;
+
+    /**
+     * 원본 SmartMovingSelf.lastHungerIncrease — 이전 전송값 캐시. 변화 감지로 중복 전송 방지.
+     * 원본 L911 `if (hungerIncrease != lastHungerIncrease) { sendHungerChange; lastHungerIncrease = hungerIncrease; }`.
+     */
+    public float lastHungerIncrease;
+
     // ── 12-7: 위 블록까지의 거리 (isCrawlClimbing || isHeadJumping 시 사용) ─
     /** 머리 위 블록까지의 거리. 최대 5.0F. */
     public float smallOverGroundHeight;
@@ -903,6 +919,8 @@ public final class SmartMovingClientState {
         angleJumpType = 0;
         wasClimbing  = false;
         exhaustion   = 0F;
+        hungerIncrease     = 0F;   // 원본 SmartMovingSelf.resetState — hungerIncrease 누적 리셋
+        lastHungerIncrease = 0F;   // 원본 SmartMovingSelf.resetState — 변화 감지 캐시 리셋
         fadingPerspectiveFactor = -1F;
         wouldIsSneaking = false;
         forceIsSneaking = null;

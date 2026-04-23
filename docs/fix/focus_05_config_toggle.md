@@ -18,7 +18,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 15 범위 확정 — "Easy 실사용 코드 경로만" 이식) |
-| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-7 완료 (Config 29필드 + speedUser + getFactor 메서드) / ⏳ **H-8 진행 (ClientState 신규 필드)** |
+| 현재 단계 | ✅ A~F + G-1/G-3/G-4 + H-0~H-8 완료 (+ ClientState 2필드) / ⏳ **H-9 진행 (handleExhaustion 축소판 구현)** |
 | 이식 범위 | Easy 실제 코드 경로: factor 헬퍼 + handleExhaustion 축소판 + 29개 Config 필드 + 허기 패킷 + speedUser 정정 |
 | 배제 범위 | 14종 점프 피로 / 클라이밍·천장·스프린트 피로 축적 / 라바 수영 / Creative levitate / getMaxExhaustion 순회 |
 | 이전 판단 오류 | ⚠️ 2건 — ① 2-"이전 판단 오류" (단일 key on/off 등가 오판) / ② §7.1 "Property 시스템 구조적 N/A" 오판 (세션 13 정정) |
@@ -731,8 +731,10 @@ if (SmartMovingKeys.configToggle.wasPressed()) {
       2단계 7분기 (climbing/crawling/ceilClimbing/swimming/diving/dipping/normal).
       airBorne+hunger 는 0F 하드코딩, L589/L591 normal 중복 전부 재현. javadoc 에 본체
       원본 pseudo 코드 포함.
-- [ ] H-8. **`SmartMovingClientState` 신규 필드 2개** — `hungerIncrease` /
-      `lastHungerIncrease`. `resetState()` 에서 초기화.
+- [x] H-8. **`SmartMovingClientState` 신규 필드 2개** — `hungerIncrease` /
+      `lastHungerIncrease` 필드 추가 (`exhaustion` 뒤). 원본 SmartMovingSelf 의 동명 필드
+      1:1 대응. javadoc 에 소비처 L863/L893(누적) / L911-L915(변화 감지 전송) 명시.
+      `resetState()` 에 두 필드 초기화(0F) 추가.
 - [ ] H-9. **`SmartMovingClientState.handleExhaustion(player)` 축소판 이식** — 원본
       SmartMovingSelf.md L849-L916 중 Easy 에서 실행되는 부분만:
       (1) `horizontalMovement`/`movement`/`relevantMovementFactor` 계산
@@ -1789,6 +1791,32 @@ SmartMovingClientConfig.java L554-L595 (§5.4 에 본체 임베드). 전처리 5
 
 **다음 작업**: H-8 — `SmartMovingClientState` 에 `hungerIncrease` / `lastHungerIncrease`
 필드 신규 추가 + `resetState()` 에 초기화 추가.
+
+### 세션 18 — 2026-04-24 — H-8 (ClientState 2필드)
+
+**진행한 작업**:
+- `SmartMovingClientState` 의 `exhaustion` 필드 뒤에 H-8 섹션 추가:
+  - `public float hungerIncrease` — 매 틱 누적, 서버 전송 대상.
+  - `public float lastHungerIncrease` — 변화 감지 캐시 (중복 전송 방지).
+- javadoc 에 원본 SmartMovingSelf L863/L893 (축적) / L911-L915 (변화 감지 전송) 명시.
+- `resetState()` 에 `hungerIncrease = 0F; lastHungerIncrease = 0F;` 추가 (원본
+  SmartMovingSelf.resetState 대응).
+
+**완료 전 검증 체크리스트 (H-8 기준)**:
+- [근거] 원본 SmartMovingSelf.md L863/L893/L911-L915 필드 사용 확인 ✓
+- [대응] 원본 2필드 ↔ 구현 2필드 1:1 (float 타입, 동일 이름) ✓
+- [분기] 해당 없음 (필드 선언만)
+- [상수] 초기값 0F 일치 ✓
+- [타이밍] `resetState()` 호출 시 초기화 — 원본과 동일
+- [근사] 해당 없음
+- [신규] 없음
+- [회귀] 신규 필드 추가만 — 기존 이식 영향 0
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: H-9 — `handleExhaustion(player)` 축소판 메서드 구현 (ClientState 에
+private 메서드). 원본 SmartMovingSelf L849-L916 중 Easy 에서 실행되는 부분만:
+이동거리 계산 → hungerGainFactor → hungerIncrease 누적 → exhaustionLossFactor →
+exhaustion 감소 → hungerIncrease 허기연동. 점프/클라이밍/스프린트 피로 블록 전부 제외.
 
 ---
 
