@@ -865,16 +865,35 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // B-23 (세션 46): isHeadJumping 매 틱 재평가 5-AND 해제 공식 (원본 L2524-L2530)
+            // `isHeadJumping = isHeadJumping && !onGround && !(swim||dive) && !(flying||capabilities.flying)
+            //                  && !(waterMovement && motionY<0) && !lavaMovement`
+            // - onGround: 지면 착지 시 해제
+            // - swimming/diving: 수중 진입 시 해제
+            // - flying/capabilities.isFlying: 비행 모드 진입 시 해제
+            // - waterMovement && motionY<0: 물 접촉 + 하강 중 → 수중 진입 예정 해제
+            // - lavaMovement: 라바 접촉 시 해제
+            wasHeadJumping = isHeadJumping;
+            isHeadJumping = isHeadJumping
+                    && !player.isOnGround()
+                    && !(isSwimming_sm || isDiving)
+                    && !(isFlying || player.getAbilities().flying)
+                    && !(player.isTouchingWater() && player.getVelocity().y < 0)
+                    && !player.isInLava();
+
+            // 원본 L2532-L2533: !isHeadJumping 시 isAerodynamic 리셋 (재평가 뒤 위치로 이동)
+            if (!isHeadJumping) isAerodynamic = false;
+
+            // B-24 (미이식): 원본 L2535-L2540 `wasHeadJumping && !isHeadJumping && onGround` →
+            //   handleCrash(_headFallDamageStartDistance, _headFallDamageFactor) + restoreFromFlying.
+            //   별도 원자로 분리. 현재는 B-23 재평가만 이식.
+
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
             // 슬라이딩 중 낙하거리가 0.05F 초과 → 헤드점프 + 공기역학 모드 전환
             if (isSliding && player.fallDistance > 0.05F) {
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
-            }
-            // isHeadJumping이 꺼지면 isAerodynamic도 리셋 (원본: 행 2533)
-            if (!isHeadJumping) {
-                isAerodynamic = false;
             }
 
             // IMPL-03: 더블클릭 방향 점프 카운터 갱신

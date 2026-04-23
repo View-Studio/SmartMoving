@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 45 — B Phase 2 계속) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + B-2/B-30/B-44a/B-32/B-40/B-45 완료 / ⏳ **B Phase 2 잔여** |
+| 상태 | 🟡 진행 중 (세션 46 — B Phase 2 계속) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: B-2/B-30/B-44a/B-32/B-40/B-45/B-23 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -682,11 +682,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       L2734 은 B-30 범위.
 
 #### B-23. `isHeadJumping` 매 틱 재평가 5-AND 공식 이식 (A-4 발견)
-- [ ] B-23. 원본 L2524-L2530 tickEssential 에 이식:
+- [x] B-23. ✅ **세션 46 완료** — 원본 L2524-L2533 tickEssential 재평가 블록 이식:
       `wasHeadJumping = isHeadJumping;`
-      `isHeadJumping = isHeadJumping && !onGround && !(swim||dive) && !(flying||capabilities.flying) && !(waterMovement && motionY<0) && !lavaMovement`
-      + `if (!isHeadJumping) isAerodynamic = false;` (기존 이식됨, 재평가 위치 확인)
-      의존: B-22a `wasHeadJumping` 선행.
+      `isHeadJumping = isHeadJumping && !isOnGround() && !(isSwimming_sm||isDiving) &&
+      !(isFlying||capabilities.flying) && !(isTouchingWater && motionY<0) && !isInLava;`
+      `if (!isHeadJumping) isAerodynamic = false;` (재평가 뒤 위치로 이동 — 원본 L2533 대응).
+      SlideToHeadJumping 전환 앞에 배치 (원본 L2524 → L2546 순서 복원).
+      B-24 (해제 엣지 후처리) 자리는 주석으로 확보.
 
 #### B-24. 해제 엣지 후처리 이식 (A-4 발견)
 - [ ] B-24. 원본 L2535-L2540 이식 — `wasHeadJumping && !isHeadJumping && onGround` 시:
@@ -1793,6 +1795,55 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   B-16 `isClimbHolding` 의존. B-16 선행 필요.
 - 또는 **B-23 (isHeadJumping 매 틱 재평가)** — B-22a `wasHeadJumping` 이식 완료 → 가능.
   원본 L2524-L2530 5-AND 해제 공식.
+
+### 세션 46 — 2026-04-24 — B Phase 2 B-23 (isHeadJumping 매 틱 재평가)
+
+**진행한 작업**:
+- `SmartMovingClientState.tickEssential` 에 B-23 재평가 블록 추가:
+  * `wasHeadJumping = isHeadJumping;` — 이전 틱 저장 (원본 L2524)
+  * 5-AND 해제 공식: `isHeadJumping && !onGround && !(swim_sm||dive) && !(flying||
+    capabilities.flying) && !(isTouchingWater && velocity.y<0) && !isInLava` (원본 L2525-L2530)
+  * `if (!isHeadJumping) isAerodynamic = false;` (원본 L2533) — 재평가 뒤 위치로 이동
+- **순서 정리**: 원본 L2524→L2533→L2546 순서에 맞게 SlideToHeadJumping 전환 앞에 배치.
+  기존 `if (!isHeadJumping) isAerodynamic = false` 는 SlideToHeadJumping 뒤 위치였음 —
+  재평가 뒤로 이동하여 원본과 일치.
+- **B-24 자리 확보**: 재평가 블록과 SlideToHeadJumping 사이에 주석으로 B-24 (handleCrash +
+  restoreFromFlying 해제 엣지 후처리) 위치 명시 — 미이식 원자.
+- 1.21.1 매핑 확인:
+  * `sp.onGround` → `player.isOnGround()`
+  * `isSwimming` → `isSwimming_sm` (1.21.1 접미사)
+  * `sp.capabilities.isFlying` → `player.getAbilities().flying`
+  * `sp.handleWaterMovement()` → `player.isTouchingWater()`
+  * `sp.motionY` → `player.getVelocity().y`
+  * `sp.handleLavaMovement()` → `player.isInLava()`
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 46 기준)**:
+- [근거] 원본 SmartMovingSelf L2524-L2530 5-AND 공식 + L2533 isAerodynamic 직접 read ✓
+- [근거] R-13 세션 34 불일치 1건 확정 — `자동 해제 경로 없음` 해결 ✓
+- [대응] 원본 5-AND 1:1 이식 (순서 + 조건 + vanilla API 표면 매핑) ✓
+- [분기] 5-AND 각 조건 (onGround/swim||dive/flying||capabilities/water+motionY<0/lava)
+  전부 식별 + 주석 ✓
+- [상수] 없음 (조건만)
+- [타이밍] SlideToHeadJumping 전환 앞 위치 — 원본 L2524→L2546 순서 복원 ✓
+- [근사] 없음 (1:1)
+- [신규] B-24 자리 주석 확보 — 다음 원자에서 추가 예정
+- [회귀] compileJava 성공 — 기존 SlideToHeadJumping 동작 보존 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황 (세션 46 기준)**:
+- ✅ B-2 / B-44a / B-30 — 세션 43
+- ✅ B-32 / B-40 — 세션 44
+- ✅ B-45 — 세션 45
+- ✅ **B-23** — 세션 46
+- ⏳ 잔여 ~32 원자
+
+**다음 작업 권고**:
+- **B-24 (해제 엣지 후처리)** — B-23 뒤 자리에 `wasHeadJumping && !isHeadJumping && onGround →
+  handleCrash + restoreFromFlying` 이식. 다만 `_headFallDamageStartDistance/Factor` Config
+  필드 이식 여부 + handleCrash 메서드 위치 확인 필요.
+- **B-17 (isCrawlClimbing 공식)** — B-15a `isNeighborClimbing` 이식됨, 의존 해소. 규모 중간.
+- **B-16 (isClimbHolding / wantClimbHolding)** — 후속 B-18 의 선행 조건.
 
 ---
 
