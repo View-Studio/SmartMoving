@@ -247,8 +247,8 @@ public final class SmartMovingClimber {
         if (!cfg.freeClimb && !cfg.simpleClimb && !cfg.smartClimb) {
             // Standard 모드: combinedFactor = getConfigSpeedFactor × getPotionSpeedFactor (SmartMovingSelf.md L712)
             // setOnlyShouldClimbSpeed(FAST_UP_MOTION * combinedFactor, true, 1.0D) → motionY = 0.2 * combinedFactor
-            double combinedFactor = SmartMovingMover.getConfigSpeedFactor(cfg)
-                                  * SmartMovingMover.getPotionSpeedFactor(player);
+            // B-1 (세션 25): Mover.getCombinedSpeedFactor 단일 헬퍼로 교체.
+            double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
             setOnlyShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
             player.fallDistance = 0;
             return;
@@ -322,8 +322,8 @@ public final class SmartMovingClimber {
             return;
         }
 
-        double combinedFactor = SmartMovingMover.getConfigSpeedFactor(cfg)
-                              * SmartMovingMover.getPotionSpeedFactor(player);
+        // B-1 (세션 25): Mover.getCombinedSpeedFactor 단일 헬퍼로 교체.
+        double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
 
         // Simple 모드 — grab 없이 자동 클라이밍, 속도는 FeetClimbing/HandsClimbing 상태로 결정
         // 원본: SmartMovingSelf handleClimbing() Simple Base Climb (825-843줄)

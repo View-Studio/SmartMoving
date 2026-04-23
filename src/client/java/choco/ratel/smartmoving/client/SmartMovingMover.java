@@ -24,22 +24,37 @@ public final class SmartMovingMover {
 
     /**
      * Config 기반 속도 배율.
-     * speedFactor × (1 + speedUserFactor)^speedUserExponent
+     * 원본 `SmartMovingSelf.getConfigSpeedFactor()` (L154-157) 1:1:
+     *   `Config.enabled ? Config._speedFactor.value * Config.getUserSpeedFactor() : 1F`
+     * B-1 (세션 25): `cfg.enabled` 가드 추가 — 원본 1:1. SM 비활성 시 1F 반환.
+     * 공식: `cfg.enabled ? speedFactor × (1 + speedUserFactor)^speedUserExponent : 1F`
      */
     public static float getConfigSpeedFactor(SmartMovingConfig cfg) {
-        return cfg.speedFactor * cfg.getUserSpeedFactor();
+        return cfg.enabled ? cfg.speedFactor * cfg.getUserSpeedFactor() : 1F;
     }
 
     /**
      * 포션 효과 포함 이동속도 역산 배율.
-     * 원본: getLandMovementFactor() × 10F / (isSprinting ? 1.3F : 1F)
+     * 원본 `SmartMovingSelf.getPotionSpeedFactor()` (L160-162) 1:1:
+     *   `Config.enabled ? getLandMovementFactor() * 10F / (sp.isSprinting() ? 1.3F : 1F) : 1F`
+     * B-1 (세션 25): `cfg.enabled` 가드 추가.
      *
      * GENERIC_MOVEMENT_SPEED 속성에 포션 효과가 이미 반영됨 → 이중 적용 주의.
      * 스프린트 modifier(+0.3)도 포함된 상태이므로 스프린팅 시 1.3F로 나눠 제거.
      */
     public static float getPotionSpeedFactor(ClientPlayerEntity player) {
+        if (!SmartMovingConfig.Config.enabled) return 1F;
         float landMovementFactor = (float) player.getAttributeValue(EntityAttributes.GENERIC_MOVEMENT_SPEED);
         return landMovementFactor * 10F / (player.isSprinting() ? 1.3F : 1F);
+    }
+
+    /**
+     * 원본 `SmartMovingSelf.getCombinedSpeedFactor()` (L149-152) 1:1:
+     *   `return getConfigSpeedFactor() * getPotionSpeedFactor();`
+     * B-1 (세션 25) 신설 — Climber/Jumper 등 6곳에서 인라인 곱셈 대체.
+     */
+    public static float getCombinedSpeedFactor(ClientPlayerEntity player, SmartMovingConfig cfg) {
+        return getConfigSpeedFactor(cfg) * getPotionSpeedFactor(player);
     }
 
     /**

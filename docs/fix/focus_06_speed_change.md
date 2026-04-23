@@ -9,7 +9,7 @@
 | 필드 | 값 |
 |------|---|
 | 상태 | 🟡 진행 중 (세션 24 — A 단계 완료) |
-| 현재 단계 | ✅ A-1/A-2/A-3 완료 (누락 2건 + 확인 4건 식별) / ⏳ **B-1 진행 (헬퍼 정비)** |
+| 현재 단계 | ✅ A + B-1 완료 (헬퍼 정비) / ⏳ **B-2 진행 (Land 이동 User 배율)** |
 | 핵심 누락 | Land 이동 전체 / Swim+Dive speedFactor — 체감 최대 경로 2곳 |
 | 선행 의존 | #5 완료 (세션 23) |
 
@@ -233,9 +233,12 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 | 12 | 키 입력 L2326 | `ClientState.tickEssential` + SpeedChangePayload | ✓ 이식됨 | — |
 
 ### B. 호출처 이식 (A-3 결과 기반 원자 작업 분해)
-- [ ] B-1. **헬퍼 정비** — `Mover.getConfigSpeedFactor` 에 `cfg.enabled ? ... : 1F` 가드 추가
-      (원본 Self L156 1:1). `getCombinedSpeedFactor(player, cfg)` 단일 헬퍼 신설 (기존 인라인
-      `getConfigSpeedFactor * getPotionSpeedFactor` 대체). 기존 `Climber` 2곳 호출을 새 헬퍼로 대체.
+- [x] B-1. **헬퍼 정비** — 3가지 변경:
+      (1) `Mover.getConfigSpeedFactor(cfg)` 에 `cfg.enabled ? ... : 1F` 가드 추가 (원본 L156 1:1)
+      (2) `Mover.getPotionSpeedFactor(player)` 에도 `cfg.enabled` 가드 추가 (원본 L161 1:1,
+          기존 1.21.1 에 빠져있던 부분)
+      (3) `Mover.getCombinedSpeedFactor(player, cfg)` 단일 헬퍼 신설 (원본 L149-152 1:1).
+      Climber L250/L325 인라인 곱셈 2곳을 새 헬퍼로 교체. 빌드 ✓
 - [ ] B-2. **Land 이동 User 배율 이식** (핵심 누락 1) — vanilla travel() 경로에 User 배율
       주입. `MixinLivingEntityClient.sm_travel_client` 또는 `LivingEntity.travel` 에 Inject 로
       movementInput 을 `getUserSpeedFactor()` 곱 처리. 또는 `GENERIC_MOVEMENT_SPEED` attribute
@@ -372,6 +375,36 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 
 **다음 작업**: B-1 — `Mover.getConfigSpeedFactor` 에 `cfg.enabled` 가드 추가 + 단일
 `getCombinedSpeedFactor` 헬퍼 신설 + 기존 인라인 호출 대체. 원본 Self L149-L156 1:1.
+
+### 세션 25 — 2026-04-24 — B-1 (헬퍼 정비)
+
+**진행한 작업**:
+- `Mover.getConfigSpeedFactor(cfg)`: `cfg.enabled ? cfg.speedFactor * cfg.getUserSpeedFactor() : 1F`
+  로 정정. 원본 `SmartMovingSelf.java L156` 1:1 (`Config.enabled ? ... : 1F`).
+- `Mover.getPotionSpeedFactor(player)`: 함수 시작에 `if (!cfg.enabled) return 1F;` 가드 추가.
+  원본 `L161` 1:1 — 기존 이식에 빠져있던 부분 보완.
+- `Mover.getCombinedSpeedFactor(player, cfg)` 신규 추가. 원본 `L149-L152`:
+  `return getConfigSpeedFactor(cfg) * getPotionSpeedFactor(player);`. Climber 등 호출처에서
+  사용할 단일 헬퍼.
+- `SmartMovingClimber` 2곳 (L250/L325) 의 인라인 `getConfigSpeedFactor × getPotionSpeedFactor`
+  를 새 헬퍼 `getCombinedSpeedFactor(player, cfg)` 로 교체. 의미 완전 동일, 가독성 향상.
+
+**완료 전 검증 체크리스트 (B-1 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L149-L162 (A-1 세션 24 에서 확보) ✓
+- [대응] 원본 3메서드 ↔ 구현 3메서드 1:1 ✓
+- [분기] `cfg.enabled` 가드 2곳 추가 — 원본과 완전 일치 ✓
+- [상수] 해당 없음 (공식만)
+- [타이밍] 호출처 기존 2곳 변경 — 의미 동일. Climber 3갈래 경로 전부 영향.
+- [근사] 해당 없음 (원본 완전 재현)
+- [신규] 없음
+- [회귀] `cfg.enabled=false` 상태에서 factor 가 이전엔 cfg.speedFactor(=1F) 만 반환했는데
+  이제 1F 고정. 기존과 동일 (speedFactor 기본값 1F). 회귀 0.
+- [빌드] `./gradlew build` ✓
+
+**다음 작업**: B-2 — Land 이동 User 배율 이식. vanilla travel() 경로에 주입 방식 2가지
+(Mixin inject on movementInput vs GENERIC_MOVEMENT_SPEED attribute modifier) 중 선택 +
+구현. **사용자와 방향 확인 후 진행 권장** (attribute 방식이 vanilla 친화적이나 side effect
+가능성, Mixin 방식이 원본 Self L119 구조에 더 가까움).
 
 ---
 
