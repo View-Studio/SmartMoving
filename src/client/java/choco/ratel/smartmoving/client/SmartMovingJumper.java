@@ -404,28 +404,88 @@ public final class SmartMovingJumper {
         sm.jumpPending = false;
     }
 
+    // ── [10-5] 벽 점프 상태 갱신 ─────────────────────────────────────────────
+
+    /**
+     * 매 틱 벽 점프 상태(canWallJumping / wallJumpCount / triggerWallJumping /
+     * wantWallJumping / continueWallJumping) 갱신.
+     *
+     * 원본: SmartMovingSelf (L2863-2897) + jump.md L629-668 1:1 이식.
+     *
+     *   canWallJumping = isWallJumpEnabled && !isHeadJumping && !onGround
+     *                    && !isClimbing && !isSwimming && !isDiving
+     *                    && !isLevitating && !isFlying
+     *
+     *   if (_wallJumpDoubleClick) {
+     *     if (canWallJumping) {
+     *       if (jumpStartPressed) { count==0 → count=ticks(); else trigger=true; count=0 }
+     *       else if (count>0) count--
+     *     } else count=0
+     *   } else trigger = jumpStartPressed
+     *
+     *   wantWallJumping = canWallJumping &&
+     *                     (trigger || continueWallJumping ||
+     *                      (wantWallJumping && jumpPressed && !isCollidedHorizontally))
+     *
+     *   if (continue && (onGround || isClimbing || !jumpPressed)) continue=false
+     */
+    public static void updateWallJumpState(ClientPlayerEntity player, SmartMovingClientState sm) {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        boolean isWallJumpEnabled = cfg.wallUpJump || cfg.wallHeadJump;
+        boolean canWallJumping = isWallJumpEnabled && !sm.isHeadJumping && !player.isOnGround()
+                && !sm.isClimbing && !sm.isSwimming_sm && !sm.isDiving
+                && !sm.isLevitating && !sm.isFlying;
+
+        // 더블클릭 모드 분기 (jump.md L629-643)
+        if (cfg.wallJumpDoubleClick) {
+            if (canWallJumping) {
+                if (sm.jumpKeyStartPressed) {
+                    if (sm.wallJumpCount == 0) {
+                        sm.wallJumpCount = (int) Math.ceil(cfg.wallJumpDoubleClickTicks);
+                    } else {
+                        sm.triggerWallJumping = true;
+                        sm.wallJumpCount = 0;
+                    }
+                } else if (sm.wallJumpCount > 0) {
+                    sm.wallJumpCount--;
+                }
+            } else {
+                sm.wallJumpCount = 0;
+            }
+        } else {
+            sm.triggerWallJumping = sm.jumpKeyStartPressed;
+        }
+
+        boolean jumpPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
+        // wantWallJumping 식 (SmartMovingSelf.md L1896-1898). 이전 틱 wantWallJumping 을 읽어
+        // "유지 조건" 에 활용하는 자기참조 패턴 — jumpPressed && !collided 이면 계속 true 유지.
+        sm.wantWallJumping = canWallJumping &&
+                (sm.triggerWallJumping || sm.continueWallJumping ||
+                 (sm.wantWallJumping && jumpPressed && !player.horizontalCollision));
+
+        // continueWallJumping false 전환 (jump.md L667-668)
+        if (sm.continueWallJumping && (player.isOnGround() || sm.isClimbing || !jumpPressed)) {
+            sm.continueWallJumping = false;
+        }
+    }
+
     // ── [10-5] handleWallJumping ─────────────────────────────────────────────
 
     /**
      * 벽 점프 처리. sm_travel_client() 내 climbing 처리 전에 호출된다.
-     * 원본: SmartMovingSelf.handleWallJumping()
+     * 원본: SmartMovingSelf.handleWallJumping() L1946-1997.
+     *
+     * 원본 진입 조건(L1450): `if (!wantWallJumping || NaN(horizontalCollisionAngle)) return;`
+     * → wantWallJumping 은 updateWallJumpState 에서 갱신된 값.
      *
      * 반사 각도 공식: reflectedAngle = horizontalCollisionAngle * 2 - movementAngle + 180
      * jumpAngle = round(reflectedAngle / 90) * 90  (90° 단위 반올림)
-     *
-     * horizontalCollisionAngle 알고리즘은 A-23(확인 완료) 참조.
-     * C-38: calculateSeparateCollisions() 이식으로 방향별 충돌 감지 후 완성.
      */
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // 원본 canWallJumping 조건
-        if (player.isOnGround()) return;
-        if (sm.isHeadJumping) return;
-        if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) return;
-        if (sm.isSwimming_sm || sm.isDiving) return;
-        if (sm.isFlying) return;
-        if (!player.horizontalCollision) return;
+        // 원본 L1450: 최우선 조건 — wantWallJumping=false 이면 즉시 return.
+        if (!sm.wantWallJumping) return;
 
         Vec3d vel = player.getVelocity();
 

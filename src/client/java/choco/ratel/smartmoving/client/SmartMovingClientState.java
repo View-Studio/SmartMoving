@@ -58,6 +58,36 @@ public final class SmartMovingClientState {
     /** 벽점프 연속 여부 */
     public boolean continueWallJumping;
 
+    /**
+     * 원본: SmartMovingSelf.wallJumpCount — 더블클릭 타이머.
+     * 0 일 때 jump StartPressed → wallJumpDoubleClickTicks(정수) 로 설정,
+     * 그 다음 jump StartPressed → triggerWallJumping=true + 0 리셋. else 매 틱 --.
+     */
+    public int wallJumpCount;
+
+    /**
+     * 원본: SmartMovingSelf.triggerWallJumping — 더블클릭 감지 플래그.
+     * wantWallJumping 식에 반영된 뒤 역할 종료. 매 틱 시작에 자동 리셋(원본 리서치
+     * 파일에 명시적 리셋 위치 기록 없음 — 보수적 채택).
+     */
+    public boolean triggerWallJumping;
+
+    /**
+     * 원본: SmartMovingSelf.wantWallJumping — handleWallJumping 진입 조건.
+     * canWallJumping && (trigger || continue || (prev wantWallJumping && jumpPressed && !collided)).
+     */
+    public boolean wantWallJumping;
+
+    /**
+     * 원본 jumpButton.StartPressed (이번 틱에 새로 눌림) 에 대응하는 프레임 이벤트.
+     * tickEssential 초반에 prevJumpKeyPressed 와 비교해 계산하며, sm_travel_client 내
+     * 여러 핸들러(handleJumping, updateWallJumpState 등)에서 재참조 가능.
+     */
+    public boolean jumpKeyStartPressed;
+
+    /** jumpKey.isPressed() 이전 틱 값 — jumpKeyStartPressed 엣지 감지용 내부 추적. */
+    public boolean prevJumpKeyPressed;
+
     // ── 4-1: 이동 상태 필드 ──────────────────────────────────────────
 
     /** 히트박스 오프셋 (헤드점프 시 -1F) */
@@ -363,6 +393,16 @@ public final class SmartMovingClientState {
     public void tickEssential(ClientPlayerEntity player) {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
+
+        // 원본 jumpButton.StartPressed 대응 — 이번 틱에 새로 눌림 엣지 감지.
+        // 매 틱 시작에 계산되어 sm_travel_client 내 여러 핸들러에서 재참조 가능.
+        boolean curJumpPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
+        jumpKeyStartPressed = curJumpPressed && !prevJumpKeyPressed;
+        prevJumpKeyPressed = curJumpPressed;
+
+        // 원본 SmartMovingSelf triggerWallJumping — 매 틱 시작에 리셋.
+        // 리서치 파일에 원본 리셋 위치 기록 없음 → 보수적으로 "매 틱 1회용 이벤트" 로 처리.
+        triggerWallJumping = false;
 
         // C-33: wasClimbing = 이전 틱의 isClimbing 값 저장
         wasClimbing = isClimbing;

@@ -95,6 +95,9 @@ public abstract class MixinLivingEntityClient {
         // ── 매 틱 벽점프 상태 리셋 (G-01) ─────────────────────────────────
         // 원본: resetState() this.isWallJumping = false → handleWallJumping()이 조건 충족 시 재세팅
         sm.isWallJumping = false;
+        // 원본 SmartMovingSelf L2863-2897: canWallJumping/wallJumpCount/triggerWallJumping/
+        // wantWallJumping 갱신을 handleWallJumping 진입 직전에 수행.
+        SmartMovingJumper.updateWallJumpState(player, sm);
         SmartMovingJumper.handleWallJumping(player, sm);
 
         // ── 매 틱 클라이밍 상태 리셋 (G-01) ─────────────────────────────────
