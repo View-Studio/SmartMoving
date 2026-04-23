@@ -42,7 +42,10 @@ public final class SmartMovingHud {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
+        // 원본 SmartMovingRender.md L405 진입 조건 1:1:
+        //   Config.enabled && (_displayExhaustionBar.value || _displayJumpChargeBar.value)
         if (!cfg.enabled) return;
+        if (!cfg.displayExhaustionBar && !cfg.displayJumpChargeBar) return;
 
         // ── 점프 차지 바 ──────────────────────────────────────────────────
         // 원본: stillJumpCharge = sm.jumpCharge, runJumpCharge = sm.headJumpCharge

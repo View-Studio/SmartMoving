@@ -153,6 +153,20 @@ public class SmartMovingConfig {
     // true → 크롤 중 이름 태그 표시, false → 숨김
     public boolean crawlNameTag = true;
 
+    // ── HUD display ────────────────────────────────────────────
+    /**
+     * 원본: _displayExhaustionBar = Unmodified("move.gui.exhaustion.bar").singular()
+     * 기본값 true (Unmodified). 소진 바 HUD 표시 여부.
+     * SmartMovingRender.renderGuiIngame 진입 조건:
+     *   Config.enabled && (displayExhaustionBar || displayJumpChargeBar)
+     */
+    public boolean displayExhaustionBar = true;
+    /**
+     * 원본: _displayJumpChargeBar = Unmodified("move.gui.jump.charge.bar").singular()
+     * 기본값 true. 점프 차지 바 HUD 표시 여부.
+     */
+    public boolean displayJumpChargeBar = true;
+
     // ── Flying close-to-ground ─────────────────────────────────
     // 원본: _flyCloseToGround = Modified("move.fly.ground.close") → 기본값 true
     public boolean flyCloseToGround = true;
@@ -360,6 +374,8 @@ public class SmartMovingConfig {
         crawlToggle              = getBool(p,   "move.crawl.toggle",              crawlToggle);
         sneakNameTag             = getBool(p,   "move.sneak.name",                sneakNameTag);
         crawlNameTag             = getBool(p,   "move.crawl.name",                crawlNameTag);
+        displayExhaustionBar     = getBool(p,   "move.gui.exhaustion.bar",        displayExhaustionBar);
+        displayJumpChargeBar     = getBool(p,   "move.gui.jump.charge.bar",       displayJumpChargeBar);
         sneak                    = getBool(p,   "move.sneak",                     sneak);
         run                      = getBool(p,   "move.run",                       run);
         sprint                   = getBool(p,   "move.sprint",                    sprint);
@@ -439,6 +455,8 @@ public class SmartMovingConfig {
         p.setProperty("move.crawl.toggle",               String.valueOf(crawlToggle));
         p.setProperty("move.sneak.name",                 String.valueOf(sneakNameTag));
         p.setProperty("move.crawl.name",                 String.valueOf(crawlNameTag));
+        p.setProperty("move.gui.exhaustion.bar",         String.valueOf(displayExhaustionBar));
+        p.setProperty("move.gui.jump.charge.bar",        String.valueOf(displayJumpChargeBar));
         p.setProperty("move.sneak",                      String.valueOf(sneak));
         p.setProperty("move.run",                        String.valueOf(run));
         p.setProperty("move.sprint",                     String.valueOf(sprint));
