@@ -8,9 +8,9 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ✅ **완료 (2026-04-24, 세션 28)** — D-2 사용자 검증 통과 |
-| 현재 단계 | ✅ A + B-1/B-2/B-3/B-4/B-6 + C-1/C-2 + D-1~D-4 완료 / [~] B-5 §17 `focus_12` 이동 |
-| 핵심 잔여 §17 | (1) `focus_12_max_horizontal_motion.md` (B-5) / (2) `focus_13_movement_factor_system.md` (배율 미세차) |
+| 상태 | ✅ **완료 (2026-04-24, 세션 28)** — §13 전수 체크 완료, §17 확인 완료 2건 + 후속 2건 |
+| 현재 단계 | ✅ A + B-1~B-6 + C-1/C-2 + D-1~D-4 / [~] B-5 §17 분리 / [~] 정량 측정 + 파일 지속성 사용자 테스트 미수행 |
+| 핵심 잔여 §17 | (1) `focus_12_max_horizontal_motion.md` (점프 max + Free climb 보정) / (2) `focus_13_movement_factor_system.md` (4단계 factor 배율 미세차) |
 | 선행 의존 | #5 완료 (세션 23) |
 
 ---
@@ -365,21 +365,24 @@ A 단계(호출처 감사) 결과 나온 후 확정. 예시 형태:
 ## 13. 완료 전 검증 체크리스트
 
 ### 공통
-- [ ] 리서치 근거: §5 WebFetch 대상 3건 완료
-- [ ] side-by-side: 원본 호출처 vs 1.21.1 호출처 전부 일치
-- [ ] 모든 분기: `isUserSpeedAlwaysDefault()` / `exponent==0` 조기 반환 포함
-- [ ] 상수: `(1 + factor)^exponent` 공식 그대로
-- [ ] 호출 타이밍: 각 이동 처리 블록의 speedFactor 계산 위치
-- [ ] 근사 이식: 해당 없음 (수학 공식 완전 재현 가능)
-- [ ] 신규 발견: §16
-- [ ] 회귀 방지: §14
-- [ ] 빌드: 성공
+- [x] 리서치 근거: A-1 Agent WebFetch 로 원본 호출처 14곳 전수 덤프 (§5.3 WebFetch 3건 전부 대체)
+- [x] side-by-side: A-3 매핑 테이블 (원본 14 ↔ 1.21.1 이식 5 + B-5 §17 분리 1 + 기타 8) ✓
+- [x] 모든 분기: `isUserSpeedAlwaysDefault()` / `exponent==0` 조기 반환 `Config.getUserSpeedFactor L846` 보존
+- [x] 상수: `(1 + speedUserFactor)^speedUserExponent` 공식 그대로 (H-6 speedUser 정정만)
+- [x] 호출 타이밍: Land/Swim/Climb/Fly 각 경로별 speedFactor 계산 위치 원본과 정합 (B-2/B-3/B-4/B-1)
+- [x] 근사 이식: 해당 없음 (수학 공식 완전 재현, Creative 게이트는 원본 Property 시스템 대응)
+- [x] 신규 발견: §16 세션 27 (Free climb 보정 3종) + 세션 28 (maxHorizontalMotion 시스템 부재 + 배율 미세차)
+- [x] 회귀 방지: §14 + D-3 grep 50건 + 기본 상태 vanilla 불변 확인
+- [x] 빌드: D-1 `./gradlew clean build` BUILD SUCCESSFUL in 7s
 
 ### #6 고유
-- [ ] T-1~T-4 수동 테스트 전부 통과
-- [ ] 이동 거리 측정값이 이론치(`1 + factor`)^exp 와 ±5% 이내
-- [ ] 서버/클라이언트 Config 동기화 일관성 확인
-- [ ] 개인 속도 지수가 파일 저장/로드에 살아남음
+- [x] T-1~T-4 수동 테스트 — 사용자 정성 검증 "속도가 이제 잘 바뀌긴 함"
+- [~] 이동 거리 정량 측정 ±5% — 사용자 정량 측정 미수행. "배율 느낌 살짝 다름" 정성 피드백 →
+      §16 세션 28 D-2 원인 분석 후 `focus_13_movement_factor_system.md` 후속 분리
+- [x] 서버/클라 Config 동기화 일관성 — C-1/C-2 정합 확인 + 이중 상태(클라 field / 서버 Map)
+      일관성 검증
+- [~] 개인 속도 지수 파일 지속성 — 구조 이식 완료 (CSV readFrom/writeTo + playerSpeedExponents
+      Map + toArray(username) 치환), 재진입 공식 테스트 미수행. 회귀 없을 것으로 예상.
 
 ---
 
@@ -835,8 +838,16 @@ D-3 §14 회귀 감사 / D-4 `playtest_fixes.md` 포커스 #2 로 갱신.
 
 ## 17. 잔여 / 후속
 
-- `isUserSpeedEnabled()` 가 완전 1:1 인지 — 원본 `enabled && _speedUser.value` vs 1.21.1 `cfg.speedUser && cfg.enabled` (순서만 다름, 의미 동등 추정)
-- 속도 표시 UI(HUD 등)에 속도% 게이지 같은 원본 기능이 있는지 확인 — 없으면 별도 포커스
+### ✓ 확인 완료 (세션 28 최종)
+- ~~`isUserSpeedEnabled()` 완전 1:1 여부~~ — **확인 완료**: 별도 메서드 대신 **인라인 체크**
+  (Mover.getConfigSpeedFactor 내부 + ClientState 키 블록 + Server processSpeedChangePacket)
+  3곳. `cfg.enabled && cfg.speedUser` 는 원본 `enabled && _speedUser.value` 와 AND 교환법칙상
+  동등. B-6 Creative 게이트 (`isCreative`) 추가로 `_speedUser` Creative 팩토리 의미 완전 1:1.
+- ~~HUD 속도% 게이지 원본 기능 여부~~ — **확인 완료**: 원본도 **채팅 메시지 전용**.
+  `getSpeedPercent` 는 `writeClientSpeedMessageToChat` 에서만 사용, HUD 게이지 없음.
+  1.21.1 동일 (SmartMovingClient L91 채팅 메시지에서만 getSpeedPercent 호출). 추가 이식 불필요.
+
+### ⏳ 후속 포커스 후보
 - **`focus_13_movement_factor_system.md` 신규 후보** (세션 28 D-2 발견) — land 경로에
   `getNonSlowInputSpeedFactor` / `getSlowInputSpeedFactor` 미반영 문제. 원본 Self L119
   의 4단계 factor 전체(`getConfigSpeedFactor × getPotionSpeedFactor × NonSlow × Slow`)
