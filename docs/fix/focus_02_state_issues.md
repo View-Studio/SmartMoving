@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 42 — **B Phase 1 100% 완료**) |
-| 현재 단계 | A 완료 + B Phase 1 완료 (필드 17 + Config 헬퍼 4 + Config 필드 1 + isRunning/vanilla 메서드 2) / ⏳ **B Phase 2 (공식 이식) 진입** |
+| 상태 | 🟡 진행 중 (세션 43 — B Phase 2 착수) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + B-2 / B-30 / B-44a 완료 / ⏳ **B Phase 2 잔여** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -534,14 +534,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (원본 `SmartMovingSelf` L2688-L2695, `isClimbSprinting` 중복 1:1 보존).
 
 #### B-2. `isSlow` 공식 정정 (단일 원자)
-- [ ] B-2. `SmartMovingClientState.tickEssential` L650-L651 정정 (원본 L2588-L2590 / L2718):
-      - `wantSneak = Config.isSneakingEnabled() && wouldWantSneak` 신설
-      - **✅ 세션 39**: `Config.isSneakingEnabled()` 헬퍼 신설 완료 (원본 **OR 패턴**:
-        `sneak || !enabled`). **주의: 기존 매핑 테이블의 `cfg.sneak && cfg.enabled`
-        는 오역이었음 — 원본은 OR 패턴**.
-      - `isSlow = wantSneak && wouldIsSneaking`
-      - 기존 `sneakContinueInput` 중복 곱 제거
-      - ※ `wouldIsSneaking` 은 B-3b 에서 처리 — B-2 는 `isSlow` 우변만 교체
+- [x] B-2. ✅ **세션 43 완료** — `SmartMovingClientState.tickEssential` 정정:
+      - `wantSneak = cfg0.isSneakingEnabled() && wouldWantSneak` 신설 (원본 L2588-L2590)
+      - `isSlow = wantSneak && wouldIsSneaking` (원본 L2718, 기존 sneakContinueInput 중복 제거)
+      - 주석 원본 라인 L2576-L2590/L2711-L2719 1:1 매핑 기록
+      - ※ wouldIsSneaking 는 여전히 `!player.isSprinting()` — B-3b 에서 `!wantSprint` 로 정정 예정
 
 #### B-3. `wantSprint` 신설 + `wouldIsSneaking` 정정 (원자 2개 분해)
 - [ ] B-3a. `wantSprint` 필드 + 6조건 OR 계산 블록 이식 (원본 `SmartMovingSelf` L2595-L2615).
@@ -725,9 +722,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: B-22a `wasHeadJumping` 선행.
 
 #### B-30. `isStanding` 갱신 공식 이식 (A-4 발견)
-- [ ] B-30. tickEssential 에 원본 L2734 공식 추가:
+- [x] B-30. ✅ **세션 43 완료** — tickEssential 에 원본 L2734 공식 추가:
       `isStanding = horizontalSpeedSquare < 0.0005` (horizontalSpeedSquare = motionX² + motionZ²).
-      의존: B-22d `isStanding` 필드 선행.
+      R-09 블록 진입 직전 (isSmall 뒤) 에 추가. 블록 스코프로 변수명 충돌 방지.
 
 #### B-31. 미이식 필드 3건 이식 (A-5 발견)
 - [x] B-31a. ✅ **세션 41 완료** — 기존 `wasCrawling_st` (R-09 전용) 을 `wasCrawling` 으로
@@ -811,8 +808,8 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: A-4 B-22b (wasRunning+isRunning) / A-2 B-10d (isLevitating+wasLevitating) 선행.
 
 #### B-44. 이력 3개 저장 시점 정밀 조정 (A-6 발견)
-- [ ] B-44a. `wasSneaking = isSlow` 저장 L560 → isSlow 공식 직전 (원본 L2716 대응).
-      B-2 (isSlow 정정) 수정 시 함께 조정.
+- [x] B-44a. ✅ **세션 43 완료** — `wasSneaking = isSlow` 저장을 tickEssential 초반
+      (L709 일괄 저장) → isSlow 공식 직전 (원본 L2716 대응) 으로 이동. B-2 수정 시 함께.
 - [ ] B-44b. `wasCrawling_st = isCrawling` 저장 L561 → isCrawling 공식 직전 (원본 L2441
       대응). B-33 (A-5 메인 공식 재작성) 수정 시 함께 조정.
 - [ ] B-44c. `wasClimbCrawling = isClimbCrawling` 저장 L562 → isClimbCrawling 공식 직전
@@ -1638,6 +1635,55 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 
 **다음 권고 시작**: **B-2 (isSlow 정정)** — 가장 단순한 2줄 교체로 첫 Phase 2 원자로 적합.
 또는 **B-30 (isStanding 공식 이식)** — isStanding 필드 이미 이식됨 + 공식 1줄.
+
+### 세션 43 — 2026-04-24 — B Phase 2 착수: B-2 + B-44a + B-30
+
+**진행한 작업**:
+- **B-2 `isSlow` 정정** (`SmartMovingClientState.tickEssential`):
+  * `wantSneak = cfg0.isSneakingEnabled() && wouldWantSneak` 신설 (원본 L2588-L2590)
+  * `isSlow = wantSneak && wouldIsSneaking` (원본 L2718) — 기존 `sneakContinueInput`
+    중복 곱 제거
+  * 주석 원본 L2576-L2590/L2711-L2719 1:1 매핑 기록
+- **B-44a wasSneaking 저장 시점 이동**:
+  * 기존 L709 tickEssential 초반 일괄 저장에서 **isSlow 공식 직전** (원본 L2716) 으로
+    이동. wasCrawling / wasClimbCrawling 는 아직 기존 위치 유지 (B-33/B-18 수정 시 함께)
+- **B-30 `isStanding` 공식 이식**:
+  * R-09 블록 진입 직전 (isSmall 뒤) 에 원본 L2734 공식 추가:
+    `isStanding = (motionX² + motionZ²) < 0.0005`
+  * 블록 스코프로 감싸 지역 변수 이름 충돌 방지 (`_motionX`/`_motionZ`/`_horizontalSpeedSquare`)
+- `./gradlew compileJava --rerun-tasks` 성공
+
+**완료 전 검증 체크리스트 (세션 43 기준)**:
+- [근거] 원본 L2588-L2590 / L2716 / L2718 / L2734 직접 read ✓
+- [근거] `isSneakingEnabled()` 헬퍼 (B-2 선행) 이식 완료 확인 ✓
+- [대응] B-2 원본 공식 1:1 (wantSneak = isSneakingEnabled && wouldWantSneak /
+  isSlow = wantSneak && wouldIsSneaking) ✓
+- [분기] sneakContinueInput 중복 제거 + wantSneak 신설 + 저장 시점 이동 3건 일관 ✓
+- [상수] 0.0005 isStanding 임계값 원본 유지 ✓
+- [타이밍] B-44a 저장 시점이 공식 직전으로 이동 — 결과는 동일 (L709 위치에서도 이전 틱
+  값 유지되지만, 원본 구조와 엄격 일치 확보) ✓
+- [근사] 없음 (원본 완전 일치)
+- [신규] 없음
+- [회귀] compileJava 성공 — wouldIsSneaking 은 여전히 `!player.isSprinting()` (B-3b 에서 정정)
+  이라 B-2 만으로 완전 해결 아님. 점진 개선 ✓
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**Phase 2 진행 상황**:
+- ✅ B-2 (isSlow 공식 정정)
+- ✅ B-44a (wasSneaking 저장 시점)
+- ✅ B-30 (isStanding 공식)
+- ⏳ B-1c ~ B-1f (can* / 6 Sprint 변종 / standing / isFast)
+- ⏳ B-3a ~ B-3b (wantSprint / wouldIsSneaking 정정)
+- ⏳ B-16 (isClimbHolding + wantClimbHolding)
+- ⏳ B-17 / B-18 (isCrawlClimbing / isClimbCrawling 공식)
+- ⏳ B-23 (isHeadJumping 매 틱 재평가)
+- ⏳ B-32 / B-33 / B-40 (canCrawl / isCrawling 공식 / toCrawling 헬퍼)
+- 등 40+ 원자
+
+**다음 작업 권고**: **B-3b (wouldIsSneaking 정정)** — B-3a (wantSprint) 선행이 완벽하진
+않지만 `!player.isSprinting()` → `!wantSprint` 로 바꾸려면 wantSprint 필드가 먼저 있어야
+함. 또는 **B-40 (toCrawling 헬퍼)** — 단독 가능 (기존 inline 3줄을 헬퍼로 추출).
+또는 **B-32 (canCrawl 5-AND 복원)** — 단순 조건 축소 (9-AND → 5-AND).
 
 ---
 

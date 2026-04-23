@@ -705,8 +705,9 @@ public final class SmartMovingClientState {
             resetState();
         } else {
             // 원본 R-09 토글 블록 이전 값 저장 (willStartSneak/willStartCrawl 엣지 계산용).
-            // 원본 L2717 `wasSneaking = isSlow`, 원본 willStartCrawl `isCrawling && !wasCrawling`.
-            wasSneaking = isSlow;
+            // B-44 (세션 43): wasSneaking 저장은 isSlow 공식 직전(L2716)으로 이동 — B-2 함께.
+            //   wasCrawling / wasClimbCrawling 는 해당 B-N 수정 시 동일하게 이동 예정.
+            // 원본 L2441 `wasCrawling = isCrawling`, 원본 L2786 `wasClimbCrawling = isClimbCrawling`.
             wasCrawling = isCrawling;
             wasClimbCrawling = isClimbCrawling;
 
@@ -771,7 +772,8 @@ public final class SmartMovingClientState {
             if (!isCrawling) contextContinueCrawl = false;
 
             // C-15: isSlow / isFast / isFlying 매 틱 계산
-            // 원본 L2576-L2586 sneakContinueInput + wouldWantSneak + L2711-2719 wouldIsSneaking/isSlow 1:1.
+            // 원본 L2576-L2590 sneakContinueInput + wouldWantSneak + wantSneak + L2711-L2719
+            // wouldIsSneaking / wasSneaking / isSlow 1:1.
             //   sneakContinueInput = isSneakToggleEnabled ? (sneakToggled || sneakStartPressed) : sneakPressed
             //   wouldWantSneak = !flying && !sliding && !headJumping
             //                    && !(diving && diveDownOnSneak)
@@ -779,8 +781,10 @@ public final class SmartMovingClientState {
             //                    && sneakContinueInput
             //                    && !wantCrawl && !mustCrawl
             //                    && (!isCrawlingEnabled || !grabPressed)
-            //   wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing
-            //   isSlow = wantSneak && wouldIsSneaking (wantSneak 은 sneakContinueInput 로 매핑)
+            //   wantSneak = isSneakingEnabled() && wouldWantSneak                 (원본 L2588-L2590)
+            //   wouldIsSneaking = wouldWantSneak && !wantSprint && !isClimbing    (원본 L2712)
+            //   wasSneaking = isSlow                                              (원본 L2716 공식 직전)
+            //   isSlow = wantSneak && wouldIsSneaking                              (원본 L2718)
             boolean sneakContinueInput = cfg0.sneakToggle
                     ? (sneakToggled || sneakKeyStartPressed)
                     : sneakPressedRaw;
@@ -796,8 +800,13 @@ public final class SmartMovingClientState {
                     && !wantCrawl
                     && !mustCrawl
                     && (!crawlingEnabled0 || !grabPressed0);
+            // B-2 (세션 43): wantSneak 신설. Config.isSneakingEnabled() = sneak || !enabled (OR 패턴).
+            boolean wantSneak = cfg0.isSneakingEnabled() && wouldWantSneak;
             wouldIsSneaking = wouldWantSneak && !player.isSprinting() && !isClimbing;
-            isSlow = sneakContinueInput && wouldIsSneaking;
+            // B-44a (세션 43): wasSneaking 저장을 isSlow 공식 직전으로 이동 (원본 L2716).
+            wasSneaking = isSlow;
+            // B-2 (세션 43): 기존 `sneakContinueInput && wouldIsSneaking` 중복 제거 → 원본 1:1.
+            isSlow = wantSneak && wouldIsSneaking;
             // isFast 원본: grabButton.Pressed && isSprinting()
             isFast = SmartMovingKeys.grab.isPressed() && player.isSprinting();
             // isFlying 원본: sp.capabilities.isFlying
@@ -914,6 +923,16 @@ public final class SmartMovingClientState {
             isSmall = isCrawling || isSliding || isHeadJumping;
 
             // wouldIsSneaking 은 위 isSlow 계산 블록에서 이미 원본 L2711 공식으로 설정됨.
+
+            // B-30 (세션 43): isStanding 매 틱 갱신 (원본 L2734 `horizontalSpeedSquare < 0.0005`).
+            // horizontalSpeedSquare = motionX² + motionZ². 원본 L2389 참조. handleExhaustion
+            // L1180 로컬 변수와 중복 계산되지만 isStanding 필드는 tickEssential 단일 진실 공급원.
+            {
+                double _motionX = player.getVelocity().x;
+                double _motionZ = player.getVelocity().z;
+                double _horizontalSpeedSquare = _motionX * _motionX + _motionZ * _motionZ;
+                isStanding = _horizontalSpeedSquare < 0.0005;
+            }
 
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
