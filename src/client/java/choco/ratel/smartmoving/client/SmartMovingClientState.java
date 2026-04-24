@@ -1455,10 +1455,28 @@ public final class SmartMovingClientState {
                     // isCollidedHorizontally 복원은 근사로 생략 (§7 B-18).
                     player.move(MovementType.SELF, new Vec3d(0, 0.05, 0));
                 } else if (!isClimbCrawling && wasClimbCrawling) {
-                    // 해제 엣지 (원본 L2819-L2820 요약) — 일부 이식.
+                    // B-18b (세션 83): 해제 엣지 완전 본문 이식 (원본 L2804-L2820).
+                    // Agent WebFetch 로 해제 엣지 상세 확보 후 이식. 원본:
+                    //   climbIntoCount = 0;
+                    //   if (mustCrawl || sneakButton.Pressed || crawlToggled) {
+                    //       double gap = minY - getMaxPlayerSolidBetween(minY-1, minY, 0);
+                    //       if (gap >= 0 && gap < 1) {
+                    //           wasCrawling = toCrawling();
+                    //           move(0, -gap, 0, true);
+                    //       } else resetHeightOffset();
+                    //   } else resetHeightOffset();
+                    // ※ 근사 이식 (§7 B-18 근사 확장): `getMaxPlayerSolidBetween` 정밀 AABB
+                    //   스캔 미이식 → `gap ≈ 0` 근사 (발 아래 고체 붙어있음 가정) →
+                    //   `gap >= 0 && gap < 1` 항상 true → mustCrawl/sneak 분기 시 크롤 전환.
+                    //   `move(0, -gap, 0)` 이동량은 0 근사 (no-op). heightOffset 유지.
                     climbIntoCount = 0;
-                    // TODO (B-18b): mustCrawl/sneak 상황별 크롤 전환 + resetHeightOffset
-                    //   본문 미확보 — Agent WebFetch 후 별도 서브 원자.
+                    if (mustCrawl || sneakPressedRaw || crawlToggled) {
+                        // gap ≈ 0 근사 → 항상 `[0, 1)` 범위 → 크롤 전환 + move no-op.
+                        wasCrawling = toCrawling();
+                        // player.move(SELF, new Vec3d(0, -gap, 0)) 이동량 0 근사로 생략.
+                    } else {
+                        heightOffset = 0F;  // resetHeightOffset 근사
+                    }
                 }
             }
 

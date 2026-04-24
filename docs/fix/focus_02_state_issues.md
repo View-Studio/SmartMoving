@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 82 — B Phase 2 계속 / B-44c) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 52 원자 완료 / ⏳ **B Phase 2 잔여 6 원자** (B-7/B-9/B-11/B-19/B-33/B-44b) |
+| 상태 | 🟡 진행 중 (세션 83 — B Phase 2 계속 / B-18b) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 53 원자 완료 / ⏳ **B Phase 2 잔여 6 원자** (B-7/B-9/B-11/B-19/B-33/B-44b) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -815,6 +815,20 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
         별도 서브 원자 **B-18b** (TODO 주석). 의존 전수 충족: hasClimbCrawlGap 필드 (기존) /
         hasClimbGap (B-15b) / isClimbHolding (B-16) / wantClimbHolding (B-18-pre) /
         wantClimbUp (B-17b2-pre) / climbIntoCount 필드.
+- [x] **B-18b** ✅ **세션 83 완료 (근사 이식)** — 세션 81 B-18 해제 엣지의 TODO 본문 완전
+      이식. Agent WebFetch 로 원본 L2804-L2820 확보:
+      ```java
+      climbIntoCount = 0;
+      if (mustCrawl || sneakButton.Pressed || crawlToggled) {
+          double gap = minY - getMaxPlayerSolidBetween(minY-1, minY, 0);
+          if (gap >= 0 && gap < 1) { wasCrawling = toCrawling(); move(0, -gap, 0); }
+          else resetHeightOffset();
+      } else resetHeightOffset();
+      ```
+      ClientState 이식: `sneakPressedRaw || mustCrawl || crawlToggled` 시 `wasCrawling =
+      toCrawling()` (§7 B-18 근사 — `gap ≈ 0` 가정으로 항상 `[0, 1)` 범위 + move 생략).
+      그 외 `heightOffset = 0F`. 스코프: B-18 본체가 pre-compute 블록 내 배치 → `mustCrawl/
+      sneakPressedRaw/crawlToggled` 모두 접근 가능 (빌드 성공 확인).
 
 #### B-19. `hasClimbCrawlGap` / `hasClimbGap` / `isNeighborClimbing` 갱신 로직 이식 (A-3 발견)
 - [ ] B-19. 원본 handleClimbing Free Climbing 분기 (L896-L1108) 내부 Orientation 판정
@@ -3835,6 +3849,69 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-44b** (wasCrawling 저장 시점) — B-33 동시 조정 필요.
 - **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
 - **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
+
+### 세션 83 — 2026-04-24 — B Phase 2 B-18b (isClimbCrawling 해제 엣지 본문)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 L2804-L2820 해제 엣지 본문 확보. 완전 구조:
+  ```java
+  else if (!isClimbCrawling && wasClimbCrawling) {
+      climbIntoCount = 0;
+      if (mustCrawl || sneakButton.Pressed || crawlToggled) {
+          double gap = minY - getMaxPlayerSolidBetween(minY - 1D, minY, 0);
+          if (gap >= 0D && gap < 1D) {
+              wasCrawling = toCrawling();
+              move(0, -gap, 0, true);
+          } else {
+              resetHeightOffset();
+          }
+      } else {
+          resetHeightOffset();
+      }
+  }
+  ```
+- ClientState B-18 해제 엣지의 기존 TODO (세션 81) → 완전 본문 이식:
+  ```java
+  climbIntoCount = 0;
+  if (mustCrawl || sneakPressedRaw || crawlToggled) {
+      // gap ≈ 0 근사 → 항상 [0, 1) 범위 → 크롤 전환 + move no-op
+      wasCrawling = toCrawling();
+  } else {
+      heightOffset = 0F;  // resetHeightOffset 근사
+  }
+  ```
+- §7 **B-18 근사 확장**: `getMaxPlayerSolidBetween` 정밀 AABB 미이식 → `gap ≈ 0` 근사 →
+  `gap >= 0 && gap < 1` 항상 true → mustCrawl/sneak/crawlToggled 조건 만족 시 크롤 전환
+  으로 진입. `move(0, -gap, 0)` 이동량도 0 근사 (no-op). heightOffset 유지.
+- 스코프 확인: B-18 본체가 pre-compute 블록 내 배치 → `mustCrawl`/`sneakPressedRaw`/
+  `crawlToggled` 모두 접근 가능. 빌드 성공으로 확인.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 83)**:
+- [근거] Agent WebFetch 로 원본 L2804-L2820 완전 본문 확보 ✓
+- [근거] R-12.6 해제 엣지 전환 분기 [누락] §16 세션 33 ✓
+- [대응] climbIntoCount=0 + 조건부 toCrawling/resetHeightOffset 원본 1:1 (gap 이동량 근사) ✓
+- [분기] 3갈래 (mustCrawl/sneak/crawlToggled 조건 → gap [0,1) / 외 → resetHeightOffset) ✓
+- [상수] `0D` / `1D` 원본 동일. gap 근사 0 으로 조건 [0, 1) 자동 만족.
+- [타이밍] B-18 해제 엣지 내부 (climbIntoCount=0 직후) — 원본 순서 1:1 ✓
+- [근사] §7 B-18 근사 확장 (gap 정밀 측정 + move 이동량 생략) ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. isClimbCrawling 해제 시 mustCrawl/sneak/
+  crawlToggled 만족 → 크롤 전환 경로 복원. 원본 설계 의도 (크롤 상태 유지 vs 정상 기립)
+  분기 선택 활성.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #2 isClimbCrawling 메인 공식 + 해제 엣지 (B-18 + B-18b 세션 81/83)
+- 나머지 기존 갱신과 동일
+
+**Phase 2 진행 상황**: 53 원자 완료 (B-18b 서브 추가) / 잔여 6 원자
+
+**다음 작업 권고**:
+- **B-44b** (wasCrawling 저장 시점) — B-33 동시 조정 필요 (단독 무의미).
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
+- **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
+- **B-19** (hasClimbGap 갱신) — 대규모 Orientation 판정 필요.
 
 ---
 
