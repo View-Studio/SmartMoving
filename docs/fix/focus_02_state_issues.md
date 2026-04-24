@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 C 단계 진입 (세션 85 — C-1 clean build 완료 / 잔여 C-2~C-5) |
-| 현재 단계 | A 완료 + B Phase 1/2 핵심 완료 + C-1 완료. **B Phase 2 잔여 4 원자 별도 포커스 분리** (B-7 → focus_15 / B-9+B-11 → focus_16 / B-19 → focus_17). ⏳ C-2 회귀 감사 / C-3 checklist 기록 / C-4 인게임 재검증 / C-5 포커스 #3 전환 |
+| 상태 | 🟡 C 단계 진행 (세션 86 — C-1/C-2 완료 / 잔여 C-3/C-4/C-5) |
+| 현재 단계 | A 완료 + B Phase 1/2 핵심 완료 + C-1 clean build + C-2 회귀 감사 완료. **B Phase 2 잔여 4 원자 별도 포커스 분리** (B-7 → focus_15 / B-9+B-11 → focus_16 / B-19 → focus_17). ⏳ C-3 checklist 기록 / C-4 인게임 재검증 (사용자 몫) / C-5 포커스 #3 전환 |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -1108,7 +1108,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 - [x] C-1. ✅ **세션 85 완료** — `./gradlew clean build` 성공 (10 actionable tasks, 9s).
       compileJava + compileClientJava + remapJar + assemble + build 전 단계 통과. 경고는
       Gradle 10 호환성 관련 deprecation 뿐 (기능 영향 없음).
-- [ ] C-2. §14 회귀 방지 감사 (상태 소비처 — 애니메이션/전환/키 커맨드 영향 확인)
+- [x] C-2. ✅ **세션 86 완료** — §14 회귀 방지 감사 전수 통과. 4개 체크포인트 (R-09 토글
+      블록 / wouldWantSneak·wouldWantCrawl / sendStatePacket·processStatePacket /
+      sm_isSneaking override) + 공통 회귀 감사 체크리스트 (B/C/D) 모두 ✓. 상세 감사 결과는
+      §14 표 갱신 기록. 결론: 상태 소비처 (#1/#3/#4) 에 영향 주는 회귀 없음.
 - [ ] C-3. checklist_original_audit.md 에 포커스 #2 결과 기록
 - [ ] C-4. 사용자 인게임 재검증 (§3 재현 케이스 실제 채워지면 매칭 확인)
 - [ ] C-5. `playtest_fixes.md` "현재 포커스" → `#3` 갱신
@@ -1144,12 +1147,25 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 
 ## 14. 회귀 방지 감사
 
-| 기존 이식 | 영향 포인트 | 확인 |
-|----------|-----------|------|
-| R-09 토글 블록 | `wasSneaking` / `wasCrawling_st` 저장 시점 변경하면 토글 블록 깨짐 | [ ] |
-| `wouldWantSneak` / `wouldWantCrawl` | 참조 필드 의미 변경 시 연쇄 영향 | [ ] |
-| `sendStatePacket` / `processStatePacket` | State 비트 매핑 변경하면 다른 플레이어 렌더 깨짐 | [ ] |
-| `sm_isSneaking` override | isSlow → isSneaking 순환 주의 | [ ] |
+**세션 86 (2026-04-24) 감사 결과** — C-2 체크포인트 전수 통과.
+
+| 기존 이식 | 영향 포인트 | 확인 | 감사 결과 (세션 86) |
+|----------|-----------|------|---------------------|
+| R-09 토글 블록 | `wasSneaking` / `wasCrawling_st` 저장 시점 변경하면 토글 블록 깨짐 | [x] | `wasSneaking` (B-44a 세션 43 공식 직전 이동) / `wasCrawling` (B-31a 세션 41 개명 + B-44b 세션 84 공식 직전 이동) 완료. R-09 블록이 매 틱 isCrawling 값 참조하므로 세션 84 B-33 IMPL-01 제거 후에도 `willStopCrawl → crawlToggled=false` 자동 해제 경로 일관성 유지 ✓ |
+| `wouldWantSneak` / `wouldWantCrawl` | 참조 필드 의미 변경 시 연쇄 영향 | [x] | wouldWantCrawl 필드 승격 (B-36-pre 세션 77, 지역 별칭 유지). wouldIsSneaking B-3b 세션 49 `!wantSprint` 정정. wantCrawl = crawlingEnabled && wouldWantCrawl 공식 그대로 → B-33 매 틱 공식에 의미 유지 ✓ |
+| `sendStatePacket` / `processStatePacket` | State 비트 매핑 변경하면 다른 플레이어 렌더 깨짐 | [x] | 비트 매핑 변경 없음 (SmartMovingState 필드/비트 위치 유지). 세션 71 isLevitating 강제 false 제거는 계산 갱신만 — 네트워크 전송 형식 불변 ✓ |
+| `sm_isSneaking` override | isSlow → isSneaking 순환 주의 | [x] | pre-compute 블록에서 `sneakPressedRaw` 사용 (L784) 로 순환 방지 이미 적용. 세션 84 B-33 IMPL-01 제거로 `player.isSneaking()` 호출 소멸 → 순환 위험 오히려 감소 ✓ |
+
+**추가 감사** (공통 회귀 감사 체크리스트 §playtest_fixes §B/C/D):
+- [B] B-N 원자별 필드/메서드 시그니처 변경 — 호출처 전수 확인 완료 (Config 헬퍼/KeyBinding 매핑).
+  B-16a/b/c (세션 69) 신규 헬퍼 추가 외 기존 시그니처 보존.
+- [C] 공통 플래그 (`enabled` / `isCrawling` / `isSlow` / `isFast` / `toggler` / `sneakToggled`
+  등) 의미 변경 확인 — checklist_original_audit.md 해당 완료 항목 (포커스 #5/#6) 재검토 불필요
+  (B Phase 1/2 수정이 상태 플래그 계산 규칙만 수정, 의미 자체는 원본 1:1 유지).
+- [D] 네트워크 페이로드 (ConfigContentPayload / StatePayload / SpeedChangePayload) 변경
+  없음 — 세션 29-85 작업 전체에서 네트워크 프로토콜 미변경.
+
+**결론**: 회귀 방지 감사 전수 통과. C-2 체크박스 [x].
 
 ---
 
@@ -4043,6 +4059,45 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **C-5 playtest_fixes.md "현재 포커스" → #3** 전환 (C-4 사용자 몫 제외).
 - **focus_15/16/17 신규 파일 생성** — 세션 85 분리 결정의 후속 실행 (post #3 진입 후 또는
   focus_14 와 묶어 일괄).
+
+### 세션 86 — 2026-04-24 — C-2 회귀 방지 감사
+
+**진행한 작업**:
+- §14 회귀 방지 감사 체크리스트 4개 체크포인트 전수 감사:
+  1. **R-09 토글 블록**: `wasSneaking` (B-44a 세션 43) / `wasCrawling` (B-31a 세션 41 개명 +
+     B-44b 세션 84 공식 직전 이동) 완료. 매 틱 isCrawling 참조로 세션 84 B-33 IMPL-01 제거
+     후에도 `willStopCrawl → crawlToggled=false` 자동 해제 경로 일관성 유지 ✓
+  2. **wouldWantSneak / wouldWantCrawl**: wouldWantCrawl 필드 승격 (B-36-pre 세션 77).
+     wouldIsSneaking B-3b 세션 49 `!wantSprint` 정정. wantCrawl 의미 유지 ✓
+  3. **sendStatePacket / processStatePacket**: SmartMovingState 비트 매핑 변경 없음. 세션 71
+     isLevitating 제거는 계산만 — 네트워크 전송 형식 불변 ✓
+  4. **sm_isSneaking override**: pre-compute `sneakPressedRaw` 사용으로 순환 방지 이미 적용.
+     세션 84 B-33 IMPL-01 제거로 `player.isSneaking()` 호출 소멸 → 순환 위험 감소 ✓
+- 공통 회귀 감사 체크리스트 (B/C/D) 추가 감사:
+  * [B] 시그니처 변경 — B-16a/b/c 신규 헬퍼 추가 외 보존
+  * [C] 공통 플래그 의미 변경 없음 (#5/#6 완료 항목 재검토 불필요)
+  * [D] 네트워크 페이로드 변경 없음
+- §14 감사 결과 표 갱신 + §10 C-2 체크박스 [x] 해소 + §1 진행 상황 갱신.
+- 코드 변경 없음 — 감사 기록만.
+
+**완료 전 검증 체크리스트 (세션 86)**:
+- [근거] §14 체크리스트 4개 체크포인트 + 공통 회귀 감사 B/C/D 항목 전수 확인 ✓
+- [근거] 세션 29-85 작업 누적 재검토 (B-44a/B-31a/B-44b/B-36-pre/B-3b/B-33 등) ✓
+- [대응] 감사 결과 §14 표 세션 86 칼럼 기록 ✓
+- [분기] 없음 (감사 작업)
+- [상수] 없음
+- [타이밍] C-1 완료 후 C-2 — §10 C 단계 순서 정합 ✓
+- [근사] 없음 — 감사 작업
+- [신규] 없음
+- [회귀] 감사 자체 — 세션 29-85 누적 수정이 소비처 #1/#3/#4 에 영향 주는 회귀 없음 확정 ✓
+- [빌드] C-1 세션 85 clean build 성공 이미 확인
+
+**Phase 진행 상황**: B Phase 2 54 + 별도 포커스 분리 4 / C 단계 2/5 완료 (C-1/C-2).
+
+**다음 작업 권고**:
+- **C-3 checklist_original_audit.md 기록** — 포커스 #2 결과 요약 (파일 존재 여부 확인 후).
+- **C-5 playtest_fixes.md "현재 포커스" → #3** 전환.
+- **C-4** 는 사용자 인게임 몫 (G-2 테스트).
 
 ---
 
