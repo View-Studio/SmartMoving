@@ -303,11 +303,18 @@ public final class SmartMovingClimber {
         }
 
         if (!cfg.freeClimb && !cfg.simpleClimb && !cfg.smartClimb) {
-            // Standard 모드: combinedFactor = getConfigSpeedFactor × getPotionSpeedFactor (SmartMovingSelf.md L712)
-            // setOnlyShouldClimbSpeed(FAST_UP_MOTION * combinedFactor, true, 1.0D) → motionY = 0.2 * combinedFactor
-            // B-1 (세션 25): Mover.getCombinedSpeedFactor 단일 헬퍼로 교체.
+            // B-20 (세션 76): 원본 L820-L823 Standard Base Climb 1:1 복원 (근사).
+            //   원본: if (isOnLadderOrVine && isCollidedHorizontally) motionY = 0.2 * combinedFactor
+            //         **isClimbing 설정 안 함** (vanilla ladder 물리 위임).
+            //   기존 `setOnlyShouldClimbSpeed` 호출은 내부 `if (relevant) sm.isClimbing = true;`
+            //   로 Standard 모드에서도 isClimbing 잉여 설정 → 포커스 #2 상태 플래그 오염.
+            //   정정: `setShouldClimbSpeed` (isClimbing 안 건드림) 로 교체. 속도 보정 유지.
+            //   ※ 근사 이식 (§7 B-20): `isOnLadderOrVine && isCollidedHorizontally` 조건
+            //     판정 생략 — Standard 분기 진입 자체를 ladder/vine 접촉으로 간주.
+            //     실제로는 vanilla ladder 물리가 진입을 조건부로 처리하므로 실용상 등가.
+            // B-1 (세션 25): Mover.getCombinedSpeedFactor User 배율 주입.
             double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
-            setOnlyShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
+            setShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
             player.fallDistance = 0;
             return;
         }

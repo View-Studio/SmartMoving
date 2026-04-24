@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 75 — B Phase 2 계속 / B-26) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 45 원자 완료 / ⏳ **B Phase 2 잔여 12 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-33/B-36/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 76 — B Phase 2 계속 / B-20) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 46 원자 완료 / ⏳ **B Phase 2 잔여 11 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-36/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -418,6 +418,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `Jumper.SLIDE_DOWN` 상수 + 전용 속도 공식 (원본 tryJump 내부 SlideDown 분기) 미이식.
   `isFromRunning` 파라미터 영향 생략. 효과: 슬라이딩 진입 시 SlideDown 전용 하강 점프
   추진 모션 누락 — 주로 시각/이펙트 영향, 핵심 상태 플래그에는 영향 없음.
+- **B-20 근사** (세션 76): `SmartMovingClimber.handleClimbing` Standard Base Climb 분기
+  (원본 L820-L823) 의 `isOnLadderOrVine && isCollidedHorizontally` 조건 판정 생략 — Standard
+  분기 진입 자체를 ladder/vine 접촉으로 간주. 실제로는 vanilla ladder 물리가 진입을 조건부로
+  처리하므로 실용 등가. `setOnlyShouldClimbSpeed` → `setShouldClimbSpeed` 교체로 isClimbing
+  잉여 설정 해소 (포커스 #2 상태 플래그 정확성 개선). Simple/Smart Base Climb (L825-L894)
+  전체 미이식은 별도 포커스 후보.
 
 ---
 
@@ -792,9 +798,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       분해 (B-19a: Orientation 4방향 판정 / B-19b: ClimbGap out 파라미터 / ...).
 
 #### B-20. Standard / Simple Base Climb 이식 (A-3 발견)
-- [ ] B-20. 원본 L820-L844 이식 — Config.isStandardBaseClimb / isSimpleBaseClimb 분기.
-      motionY 직접 설정 (FastUpMotion / SlowUpMotion 상수 이식). isClimbing 설정 안 함
-      (vanilla ladder 물리 위임). 1.21.1 은 Free 만 이식되어 있어 옵션 분기 전체 미이식.
+- [x] B-20. ✅ **세션 76 완료 (부분, Standard 만)** — 원본 L820-L823 Standard Base Climb
+      `isClimbing 설정 안 함` 원칙 복원. SmartMovingClimber.handleClimbing L305-L313 Standard
+      분기에서 `setOnlyShouldClimbSpeed` (L273 `isClimbing=true` 내장) → `setShouldClimbSpeed`
+      (isClimbing 안 건드림) 로 교체. 속도 보정 (motionY = 0.2 * combinedFactor) 유지.
+      §7 B-20 근사 등록: `isOnLadderOrVine && isCollidedHorizontally` 조건 판정 생략 —
+      Standard 분기 진입을 ladder 접촉으로 간주 (vanilla ladder 물리 조건부 처리로 실용 등가).
+      **Simple/Smart Base Climb 분기 (L825-L894) 는 미이식 유지** — 별도 포커스 후보 (옵션
+      모드 전체 이식 규모 큼). Standard 모드의 `isClimbing` 오염만 해소.
 
 #### B-21. `isCeilingClimbing` 해제 엣지 이식 (A-3 발견)
 - [x] B-21. ✅ **세션 57 완료 (B-14 로 자동 해소)** — 원본 L1485 resetClimbing 이 매 틱
@@ -3452,6 +3463,54 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
 - **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
 - **B-39** (landMotionPost 3분기) — crawlStandUpBottom 근사 필요.
+
+### 세션 76 — 2026-04-24 — B Phase 2 B-20 (Standard Base Climb isClimbing 오염 해소)
+
+**진행한 작업**:
+- `SmartMovingClimber.handleClimbing` L305-L313 Standard 분기에서 `setOnlyShouldClimbSpeed`
+  → `setShouldClimbSpeed` 한 단어 교체.
+  * `setOnlyShouldClimbSpeed` (L273): `if (relevant) sm.isClimbing = true;` 내장 — Standard
+    모드에서도 isClimbing 잉여 설정 → **오역** (원본은 Standard 에서 vanilla ladder 물리 위임이라
+    isClimbing 설정 안 함).
+  * `setShouldClimbSpeed`: motionY 보정만 수행, isClimbing 안 건드림.
+- 속도 보정 (motionY = 0.2 × combinedFactor) 유지 — 세션 25 B-1 User 배율 주입 효과 보존.
+- §7 **B-20 근사 등록**: 원본 `isOnLadderOrVine && isCollidedHorizontally` 조건 판정 생략 —
+  Standard 분기 진입 자체를 ladder/vine 접촉으로 간주. vanilla ladder 물리가 진입을 조건부로
+  처리하므로 실용 등가.
+- **Simple/Smart Base Climb 분기 (L825-L894) 는 미이식 유지** — 별도 포커스 후보 (옵션
+  모드 전체 이식 규모 큼). B-20 본 원자는 "Standard 모드 isClimbing 오염 해소" 에 한정.
+- 주석 업데이트: 원본 L820-L823 인용 + 근사 명시 + isClimbing 오염 해소 근거 상세 기록.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 76)**:
+- [근거] 원본 L820-L823 Standard Base Climb + SmartMovingSelf.md R-12.3 확보 ✓
+- [근거] setOnlyShouldClimbSpeed 내부 `isClimbing=true` 설정 L273 재확인 ✓
+- [대응] 한 단어 교체로 원본 의도 (Standard 에서 isClimbing 설정 안 함) 복원 ✓
+- [분기] 없음 (단일 호출)
+- [상수] `FAST_UP_MOTION = 0.2D` (원본 L712 `0.2` 일치) 유지 ✓
+- [타이밍] 기존 위치 그대로 (exhaustion 체크 뒤 Standard 분기 진입부) ✓
+- [근사] `isOnLadderOrVine && isCollidedHorizontally` 조건 판정 생략 — §7 B-20 근사 등록 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. Standard 모드에서 `isClimbing=true` 잉여
+  설정 제거 → 포커스 #2 상태 플래그 정확성 개선. 속도 보정 유지로 세션 25 B-1 효과 보존.
+  소비처 (isCrawlClimbing 공식 등) 에서 Standard 모드 접촉 시 등반 상태 오분류 해소.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing() (B-14 세션 57)
+- ✅ #3 isCrawlClimbing 메인 공식 + 전환 (B-17a/b1/b2 세션 47/48/73)
+- ✅ #6/#7 isClimbHolding/wantClimbHolding (B-16 세션 68/69)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 자동 해소 세션 57)
+- ✅ Standard Base Climb isClimbing 오염 해소 (B-20 세션 76, 부분)
+- ⏳ #2/#4/#5/#8~#12/#14 (B-18/B-19 등)
+
+**Phase 2 진행 상황**: 46 원자 완료 / 잔여 11 원자
+
+**다음 작업 권고**:
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
+- **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
+- **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사 필요.
+- **B-44b** (wasCrawling 저장 시점 이동) — B-33 함께 조정 예정이나 단독 문서 정리 가능.
 
 ---
 
