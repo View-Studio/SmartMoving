@@ -54,13 +54,72 @@
 원본 SmartMovingSelf.java `handleClimbing` Free Climbing 분기 (L896-L1108) 내부
 Orientation 판정 + ClimbGap 계산.
 
-#### B-19a. Climber Orientation 4방향 판정 로직 이식
-- [ ] B-19a. 원본 L906-L1020 대역 4방향 (PZ/NZ/ZP/ZN) Orientation 기반 블록 탐색 로직 이식.
-      Agent WebFetch 로 원본 본문 확보 필요.
-      `Orientation` 타입 이식 (ClimbGap 에 이미 존재 확인 필요).
-      주변 블록 등반 가능 여부 → `inout_handsClimbing` / `inout_feetClimbing` / `ClimbGap`
-      결과 집계. 현재 `getOnLadderOrVine` 가 일부 기능 커버하나 Free Climb 의 전체 로직
-      부재.
+#### B-19a. Climber Orientation 4방향 판정 로직 이식 (서브 원자 5개로 재분해 — 세션 89)
+
+**세션 89 재평가 결과** (Agent WebFetch 로 원본 `Orientation.java` 2860줄 확보 후):
+- 원본 `seekClimbGap` (L207-L224) 은 `handsClimbing()`/`feetClimbing()` 호출만 — 실체는
+  **`isLadderSubstitute()` (L477-L606) 내부의 gap 정밀 계산 + `ClimbGap.CanStand/MustCrawl`
+  설정 (L601-L602)** 에 있음.
+- `isLadderSubstitute` 는 `hasHalfHold` / `hasBottomHold` / `isBaseAccessible` /
+  `isFullAccessible` / `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` /
+  `isOnLadderOrVine` / `isOnOpenTrapDoor` / `isRope` / `isOnWallRope` 등 10+ 의존 헬퍼를
+  씀. 대부분 `SmartMovingContext` 에 있음.
+- 1.21.1 `ClimbGap.canStand`/`mustCrawl` 은 **설정 로직 자체 부재** — `reset()` 에서 false
+  고 그대로. 따라서 Climber 4방향 탐색 결과가 ClientState 에 반영되더라도 canStand=
+  mustCrawl=false 라서 효과 없음.
+- 결론: 단일 원자로 한 세션 불가. 아래 5개 서브로 분해.
+
+**원본 근거**: `.tmp_research/Orientation.java.md` (WebFetch 저장, 2860줄).
+
+- [ ] **B-19a0. `Orientation` 클래스 기본 구조 신설** (원본 Orientation L36-L205)
+      * 9 상수 (ZZ/PZ/NZ/ZP/ZN/PP/NN/PN/NP) + `_i`/`_k` 필드 + 생성자
+      * `isWithinAngle` / `isRotationForClimbing` / `getKnownLadderOrientation` / `addTo`
+      * `getHorizontalBorderGap` / `isTunnelAhead` / `getClimbingOrientations` (정적 헬퍼)
+      * 1.21.1 `choco.ratel.smartmoving.climbing.Orientation` 패키지에 신설.
+
+- [ ] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼**
+      (원본 SmartMovingContext / Orientation 의 `isOnLadderOrVine` / `isOnOpenTrapDoor` /
+      `isRope` / `isOnWallRope` / `isBaseAccessible` / `isFullAccessible` /
+      `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` / `isFullEmpty` /
+      `isSolid`)
+      * `SmartMovingContext` 원본 Agent WebFetch 필요.
+      * 1.21.1 BlockState 매핑 (ladder/vine/trapdoor/rope 식별 — rope 은 SmartMoving 모드
+        블록, 1.21.1 vanilla 외부).
+
+- [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
+      (원본 L477-L606 + L608-L648 `hasHalfHold` + `hasBottomHold`)
+      * `halfOffset` (middle/base/sub/subSub/top) enum 이식
+      * gap 계산 1-5 스케일 + `ClimbGap.CanStand/MustCrawl/Block/Meta/Direction` 설정 로직
+      * 의존: B-19a1 헬퍼 전수 이식.
+
+- [ ] **B-19a3. `handsClimbing()` / `feetClimbing()` 판정 메서드 이식**
+      (원본 L329-L475)
+      * `handsClimbing`: 4개 gap (middle/base/sub/subSub) 판정 → HandsClimbing 결과 + gap
+        threshold 별 분기 (FastUp/Up/TopHold/BottomHold/Sink)
+      * `feetClimbing`: 4개 gap (top/middle/base/sub) + isCrawlClimbing/isClimbCrawling
+        조건부 분기
+      * `HandsClimbing.max` / `FeetClimbing.max` 메서드 확인 (1.21.1 에 이미 있는지 grep)
+      * 의존: B-19a2 `isLadderSubstitute`.
+
+- [ ] **B-19a4. `Orientation.seekClimbGap` 메서드 이식 + Climber.handleClimbing 연결**
+      (원본 L207-L224 + Self.java L937-L961)
+      * `seekClimbGap(rotation, world, i, id, jhd, k, kd, isClimbCrawling, isCrawlClimbing,
+        isCrawling, inout_handsClimbing, inout_feetClimbing, out_handsClimbGap,
+        out_feetClimbGap)` 메서드 이식
+      * 1.21.1 `SmartMovingClimber.handleClimbing` 4방향 탐색을 `getOnLadderOrVine` →
+        `Orientation.PZ/NZ/ZP/ZN.seekClimbGap` 4회 호출로 교체 (원본 L937-L940)
+      * 원본 L945-L947 `sm.isNeighborClimbing`/`hasNeighborClimbGap`/`hasNeighborClimbCrawlGap`
+        대입 이식 (→ B-19c / B-19d 의 일부 해소)
+      * 대각 탐색도 `Orientation.PP/NP/NN/PN.seekClimbGap` 로 교체 (원본 L951-L954)
+      * 원본 L960-L961 `sm.hasClimbGap`/`hasClimbCrawlGap` 대입 이식 (→ B-19b 해소)
+      * 의존: B-19a0 / B-19a1 / B-19a2 / B-19a3.
+
+**예상 세션 수 (B-19a 전체)**: 5-8 세션. Orientation.java 단독 2860줄이라 B-19a1/a2 가 가장
+큼. `SmartMovingContext` 원본 확보 필수.
+
+**방침 대안 (사용자 승인 시)**: 엄격 완료 방침 유지 vs 근사 이식 채택. 근사 시 B-19a 전체를
+"`getOnLadderOrVine` 에 ClimbGap.canStand/mustCrawl 을 수직 블록 공간 체크로 근사 계산"
+단일 원자로 축소 가능 (§7 B-19 근사 등록). **현재는 엄격 완료 방침 유지로 서브 5개 구조 선택**.
 
 #### B-19b. `hasClimbGap` / `hasClimbCrawlGap` 계산 이식
 - [ ] B-19b. 원본 Free Climb 분기 내부 `hasClimbGap` + `hasClimbCrawlGap` 갱신 로직.
@@ -303,15 +362,77 @@ Phase 8 (Simple/Smart)           ← 독립 가능
 Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ```
 
-**추정 원자 수**: 약 43 신규 원자 + 일부 재이식 (Phase 9 신설 +3, 3차 감사 +3
+**추정 원자 수**: 약 47 신규 원자 + 일부 재이식 (Phase 9 신설 +3, 3차 감사 +3
 → B-10-reset-post / B-N-standup / B-40-post, 4차 확정 감사 +7 → B-7d / B-9h / B-10b-pre
-/ B-42-B18a / B-42-B18b / B-49b / B-51).
-**추정 세션 수**: 33-50 세션.
-**Agent WebFetch 필요**: 대부분 원자 (원본 본문 리서치 미확보 대역 많음).
+/ B-42-B18a / B-42-B18b / B-49b / B-51, **세션 89 B-19a 재분해 +4 → B-19a0/a1/a2/a3/a4
+(단일 원자 → 5 서브)**).
+**추정 세션 수**: 37-55 세션 (B-19a 서브 1a1/1a2 가 가장 큼 — `SmartMovingContext` 전체
+헬퍼 이식 필요).
+**Agent WebFetch 필요**: 대부분 원자. **`SmartMovingContext.java` / `HandsClimbing.java` /
+`FeetClimbing.java` / Properties 원본 추가 확보** 필요 (B-19a1/a2/a3 의존).
 
 ---
 
 ## 5. 작업 기록
+
+### 세션 89 — 2026-04-24 — B-19a 원본 확보 + 서브 원자 5개 재분해
+
+**사용자 지시**: "이 규칙 지키면서 작업 이어서 진행해줘" (세션 88 프롬프트 재사용).
+
+**목표**: Phase 3 B-19a 시작 (엄격 완료 방침, 최우선 도미노 해소).
+
+**진행한 작업**:
+1. **원본 확보** — Agent WebFetch 로 `net/smart/moving/Orientation.java` 전체 2860줄 확보.
+   `.tmp_research/Orientation.java.md` 저장.
+2. **1.21.1 현재 상태 grep**:
+   - `SmartMovingClimber.handleClimbing` — 4방향 + 대각 탐색 자체는 이식됨
+     (`getOnLadderOrVine` + 수동 대각 루프) 이나 결과를 `sm.isNeighborClimbing` /
+     `sm.hasClimbGap` / `sm.hasClimbCrawlGap` / `sm.hasNeighborClimbGap` /
+     `sm.hasNeighborClimbCrawlGap` 에 대입하는 코드 **완전 부재**.
+   - `ClimbGap.canStand` / `mustCrawl` — public 필드로 있으나 설정하는 로직 **완전 부재**
+     (`reset()` 에서 false 되고 그대로). 원본은 `isLadderSubstitute` L597-L604 에서
+     `CanStand = gap > 3; MustCrawl = gap > 1 && gap < 4` 로 설정.
+3. **범위 재평가**:
+   - 원본 `seekClimbGap` (L207-L224) 은 `handsClimbing`/`feetClimbing` 호출 래퍼 — 실체
+     로직은 `isLadderSubstitute` (L477-L606) 의 gap 1-5 스케일 판정 + `hasHalfHold`
+     (L608+) / `hasBottomHold` 분기.
+   - `isLadderSubstitute` 의 의존: `isOnLadderOrVine` / `isOnOpenTrapDoor` / `isRope` /
+     `isOnWallRope` / `isBaseAccessible` / `isFullAccessible` / `isFullExtentAccessible` /
+     `isJustLowerHalfExtentAccessible` 등 10+ 헬퍼. 대부분 `SmartMovingContext` 에 있음.
+   - **결론**: B-19a 단일 원자로 한 세션 불가. 최소 5개 서브로 분해 필요.
+4. **Extended §3 B-19a 재구조화** — 5개 서브 원자로 분해:
+   * B-19a0: `Orientation` 클래스 기본 구조 신설 (9 상수 + 각도 판정 헬퍼)
+   * B-19a1: `SmartMovingContext` 헬퍼 파트 1 (수직 상태 판정 10+ 헬퍼)
+   * B-19a2: `isLadderSubstitute` 본체 + `hasHalfHold`/`hasBottomHold` (gap 계산 + CanStand/
+     MustCrawl 설정의 핵심)
+   * B-19a3: `handsClimbing()` / `feetClimbing()` 판정 메서드 이식
+   * B-19a4: `seekClimbGap` 메서드 이식 + Climber.handleClimbing 연결 (원본 L937-L961)
+5. **§3 B-19a 설명 교체 완료** — 서브 원자별 범위 / 의존 / 원본 근거 라인 명시.
+
+**코드 변경 없음** — 메타 결정 + 리서치 확보 + 원자 재분해 세션. 빌드 검증 불필요.
+
+**완료 전 검증 체크리스트 (세션 89 기준)**:
+- [근거] 원본 `Orientation.java` 2860줄 전체 WebFetch ✓
+- [근거] 1.21.1 `SmartMovingClimber.handleClimbing` 전수 read + ClimbGap 구조 확인 ✓
+- [근거] `isNeighborClimbing`/`hasClimbGap`/`hasClimbCrawlGap`/`hasNeighborClimbGap`/
+  `hasNeighborClimbCrawlGap` ClientState 필드는 이미 이식 (B-15 세션 40) 확인 ✓
+- [대응] 원본 L906-L1020 범위 ↔ 1.21.1 현재 구조 side-by-side 완료 ✓
+- [분기] seekClimbGap 내부 handsClimbing/feetClimbing 4 gap (middle/base/sub/subSub) +
+  4 gap (top/middle/base/sub) + isLadderSubstitute gap 1-5 스케일 전체 식별 ✓
+- [상수] `CanStand = gap > 3 / MustCrawl = gap > 1 && gap < 4` (원본 L601-L602) /
+  `_handClimbingHoldGap` / `DefaultMeta` 확인 ✓
+- [타이밍] 원본 tickEssential 호출 → handleClimbing 내부 4방향 탐색 → 대각 → 필드 대입
+  순서 원본 L937-L961 이식 계획에 반영 ✓
+- [근사] 없음 (서브 원자별 엄격 1:1 이식 방침 유지) — 필요 시 B-19a4 에서 ladder/vine
+  이외 매핑 (rope/wallRope 등 SmartMoving 모드 고유 블록) 근사 등록 가능성 §7 에 사전 명시
+- [신규] Orientation 클래스 + SmartMovingContext 헬퍼 이식이 Extended §3 에 포함 안 되어
+  있었음 — B-19a 서브로 정식 등록 ✓
+- [회귀] 코드 변경 없음 — 회귀 영향 없음 ✓
+- [빌드] 코드 변경 없음 — 빌드 검증 불필요 ✓
+
+**다음 세션 권고**: **B-19a0 (Orientation 클래스 기본 구조 신설)** — 의존 없는 독립 원자.
+`choco.ratel.smartmoving.climbing.Orientation` 신설. 9 상수 + `_i`/`_k` + 각도 판정
+메서드 이식. Orientation.java.md L36-L205 근거.
 
 ### 세션 88 — 2026-04-24 — 엄격 완료 결정 + Extended 파일 분리 + 전수 감사 2회
 
