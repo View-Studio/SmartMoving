@@ -440,6 +440,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1c2 근사 3건** (세션 94): `Orientation.isBaseAccessible` 이식 시 mod 호환 분기
+  생략:
+  (1) RedPower wire 분기 (원본 L2352-L2369) — `isRedPowerWire` / `getRpCoverSides` /
+  `isRedPowerWireBottom` / `isRedPowerWireTop` 체인 전체 생략. RedPower mod 1.21.1 미이식.
+  (2) ASRope 분기 (원본 L2385-L2389) — `isASRope` + `hasASGrapplingHook`/`hasRopesPlus`
+  모드 체크 생략. B-19a1b 의 `isRope`/`isOnWallRope` false 근사와 연동.
+  (3) Carpenters 분기 (원본 L2394-L2396) — `_blockCarpentersLadder` + `isExternalBlockType`
+  체크 생략. Carpenters mod 1.21.1 미이식.
+  각 근사는 해당 `if` 블록 위치에 "근사 이식 — 원본과 차이: X" 주석. vanilla 기반
+  접근성 판정 (isEmpty + isFullEmpty + trapdoor + wallBlock + door) 은 모두 1:1.
 - **B-19a1c1 근사 4건** (세션 93): `Orientation` 기본 블록 식별 + stair/slab/fence/wall/door
   헬퍼 이식 시 mod 호환성 관련 원본 분기 생략:
   (1) `isStairCompact` — 원본 `_knownCompactStairBlocks` (mod 추가 stair 리스트) 체크 생략.

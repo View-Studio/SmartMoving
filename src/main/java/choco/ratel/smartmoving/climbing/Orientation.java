@@ -1028,4 +1028,112 @@ public class Orientation {
     public static boolean isDoorTop(BlockState state) {
         return isDoor(state) && state.get(DoorBlock.HALF) == DoubleBlockHalf.UPPER;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c2 (세션 94) — isEmpty + isBaseAccessible + 좌표 기반 trapdoor 래퍼
+    // 원본: Orientation.java L2224-L2238 (trapdoor 좌표 래퍼),
+    //       L2342-L2399 (isBaseAccessible 2 오버로드), L2537-L2541 (isEmpty).
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Trapdoor 좌표 기반 래퍼 (원본 L2224-L2238) ─────────────────────────
+
+    /** 원본 L2236-L2238 `isTrapDoor(int i, int j_offset, int k)` — 좌표 → BlockState 래퍼. */
+    protected static boolean isTrapDoor(int i, int j_offset, int k) {
+        return isTrapDoor(getBlock(i, j_offset, k));
+    }
+
+    /** 원본 L2230-L2233 `isClosedTrapDoor(int i, int j_offset, int k)` — 좌표 래퍼. */
+    protected static boolean isClosedTrapDoor(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        return isTrapDoor(state) && isClosedTrapDoor(state);
+    }
+
+    /** 원본 L2224-L2227 `isOpenTrapDoor(int i, int j_offset, int k)` — 좌표 래퍼. */
+    protected static boolean isOpenTrapDoor(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        return isTrapDoor(state) && !isClosedTrapDoor(state);
+    }
+
+    // ── isFullEmpty 좌표 오버로드 (B-19a1a 확장 — static world 활용) ──────
+
+    /**
+     * 원본 `isFullEmpty(Block)` 단일 파라미터를 좌표 기반으로 오버로드.
+     * 1.21.1 `isFullEmpty(BlockState, World, BlockPos)` 로 전달. 호출부 단순화.
+     */
+    protected static boolean isFullEmpty(int i, int j_offset, int k) {
+        BlockPos pos = new BlockPos(i, local_offset + j_offset, k);
+        return isFullEmpty(world.getBlockState(pos), world, pos);
+    }
+
+    // ── isEmpty (원본 L2537-L2541) ──────────────────────────────────────────
+
+    /**
+     * 원본 L2537-L2541 `isEmpty(int i, int j_offset, int k)`:
+     *   `isFullEmpty(getBlock(i, j_offset, k)) && !isFence(i, j_offset - 1, k)`.
+     *
+     * 플레이어 지나갈 수 있는 공간 + 바로 아래가 fence 가 아님 (fence 는 1.5-높이 → 막힘).
+     */
+    protected static boolean isEmpty(int i, int j_offset, int k) {
+        return isFullEmpty(i, j_offset, k) && !isFence(i, j_offset - 1, k);
+    }
+
+    // ── isBaseAccessible 2 오버로드 (원본 L2342-L2399) ──────────────────────
+
+    /**
+     * 원본 L2342-L2345 `isBaseAccessible(int j_offset)` — 단순 래퍼, bottom=false/full=false.
+     */
+    protected static boolean isBaseAccessible(int j_offset) {
+        return isBaseAccessible(j_offset, false, false);
+    }
+
+    /**
+     * 원본 L2347-L2399 `isBaseAccessible(int j_offset, boolean bottom, boolean full)` —
+     * base 위치가 플레이어 점유 가능한 공간인지.
+     *
+     * 7 분기 (OR 누적):
+     *   (1) `isEmpty(base_i, j_offset, base_k)` — 빈 공간 + 아래 fence 없음
+     *   (2) [§7 근사 생략] RedPower wire 특수 처리
+     *   (3) `isFullEmpty(baseBlock)` — 블록 공간 자체 비어있음
+     *   (4) `isOpenTrapDoor(base_i, j_offset, base_k)` — 열린 trap door
+     *   (5) bottom && `isClosedTrapDoor(base_i, j_offset, base_k)` — bottom 플래그 + 닫힌 trapdoor
+     *   (6) !full && `isWallBlock(baseBlock, base_i, j_offset, base_k)` — full=false + 얇은 벽/펜스
+     *   (7) [§7 근사 생략] ASRope — !full && mod rope
+     *   (8) `isDoor(baseBlock)` — door 블록
+     *   (9) [§7 근사 생략] Carpenters `_blockCarpentersLadder`
+     *
+     * **§7 B-19a1c2 근사 3건**:
+     *   - RedPower wire 특수 판정 (`isRedPowerWire`/`getRpCoverSides`/`isRedPowerWireBottom/Top`
+     *     체인) 전체 생략 — RedPower mod 1.21.1 미이식
+     *   - ASRope 분기 생략 — ASRope mod 1.21.1 미이식 (B-19a1b `isRope`/`isOnWallRope`
+     *     false 근사와 연동)
+     *   - Carpenters `_blockCarpentersLadder` 분기 생략 — Carpenters mod 1.21.1 미이식
+     */
+    protected static boolean isBaseAccessible(int j_offset, boolean bottom, boolean full) {
+        BlockState id = getBaseBlockId(j_offset);
+        boolean accessible = isEmpty(base_i, j_offset, base_k);
+
+        // 근사 이식 — 원본과 차이: RedPower wire 분기 (원본 L2352-L2369) 생략
+
+        if (!accessible && isFullEmpty(getBaseBlockId(j_offset), world,
+                new BlockPos(base_i, local_offset + j_offset, base_k)))
+            accessible = true;
+
+        if (!accessible && isOpenTrapDoor(base_i, j_offset, base_k))
+            accessible = true;
+
+        if (!accessible && bottom && isClosedTrapDoor(base_i, j_offset, base_k))
+            accessible = true;
+
+        if (!accessible && !full && isWallBlock(id))
+            accessible = true;
+
+        // 근사 이식 — 원본과 차이: ASRope 분기 (원본 L2385-L2389) 생략
+
+        if (!accessible && isDoor(id))
+            accessible = true;
+
+        // 근사 이식 — 원본과 차이: Carpenters _blockCarpentersLadder 분기 (원본 L2394-L2396) 생략
+
+        return accessible;
+    }
 }

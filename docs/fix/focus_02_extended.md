@@ -116,9 +116,9 @@ Orientation 판정 + ClimbGap 계산.
                   isHalfBlock / isTopHalfBlock / isBottomHalfBlock / isFence / isFenceBase /
                   isWallBlock / isDoor / isDoorTop / isFenceGate / isOpenFenceGate /
                   isClosedFenceGate). §7 근사 4건 등록.
-            - [ ] **B-19a1c2**: `isEmpty` + `isBaseAccessible` 2 오버로드 (7 분기 —
-                  isEmpty / RedPower 무시 / isFullEmpty / isOpenTrapDoor / isClosedTrapDoor /
-                  isWallBlock / Rope / isDoor / Carpenters).
+            - [x] **B-19a1c2** (세션 94 완료): `isEmpty` + `isBaseAccessible` 2 오버로드
+                  (7 분기) + 좌표 기반 trapdoor 래퍼 3 + `isFullEmpty` 좌표 오버로드.
+                  §7 근사 3건 등록 (RedPower / ASRope / Carpenters).
             - [ ] **B-19a1c3**: `isRemoteAccessible` + `isAccessAccessible` +
                   `isDoorFrontBlocked` + `headedToFrontWall` + `headedToRemoteFlatWall` +
                   `remoteLadderClimbing`.
@@ -413,6 +413,60 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 94 — 2026-04-24 — B-19a1c2 `isEmpty` + `isBaseAccessible` + trapdoor 좌표 래퍼
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2224-L2238 + L2342-L2399 + L2537-L2541 read** — 이전 세션들에서 거의 확인 완료.
+   `isFullEmpty(Block)` 단일 파라미터를 1.21.1 에서 어떻게 호출할지 결정.
+2. **이식 세트** (8 메서드):
+   * `isTrapDoor(i, j_offset, k)` / `isClosedTrapDoor(i, j_offset, k)` /
+     `isOpenTrapDoor(i, j_offset, k)` — 좌표 기반 trapdoor 래퍼 3 (원본 L2224-L2238)
+   * `isFullEmpty(i, j_offset, k)` — 좌표 기반 오버로드 (B-19a1a `isFullEmpty(BlockState,
+     World, BlockPos)` 3-arg 래퍼). 호출부 간소화 + static world 활용.
+   * `isEmpty(i, j_offset, k)` (원본 L2537-L2541) — `isFullEmpty && !isFence(j_offset-1)`
+   * `isBaseAccessible(j_offset)` 1-arg 래퍼 (원본 L2342-L2345)
+   * `isBaseAccessible(j_offset, bottom, full)` 3-arg 본체 (원본 L2347-L2399) — 7 분기
+     OR 누적
+3. **vanilla 4 분기 1:1 이식**:
+   * (1) `isEmpty(base_i, j_offset, base_k)`
+   * (3) `isFullEmpty(baseBlock, world, pos)` — 블록 자체 비어있음
+   * (4) `isOpenTrapDoor(base_i, j_offset, base_k)`
+   * (5) bottom && `isClosedTrapDoor(base_i, j_offset, base_k)`
+   * (6) !full && `isWallBlock(baseBlock)` — B-19a1c1 이식
+   * (8) `isDoor(baseBlock)` — B-19a1c1 이식
+4. **§7 근사 3건 등록** (본체 §7 추가):
+   (1) RedPower wire 분기 (원본 L2352-L2369) 전체 생략
+   (2) ASRope 분기 (원본 L2385-L2389) 생략 — B-19a1b `isRope`/`isOnWallRope` false 와 연동
+   (3) Carpenters `_blockCarpentersLadder` 분기 (원본 L2394-L2396) 생략
+
+**완료 전 검증 체크리스트 (세션 94 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L2224-L2238 + L2342-L2399 + L2537-L2541
+  전수 read (세션 93 에서 대부분 read 완료) ✓
+- [근거] 1.21.1 B-19a1a `isFullEmpty(BlockState, World, BlockPos)` / B-19a1b
+  `isTrapDoor`/`isClosedTrapDoor` / B-19a1c1 `isFence`/`isWallBlock`/`isDoor` 의존
+  전수 충족 ✓
+- [대응] 8 메서드 원본 ↔ 1.21.1 side-by-side. 7 분기 OR 누적 순서 보존 (vanilla 분기 1/3/4/5/6/8
+  + 근사 생략 2/7/9) ✓
+- [분기] `isBaseAccessible` 7 분기 전수 식별. vanilla 분기 6개 이식 + mod 분기 3개 근사 생략
+  주석 명시 ✓
+- [상수] 없음 (조건 조합만) ✓
+- [타이밍] `isEmpty` / `isBaseAccessible` 는 순수 조회 함수 — 호출 타이밍 무관. base_i/
+  base_k/local_offset 는 `initialize()` 에서 설정되나 현재 `initialize` 자체는 B-19a2/a4
+  에서 이식 예정 ✓
+- [근사] **§7 B-19a1c2 근사 3건 등록 완료**. RedPower/ASRope/Carpenters 각 생략 위치에
+  "근사 이식 — 원본과 차이: X" 주석 ✓
+- [신규] 없음. `isFullEmpty(int, int, int)` 좌표 오버로드는 B-19a1a 3-arg 대응 편의 —
+  원본 semantics 보존 ✓
+- [회귀] 기존 Climber/ClientState 는 새 헬퍼 미사용 → 영향 없음. B-19a1c1 헬퍼와 연동 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a1c3** — `isRemoteAccessible` (12+ 분기, 원본 L2401-L2475) +
+`isAccessAccessible` (diagonal 용, L2477-L2484) + `isDoorFrontBlocked` (L2301-L2323) +
+`headedToFrontWall` (L1741+) + `headedToRemoteFlatWall` (L1941+) + `remoteLadderClimbing`
+(L1115+). 복잡한 wall/door/ladder 조합 판정 — 예상 1-2 세션.
 
 ### 세션 93 — 2026-04-24 — B-19a1c1 블록 식별 + stair/slab/fence/wall/door 헬퍼
 
