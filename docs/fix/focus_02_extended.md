@@ -374,8 +374,9 @@ Orientation 판정 + ClimbGap 계산.
 원본 정밀 AABB 헬퍼 이식.
 
 #### B-42 이식 (Phase 6 본체)
-- [ ] B-42a. `getMaxPlayerSolidBetween(double y1, double y2, double dOffset)` 이식 —
-      플레이어 AABB 의 x/z 범위 + [y1, y2] Y 범위 내 최고 고체 블록 Y.
+- [x] B-42a. `getMaxPlayerSolidBetween(double y1, double y2, double dOffset)` 이식 —
+      플레이어 AABB 의 x/z 범위 + [y1, y2] Y 범위 내 최고 고체 블록 Y. **세션 117 완료**
+      (`ClientState` static helper, VoxelShape→Box 단일 박스 근사 §7 등록).
 - [ ] B-42b. `getMinPlayerSolidBetween(double y1, double y2, double dOffset)` 이식 —
       위 범위 내 최저 고체 블록 Y.
 - [ ] B-42c. `getMinPlayerLiquidBetween(double y1, double y2)` 이식 — 최저 액체 Y.
@@ -499,6 +500,85 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 117 — 2026-04-24 — **Phase 6 진입** B-42a `getMaxPlayerSolidBetween` AABB 정밀 헬퍼 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 진입.
+
+**진행한 작업**:
+1. **원본 소스 확보**:
+   * `.tmp_research/SmartMovingSelf.java` grep `getMaxPlayerSolidBetween` — 10+ 호출 지점 확인
+     (본체 메서드는 `SmartMovingBase` 에 있어 미포함).
+   * Agent WebFetch 로 원본 `SmartMovingBase` L229-L306 획득 —
+     `getPlayerSolidBetween` / `isPlayerInSolidBetween` / `getMaxPlayerSolidBetween` /
+     `getMinPlayerSolidBetween` / `isInLiquid` / `getMaxPlayerLiquidBetween` /
+     `getMinPlayerLiquidBetween` / `isCollided` 본체 전수 확인.
+2. **기존 헬퍼 상태 점검**:
+   * `ClientState.isPlayerInSolidBetween(player, yMin, yMax, horizontalTolerance)` —
+     세션 48 이식 완료 (`canStandUp` 의존).
+   * `canStandUp(player)` — 세션 48 이식 완료.
+   * **`getMaxPlayerSolidBetween` 은 미이식** — 본 원자에서 신설.
+3. **B-42a 본문 이식** (`SmartMovingClientState.java` `isPlayerInSolidBetween` 직후):
+   ```java
+   public static double getMaxPlayerSolidBetween(ClientPlayerEntity player,
+                                                  double yMin, double yMax,
+                                                  double horizontalTolerance) {
+       Box pb = player.getBoundingBox();
+       Box checkBox = new Box(
+               pb.minX - horizontalTolerance, yMin, pb.minZ - horizontalTolerance,
+               pb.maxX + horizontalTolerance, yMax, pb.maxZ + horizontalTolerance);
+
+       double result = yMin;
+       for (net.minecraft.util.shape.VoxelShape shape
+               : player.getWorld().getBlockCollisions(player, checkBox)) {
+           if (shape.isEmpty()) continue;
+           // 근사 이식 — 원본과 차이: VoxelShape.getBoundingBox() 단일 box
+           Box box = shape.getBoundingBox();
+           if (box.maxX >= pb.minX - horizontalTolerance
+                   && box.minX <= pb.maxX + horizontalTolerance
+                   && box.maxY >= yMin
+                   && box.minY <= yMax
+                   && box.maxZ >= pb.minZ - horizontalTolerance
+                   && box.minZ <= pb.maxZ + horizontalTolerance) {
+               result = Math.max(result, box.maxY);
+           }
+       }
+       return Math.min(result, yMax);
+   }
+   ```
+4. **§7 B-42a 근사 등록** (focus_02_state_issues.md L467 부근):
+   * 원본 `AxisAlignedBB` 단일 박스 순회 → 1.21.1 `VoxelShape.getBoundingBox()` 단일
+     enclosing box 근사.
+   * 대부분 블록 (cube/slab/stair) 은 단일 박스라 정확성 손실 없음.
+   * 다중 박스 블록 (wall/fence/chain) 은 enclosing box 가 과대 추정되어 maxY 약간 높음
+     (실용 등가 — crawlStandUpBottom / climbGap 판정 영향 없음).
+5. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 117 기준)**:
+- [근거] 원본 `SmartMovingBase` L247-L262 `getMaxPlayerSolidBetween` 본체 WebFetch 확보 ✓
+- [근거] 1.21.1 `SmartMovingClientState.java` 기존 `isPlayerInSolidBetween` / `canStandUp`
+  위치 Read 로 삽입 지점 확정 ✓
+- [대응] 원본 `List colliding boxes` 순회 → 1.21.1 `getBlockCollisions()` Iterable<VoxelShape>
+  대응 확정 ✓
+- [분기] `result = yMin` 초기값 / 박스 교차 6-AND 조건 / `Math.min(result, yMax)` clamp
+  전수 1:1 ✓
+- [상수] 없음 ✓
+- [타이밍] helper 신설 (tick-free 정적 메서드) — 호출 지점은 후속 원자 ✓
+- [근사] §7 B-42a 근사 1건 등록 (VoxelShape→Box 단일 box) ✓
+- [신규] `getMaxPlayerSolidBetween` 메서드 신설 — B-42b~d + 승격 8건 기반 ✓
+- [회귀] 현재 호출 지점 없음 → 회귀 영향 없음. 후속 원자에서 호출 시점부터 활성 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42b** (`getMinPlayerSolidBetween` — maxY 대응의 minY 집계 대칭
+로직). 이후 B-42c (liquid 계열) → B-42d (파생값) → B-42-B5/B16/B20/B26/B35/B36/B39/B18a/b
+승격 8건.
+
+**진행률** (세션 117 종료 시점):
+- Extended 완료: **31 원자** (B-19 22 + Phase 4 8 + Phase 6 **1** = 31)
+- Extended 총 원자 ~61
+- **Extended 진행률: 31/61 ≈ 51%**
+- **포커스 #2 전체: (54+31)/115 ≈ 74%**
+- **Phase 6 진입 — AABB 정밀 헬퍼 신설 시작**
 
 ### 세션 116 — 2026-04-24 — B-40-post 재검토 → **Phase 4 전체 완료**
 

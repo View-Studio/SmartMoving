@@ -1822,6 +1822,68 @@ public final class SmartMovingClientState {
         return !player.getWorld().isSpaceEmpty(player, box);
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // B-42a (세션 117) — getMaxPlayerSolidBetween AABB 정밀 헬퍼
+    // 원본: SmartMovingBase.java L229-L248 + L299-L306 (isCollided).
+    // Phase 6 시작. §7 B-35/B-36/B-39/B-18/B-26 근사 승격 대상 선행 의존.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L229-L231 `getPlayerSolidBetween(yMin, yMax, horizontalTolerance)` + L239-L248
+     * `getMaxPlayerSolidBetween(yMin, yMax, horizontalTolerance)` 통합 이식.
+     *
+     * 플레이어 AABB (X/Z 범위 ± horizontalTolerance) 내 [yMin, yMax] Y 구간의
+     * 최고 고체 블록 `box.maxY` 반환. 콜리전 없으면 `yMin`.
+     *
+     * 원본 동작:
+     *   1. sp.boundingBox.minY/maxY 를 yMin/yMax 로 임시 변경 + contract(-h, 0, -h) 로 확장
+     *   2. world.getCollidingBoundingBoxes(sp, box) 로 AABB 리스트 수집
+     *   3. boundingBox 복원
+     *   4. 각 box 에 isCollided 검증 (horizontal + yMin/yMax 범위 재확인)
+     *   5. 통과한 box 의 maxY 최대값 (단, yMax 상한)
+     *
+     * 1.21.1 매핑:
+     *   - `sp.boundingBox` 는 immutable → 새 `Box` 생성
+     *   - `contract(-h, 0, -h)` (음수 contract = 확장) → `Box` 생성 시 x/z 범위에 ±h 적용
+     *   - `world.getCollidingBoundingBoxes(sp, box)` → `world.getBlockCollisions(entity, box)`
+     *     반환 `Iterable<VoxelShape>`
+     *   - `VoxelShape.getBoundingBox()` 로 shape 단일 Box 추출
+     *
+     * **§7 근사** (B-42a-approx): VoxelShape → Box 단일 변환 — multi-shape stair/slab 블록
+     * 은 여러 하위 box 로 구성되나 `getBoundingBox()` 는 전체 외접 box 반환. 대부분 full
+     * block 은 단일 box 라 동치, slab/stair top-half 는 외접 box 로 근사 (정밀도 약간 상승 —
+     * 실제 stair 상단부보다 크게 잡힘 가능성). 대안인 VoxelShape iteration 은 구조 복잡 —
+     * 실용상 getBoundingBox() 충분.
+     *
+     * B-42a (세션 117) — Phase 6 시작 원자.
+     */
+    public static double getMaxPlayerSolidBetween(ClientPlayerEntity player,
+                                                   double yMin, double yMax,
+                                                   double horizontalTolerance) {
+        Box pb = player.getBoundingBox();
+        Box checkBox = new Box(
+                pb.minX - horizontalTolerance, yMin, pb.minZ - horizontalTolerance,
+                pb.maxX + horizontalTolerance, yMax, pb.maxZ + horizontalTolerance);
+
+        double result = yMin;
+        for (net.minecraft.util.shape.VoxelShape shape
+                : player.getWorld().getBlockCollisions(player, checkBox)) {
+            if (shape.isEmpty()) continue;
+            // 근사 이식 — 원본과 차이: VoxelShape.getBoundingBox() 단일 box (multi-shape 외접)
+            Box box = shape.getBoundingBox();
+            // 원본 L299-L306 `isCollided(box, yMin, yMax, horizontalTolerance)` 인라인 이식
+            if (box.maxX >= pb.minX - horizontalTolerance
+                    && box.minX <= pb.maxX + horizontalTolerance
+                    && box.maxY >= yMin
+                    && box.minY <= yMax
+                    && box.maxZ >= pb.minZ - horizontalTolerance
+                    && box.minZ <= pb.maxZ + horizontalTolerance) {
+                result = Math.max(result, box.maxY);
+            }
+        }
+        return Math.min(result, yMax);
+    }
+
     // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
 
     /**

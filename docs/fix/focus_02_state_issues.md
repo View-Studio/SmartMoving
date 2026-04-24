@@ -464,6 +464,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `!canStandUp(player)` 근사. B-42 Phase 6 (AABB 정밀 헬퍼) 완료 시 정밀 복원 경로.
   기존 B-35/B-36 근사와 동일 패턴 (§7 B-42 계열 통합 승격 대상). 외 구조 (initialized
   가드 / hasVehicle 체크 / multiPlayerInitialized 감소) 는 원본 1:1.
+- **B-42a 근사 1건** (세션 117): `ClientState.getMaxPlayerSolidBetween(player, yMin,
+  yMax, horizontalTolerance)` AABB 정밀 헬퍼 이식 — 원본 `SmartMovingBase` L247-L262 의
+  박스 순회 기반 maxY 집계 로직을 1.21.1 `player.getWorld().getBlockCollisions(entity,
+  box)` 로 대체. 차이 1건: 원본은 `Block.getCollisionBoundingBoxFromPool` 이 반환하는
+  `AxisAlignedBB` 단일 박스를 순회하므로 블록당 단일 박스였으나, 1.21.1 은
+  `VoxelShape` 로 다중 박스 가능 → **`shape.getBoundingBox()` 로 단일 enclosing box
+  근사**. 대부분의 블록 (cube/slab/stair) 은 단일 박스라 정확성 손실 없음. 다중 박스
+  블록 (wall/fence/chain) 은 enclosing box 가 과대 추정되어 maxY 가 약간 높게 측정될
+  수 있음 (실용 등가 — crawlStandUpBottom/climbGap 판정에 영향 없음). **B-42 계열의
+  기반 헬퍼** — B-42b~d + 승격 8건이 이를 참조.
 - **B-10b-pre 근사 1건** (세션 110): `wasJumpingOutOfWater` — 원본은 SmartMovingSelf
   L105 의 **updateEntityActionState 내부 지역 snapshot** (`boolean wasJumpingOutOfWater =
   isJumpingOutOfWater;`). 이후 handleSwimming L229 에 파라미터로 전달되어 L487 공식
