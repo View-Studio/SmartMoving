@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 55 — B Phase 2 계속 / B-25) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 22 원자 완료 / ⏳ **B Phase 2 잔여 ~18 원자** |
+| 상태 | 🟡 진행 중 (세션 56 — B Phase 2 계속 / B-43) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 23 원자 완료 / ⏳ **B Phase 2 잔여 ~17 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -822,11 +822,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       가능 — 별도 포커스 후보 (focus_??? 분리).
 
 #### B-43. R-09 블록 종료부 저장 2건 이식 (A-6 발견)
-- [ ] B-43. 원본 L3043-L3044 이식 — `ClientState.tickEssential` L839 이후 R-09 블록
-      종료부에 추가:
-      `wasRunning = isRunning;`
+- [x] B-43. ✅ **세션 56 완료** — 원본 L3043-L3044 이식. ClientState R-09 블록 종료부
+      (L1261 sneakKeyStopPressed 처리 뒤, 블록 `}` 직전) 에 2줄 추가:
+      `wasRunning = isRunning(player);`
       `wasLevitating = isLevitating;`
-      의존: A-4 B-22b (wasRunning+isRunning) / A-2 B-10d (isLevitating+wasLevitating) 선행.
+      **부산물** — `wasLevitating` public 필드 신설 (wasRunning 옆) + resetState 리셋 추가.
+      B-10d 미해소로 `isLevitating` 은 여전히 기본값 false 유지이나 저장 라인 1:1 이식만 먼저
+      수행. B-25 의 `wasRunning && !isRunning && onGround` isSliding 직접 진입 분기 정상
+      활성. L1022 기존 "미이식 → 항상 false" 주석을 "B-43 이식 완료" 로 갱신.
 
 #### B-44. 이력 3개 저장 시점 정밀 조정 (A-6 발견)
 - [x] B-44a. ✅ **세션 43 완료** — `wasSneaking = isSlow` 저장을 tickEssential 초반
@@ -2306,6 +2309,49 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   단순. B-25 의 wasRunning 분기 활성화 효과.
 - **B-26** (부수 동작) — Config.SlideDown 상수 + Jumper.tryJump 확장. 규모 중간.
 - **B-48** (isGroundSprinting 전환 후처리) — Options 필드 선행.
+
+### 세션 56 — 2026-04-24 — B Phase 2 B-43 (R-09 종료부 저장 2건)
+
+**진행한 작업**:
+- ClientState `wasLevitating` public boolean 필드 신설 (wasRunning 바로 뒤 L149 근처).
+  주석에 원본 L3044 + 사용처 (isGroundSprinting 전환 후처리 L2699) 표기. isLevitating 공식
+  B-10d 미이식이라 결과적 false 유지지만 저장 라인 1:1 이식이 목표.
+- R-09 블록 종료부 (L1261 sneakKeyStopPressed 처리 뒤, 블록 `}` 직전) 에 저장 2줄 추가:
+  * `wasRunning    = isRunning(player);`
+  * `wasLevitating = isLevitating;`
+  원본 L3043-L3044 1:1 대응. `isRunning(player)` 는 세션 42 B-22c 로 이식된 메서드.
+- L1022 기존 "wasRunning 미이식 → 항상 false" 주석을 "B-43 (세션 56) 이식 완료" 로 갱신.
+  B-25 isSliding 직접 진입 6-AND 의 두 번째 OR 분기 (`wasRunning && !isRunning(player)
+  && onGround`) 가 이제 정상 활성.
+- resetState 에 `wasLevitating = false` 추가 (wasRunning=false 바로 뒤).
+- `./gradlew compileJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 56)**:
+- [근거] 원본 L3043-L3044 직접 read (SmartMovingSelf.md L2030-L2031 + R-15.4) ✓
+- [근거] R-15.4 R-09 블록 종료부 누락 2건 확정 자료 재확인 ✓
+- [대응] 저장 2줄 + 필드 선언 + resetState 리셋 원본 1:1 ✓
+- [분기] 없음 (단순 저장)
+- [상수] 없음
+- [타이밍] R-09 블록 내부 마지막 statement — 원본 `sneakButton.StopPressed` 처리 뒤 저장
+  순서와 동일 ✓
+- [근사] 없음 — isLevitating 갱신 공식이 B-10d/B-9 로 지연되어 현재 false 지만 저장 자체는
+  1:1. 공식 이식 시 자동 활성.
+- [신규] 없음
+- [회귀] compileJava 성공 — B-25 의 wasRunning 분기가 이제 실제 값 기반으로 평가됨
+  (기존엔 항상 false). 즉 슬라이딩 직접 진입 조건이 더 너그러워질 수 있음 — 원본 의도.
+- [빌드] ./gradlew compileJava --rerun-tasks ✓
+
+**A-6 R-15.4 불일치 현황**:
+- ✅ **#1 wasRunning 저장** + **#2 wasLevitating 저장** (B-43 세션 56)
+- 저장 시점 이동 (B-44a~c) 은 각 공식 이식 원자와 함께 조정 예정
+
+**Phase 2 진행 상황**: 23 원자 완료 / 잔여 ~17
+
+**다음 작업 권고**:
+- **B-26** (부수 동작) — Config.SlideDown 상수 + Jumper.tryJump 확장. 규모 중간.
+- **B-14** (resetClimbing 신설) — 등반 필드 리셋 헬퍼. B-21/B-28 해소.
+- **B-16** (isClimbHolding/wantClimbHolding 3-OR 공식) — B-18 선행 블록.
+- **B-10d** (isLevitating 공식) — 간단한 4조건 AND — wasLevitating 완전 활성화.
 
 ---
 

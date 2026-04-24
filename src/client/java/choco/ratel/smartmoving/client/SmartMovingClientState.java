@@ -136,9 +136,17 @@ public final class SmartMovingClientState {
      * 원본 SmartMovingSelf L3043 `wasRunning = isRunning` — R-09 블록 종료부 저장.
      * isSliding 직접 진입 조건 `(isGroundSprinting || (wasRunning && !isRunning && onGround))`
      * 및 tryJump 파라미터에 사용.
-     * B-25 / B-26 / B-43 의존.
+     * B-25 / B-26 / B-43 (세션 56) 이식 완료.
      */
     public boolean wasRunning;
+
+    /**
+     * 원본 SmartMovingSelf L3044 `wasLevitating = isLevitating` — R-09 블록 종료부 저장.
+     * 이전 틱 isLevitating 스냅샷. 사용처: isGroundSprinting 전환 후처리(L2699) 등.
+     * isLevitating 공식 자체는 B-10d / B-9 범위 (현재 항상 false) — wasLevitating 도
+     * 결과적으로 false 유지. 저장 라인 1:1 이식만 먼저 수행. B-43 (세션 56).
+     */
+    public boolean wasLevitating;
 
     /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
@@ -1019,9 +1027,8 @@ public final class SmartMovingClientState {
             // 필드 세팅 (원본 L2558-L2560): isSliding=true + isHeadJumping=false + isAerodynamic=false.
             // ※ 부수 동작 (setHeightOffset(-1) + move(0,-1,0) + tryJump(SlideDown, wasRunning))
             //   은 B-26 (별도 원자) — Config.SlideDown 상수 + Jumper.tryJump 시그니처 조정 필요.
-            // ※ wasRunning 필드는 R-09 종료부 저장 (원본 L3043) 미이식 (B-43) → 항상 false.
-            //   `wasRunning && !isRunning && onGround` 분기 활성 안 됨. isGroundSprinting 분기만
-            //   활성. B-43 이식 후 완전 복원.
+            // ※ wasRunning 저장 (원본 L3043) — B-43 (세션 56) 이식 완료. R-09 블록 종료부에서
+            //   `wasRunning = isRunning(player)` 저장 중 → 이 분기 정상 활성.
             if (!isSliding && cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
                     && (isGroundSprinting
@@ -1258,6 +1265,12 @@ public final class SmartMovingClientState {
                 }
 
                 if (sneakKeyStopPressed) ignoreNextStopSneakButtonPressed = false;
+
+                // B-43 (세션 56): R-09 블록 종료부 저장 2건 이식 (원본 L3043-L3044).
+                // wasRunning 은 B-25 isSliding 직접 진입 조건 `wasRunning && !isRunning && onGround`
+                // 분기에서 사용 — 이 저장 없이는 항상 false 였음.
+                wasRunning    = isRunning(player);
+                wasLevitating = isLevitating;
             }
 
             // fadingPerspectiveFactor EMA 계산 (원본: SmartMovingSelf.tickEssential L1317-1336)
@@ -1357,6 +1370,7 @@ public final class SmartMovingClientState {
         wasHeadJumping          = false;
         isStanding              = false;
         wasRunning              = false;
+        wasLevitating           = false;
         isShallowDiveOrSwim     = false;
         isJumpingOutOfWater     = false;
         isStillSwimmingJump     = false;
