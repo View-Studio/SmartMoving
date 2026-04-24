@@ -291,14 +291,15 @@ Orientation 판정 + ClimbGap 계산.
       분기 A `!initializeCrawling` 억제 조건 정상 동작.
 
 #### B-10-reset-post. `resetSwimming()` 메서드 완전 이식 (세션 88 3차 감사 발견)
-- [ ] B-10-reset-post. 본체 §6 L366 `resetSwimming()` **부분 이식** 표기 해소.
-      원본 `resetSwimming()` (SmartMovingSelf.java L1488-L1498 추정) 전체 리셋 필드 목록
-      확보 필요 (Agent WebFetch). 현재 Swimmer.updateSwimState 물 밖 분기에서 리셋되는
-      필드는 5개 수준 — 원본은 8개 이상 가능성. 추가 리셋 대상 예상:
-      `isShallowDiveOrSwim` (B-10a), `isFakeShallowWaterSneaking`, `isJumpingOutOfWater`
-      (B-10b), `isLevitating` (B-10d), `waterMovementTicks` 초기화 등. 의존: B-10a/b/c/d
-      필드 이식 완료 (Phase 1). 완전 이식 시 물 밖 전환 엣지에서 모든 수중 관련 상태
-      정리가 원본과 1:1.
+- [x] B-10-reset-post. ✅ **세션 114 완료** — 원본 L1488-L1498 `resetSwimming()` 메서드
+      8 필드 리셋 완전 이식. `SmartMovingSwimmer.resetSwimming(sm)` static private 메서드
+      신설 + `updateSwimState` 의 `!isTouchingWater` 경로에서 호출.
+      원본 8 필드: dippingDepth / isDipping / isSwimming / isDiving / isLevitating /
+      isShallowDiveOrSwim / isFakeShallowWaterSneaking / isJumpingOutOfWater. 1.21.1
+      기존 5 필드 할당 → 메서드 호출로 대체 + 누락 3 필드 (isLevitating /
+      isFakeShallowWaterSneaking / isJumpingOutOfWater) 해소. B-9 Phase 5 재작성 시
+      handleSwimming 내부 5 호출 지점 (L555/L585/L607/L645) 도 이 메서드 재사용.
+      근사 없음. 본체 §6 표기 구식 업데이트.
 
 #### B-N-standup. `standupIfPossible` 메서드 이식 (세션 88 3차 감사 발견)
 - [ ] B-N-standup. 원본 `standupIfPossible()` (SmartMovingSelf.java — 정확 위치 Agent
@@ -493,6 +494,57 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 114 — 2026-04-24 — B-10-reset-post `resetSwimming()` 메서드 완전 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L1488-L1498 read** — `resetSwimming()` 본체 8 필드 리셋 확인.
+2. **원본 호출 지점 6 곳 grep** (L242/L253/L555/L585/L607/L645). updateSwimState 2 곳 +
+   handleSwimming 4 곳.
+3. **1.21.1 현재 상태 확인** — `!isTouchingWater` 경로에서 5 필드 리셋만 (dippingDepth /
+   isDipping / isSwimming_sm / isDiving / isShallowDiveOrSwim) + B-10c-post 에서 추가된
+   isStillSwimmingJump. 누락 3 필드: isLevitating / isFakeShallowWaterSneaking /
+   isJumpingOutOfWater.
+4. **`SmartMovingSwimmer.resetSwimming(sm)` static private 메서드 신설** — 원본 L1488-L1498
+   8 필드 리셋 1:1 이식.
+5. **`updateSwimState` 의 `!isTouchingWater` 경로** 리팩터:
+   * 기존 5 개별 필드 할당 → `resetSwimming(sm)` 메서드 호출
+   * 원본 L550 대응 `isStillSwimmingJump = false` (세션 112) 는 별도 유지 (원본
+     resetSwimming 에 없고 useStandard 경로 대응이라 별도)
+   * 1.21.1 추가 `waterMovementTicks = 0` 유지 (원본에 없음, B-12 일관성)
+6. **본체 §6 매핑 테이블 갱신** — "⚠️ 부분 이식" → "✓ 완전 이식 (B-10-reset-post 세션 114)".
+
+**완료 전 검증 체크리스트 (세션 114 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L1488-L1498 + 호출 지점 6 곳 grep ✓
+- [근거] 의존 전수 충족 — 8 필드 모두 1.21.1 이식됨 (B-10a~d + isDiving/isSwimming_sm/
+  isDipping/isFakeShallowWaterSneaking/dippingDepth 기존) ✓
+- [대응] 8 필드 리셋 원본 ↔ 1.21.1 메서드 1:1 ✓
+- [분기] 메서드 단일 경로 (분기 없음). `!isTouchingWater` 호출 + isStillSwimmingJump +
+  waterMovementTicks 별도 보존 ✓
+- [상수] `-1F` (dippingDepth) / `false` 7 원본 동일 ✓
+- [타이밍] 원본 L242/L253 (updateSwimState 진입 `!isInWater` 분기) 대응 위치 ✓
+- [근사] 없음 — 8 필드 완전 이식 (B-10a/b/c/d 근사는 별도 원자에서 관리) ✓
+- [신규] `resetSwimming(sm)` 메서드 신설 (static private). B-9 Phase 5 재작성 시 재사용
+  예정 ✓
+- [회귀] 기존 5 필드 리셋 → 8 필드 리셋 확장. isLevitating / isFakeShallowWaterSneaking /
+  isJumpingOutOfWater 가 물 밖 전환 시 비로소 정상 리셋. 이전에는 물 밖에서도 이전 값
+  유지 (특히 isFakeShallowWaterSneaking 은 isSwimming 도 리셋되지만 self 값 유지 가능성
+  있었음) — 이제 깨끗한 초기화 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-N-standup** — `standupIfPossible` 메서드 이식 (세션 53 B-24
+로그 "B-N 후속" 으로 남음). 원본 Agent WebFetch 필요. `restoreFromFlying` 소비자 +
+`handleSwimming` 수영→크롤 전환 의존. 예상 1-2 세션.
+
+**진행률** (세션 114 종료 시점):
+- Extended 완료: **28 원자** (B-19 22 + B-10a-post + B-10b-pre + B-10b-post + B-10c-post +
+  B-31c-post + **B-10-reset-post**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 28/61 ≈ 46%**
+- **포커스 #2 전체: (54+28)/115 ≈ 71%**
+- **Phase 4**: 6/8 (2 남음 — B-N-standup / B-40-post)
 
 ### 세션 113 — 2026-04-24 — B-31c-post `initializeCrawling` true 설정 경로 이식
 

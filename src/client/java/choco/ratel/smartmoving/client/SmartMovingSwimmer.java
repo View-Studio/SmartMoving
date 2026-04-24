@@ -61,6 +61,33 @@ public final class SmartMovingSwimmer {
      *   1.4 ≤ offset < 1.9 → isSwimming_sm (수면 수영)
      *   offset ≥  1.9 → isDiving    (완전 잠수)
      */
+    /**
+     * 원본 SmartMovingSelf L1488-L1498 `resetSwimming()` 완전 이식 (B-10-reset-post 세션 114).
+     *
+     * 원본 8 필드 리셋:
+     *   dippingDepth = -1
+     *   isDipping = false
+     *   isSwimming = false
+     *   isDiving = false
+     *   isLevitating = false
+     *   isShallowDiveOrSwim = false
+     *   isFakeShallowWaterSneaking = false
+     *   isJumpingOutOfWater = false
+     *
+     * 원본 호출 지점 6 개 중 updateSwimState 진입 `!isInWater` 분기 (원본 L242/L253) 대응.
+     * handleSwimming 내부 호출 (L555/L585/L607/L645) 은 B-9 Phase 5 재작성 시 활용 예정.
+     */
+    private static void resetSwimming(SmartMovingClientState sm) {
+        sm.dippingDepth                = -1F;
+        sm.isDipping                   = false;
+        sm.isSwimming_sm               = false;
+        sm.isDiving                    = false;
+        sm.isLevitating                = false;
+        sm.isShallowDiveOrSwim         = false;
+        sm.isFakeShallowWaterSneaking  = false;
+        sm.isJumpingOutOfWater         = false;
+    }
+
     public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientState sm) {
         // B-10b-pre (세션 110): 원본 L105 `boolean wasJumpingOutOfWater = isJumpingOutOfWater`
         // 지역 snapshot. 1.21.1 은 updateSwimState + handleSwimming 분리 → 필드로 승격.
@@ -69,18 +96,18 @@ public final class SmartMovingSwimmer {
         sm.wasJumpingOutOfWater = sm.isJumpingOutOfWater;
 
         if (!player.isTouchingWater()) {
-            sm.isDipping      = false;
-            sm.isSwimming_sm  = false;
-            sm.isDiving       = false;
-            // B-10a-post (세션 109): 원본 L548 `isShallowDiveOrSwim = false` 이식 —
-            // 물 밖 전환 시 shallow dive/swim 해제.
-            sm.isShallowDiveOrSwim = false;
-            // B-10c-post (세션 112): 원본 L550 `isStillSwimmingJump = false` 이식 —
-            // 물 밖 전환 (원본 useStandard 경로) 시 수영 점프 hold 상태 해제.
-            // true 설정은 B-36 분기 (a) (원본 L2845, ClientState 이식 완료) 에서만.
+            // B-10-reset-post (세션 114): 원본 L1488-L1498 `resetSwimming()` 메서드 호출.
+            // updateSwimState 진입 `!isInWater` 분기 (원본 L242/L253) 대응 — 물 밖 전환 시
+            // 8 수중 관련 필드 일괄 리셋 (이전 개별 할당에서 isLevitating / isFakeShallowWaterSneaking
+            // / isJumpingOutOfWater 3 필드 누락 해소).
+            resetSwimming(sm);
+            // B-10c-post (세션 112): 원본 L550 `isStillSwimmingJump = false` — useStandard
+            // 경로 별도 리셋. 원본 resetSwimming 자체에는 없으나 1.21.1 `!isTouchingWater`
+            // 경로가 useStandard 대응이라 여기서 함께 리셋.
             sm.isStillSwimmingJump = false;
-            sm.waterMovementTicks = 0;
-            sm.dippingDepth   = -1F;
+            // 1.21.1 추가 — waterMovementTicks 리셋 (원본 resetSwimming 에 없음. B-12 정정
+            // 경로와 일관성 유지를 위해 물 밖에서 0).
+            sm.waterMovementTicks  = 0;
             return;
         }
 
