@@ -1136,4 +1136,77 @@ public class Orientation {
 
         return accessible;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c3a (세션 95) — remoteLadderClimbing + isAccessAccessible + isDoorFrontBlocked
+    // 원본: Orientation.java L1115-L1118 (remoteLadderClimbing),
+    //       L2477-L2484 (isAccessAccessible), L2300-L2323 (isDoorFrontBlocked).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L1115-L1118 `remoteLadderClimbing(int j_offset)` — remote 위치에 ladder 가 있고
+     * 그 ladder 가 **플레이어 반대 방향으로 (back)** 붙어있는지.
+     *
+     * 의미: 이 Orientation 방향으로 탐색 시, remote 위치에 ladder 가 back-facing 이면
+     * "현재 위치에서 등반 중" 으로 간주 (즉 이 방향 블록 통과 차단).
+     *
+     * 의존: B-19a1b `isBehindLadder` + `isOnLadderBack`.
+     */
+    protected boolean remoteLadderClimbing(int j_offset) {
+        return isBehindLadder(j_offset) && isOnLadderBack(j_offset);
+    }
+
+    /**
+     * 원본 L2477-L2484 `isAccessAccessible(int j_offset)` — diagonal 방향 접근 시 필요.
+     * orthogonal 에서는 항상 true. diagonal 에서는 두 개의 수직 경계 (remote_i/base_k
+     * 및 base_i/remote_k) 가 모두 비어있어야 함 — 즉 diagonal 진입 시 양쪽 orthogonal
+     * 위치도 통과 가능해야 함.
+     */
+    protected boolean isAccessAccessible(int j_offset) {
+        if (!_isDiagonal) return true;
+        return isEmpty(remote_i, j_offset, base_k)
+            && isEmpty(base_i, j_offset, remote_k);
+    }
+
+    /**
+     * 원본 L2300-L2323 `isDoorFrontBlocked(int i, int j_offset, int k)` — 이 Orientation
+     * 방향 이동 시 door 로 막히는지.
+     *
+     * 원본 vanilla 1.7.10 door metadata 매핑:
+     *   case 8: upper half → lower half 재귀
+     *   case 4 (EAST open) / case 1 (SOUTH closed):  return this._k < 0
+     *   case 5 (SOUTH open) / case 2 (WEST closed): return this._i > 0
+     *   case 6 (WEST open) / case 3 (NORTH closed):  return this._k > 0
+     *   case 7 (NORTH open) / case 0 (EAST closed):  return this._i < 0
+     *   default: return true (방어적)
+     *
+     * 1.21.1 매핑: `DoorBlock.FACING` Direction + `DoorBlock.OPEN` Boolean +
+     * `DoorBlock.HALF` DoubleBlockHalf 조합으로 각 case 식별.
+     */
+    private boolean isDoorFrontBlocked(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        if (!isDoor(state)) return true;
+
+        // 원본 case 8 — upper half 이면 lower half 재귀 체크
+        if (state.get(DoorBlock.HALF) == DoubleBlockHalf.UPPER)
+            return isDoorFrontBlocked(i, j_offset - 1, k);
+
+        Direction facing = state.get(DoorBlock.FACING);
+        boolean open = state.get(DoorBlock.OPEN);
+
+        // 원본 case 4 (EAST open) / case 1 (SOUTH closed): this._k < 0
+        if ((facing == Direction.EAST  &&  open) || (facing == Direction.SOUTH && !open))
+            return this._k < 0;
+        // 원본 case 5 (SOUTH open) / case 2 (WEST closed): this._i > 0
+        if ((facing == Direction.SOUTH &&  open) || (facing == Direction.WEST  && !open))
+            return this._i > 0;
+        // 원본 case 6 (WEST open) / case 3 (NORTH closed): this._k > 0
+        if ((facing == Direction.WEST  &&  open) || (facing == Direction.NORTH && !open))
+            return this._k > 0;
+        // 원본 case 7 (NORTH open) / case 0 (EAST closed): this._i < 0
+        if ((facing == Direction.NORTH &&  open) || (facing == Direction.EAST  && !open))
+            return this._i < 0;
+
+        return true;
+    }
 }

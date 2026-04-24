@@ -119,9 +119,21 @@ Orientation 판정 + ClimbGap 계산.
             - [x] **B-19a1c2** (세션 94 완료): `isEmpty` + `isBaseAccessible` 2 오버로드
                   (7 분기) + 좌표 기반 trapdoor 래퍼 3 + `isFullEmpty` 좌표 오버로드.
                   §7 근사 3건 등록 (RedPower / ASRope / Carpenters).
-            - [ ] **B-19a1c3**: `isRemoteAccessible` + `isAccessAccessible` +
-                  `isDoorFrontBlocked` + `headedToFrontWall` + `headedToRemoteFlatWall` +
-                  `remoteLadderClimbing`.
+            - [ ] **B-19a1c3**: isRemoteAccessible 외 (세션 95 재분해: 3 서브).
+                  세션 95 원본 L1741-L2000 + L2401-L2484 read 결과 `getWallFlag` 가
+                  BlockPane/Fence/Wall/FenceGate 별 canConnect* 메서드 의존 — 1.21.1 에서는
+                  BlockState property 기반으로 근사 이식. `headedToFrontWall` /
+                  `headedToRemoteFlatWall` / `headedToWall` / `headedToBaseWall` /
+                  `headedToBaseGrabWall` / `getAllWallsOnNoWall` / `isTopHalf` 등 wall-flag
+                  인프라 의존. 3 서브 분해:
+                  - [x] **B-19a1c3a** (세션 95 완료): `remoteLadderClimbing` +
+                        `isAccessAccessible` + `isDoorFrontBlocked` — 단순 3개 (wall-flag
+                        인프라 무관). 근사 없음 — vanilla door FACING/OPEN/HALF property 로
+                        원본 metadata 8 case 전수 1:1 매핑.
+                  - [ ] **B-19a1c3b**: `getWallFlag` + `getAllWallsOnNoWall` + `headedToWall` +
+                        `isFenceGateFront` + `isTopHalf` (wall-flag 인프라).
+                  - [ ] **B-19a1c3c**: `headedToFrontWall` + `headedToRemoteFlatWall` +
+                        `isRemoteAccessible` 본체 (12+ 분기).
             - [ ] **B-19a1c4**: `isFullAccessible` + `isFullExtentAccessible` +
                   `isJustLowerHalfExtentAccessible` + `isUpperHalfFrontEmpty`.
 
@@ -413,6 +425,55 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 95 — 2026-04-24 — B-19a1c3a `remoteLadderClimbing` + `isAccessAccessible` + `isDoorFrontBlocked`
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L1115-L1118 + L1741-L2000 + L2301-L2323 + L2401-L2484 read** — `isRemoteAccessible`
+   이 `getWallFlag` 를 BlockPane/Fence/Wall/FenceGate 별 `canConnect*` 메서드 호출로 쓰고,
+   그 결과를 `headedToFrontWall` / `headedToRemoteFlatWall` 등 9+ 헬퍼에서 소비하는 구조
+   확인. 한 세션 불가 → B-19a1c3 를 3 서브 (c3a/c3b/c3c) 로 재분해.
+2. **Extended §3 B-19a1c3 서브 3개 재분해**.
+3. **B-19a1c3a 이식** — wall-flag 인프라 무관한 3 메서드:
+   * `remoteLadderClimbing(j_offset)` (원본 L1115-L1118) — 한 줄: `isBehindLadder &&
+     isOnLadderBack`. B-19a1b 의존 충족.
+   * `isAccessAccessible(j_offset)` (원본 L2477-L2484) — diagonal 전용 2 방향 isEmpty 체크.
+   * `isDoorFrontBlocked(i, j_offset, k)` (원본 L2300-L2323) — 8 metadata case 전수 이식.
+     upper half 재귀 + 4 쌍 (open/closed + facing 4방향) → `this._k < 0` / `_i > 0` /
+     `_k > 0` / `_i < 0` 판정.
+4. **vanilla 1.7.10 door metadata → 1.21.1 매핑**:
+   * metadata 0-3 = lower + closed + facing EAST/SOUTH/WEST/NORTH
+   * metadata 4-7 = lower + open + facing EAST/SOUTH/WEST/NORTH
+   * metadata 8 = upper half
+   * 1.21.1: `DoorBlock.FACING` Direction + `DoorBlock.OPEN` Boolean + `DoorBlock.HALF`
+     DoubleBlockHalf 조합으로 8 case 전수 식별.
+
+**완료 전 검증 체크리스트 (세션 95 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1115-L1118 + L2300-L2323 + L2477-L2484
+  전수 read ✓
+- [근거] vanilla 1.7.10 door metadata 비트 → 1.21.1 DoorBlock property 매핑 검증 (facing +
+  open + half) ✓
+- [대응] 3 메서드 원본 ↔ 1.21.1 side-by-side. `isDoorFrontBlocked` 8 case × 2 (open+closed)
+  쌍 = 4 if 분기 전수 ✓
+- [분기] `isDoorFrontBlocked` 8 metadata case 모두 식별: case 8 (upper recursion) +
+  case 0/1/2/3/4/5/6/7 → 4 pairs (EAST open/SOUTH closed · SOUTH open/WEST closed ·
+  WEST open/NORTH closed · NORTH open/EAST closed). `isAccessAccessible` 2 갈래 (!_isDiagonal
+  / 2개 isEmpty AND). ✓
+- [상수] 없음 (Direction enum + DoubleBlockHalf enum) ✓
+- [타이밍] 호출 타이밍 무관 (순수 BlockState 조회) ✓
+- [근사] **근사 없음** — vanilla door FACING/OPEN/HALF property 로 원본 metadata 를 1:1
+  식별 가능. mod-specific 분기 없음 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용 → 영향 없음. B-19a1a/b/c1/c2 의존 모두 충족 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a1c3b** — wall-flag 인프라. `getWallFlag(direction, i, j_offset,
+k, state)` + `getAllWallsOnNoWall` + `headedToWall` + `isFenceGateFront` + `isTopHalf`.
+1.21.1 에서는 BlockPane/Fence/Wall 의 NORTH/SOUTH/EAST/WEST BooleanProperty 로 원본
+`canPaneConnectToBlock`/`canConnectFenceTo`/`canConnectWallTo` 근사 이식 (§7 추가 근사 1-2
+등록 예상). 예상 1 세션.
 
 ### 세션 94 — 2026-04-24 — B-19a1c2 `isEmpty` + `isBaseAccessible` + trapdoor 좌표 래퍼
 
