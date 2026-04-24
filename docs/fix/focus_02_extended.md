@@ -384,8 +384,12 @@ Orientation 판정 + ClimbGap 계산.
       + `getLiquidBorder` 통합 이식 — 최저/최고 액체 Y. **세션 119 완료** (`ClientState`
       static helpers, FluidState/FluidTags.WATER 기반, §7 B-42c 근사 3건 등록:
       FiniteLiquid/_lavaLikeWater/getNormalWaterBorder).
-- [ ] B-42d. `realMinPlayerSwimWaterDepth` / `playerCrawlWaterBorder` 등 AABB 기반 파생값
-      이식.
+- [x] B-42d. `realMinPlayerSwimWaterDepth` / `playerCrawlWaterBorder` 등 AABB 기반 파생값
+      이식. **세션 120 완료** — `ClientState.SwimBorderValues` 정적 클래스 +
+      `computeSwimBorderValues(player)` 헬퍼 신설. 원본 L255-L270 파생값 9개 (i/j/k/
+      j_offset/totalSwimWaterBorder/minPlayerSwimWaterCeiling/realTotalSwimWaterBorder/
+      minPlayerSwimWaterDepth/realMinPlayerSwimWaterDepth/playerSwimWaterBorder) 1:1.
+      소비는 승격 원자 (B-42-B5 / B-42-B35 / B-42-B36) 에서.
 
 #### B-42 적용 (§7 근사 승격)
 - [ ] B-42-B5. Swimmer B-5 `couldStandUp` → `playerSwimWaterBorder >= 0 &&
@@ -504,6 +508,54 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 120 — 2026-04-25 — B-42d AABB 파생값 struct-like 헬퍼 (`SwimBorderValues`)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 B-42 본체 완결 (4/4).
+
+**세션 준비 변경**: 사용자가 SmartMoving/SmartRender 1.7.10 원본 전체 소스를 로컬에
+압축 해제 — `C:\Work\minecraft\porting\sm_original\SmartMoving` +
+`C:\Work\minecraft\porting\sm_original\SmartRender`. 이후 WebFetch 대신
+`Read`/`Grep` 으로 원본 접근. memory `reference_original_sources.md` 에 경로 저장.
+
+**진행한 작업**:
+1. **원본 소스 확보** (로컬 grep):
+   * `SmartMovingSelf.java` L255-L270 — AABB 파생값 9개 정의 블록.
+   * `SmartMovingSelf.java` L417 — `playerCrawlWaterBorder = dippingDepth + wasHeightOffset`
+     (B-42d 범위 외 — B-42-B? 승격에서 `wasHeightOffset` 추가 예정).
+2. **범위 결정**: B-42 본체 원자는 **헬퍼 제공** 에 집중. 실제 소비 (B-5/B-35/B-36
+   근사 해소) 는 승격 8건에서. `playerCrawlWaterBorder` 공식 수정은 본 원자에서 제외.
+3. **SwimBorderValues struct 신설** (`SmartMovingClientState.java` B-42c 직후):
+   * `public static final class SwimBorderValues` — 9 final 필드 (i/j/k/j_offset +
+     6 double 파생값). private constructor.
+   * `public static SwimBorderValues computeSwimBorderValues(ClientPlayerEntity player)`
+     — 원본 L255-L270 그대로 1:1 이식. B-42a/b/c 헬퍼 참조.
+4. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 120 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L228-L270 read (로컬 경로) ✓
+- [근거] 호출처 확인 (원본 L272/L276/L282/L303 등) — 소비는 승격 원자 범위 ✓
+- [대응] 원본 `sp.posX/Z` → `player.getX/Z()`, `MathHelper.floor_double` →
+  `MathHelper.floor`, `sp.boundingBox` → `player.getBoundingBox()` 표면 매핑 ✓
+- [분기] 9개 파생값 전수 이식 (Math.min / 뺄셈 순서 / boundingBox.maxY 기준) ✓
+- [상수] `1.8` / `1.2` / `2` boundingBox offset 원본 1:1 ✓
+- [타이밍] helper 신설 (tick-free 정적 메서드) — 호출 지점은 후속 승격 원자 ✓
+- [근사] 없음 — B-42a/b/c 헬퍼에 근사 위임 ✓
+- [신규] `SwimBorderValues` 클래스 + `computeSwimBorderValues` 신설 ✓
+- [회귀] 현재 호출 지점 없음 → 회귀 영향 없음 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **Phase 6 승격 8건 진입** — **B-42-B5** (Swimmer `couldStandUp`
+근사 해소). 현재 `dippingDepth <= 1.5F` 단일값 근사 → 원본
+`playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5` 복원.
+`SwimBorderValues` 소비 첫 시점.
+
+**진행률** (세션 120 종료 시점):
+- Extended 완료: **34 원자** (B-19 22 + Phase 4 8 + Phase 6 **4** = 34)
+- Extended 총 원자 ~61
+- **Extended 진행률: 34/61 ≈ 56%**
+- **포커스 #2 전체: (54+34)/115 ≈ 77%**
+- **🎉 Phase 6 B-42 본체 4/4 완료 — 승격 8건 진입 준비**
 
 ### 세션 119 — 2026-04-24 — B-42c 액체 경계 헬퍼 3종 (`getLiquidBorder` + `getMax/MinPlayerLiquidBetween`)
 

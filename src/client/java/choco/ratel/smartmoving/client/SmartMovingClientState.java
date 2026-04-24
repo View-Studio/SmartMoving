@@ -2035,6 +2035,82 @@ public final class SmartMovingClientState {
         return yMax;
     }
 
+    /**
+     * 원본 SmartMovingSelf L255-L270 의 AABB 기반 파생값 9개 통합 계산.
+     *
+     * 원본:
+     *   int i = MathHelper.floor_double(sp.posX);
+     *   int j = MathHelper.floor_double(sp.boundingBox.minY);
+     *   int k = MathHelper.floor_double(sp.posZ);
+     *   double j_offset = sp.boundingBox.minY - j;
+     *   double totalSwimWaterBorder = getMaxPlayerLiquidBetween(maxY - 1.8, maxY + 1.2);
+     *   double minPlayerSwimWaterCeiling = getMinPlayerSolidBetween(maxY - 1.8, maxY + 1.2, 0);
+     *   double realTotalSwimWaterBorder = Math.min(totalSwimWaterBorder, minPlayerSwimWaterCeiling);
+     *   double minPlayerSwimWaterDepth = totalSwimWaterBorder
+     *       - getMaxPlayerSolidBetween(totalSwimWaterBorder - 2, totalSwimWaterBorder, 0);
+     *   double realMinPlayerSwimWaterDepth = totalSwimWaterBorder
+     *       - getMaxPlayerSolidBetween(realTotalSwimWaterBorder - 2, realTotalSwimWaterBorder, 0);
+     *   double playerSwimWaterBorder = totalSwimWaterBorder - j - j_offset;
+     *
+     * 1.21.1 은 원본의 단일 메서드 `handleSwimming` 이 `Swimmer.updateSwimState` +
+     * `Swimmer.handleSwimming` 두 정적 메서드로 분리되어 있어, 두 곳에서 모두 접근
+     * 가능한 struct-like 반환값으로 제공.
+     *
+     * B-42d (세션 120) — Phase 6 네 번째 원자. 소비는 후속 승격 원자
+     * (B-42-B5 / B-42-B35 / B-42-B36 등) 에서.
+     */
+    public static final class SwimBorderValues {
+        public final int i, j, k;
+        public final double j_offset;
+        public final double totalSwimWaterBorder;
+        public final double minPlayerSwimWaterCeiling;
+        public final double realTotalSwimWaterBorder;
+        public final double minPlayerSwimWaterDepth;
+        public final double realMinPlayerSwimWaterDepth;
+        public final double playerSwimWaterBorder;
+
+        private SwimBorderValues(int i, int j, int k,
+                                 double j_offset,
+                                 double totalSwimWaterBorder,
+                                 double minPlayerSwimWaterCeiling,
+                                 double realTotalSwimWaterBorder,
+                                 double minPlayerSwimWaterDepth,
+                                 double realMinPlayerSwimWaterDepth,
+                                 double playerSwimWaterBorder) {
+            this.i = i;
+            this.j = j;
+            this.k = k;
+            this.j_offset = j_offset;
+            this.totalSwimWaterBorder = totalSwimWaterBorder;
+            this.minPlayerSwimWaterCeiling = minPlayerSwimWaterCeiling;
+            this.realTotalSwimWaterBorder = realTotalSwimWaterBorder;
+            this.minPlayerSwimWaterDepth = minPlayerSwimWaterDepth;
+            this.realMinPlayerSwimWaterDepth = realMinPlayerSwimWaterDepth;
+            this.playerSwimWaterBorder = playerSwimWaterBorder;
+        }
+    }
+
+    public static SwimBorderValues computeSwimBorderValues(ClientPlayerEntity player) {
+        Box pb = player.getBoundingBox();
+        int i = net.minecraft.util.math.MathHelper.floor(player.getX());
+        int j = net.minecraft.util.math.MathHelper.floor(pb.minY);
+        int k = net.minecraft.util.math.MathHelper.floor(player.getZ());
+        double j_offset = pb.minY - j;
+
+        double totalSwimWaterBorder      = getMaxPlayerLiquidBetween(player, pb.maxY - 1.8, pb.maxY + 1.2);
+        double minPlayerSwimWaterCeiling = getMinPlayerSolidBetween(player, pb.maxY - 1.8, pb.maxY + 1.2, 0);
+        double realTotalSwimWaterBorder  = Math.min(totalSwimWaterBorder, minPlayerSwimWaterCeiling);
+        double minPlayerSwimWaterDepth   = totalSwimWaterBorder
+                - getMaxPlayerSolidBetween(player, totalSwimWaterBorder - 2, totalSwimWaterBorder, 0);
+        double realMinPlayerSwimWaterDepth = totalSwimWaterBorder
+                - getMaxPlayerSolidBetween(player, realTotalSwimWaterBorder - 2, realTotalSwimWaterBorder, 0);
+        double playerSwimWaterBorder     = totalSwimWaterBorder - j - j_offset;
+
+        return new SwimBorderValues(i, j, k, j_offset,
+                totalSwimWaterBorder, minPlayerSwimWaterCeiling, realTotalSwimWaterBorder,
+                minPlayerSwimWaterDepth, realMinPlayerSwimWaterDepth, playerSwimWaterBorder);
+    }
+
     // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
 
     /**
