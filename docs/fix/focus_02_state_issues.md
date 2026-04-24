@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 84 — B Phase 2 계속 / B-33 + B-44b) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 54 원자 완료 / ⏳ **B Phase 2 잔여 4 원자** (B-7/B-9/B-11/B-19) |
+| 상태 | 🟡 C 단계 진입 (세션 85 — C-1 clean build 완료 / 잔여 C-2~C-5) |
+| 현재 단계 | A 완료 + B Phase 1/2 핵심 완료 + C-1 완료. **B Phase 2 잔여 4 원자 별도 포커스 분리** (B-7 → focus_15 / B-9+B-11 → focus_16 / B-19 → focus_17). ⏳ C-2 회귀 감사 / C-3 checklist 기록 / C-4 인게임 재검증 / C-5 포커스 #3 전환 |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -1105,7 +1105,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 #### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
 ### C. 검증
-- [ ] C-1. `./gradlew clean build` 성공
+- [x] C-1. ✅ **세션 85 완료** — `./gradlew clean build` 성공 (10 actionable tasks, 9s).
+      compileJava + compileClientJava + remapJar + assemble + build 전 단계 통과. 경고는
+      Gradle 10 호환성 관련 deprecation 뿐 (기능 영향 없음).
 - [ ] C-2. §14 회귀 방지 감사 (상태 소비처 — 애니메이션/전환/키 커맨드 영향 확인)
 - [ ] C-3. checklist_original_audit.md 에 포커스 #2 결과 기록
 - [ ] C-4. 사용자 인게임 재검증 (§3 재현 케이스 실제 채워지면 매칭 확인)
@@ -3997,6 +3999,51 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 **"상태 플래그 값 자체의 정확성"** 목적은 B-33 매 틱 공식 완료로 핵심 해소. 잔여 원자는
 소비처 (애니메이션/전환/키) 에 영향 작거나 별도 포커스 후보.
 
+### 세션 85 — 2026-04-24 — C 단계 진입 (C-1 clean build + 잔여 4 원자 별도 포커스 분리)
+
+**진행한 작업**:
+- **C-1 완료**: `./gradlew clean build` 성공.
+  * 10 actionable tasks 전부 통과 (compileJava / compileClientJava / remapJar / assemble /
+    build). 경고는 Gradle 10 deprecation 만 (기능 영향 없음). BUILD SUCCESSFUL 9s.
+- **잔여 4 원자 별도 포커스 분리 결정** (§17 기록):
+  * **B-7 → `focus_15_liquid_climbing.md`** — isLiquidClimbing / isInLiquid /
+    isLavaLikeWaterEnabled / handleLavaMovement 모두 미이식. Free climbing liquid
+    (용암 등반) 전체 이식 필요. 포커스 #2 범위 밖.
+  * **B-9 + B-11 → `focus_16_swim_classification.md`** — handleSwimming 대규모 재구성
+    (L303-L414 offset 테이블 11단계+10단계 + motionYDiff). AABB 정밀 근사 의존 →
+    focus_14 와도 연계.
+  * **B-19 → `focus_17_climb_orientation.md`** — Free Climb Orientation 4/8방향 판정
+    대규모 이식. focus_14 AABB 와도 연계 가능.
+- **근거**: 세션 84 B-33 매 틱 공식 완료로 "13 상태 플래그 값 자체의 정확성" (포커스 #2
+  핵심 목적) 달성. 잔여 4 원자는 **주요 소비처 #1/#3/#4 에 직접적 영향 작음** —
+  별도 포커스로 분리하여 후속 처리.
+- **§10 C-1 체크박스 [x] 해소**. §1 진행 상황 "C 단계 진입" 으로 갱신.
+
+**완료 전 검증 체크리스트 (세션 85)**:
+- [근거] `./gradlew clean build` 성공 — 10 tasks 전체 통과 ✓
+- [근거] 세션 84 B-33 완료로 핵심 목적 달성 + 세션 29-84 작업 누적 ✓
+- [대응] clean build 성공이 C-1 기준 충족 ✓
+- [분기] 없음 (명령 실행)
+- [상수] 없음
+- [타이밍] 모든 B Phase 2 핵심 완료 후 C 진입 — 원자 순서 정합 ✓
+- [근사] 잔여 4 원자는 별도 포커스 분리로 처리 — §7 근사 지점 유지 (focus_14/15/16/17
+  에서 점진 해소 예정)
+- [신규] B-7 별도 포커스 (focus_15), B-9/B-11 (focus_16), B-19 (focus_17) 3개 신규 포커스
+  후보 §17 기록 ✓
+- [회귀] clean build 전체 통과 — 이전 세션 누적 수정이 상호 충돌 없음. 세션 84 B-33 매 틱
+  공식 전환 후에도 전체 빌드 안정.
+- [빌드] ./gradlew clean build ✓ (10 tasks, 9s)
+
+**Phase 진행 상황**: B Phase 2 54 원자 완료 / 잔여 4 원자 (별도 포커스 분리) / C 단계 C-1
+완료 / C-2~C-5 대기.
+
+**다음 작업 권고**:
+- **C-2 §14 회귀 방지 감사** — 상태 소비처 (애니메이션/전환/키 커맨드) 영향 감사.
+- **C-3 checklist_original_audit.md 기록** — 포커스 #2 결과 요약.
+- **C-5 playtest_fixes.md "현재 포커스" → #3** 전환 (C-4 사용자 몫 제외).
+- **focus_15/16/17 신규 파일 생성** — 세션 85 분리 결정의 후속 실행 (post #3 진입 후 또는
+  focus_14 와 묶어 일괄).
+
 ---
 
 ## 16. 신규 발견
@@ -4663,6 +4710,21 @@ Phase 5 (C 단계):
 ## 17. 잔여 / 후속
 
 - 상태 디버그용 HUD 오버레이(F3 + Tab 같은) 추가는 별도 포커스 후보
+- **남은 4 원자 별도 포커스 분리** (세션 85 결정):
+  * **B-7** (updateSwimState 진입 조건) — `isLiquidClimbing` / `isInLiquid()` /
+    `Config.isLavaLikeWaterEnabled()` / `handleLavaMovement()` 의존 모두 미이식 → Free
+    climbing liquid (용암 등반) 전체 이식 필요. 포커스 #2 "상태 플래그 정확성" 범위 밖.
+    **`focus_15_liquid_climbing.md`** 로 분리.
+  * **B-9** (메인 분류 3-갈래 재작성) — `SmartMovingSwimmer.handleSwimming` 대규모 재구성
+    (L303-L414 offset 테이블 11-단계 + 10-단계 + motionYDiff 등). AABB 정밀 근사 의존.
+    `focus_14_aabb_precision.md` + **`focus_16_swim_classification.md`** 로 분리.
+  * **B-11** (얕은 물 특수 분기) — B-9 범위 (handleSwimming 내부). `focus_16` 범위.
+  * **B-19** (hasClimbGap/hasClimbCrawlGap/isNeighborClimbing 갱신) — Free Climbing
+    Orientation 4방향/8방향 판정 대규모 이식. `focus_14` AABB 정밀 또는
+    **`focus_17_climb_orientation.md`** 분리.
+  * 이 4 원자는 포커스 #2 핵심 목적 "13 상태 플래그 값 자체의 정확성" 에는 **부차적 영향**
+    (주요 소비처 #1/#3/#4 에 직접적 영향 작음). 세션 84 B-33 매 틱 공식 완료로 핵심 목적
+    달성. 별도 포커스로 분리하여 후속 처리.
 - **B-42 → `focus_14_aabb_precision.md` 분리** (세션 79): 1.21.1 `canStandUp(player)` /
   `isPlayerInSolidBetween` / `crawlStandUpBottom` 근사가 여러 원자에서 사용 중 (B-17b1 /
   B-35 / B-36 / B-39 등). 원본 `getMaxPlayerSolidBetween / getMinPlayerSolidBetween /
