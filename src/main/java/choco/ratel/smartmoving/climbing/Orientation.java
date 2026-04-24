@@ -2993,4 +2993,43 @@ public class Orientation {
 
         return result;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a4 (세션 108) — seekClimbGap 메서드 이식
+    // 원본: Orientation.java L207-L224.
+    // **B-19 도미노 해소의 외부 API 진입점** — Climber 에서 각 방향 호출.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L207-L224 `seekClimbGap(rotation, world, i, id, jhd, k, kd, isClimbCrawling,
+     * isCrawlClimbing, isCrawling, inout_handsClimbing, inout_feetClimbing,
+     * out_handsClimbGap, out_feetClimbGap)`.
+     *
+     * 이 Orientation 이 플레이어 회전각 범위 (`isRotationForClimbing`) 에 맞을 때만
+     * 내부 상태 (`initialize`) 설정하고 `handsClimbing`/`feetClimbing` 판정 결과를
+     * inout 파라미터에 max 누적. 각 방향별 호출 결과를 합산하는 패턴.
+     *
+     * 1.21.1 매핑: `HandsClimbing.max` / `FeetClimbing.max` 의 `inout_thisGap` 이
+     * `ClimbGap[]` 배열 래퍼이므로 `out_handsClimbGap` / `out_feetClimbGap` 을 배열
+     * 래핑해서 전달.
+     */
+    public void seekClimbGap(float rotation, World w, int i, double id,
+                             double jhd, int k, double kd,
+                             boolean isClimbCrawling, boolean isCrawlClimbing, boolean isCrawling,
+                             HandsClimbing[] inout_handsClimbing, FeetClimbing[] inout_feetClimbing,
+                             ClimbGap out_handsClimbGap, ClimbGap out_feetClimbGap) {
+        if (isRotationForClimbing(rotation)) {
+            initialize(w, i, id, jhd, k, kd);
+
+            ClimbGap[] handsArr = { out_handsClimbGap };
+            inout_handsClimbing[0] = inout_handsClimbing[0].max(
+                    handsClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, _climbGapOuterTemp),
+                    handsArr, _climbGapOuterTemp);
+
+            ClimbGap[] feetArr = { out_feetClimbGap };
+            inout_feetClimbing[0] = inout_feetClimbing[0].max(
+                    feetClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, _climbGapOuterTemp),
+                    feetArr, _climbGapOuterTemp);
+        }
+    }
 }

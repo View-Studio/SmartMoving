@@ -195,18 +195,20 @@ Orientation 판정 + ClimbGap 계산.
         이미 이식됨 — 호출부에서 `ClimbGap[] outArr = { out_climbGap }` 배열 래핑 후 전달.
       * 근사 없음 — HandsClimbing/FeetClimbing enum + ordinal 순서 비교 1:1.
 
-- [ ] **B-19a4. `Orientation.seekClimbGap` 메서드 이식 + Climber.handleClimbing 연결**
+- [x] **B-19a4. `Orientation.seekClimbGap` 메서드 이식 + Climber.handleClimbing 연결**
+      ✅ **세션 108 완료 — B-19a / B-19b / B-19c / B-19d 전체 해소**
       (원본 L207-L224 + Self.java L937-L961)
-      * `seekClimbGap(rotation, world, i, id, jhd, k, kd, isClimbCrawling, isCrawlClimbing,
-        isCrawling, inout_handsClimbing, inout_feetClimbing, out_handsClimbGap,
-        out_feetClimbGap)` 메서드 이식
-      * 1.21.1 `SmartMovingClimber.handleClimbing` 4방향 탐색을 `getOnLadderOrVine` →
-        `Orientation.PZ/NZ/ZP/ZN.seekClimbGap` 4회 호출로 교체 (원본 L937-L940)
-      * 원본 L945-L947 `sm.isNeighborClimbing`/`hasNeighborClimbGap`/`hasNeighborClimbCrawlGap`
-        대입 이식 (→ B-19c / B-19d 의 일부 해소)
-      * 대각 탐색도 `Orientation.PP/NP/NN/PN.seekClimbGap` 로 교체 (원본 L951-L954)
-      * 원본 L960-L961 `sm.hasClimbGap`/`hasClimbCrawlGap` 대입 이식 (→ B-19b 해소)
-      * 의존: B-19a0 / B-19a1 / B-19a2 / B-19a3.
+      * `seekClimbGap(...)` 메서드 이식 완료 — isRotationForClimbing 게이트 + initialize +
+        handsClimbing/feetClimbing 호출 + max 누적
+      * 1.21.1 `SmartMovingClimber.handleClimbing` 내부에 seekClimbGap 8방향 호출 +
+        ClientState 필드 5 대입 블록 추가 (기존 `getOnLadderOrVine` 탐색 결과와 병렬).
+        기존 속도 결정 로직 보존 + ClientState 필드만 신규 대입.
+      * 원본 L918-L920 jh 조정 (isClimbCrawling/isCrawlClimbing/isSmallClimbing → jh -= 2)
+      * 원본 L945-L947: `sm.isNeighborClimbing` / `hasNeighborClimbGap` /
+        `hasNeighborClimbCrawlGap` 대입 → **B-19c / B-19d (부분) 해소**
+      * 원본 L960-L961: `sm.hasClimbGap` / `hasClimbCrawlGap` 대입 → **B-19b 해소**
+      * 근사 없음.
+      * 의존: B-19a0 / B-19a1 / B-19a2 / B-19a3 전수 충족.
 
 **예상 세션 수 (B-19a 전체)**: 5-8 세션. Orientation.java 단독 2860줄이라 B-19a1/a2 가 가장
 큼. `SmartMovingContext` 원본 확보 필수.
@@ -216,18 +218,21 @@ Orientation 판정 + ClimbGap 계산.
 단일 원자로 축소 가능 (§7 B-19 근사 등록). **현재는 엄격 완료 방침 유지로 서브 5개 구조 선택**.
 
 #### B-19b. `hasClimbGap` / `hasClimbCrawlGap` 계산 이식
-- [ ] B-19b. 원본 Free Climb 분기 내부 `hasClimbGap` + `hasClimbCrawlGap` 갱신 로직.
+- [x] B-19b. ✅ **세션 108 완료 (B-19a4 에서 해소)** — 원본 Free Climb 분기 내부 `hasClimbGap`
+      + `hasClimbCrawlGap` 갱신 로직.
       4방향 (또는 8방향) ClimbGap 결과 순회하여 OR 집계.
       `isClimbHolding` / B-18 `isClimbCrawling` 메인 공식의 `needClimbCrawling = hasClimbCrawlGap
       || (hasClimbGap && isClimbHolding)` 에 필수.
 
 #### B-19c. `isNeighborClimbing` 계산 이식
-- [ ] B-19c. 원본 Free Climb 내부 인접 블록 등반 가능 판정.
+- [x] B-19c. ✅ **세션 108 완료 (B-19a4 에서 해소)** — 원본 Free Climb 내부 인접 블록 등반
+      가능 판정.
       B-17 `isCrawlClimbing = (wasCrawling || isCrawlClimbing) && isClimbing &&
       isNeighborClimbing && (sneakPressed || crawlToggled) && moveForward > 0F` 에 필수.
 
 #### B-19d. 대각 4방향 확장 (`hasNeighborClimbGap` / `hasNeighborClimbCrawlGap`)
-- [ ] B-19d. isSmall 아닐 때 PP/NP/NN/PN 대각 4방향 추가 탐색.
+- [x] B-19d. ✅ **세션 108 완료 (B-19a4 에서 해소)** — isSmall 아닐 때 PP/NP/NN/PN 대각
+      4방향 추가 탐색.
       `hasNeighborClimbGap` / `hasNeighborClimbCrawlGap` 갱신.
       필드 이식은 B-15c 세션 40 완료 — 갱신 로직만 추가.
 
@@ -468,6 +473,89 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 108 — 2026-04-24 — 🎉 B-19a4 seekClimbGap + Climber 연결 — **B-19 전체 도미노 해소 완결**
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**🎯 마일스톤 세션** — Phase 3 B-19 (a0~a4, b, c, d) 전체 완료. B-17 `hasClimbCrawlGap` /
+B-18 `hasClimbGap` / B-16c `wouldWantClimb` 4-OR 공식 **활성화 개시**.
+
+**진행한 작업**:
+1. **원본 L207-L224 `seekClimbGap` 전수 read + 원본 L848-L854 좌표 추출 규칙 확인**:
+   * `id = sp.posX` (double) / `jd = sp.boundingBox.minY` (double) / `kd = sp.posZ` (double)
+   * `i = floor(id)` / `j = floor(jd)` / `k = floor(kd)` (int)
+   * `jh = jd * 2D + 1` (원본 L926)
+2. **`Orientation.seekClimbGap(...)` 메서드 이식** (원본 L207-L224):
+   * `isRotationForClimbing(rotation)` 게이트
+   * `initialize(world, i, id, jhd, k, kd)` 상태 필드 설정
+   * `handsClimbing(...)` + `feetClimbing(...)` 호출 결과를 `max()` 로 inout 누적
+   * `ClimbGap[]` 배열 래핑 (1.21.1 max 시그니처 대응)
+3. **`SmartMovingClimber.handleClimbing` 에 seekClimbGap 블록 삽입**:
+   * 기존 `getOnLadderOrVine` 4/대각 탐색 결과 `handsClimbing`/`feetClimbing` 변수 보존 +
+     속도 결정 로직 보존 (변경 없음)
+   * L386 `if (!handsClimbing.isRelevant() && !feetClimbing.isRelevant()) return;` **앞**
+     에 새 블록 추가:
+     - 좌표 id/jd/kd 추출 (player.getX()/getBoundingBox().minY/getZ())
+     - rotation 정규화 (player.getYaw() % 360F + 음수 보정)
+     - isSmallClimbing = isCrawling || isSliding
+     - jh = jd * 2D + 1, 조건 시 jh -= 2D (원본 L918-L920 의 jd += -1D 상응)
+     - inoutH/inoutF (NONE 초기화) + outHandsGap/outFeetGap (new ClimbGap)
+     - **4 orthogonal PZ/NZ/ZP/ZN seekClimbGap 호출**
+     - ClientState 필드 3 대입: `isNeighborClimbing` / `hasNeighborClimbGap` /
+       `hasNeighborClimbCrawlGap` (원본 L945-L947) → **B-19c / B-19d (부분) 해소**
+     - isSmallClimbing 아니면 **대각 4 PP/NP/NN/PN seekClimbGap 호출** (원본 L951-L954)
+     - 최종 ClientState 필드 2 대입: `hasClimbGap` / `hasClimbCrawlGap` (원본 L960-L961) →
+       **B-19b 해소**
+4. **Climber import 추가**: `choco.ratel.smartmoving.climbing.Orientation`.
+5. **Extended §3 체크박스 4 완료** — B-19a4 + B-19b + B-19c + B-19d (a4 가 세 개 동시 해소).
+
+**완료 전 검증 체크리스트 (세션 108 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L207-L224 + `.tmp_research/SmartMovingSelf.java`
+  L848-L854 + L918-L961 전수 read ✓
+- [근거] 의존 전수 충족 — B-19a0 (Orientation 상수 PZ/NZ/ZP/ZN/PP/NN/PN/NP) + B-19a2b
+  (initialize) + B-19a3 (handsClimbing/feetClimbing) + ClientState 필드 5 (isNeighborClimbing /
+  hasNeighborClimbGap / hasNeighborClimbCrawlGap / hasClimbGap / hasClimbCrawlGap — 전부
+  B-15 세션 40 이식 + 기존 L272 hasClimbCrawlGap) ✓
+- [대응] seekClimbGap 원본 1:1 + Climber 연결 블록 8 방향 호출 + 필드 5 대입 원본 1:1 ✓
+- [분기] seekClimbGap: isRotationForClimbing 게이트 1갈래. Climber 블록: 4 orthogonal
+  (isSmallClimbing 무관) + 4 대각 (isSmallClimbing 제외) + 필드 대입 5. 전수 식별 ✓
+- [상수] `2D` (jh 계산) / `360F` (rotation) / `0F` (음수 보정) 원본 동일 ✓
+- [타이밍] 원본 L926 `jh = jd * 2D + 1` 계산 → L932-L935 reset → L937-L940 4방향 →
+  L945-L947 필드 3 대입 → L949-L955 대각 4방향 (isSmallClimbing 가드) → L960-L961 필드 2
+  대입 순서 보존. `if (!handsClimbing.isRelevant() && !feetClimbing.isRelevant()) return;`
+  **앞** 에 배치하여 매 틱 필드 대입 보장 (resetClimbing 에 4 필드 빠져 있음, 원본 동일
+  동작) ✓
+- [근사] 없음 ✓
+- [신규] Orientation import Climber 에 추가. 기존 탐색 (getOnLadderOrVine) 은 보존 +
+  seekClimbGap 블록 병렬 추가. Climber.resetClimbing 에 4 필드 (hasClimbGap 등) 추가 안 함
+  (원본과 동일) — 원본이 resetClimbing 에 이 필드들을 포함하지 않음 ✓
+- [회귀] 기존 속도 결정 로직 변경 없음 (getOnLadderOrVine 결과 변수 handsClimbing/
+  feetClimbing 그대로 사용). ClientState 필드 5 대입만 신규 추가. B-17/B-18/B-16c 공식
+  평가 결과가 변화 — **이전: 항상 false / 이제: 실제 값 기반 동작**. 원본 의도 복원.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**🎉 B-19 전체 도미노 해소 완결**:
+- B-19a (a0/a1a/a1b/a1c1-c4/a2a1-a4/a2b/a2c/a2d/a2e/a3/a4) 18 서브 완료
+- B-19b (hasClimbGap/hasClimbCrawlGap) 해소
+- B-19c (isNeighborClimbing) 해소
+- B-19d (hasNeighborClimbGap/hasNeighborClimbCrawlGap) 해소
+
+**B-17 / B-18 / B-16c 공식 활성화** — 이전엔 isNeighborClimbing / hasClimbGap /
+hasClimbCrawlGap 필드가 항상 false 라 공식 평가 항상 false 였음. 이제 seekClimbGap 기반
+실제 값 저장 → 자동 등반 + 크롤 등반 + 얇은 갭 등반 경로 활성화.
+
+**다음 세션 권고**: **B-10a-post** (Phase 4 시작) — `isShallowDiveOrSwim` 공식 이식 (원본
+L507). B-19 도미노 해소 완료로 Phase 3 완전 종결 → Phase 4 진입. 의존: B-10a 필드 (세션
+38 이식 완료). 예상 1 세션.
+
+**진행률** (세션 108 종료 시점):
+- Extended 완료: **22 원자** (B-19a0 / a1a / a1b / a1c1-c4 / a2a1-a4 / a2b-a2e / a3 /
+  **a4** + **b** + **c** + **d**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 22/61 ≈ 36%**
+- **포커스 #2 전체: (54+22)/115 ≈ 66%**
+- **Phase 3 (B-19) 전체 완료** — Phase 4 진입 가능
 
 ### 세션 107 — 2026-04-24 — B-19a3 handsClimbing() + feetClimbing() 판정 — **B-19a3 완료**
 

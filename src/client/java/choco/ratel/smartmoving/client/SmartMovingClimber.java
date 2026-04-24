@@ -3,6 +3,7 @@ package choco.ratel.smartmoving.client;
 import choco.ratel.smartmoving.climbing.ClimbGap;
 import choco.ratel.smartmoving.climbing.FeetClimbing;
 import choco.ratel.smartmoving.climbing.HandsClimbing;
+import choco.ratel.smartmoving.climbing.Orientation;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
@@ -380,6 +381,79 @@ public final class SmartMovingClimber {
                     }
                 }
             }
+        }
+
+        // B-19a4 (세션 108): Orientation.seekClimbGap 기반 8방향 탐색 → ClientState 필드 5 대입.
+        // 원본 SmartMovingSelf L926-L961 (Free Climb preferClimb 블록) 이식.
+        // **B-19 도미노 해소 완결** — B-17 (isCrawlClimbing) / B-18 (isClimbCrawling) /
+        // B-16c (wouldWantClimb 4-OR) 공식이 실제 값 기반 평가 활성화.
+        // 기존 getOnLadderOrVine 결과 변수 (handsClimbing/feetClimbing) 는 속도 결정에
+        // 계속 사용됨 — 이 블록은 필드 대입만 추가 (동작 영향 최소).
+        {
+            double id = player.getX();
+            double jd = player.getBoundingBox().minY;
+            double kd = player.getZ();
+            int ix = (int) Math.floor(id);
+            int iz = (int) Math.floor(kd);
+
+            // 원본 L922-L925: rotation 정규화 (0 ~ 360F)
+            float rotation = player.getYaw() % 360F;
+            if (rotation < 0) rotation += 360F;
+
+            // 원본 L918: isSmallClimbing = isCrawling || isSliding
+            boolean isSmallClimbing = sm.isCrawling || sm.isSliding;
+
+            // 원본 L919-L920: isClimbCrawling || isCrawlClimbing || isSmallClimbing → jd += -1D
+            // initializeOffset 에 전달할 jhd = jd * 2D + 1 (원본 L926).
+            // jd 가 -1 이면 jhd = (jd - 1) * 2 + 1 = jh - 2
+            double jh = jd * 2D + 1;
+            if (sm.isClimbCrawling || sm.isCrawlClimbing || isSmallClimbing) {
+                jh += -2D;
+            }
+
+            HandsClimbing[] inoutH = { HandsClimbing.NONE };
+            FeetClimbing[]  inoutF = { FeetClimbing.NONE };
+            ClimbGap outHandsGap = new ClimbGap();
+            ClimbGap outFeetGap  = new ClimbGap();
+
+            // 원본 L937-L940: 4방향 (PZ/NZ/ZP/ZN) seekClimbGap 호출
+            Orientation.PZ.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                    sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                    inoutH, inoutF, outHandsGap, outFeetGap);
+            Orientation.NZ.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                    sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                    inoutH, inoutF, outHandsGap, outFeetGap);
+            Orientation.ZP.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                    sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                    inoutH, inoutF, outHandsGap, outFeetGap);
+            Orientation.ZN.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                    sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                    inoutH, inoutF, outHandsGap, outFeetGap);
+
+            // 원본 L945-L947: 4방향 결과 → ClientState 필드 3 대입
+            sm.isNeighborClimbing = inoutH[0].isRelevant() || inoutF[0].isRelevant();
+            sm.hasNeighborClimbGap = outHandsGap.canStand || outFeetGap.canStand;
+            sm.hasNeighborClimbCrawlGap = outHandsGap.mustCrawl || outFeetGap.mustCrawl;
+
+            // 원본 L949-L955: isSmallClimbing 아닐 때 대각 4방향 (PP/NP/NN/PN) 추가 탐색
+            if (!isSmallClimbing) {
+                Orientation.PP.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                        sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                        inoutH, inoutF, outHandsGap, outFeetGap);
+                Orientation.NP.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                        sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                        inoutH, inoutF, outHandsGap, outFeetGap);
+                Orientation.NN.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                        sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                        inoutH, inoutF, outHandsGap, outFeetGap);
+                Orientation.PN.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
+                        sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
+                        inoutH, inoutF, outHandsGap, outFeetGap);
+            }
+
+            // 원본 L960-L961: 8방향 합산 결과 → ClientState 필드 2 대입
+            sm.hasClimbGap = outHandsGap.canStand || outFeetGap.canStand;
+            sm.hasClimbCrawlGap = outHandsGap.mustCrawl || outFeetGap.mustCrawl;
         }
 
         // 클라이밍 가능한 표면이 없으면 처리하지 않음
