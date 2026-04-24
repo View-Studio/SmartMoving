@@ -2323,4 +2323,133 @@ public class Orientation {
         }
         return setGrabType(type, block, remote, hasGrab, metaClimb);
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2c (세션 104) — hasHalfHold 본체
+    // 원본: Orientation.java L608-L726 (120줄).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L608-L726 `hasHalfHold()` — 플레이어 중앙 (y=0) 레벨 grab 가능 판정.
+     *
+     * 분기 순서 (첫 return 에서 종료, 미매치면 최종 `NoGrab`):
+     *   (1) FreeBaseClimb: isOnLadder+isOnLadderFront → AroundGrab (base)
+     *   (2) FreeBaseClimb: remoteLadderClimbing → AroundGrab (remote)
+     *   (3) [§7 근사 생략] BetterThanWolves/RopesPlus rope/anchor
+     *   (4) isEmpty(base) + remote==iron_bars + headedToFrontWall → HalfGrab (remote)
+     *   (5) wallId==iron_bars + headedToBaseWall(0) → HalfGrab (base)
+     *   (6) wallId != null + isOnMiddleLadderFront → AroundGrab (base, remoteId)
+     *   (7) freeFenceClimbing 블록 (7 서브 분기):
+     *       a) remote fence + front + (!baseFence → HalfGrab / baseFence+sideWall → HalfGrab)
+     *       b) remoteBelow fence + front + (!baseBelowFence → HalfGrab /
+     *          baseBelowFence+sideWall → HalfGrab)
+     *       c) wallId fence + headedToBaseWall → HalfGrab
+     *       d) belowWallId fence + headedToBaseWall → HalfGrab
+     *       e) remote==cobblestone_wall + !headedToRemoteFlatWall → HalfGrab
+     *       f) remoteBelow==cobblestone_wall + !headedToRemoteFlatWall → HalfGrab
+     *   (8) isBottomHalfBlock(remote) OR (stair + bottomNotBack + !(baseBelow stair
+     *       bottomFront)) → HalfGrab (remote)
+     *   (9) trapDoor closed (remote) → HalfGrab (remote)
+     *   (10) trapDoor open (base) → HalfGrab (base)
+     *   (11) [§7 근사 생략] ASGrapplingHook/RopesPlus isASRope + isASGrapplingHookFront
+     *   (12) FreeBaseClimb: baseVineClimbing(0) > -1 → HalfGrab (vine, meta)
+     *   (13) FreeBaseClimb: remoteVineClimbing(0) > -1 → HalfGrab (vine, meta)
+     *   (14) 외 → NoGrab
+     *
+     * **§7 근사** (B-19a2c-approx-1): mod 3 카테고리 분기 (BetterThanWolves rope/anchor /
+     * RopesPlus / ASRope / ASGrapplingHook) 생략 — B-19a2a4 의 getRopeId/getAnchorId/isASRope/
+     * isASGrapplingHook false/null 근사와 연동.
+     */
+    protected boolean hasHalfHold() {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        if (cfg.isFreeBaseClimb()) {
+            if (isOnLadder(0) && isOnLadderFront(0))
+                return setHalfGrabType(AroundGrab, getBaseBlockId(0), false);
+
+            if (remoteLadderClimbing(0))
+                return setHalfGrabType(AroundGrab, getRemoteBlockId(0), true);
+        }
+
+        // 근사 이식 — 원본과 차이: BetterThanWolves/RopesPlus rope+anchor 분기 (원본 L621-L629) 생략
+
+        BlockState remoteState = getRemoteBlockId(0);
+        if (isEmpty(base_i, 0, base_k)) {
+            if (remoteState.getBlock() == Blocks.IRON_BARS
+                    && headedToFrontWall(remote_i, 0, remote_k, remoteState))
+                return setHalfGrabType(HalfGrab, remoteState);
+        }
+
+        BlockState wallState = getWallBlockId(base_i, 0, base_k);
+        if (wallState != null && wallState.getBlock() == Blocks.IRON_BARS
+                && headedToBaseWall(0, wallState))
+            return setHalfGrabType(HalfGrab, wallState, false);
+        if (wallState != null && isOnMiddleLadderFront(0))
+            return setHalfGrabType(AroundGrab, remoteState, false);
+
+        if (cfg.freeFenceClimbing) {
+            if (isFence(remoteState)
+                    && headedToFrontWall(remote_i, 0, remote_k, remoteState)) {
+                if (!isFence(getBaseBlockId(0)))
+                    return setHalfGrabType(HalfGrab, remoteState);
+                else if (headedToFrontSideWall(remote_i, 0, remote_k, remoteState))
+                    return setHalfGrabType(HalfGrab, remoteState);
+            }
+
+            BlockState remoteBelowState = getRemoteBlockId(-1);
+            if (isFence(remoteBelowState)
+                    && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
+                if (!isFence(getBaseBlockId(-1)))
+                    return setHalfGrabType(HalfGrab, remoteState);
+                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
+                    return setHalfGrabType(HalfGrab, remoteState);
+            }
+
+            if (isFence(wallState) && headedToBaseWall(0, wallState))
+                return setHalfGrabType(HalfGrab, wallState, false);
+
+            BlockState belowWallState = getWallBlockId(base_i, -1, base_k);
+            if (isFence(belowWallState) && headedToBaseWall(-1, belowWallState))
+                return setHalfGrabType(HalfGrab, belowWallState, false);
+
+            if (remoteState.getBlock() == Blocks.COBBLESTONE_WALL
+                    && !headedToRemoteFlatWall(remoteState, 0))
+                return setHalfGrabType(HalfGrab, remoteState);
+
+            if (remoteBelowState.getBlock() == Blocks.COBBLESTONE_WALL
+                    && !headedToRemoteFlatWall(remoteBelowState, -1))
+                return setHalfGrabType(HalfGrab, remoteBelowState);
+        }
+
+        // (8) bottom half block OR (stair bottom-not-back AND !(baseBelow stair bottom-front))
+        if (isBottomHalfBlock(remoteState)
+                || (isStairCompact(remoteState)
+                    && isBottomStairCompactNotBack(remoteState)
+                    && !(isStairCompact(getBaseBlockId(-1))
+                         && isBottomStairCompactFront(getBaseBlockId(-1)))))
+            return setHalfGrabType(HalfGrab, remoteState);
+
+        // (9) remote trap door closed
+        if (isTrapDoor(remoteState) && isClosedTrapDoor(remoteState))
+            return setHalfGrabType(HalfGrab, remoteState);
+
+        // (10) base trap door open
+        BlockState baseState = getBaseBlockId(0);
+        if (isTrapDoor(baseState) && !isClosedTrapDoor(baseState))
+            return setHalfGrabType(HalfGrab, baseState, false);
+
+        // 근사 이식 — 원본과 차이: ASGrapplingHook/RopesPlus isASRope + isASGrapplingHookFront
+        //                        분기 (원본 L701-L711) 생략
+
+        if (cfg.isFreeBaseClimb()) {
+            int meta = baseVineClimbing(0);
+            if (meta > DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+            meta = remoteVineClimbing(0);
+            if (meta > DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+        }
+
+        return setHalfGrabType(NoGrab, null);
+    }
 }

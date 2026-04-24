@@ -82,6 +82,12 @@ public class SmartMovingConfig {
      * (PZ/NZ/ZP/ZN) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 90F → 각 방향마다 ±45도
      * 범위 내 시선일 때 등반 가능. B-19a0 (세션 90).
      */
+    /**
+     * 원본 SmartMovingConfig L250 `_freeFenceClimbing` Unmodified — 기본값 `false`.
+     * "펜스 타기 허용" 옵션. `Orientation.hasHalfHold` / `hasBottomHold` 에서 펜스/벽 기반
+     * grab 경로 활성화 게이트. B-19a2c (세션 104).
+     */
+    public boolean freeFenceClimbing = false;
     public float freeClimbingOrthogonalDirectionAngle = 90F;
     /**
      * 원본 SmartMovingConfig L130 `_freeClimbingDiagonalDirectionAngle` Positive — 기본값 `80F`.
@@ -650,6 +656,20 @@ public class SmartMovingConfig {
     }
 
     /**
+     * 원본 SmartMovingConfig `_isFreeBaseClimb = _baseClimb.is("free").and(_freeClimb)` Property
+     * (`baseClimb` String 이 "free" AND `freeClimb` true).
+     *
+     * **§7 근사** (B-19a2c-approx-config): 1.21.1 에서는 `baseClimb` 를 String 대신
+     * 4 boolean (freeClimb/simpleClimb/smartClimb/standardClimb) 으로 이식. `freeClimb`
+     * 단독으로 "Free Base Climb 모드" 판정 가능 — String "free" 일 때 `freeClimb=true`
+     * 설정이라 동치. B-19a2c (세션 104).
+     */
+    public boolean isFreeBaseClimb() {
+        // 근사 이식 — 원본과 차이: `_baseClimb.is("free")` 체크 생략 (boolean 4 필드 이식 구조)
+        return freeClimb;
+    }
+
+    /**
      * 원본 `SmartMovingOptions.java` L449-L455 `isSneakToggleEnabled()`:
      *   return _sneakToggle.value && enabled;
      * **AND 패턴** — SM 비활성 시 토글 모드 비허용.
@@ -840,6 +860,7 @@ public class SmartMovingConfig {
         smartClimb               = getBool(p,   "move.climb.smart",               smartClimb);
         freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
         freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
+        freeFenceClimbing = getBool(p, "move.climb.free.fence", freeFenceClimbing);
         freeClimbingOrthogonalDirectionAngle = getFloat(p, "move.climb.free.direction.orthogonal.angle", freeClimbingOrthogonalDirectionAngle);
         freeClimbingDiagonalDirectionAngle   = getFloat(p, "move.climb.free.direction.diagonal.angle",   freeClimbingDiagonalDirectionAngle);
         ceilingClimbingSpeedFactor = getFloat(p, "move.climb.ceiling.speed.factor", ceilingClimbingSpeedFactor);
@@ -961,6 +982,7 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.smart",                String.valueOf(smartClimb));
         p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
         p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
+        p.setProperty("move.climb.free.fence", String.valueOf(freeFenceClimbing));
         p.setProperty("move.climb.free.direction.orthogonal.angle", String.valueOf(freeClimbingOrthogonalDirectionAngle));
         p.setProperty("move.climb.free.direction.diagonal.angle",   String.valueOf(freeClimbingDiagonalDirectionAngle));
         p.setProperty("move.climb.ceiling.speed.factor", String.valueOf(ceilingClimbingSpeedFactor));

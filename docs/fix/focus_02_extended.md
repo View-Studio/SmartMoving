@@ -165,8 +165,9 @@ Orientation 판정 + ClimbGap 계산.
             `setBottomGrabType` 3 오버로드 + `setGrabType` static + `initialize` +
             `initializeOffset` + `initializeLocal` (9 메서드). 근사 없음 — pure state
             setting + math. `base_jhd`/`local_halfOffset` 필드 2개 추가.
-      - [ ] **B-19a2c**: `hasHalfHold` 본체 (L608-L726) — vanilla 분기 이식 + mod 분기
-            근사 생략.
+      - [x] **B-19a2c** (세션 104 완료): `hasHalfHold` 본체 (L608-L726). 13 vanilla
+            분기 이식 + 3 mod 분기 근사 생략 + Config 헬퍼 `isFreeBaseClimb()` 신설 +
+            `freeFenceClimbing` 필드 신설. §7 근사 3건.
       - [ ] **B-19a2d**: `hasBottomHold` 본체 (L728-L1000+) — 위 동일.
       - [ ] **B-19a2e**: `isLadderSubstitute` 본체 (L477-L606) — gap 1-5 계산 +
             `ClimbGap.canStand/mustCrawl/state/direction` 설정 핵심.
@@ -453,6 +454,73 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 104 — 2026-04-24 — B-19a2c `hasHalfHold` 본체 (원본 L608-L726)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 `hasHalfHold` 본체 재확인** (세션 99 read 완료) + Config 의존 WebFetch 확인.
+2. **Config 신설**:
+   * `freeFenceClimbing = false` 필드 + load/save (원본 L250 Unmodified 기본값)
+   * `isFreeBaseClimb()` 헬퍼 — `freeClimb` 단순 반환 근사 (원본 `_baseClimb.is("free").and(_freeClimb)`
+     Property). 1.21.1 boolean 4 필드 이식 구조에서 동치.
+3. **`hasHalfHold` 본체 이식** (120줄 → 1.21.1 약 90줄, mod 분기 생략):
+   * (1)-(2) FreeBaseClimb ladder 자동 grab (base/remote) — AroundGrab
+   * (3) [§7 근사] BetterThanWolves/RopesPlus rope+anchor 분기 생략
+   * (4) isEmpty + remote iron_bars + frontWall → HalfGrab (remote)
+   * (5) wallId iron_bars + baseWall(0) → HalfGrab (base)
+   * (6) wallId + isOnMiddleLadderFront → AroundGrab (remote)
+   * (7) `freeFenceClimbing` 블록 6 서브 분기 (fence remote/remoteBelow + wallId/belowWallId +
+     cobblestone_wall remote/remoteBelow)
+   * (8) bottom half block OR (stair bottomNotBack AND !(baseBelow stair bottomFront))
+   * (9) remote trap door closed
+   * (10) base trap door open
+   * (11) [§7 근사] ASGrapplingHook/RopesPlus isASRope + isASGrapplingHookFront 생략
+   * (12)-(13) FreeBaseClimb baseVineClimbing(0) / remoteVineClimbing(0) > DefaultMeta →
+     Blocks.VINE.getDefaultState() + meta
+   * (14) default NoGrab
+4. **핵심 매핑**:
+   * `Block.getBlockFromName("iron_bars")` → `Blocks.IRON_BARS`
+   * `Block.getBlockFromName("cobblestone_wall")` → `Blocks.COBBLESTONE_WALL`
+   * `Block.getBlockFromName("vine")` → `Blocks.VINE.getDefaultState()`
+   * `Config.isFreeBaseClimb()` / `Config._freeFenceClimbing.value` → 1.21.1 헬퍼/필드
+   * 모든 Block 파라미터 → BlockState (B-19a1a grabBlock 필드 타입 일관)
+5. **본체 §7 B-19a2c 근사 3건 등록** (config 헬퍼 + mod 2 카테고리).
+
+**완료 전 검증 체크리스트 (세션 104 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L608-L726 전수 read (세션 99) +
+  WebFetch Config 기본값 확인 ✓
+- [근거] 의존 메서드 전수 충족 — B-19a1a/b/c1/c2/c3a/c3b/c3c/c4/a1/a2/a3/a4/b 이식 ✓
+- [대응] 14 분기 원본 ↔ 1.21.1 side-by-side. 13 vanilla 이식 + 3 mod 근사 생략 +
+  Config 헬퍼/필드 신설. ✓
+- [분기] 원본 14 분기 전수 식별 (vanilla 11 + mod 3 + default). `freeFenceClimbing` 내부
+  6 서브 분기 전수. bottom-half/stair 복합 조건 + trap door open/closed 분리 전수 ✓
+- [상수] `Blocks.IRON_BARS` / `Blocks.COBBLESTONE_WALL` / `Blocks.VINE` vanilla 상수 +
+  `NoGrab=0` / `HalfGrab=1` / `AroundGrab=2` / `DefaultMeta=-1` 원본 동일 ✓
+- [타이밍] hasHalfHold 는 isLadderSubstitute middle 분기에서 1회 호출. 단독 메서드 — 호출
+  타이밍은 B-19a2e 에서 처리 ✓
+- [근사] **§7 B-19a2c 근사 3건 등록 완료**:
+  (1) isFreeBaseClimb() = freeClimb 근사
+  (2) BetterThanWolves/RopesPlus rope+anchor 분기 생략
+  (3) ASGrapplingHook/RopesPlus isASRope+isASGrapplingHookFront 분기 생략
+  각 근사 지점 "근사 이식 — 원본과 차이: X" 주석 ✓
+- [신규] Config `freeFenceClimbing` 필드 + `isFreeBaseClimb()` 헬퍼 신설 (B-19a2c
+  범위 내). 본체 §6 Config 매핑 테이블 갱신은 후속 B-19a2d/e 완료 시 일괄 처리 ✓
+- [회귀] 기존 코드 미사용. B-19a2e (isLadderSubstitute) 가 hasHalfHold 소비 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a2d** — `hasBottomHold` 본체 (원본 L728-L1000+, 300+줄). 유사
+패턴 but 규모 더 큼 (하부 grab 판정 + RedPower wire 분기 + trap door/door + vine 3 서브 등).
+mod 분기 근사 생략 (RedPower / BetterThanWolves / RopesPlus / ASRope / Carpenters).
+의존 전수 충족. 예상 1 세션 (큰 세션).
+
+**진행률** (세션 104 종료 시점):
+- Extended 완료: **15 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / a2a4 / a2b / **a2c**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 15/61 ≈ 25%**
+- **포커스 #2 전체: (54+15)/115 ≈ 60%**
 
 ### 세션 103 — 2026-04-24 — B-19a2b grab 상태 세팅 + initialize 헬퍼 9 메서드
 

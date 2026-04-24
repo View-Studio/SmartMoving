@@ -440,6 +440,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a2c 근사 3건** (세션 104): `Orientation.hasHalfHold` 본체 이식 시 mod 분기 +
+  Config 헬퍼 근사:
+  (1) `SmartMovingConfig.isFreeBaseClimb()` = `freeClimb` 단순 반환. 원본은
+  `_baseClimb.is("free").and(_freeClimb)` Property (String "free" AND boolean). 1.21.1 은
+  `baseClimb` 을 boolean 4 필드 (`freeClimb`/`simpleClimb`/`smartClimb`/`standardClimb`)
+  로 이식 — `freeClimb` 단독 체크로 동치. 헬퍼는 `SmartMovingConfig.java` 에 신설.
+  (2) BetterThanWolves/RopesPlus rope+anchor 분기 (원본 L621-L629) 생략 — B-19a2a4
+  `getRopeId`/`getAnchorId` null 근사와 연동.
+  (3) ASGrapplingHook/RopesPlus `isASRope + isASGrapplingHookFront` 분기 (원본 L701-L711)
+  생략 — B-19a2a4 `isASRope`/`isASGrapplingHookFront` false 근사와 연동.
+  `freeFenceClimbing` Config 필드는 신설 (원본 L250 `_freeFenceClimbing` Unmodified 기본
+  false) — 근사 아님.
 - **B-19a2a4 근사 3건** (세션 102): `Orientation` 잔여 보조 중 mod 전용 헬퍼 전체 근사
   (vanilla 2: `getTriple` / `isHeadedToRope` 는 pure math/logic 으로 1:1):
   (1) **Carpenters mod** — `getCarpentersBlockData(i, j_offset, k)` 항상 -1 /
