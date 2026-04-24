@@ -440,6 +440,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-31c-post 근사 1건** (세션 113): `initializeCrawling` true 설정 경로 이식 시 AABB
+  정밀 스캔 미이식 대응:
+  (1) 원본 L2346 `getMaxPlayerSolidBetween(sp.boundingBox.minY, sp.boundingBox.maxY, 0)
+  > sp.boundingBox.minY` (플레이어 AABB 내 수직 범위 위에 고체 블록 존재 여부) → 1.21.1
+  `!canStandUp(player)` 근사. B-42 Phase 6 (AABB 정밀 헬퍼) 완료 시 정밀 복원 경로.
+  기존 B-35/B-36 근사와 동일 패턴 (§7 B-42 계열 통합 승격 대상). 외 구조 (initialized
+  가드 / hasVehicle 체크 / multiPlayerInitialized 감소) 는 원본 1:1.
 - **B-10b-pre 근사 1건** (세션 110): `wasJumpingOutOfWater` — 원본은 SmartMovingSelf
   L105 의 **updateEntityActionState 내부 지역 snapshot** (`boolean wasJumpingOutOfWater =
   isJumpingOutOfWater;`). 이후 handleSwimming L229 에 파라미터로 전달되어 L487 공식

@@ -269,15 +269,26 @@ Orientation 판정 + ClimbGap 계산.
       resetState 리셋 (L1735) 은 세션 38 이식 완료. 근사 없음.
 
 #### B-31c-post. `initializeCrawling` 공식 이식
-- [ ] B-31c-post. `initializeCrawling` 필드는 B-31c 세션 38 에서 이식됨 — true 설정 로직은
-      미이식 (현재 항상 false). 원본 사용 지점:
-      (1) B-35 분기 B 의 `(isCrawling && !wasCrawling) || initializeCrawling` 에서 **소비**.
-      (2) B-35 분기 B 본문 `if (initializeCrawling) toCrawling();` 에서 **소비**.
-      (3) B-35 분기 A 의 `!initializeCrawling` 에서 **소비** (억제 조건).
-      Agent WebFetch 로 원본 `initializeCrawling = true` 설정 지점 확인 필요
-      (예상 위치: grab 엣지 + 특정 조건 — 원본 `updateEntityActionState` 내 어딘가).
-      현재 true 설정 경로 없어 B-35 분기 B 의 "initializeCrawling → toCrawling() 추가 호출"
-      경로가 완전히 비활성. 공식 이식 후 Crawl 초기화 경로 활성화.
+- [x] B-31c-post. ✅ **세션 113 완료** — 원본 L2343-L2356 `initializeCrawling` true 설정
+      블록 이식. 원본은 tickEssential 내부 **지역 변수** `boolean initializeCrawling = false`
+      매 틱 선언 + 조건부 true 설정. 1.21.1 은 필드 승격 → 매 틱 `this.initializeCrawling =
+      false` 리셋 + 동일 조건에서 `true` 설정:
+      ```
+      if (!initialized && !(remote && multiPlayerInitialized != 0) && !hasVehicle()) {
+          if (!canStandUp(player)) {   // 근사 — 원본 getMaxPlayerSolidBetween 정밀 AABB
+              initializeCrawling = true;
+              toCrawling();
+          }
+          initialized = true;
+      }
+      if (multiPlayerInitialized > 0) multiPlayerInitialized--;
+      ```
+      **신설**: `SmartMovingClientState.initialized` public boolean 필드 + resetState 리셋.
+      **§7 B-31c-post 근사 1건**: AABB → canStandUp (B-42 Phase 6 완료 시 정밀 복원).
+      배치 위치: tickEssential pre-compute 블록 내 mustCrawl 계산 **직전** — 원본 L2343
+      (mustCrawl L2395 이전) 순서 보존.
+      소비자 활성화: B-35 분기 B `initializeCrawling → toCrawling() 추가 호출` +
+      분기 A `!initializeCrawling` 억제 조건 정상 동작.
 
 #### B-10-reset-post. `resetSwimming()` 메서드 완전 이식 (세션 88 3차 감사 발견)
 - [ ] B-10-reset-post. 본체 §6 L366 `resetSwimming()` **부분 이식** 표기 해소.
@@ -482,6 +493,64 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 113 — 2026-04-24 — B-31c-post `initializeCrawling` true 설정 경로 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2343-L2356 grep + read** — initializeCrawling 지역 변수 선언 + 조건부 true
+   설정 + multiPlayerInitialized 감소 블록 확인. 소비 지점 L2399 / L2822 / L2827 / L2831 /
+   L2834 (B-35/B-36 범위).
+2. **1.21.1 초기화 필드 확인**:
+   * `multiPlayerInitialized` (L669) 이식 완료 / 감소 로직 미이식
+   * `initialized` 필드 **없음** → 신설
+   * `canStandUp(player)` (L1760) 이식 완료 (AABB 근사)
+   * `toCrawling()` (B-40 세션 44) 이식 완료
+3. **이식 내용**:
+   * `SmartMovingClientState.initialized` public boolean 필드 신설 (multiPlayerInitialized
+     직후) + resetState false 리셋 추가
+   * tickEssential pre-compute 블록 내 `grabHeld0` 선언 직후 + mustCrawl 계산 **직전**에
+     initializeCrawling 설정 블록 이식:
+     - `this.initializeCrawling = false` 매 틱 리셋 (원본 L2343 지역 초기값)
+     - `if (!initialized && !(isClient && multiPlayerInitialized != 0) && !hasVehicle())` 가드
+     - `if (!canStandUp(player))` **§7 근사** → initializeCrawling=true + toCrawling()
+     - `initialized = true`
+     - `multiPlayerInitialized--` (원본 L2355-L2356)
+4. **본체 §7 B-31c-post 근사 1건 등록** (AABB 정밀 → canStandUp).
+
+**완료 전 검증 체크리스트 (세션 113 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L2343-L2356 전수 read ✓
+- [근거] 의존 전수 충족 — multiPlayerInitialized (기존) + canStandUp (기존) + toCrawling
+  (B-40) + B-35 소비자 지점 이식 완료 (세션 74) ✓
+- [대응] 원본 L2343-L2356 ↔ 1.21.1 side-by-side. `boolean initializeCrawling = false` 지역
+  선언 → `this.initializeCrawling = false` 필드 리셋. 조건 체인 (initialized + !remote &&
+  !multiPlayerInitialized + !isRiding) + 내부 canStandUp 분기 + initialized=true +
+  multiPlayerInitialized 감소 전수 보존 ✓
+- [분기] 외부 if (3-AND) + 내부 if (canStandUp 근사) + 후속 multiPlayerInitialized > 0
+  감소 전수 ✓
+- [상수] 없음 ✓
+- [타이밍] 원본 L2343 은 speedChange 패킷 처리 (L2337-L2340) 직후, mustCrawl 계산
+  (L2395) 직전. 1.21.1 tickEssential pre-compute 블록의 mustCrawl (L859) 직전에 배치 —
+  원본 순서 보존 ✓
+- [근사] **§7 B-31c-post 근사 1건 등록** (AABB → canStandUp). 주석 명시 ✓
+- [신규] `SmartMovingClientState.initialized` 필드 + resetState 리셋 신설 ✓
+- [회귀] 기존 initializeCrawling 항상 false → 이제 초기 틱 canStandUp false 시 true.
+  B-35 분기 B 의 `toCrawling()` 추가 호출 경로 활성화. multiPlayerInitialized 감소 로직이
+  비로소 이식되어 서버 동기화 직후 pushOutOfBlocks 억제 카운터 감소 정상 동작 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-10-reset-post** — `resetSwimming()` 메서드 완전 이식 (세션 88 3차
+감사 발견). 원본 `resetSwimming()` 전체 리셋 필드 목록 Agent WebFetch 로 확보 필요.
+예상 1 세션.
+
+**진행률** (세션 113 종료 시점):
+- Extended 완료: **27 원자** (B-19 완결 22 + B-10a-post + B-10b-pre + B-10b-post +
+  B-10c-post + **B-31c-post**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 27/61 ≈ 44%**
+- **포커스 #2 전체: (54+27)/115 ≈ 70%**
+- **Phase 4**: 5/8 (3 남음 — B-10-reset-post / B-N-standup / B-40-post)
 
 ### 세션 112 — 2026-04-24 — B-10c-post `isStillSwimmingJump` 리셋 (원본 L550)
 

@@ -668,6 +668,13 @@ public final class SmartMovingClientState {
      */
     public int multiPlayerInitialized;
 
+    /**
+     * 원본 SmartMovingSelf private 필드 `initialized` — 플레이어 첫 틱 실행 마커.
+     * 매 틱 tickEssential 에서 체크 후 초기 상태 판정 (원본 L2344 `!initialized` 가드).
+     * 한 번 true 되면 유지 (resetState 리셋만 false). B-31c-post (세션 113).
+     */
+    public boolean initialized;
+
     // ── C-25: SmartStatistics ──────────────────────────────────────────
     /** 이동 통계 인스턴스. move() TAIL 이후 calculate()로 갱신. */
     public final SmartStatistics stats = new SmartStatistics();
@@ -853,6 +860,38 @@ public final class SmartMovingClientState {
             // B-46 (세션 66): `SmartMovingKeys.grab.wasPressed()` 지역 호출 제거 —
             // tickEssential 초반 1회 저장된 `grabJustPressed` 필드 참조.
             boolean grabHeld0 = SmartMovingKeys.grab.isPressed();
+
+            // B-31c-post (세션 113): 원본 L2343-L2356 initializeCrawling true 설정 블록 이식.
+            //   boolean initializeCrawling = false;
+            //   if (!initialized && !(remote && multiPlayerInitialized != 0) && !isRiding()) {
+            //       if (getMaxPlayerSolidBetween(minY, maxY, 0) > minY) {
+            //           initializeCrawling = true; toCrawling();
+            //       }
+            //       initialized = true;
+            //   }
+            //   if (multiPlayerInitialized > 0) multiPlayerInitialized--;
+            //
+            // 원본은 지역 변수 `initializeCrawling = false` 매 틱 초기화 (뒤에서 B-35 등이 참조).
+            // 1.21.1 은 필드 승격 (B-31c 세션 38) → 매 틱 진입 시 리셋.
+            //
+            // **§7 근사 B-31c-post**: 원본 `getMaxPlayerSolidBetween(minY, maxY, 0) > minY`
+            // (머리 위 고체 블록 존재) AABB 정밀 스캔 미이식 → `!canStandUp(player)` 근사.
+            // B-42 Phase 6 완료 시 정밀 복원 경로.
+            this.initializeCrawling = false;
+            if (!this.initialized
+                    && !(player.getWorld().isClient() && this.multiPlayerInitialized != 0)
+                    && !player.hasVehicle()) {
+                // 근사 이식 — 원본과 차이: getMaxPlayerSolidBetween AABB → canStandUp
+                if (!canStandUp(player)) {
+                    this.initializeCrawling = true;
+                    this.toCrawling();
+                }
+                this.initialized = true;
+            }
+
+            if (this.multiPlayerInitialized > 0) {
+                this.multiPlayerInitialized--;
+            }
 
             // mustCrawl (원본 L1792-L1794). 1.21.1 은 AABB 기반 canStandUp 으로 근사.
             // 원본 L2404: `if (flying && (flyingEnabled || levitateSmallEnabled)) mustCrawl = false;` 도 반영.
@@ -1724,6 +1763,7 @@ public final class SmartMovingClientState {
         isAerodynamic = false;
         dippingDepth = -1F;
         multiPlayerInitialized  = 0;
+        initialized             = false;
         // B Phase 1 (세션 38) 추가 필드 리셋
         wasHeadJumping          = false;
         isStanding              = false;
