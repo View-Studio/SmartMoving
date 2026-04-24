@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 72 — B Phase 2 계속 / B-17b2-pre) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 42 원자 완료 / ⏳ **B Phase 2 잔여 15 원자** (세션 72 §1 집계 재정비: B-7/B-9/B-11/B-17b2/B-18/B-19/B-20/B-26/B-33/B-35/B-36/B-39/B-42/B-44b/B-44c — B-17b2-pre 는 B-17b2 서브로 카운트에서 별도) |
+| 상태 | 🟡 진행 중 (세션 73 — B Phase 2 계속 / B-17b2) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 43 원자 완료 / ⏳ **B Phase 2 잔여 14 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-26/B-33/B-35/B-36/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -746,8 +746,17 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       - `canStandUp` 판정 시 → wasCrawlClimbing=false, isCrawlClimbing=false,
         `!isClimbCrawling → heightOffset = 0F`
       - `!wasCrawlClimbing → wasCrawling=false, isCrawling=false`
-- [ ] B-17b2. **잔여** — 원본 L2755-L2783 `else if(wasCrawlClimbing)` 복합 전환 3분기.
-      `wantClimbUp/wantClimbDown` 필드 + `move()` API 의존 — 별도 원자.
+- [x] B-17b2. ✅ **세션 73 완료** — 원본 L2755-L2783 `else if (wasCrawlClimbing)` 복합 전환
+      3분기 이식. Agent WebFetch 로 원본 본문 확보 후 ClientState B-17b1 블록 직후에 추가:
+      * **분기 1** (`!isClimbing`): `wasCrawling = toCrawling();` 메서드 호출 + 바닥 스냅
+        `move(0, -minY + Math.floor(minY), 0)`.
+      * **분기 2** (`moveForward <= 0F`): 로컬 `toCrawling` 반영 `wasCrawling=isCrawling=toCrawling`
+        + `wantClimbUp=wantClimbDown=false` + `!toCrawling → heightOffset=0F` + 조건부 높이 복귀
+        `move(0, -minY+floor(minY)+(toCrawling ? 0F : 1F), 0)`.
+      * **분기 3** (`!toCrawling`): `heightOffset=0F` + 위쪽 스냅 `move(0, ceil(minY)-minY, 0)`.
+      `player.move(MovementType.SELF, Vec3d)` 로 이동 + collision + boundingBox 갱신. import
+      `MovementType`/`Vec3d` 2건 추가. toCrawling() 메서드 (B-40 세션 44) / wantClimbUp/Down
+      필드 (B-17b2-pre 세션 72) 의존 모두 충족.
 - [x] **B-17b2-pre** ✅ **세션 72 완료** — B-17b2 선행 의존 필드 3개 승격. ClientState:
       `wantClimb` / `wantClimbUp` / `wantClimbDown` public 필드 신설.
       tickEssential B-16 블록 직후에 원본 L2491-L2500 `wantClimbUp/wantClimbDown` 계산 이식.
@@ -3271,6 +3280,53 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 중간.
 - **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
+
+### 세션 73 — 2026-04-24 — B Phase 2 B-17b2 (else if wasCrawlClimbing 3분기)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 L2736-L2784 본문 확보 (기존 리서치는 요약만). 핵심 식별:
+  * 분기 1: `!isClimbing` → `toCrawling()` 메서드 호출 + 바닥 스냅
+  * 분기 2: `moveForward <= 0F` → 로컬 toCrawling 반영 + wantClimb* 리셋 + 조건부 높이 복귀
+  * 분기 3: `!toCrawling` → heightOffset 리셋 + 위쪽 스냅
+- ClientState B-17b1 (L1332 `}`) 직후 `else if (_wasCrawlClimbing17)` 블록 이식.
+  `_wasCrawlClimbing17` 은 L1307 공식 직전 저장된 이전 틱 값.
+- `player.move(MovementType.SELF, Vec3d)` 로 이동 — collision + boundingBox 갱신 자동 처리.
+  `MovementType`/`Vec3d` import 2건 추가.
+- `resetHeightOffset()` → `heightOffset = 0F` 필드 대입으로 근사 (B-17b1 동일 패턴).
+- `toCrawling()` 메서드 (B-40 세션 44) / wantClimbUp/Down 필드 (B-17b2-pre 세션 72) 의존
+  모두 충족.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 73)**:
+- [근거] Agent WebFetch 로 원본 L2736-L2784 원문 확보 (Self.java) ✓
+- [근거] R-12.10 불일치 #3 `isCrawlClimbing 메인 공식 + 전환 3분기 미이식` 확정 ✓
+- [대응] 3분기 조건 + 본문 (toCrawling/move/heightOffset 리셋) 원본 1:1 ✓
+- [분기] 3분기 각각의 순서 (`!isClimbing` → `moveForward<=0` → `!toCrawling`) 명시 ✓
+- [상수] `toCrawlingLocal ? 0F : 1F` / `-minY + Math.floor(minY)` / `Math.ceil(minY) - minY` 원본 동일 ✓
+- [타이밍] B-17b1 canStandUp 분기 바로 뒤 `else if` — 원본 순서 복원 ✓
+- [근사] `resetHeightOffset()` → `heightOffset = 0F` 근사 (B-17b1 동일 패턴). 원본 메서드는
+  bounding box 조작까지 포함하나 1.21.1 은 필드 대입 + `player.move` 로 분리 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. isCrawlClimbing 이 B-18 미이식으로 여전히
+  항상 false — else if (_wasCrawlClimbing17) 분기도 발동 가능성 낮음. B-18 이식 후 활성화.
+  현재 구조 기반 시 분기 동작 예상 정상.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing() (B-14 세션 57)
+- ✅ #3 isCrawlClimbing 메인 공식 (B-17a 세션 47) + canStandUp 분기 (B-17b1 세션 48)
+      + else if 3분기 (B-17b2 세션 73)
+- ✅ #6/#7 isClimbHolding/wantClimbHolding (B-16 세션 68/69)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 자동 해소 세션 57)
+- ⏳ #2/#4/#5/#8/#9/#10/#11/#12/#14 (B-18/B-19/B-20 등)
+
+**Phase 2 진행 상황**: 43 원자 완료 / 잔여 14 원자
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 중간.
+- **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
+- **B-35** (wasCrawling↔isCrawling 전환 후처리) — crawlStandUpBottom 근사 필요.
 
 ---
 

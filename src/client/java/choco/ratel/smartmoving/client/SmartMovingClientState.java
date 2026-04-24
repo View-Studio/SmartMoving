@@ -13,8 +13,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.MovementType;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -1330,8 +1332,41 @@ public final class SmartMovingClientState {
                         isCrawling = false;
                     }
                 }
-                // B-17b2 (미이식): 원본 L2755-L2783 else if(wasCrawlClimbing) 전환 3분기.
-                //   wantClimbUp/wantClimbDown 필드 + move() API 의존 — 별도 원자.
+                // B-17b2 (세션 73): 원본 L2755-L2783 `else if (wasCrawlClimbing)` 복합 전환 3분기.
+                // wasCrawlClimbing 은 이전 틱 값 (L1307 `_wasCrawlClimbing17 = isCrawlClimbing`
+                // 공식 직전 저장). isCrawlClimbing 이 이번 틱에 false 면서 이전 틱 true 였던
+                // 경우 = "크롤 등반 해제" 시점. 3갈래 분기로 상황별 보정.
+                else if (_wasCrawlClimbing17) {
+                    boolean toCrawlingLocal = _sneakPressed17 || crawlToggled;
+                    double minY = player.getBoundingBox().minY;
+
+                    if (!isClimbing) {
+                        // 분기 1 (원본 L2758-L2764): 등반 종료 — toCrawling() 메서드로 크롤 재진입
+                        // 판정 + 바닥 스냅. 원본 `toCrawling()` 은 세션 44 B-40 이식 완료.
+                        wasCrawling = toCrawling();
+                        player.move(MovementType.SELF,
+                                new Vec3d(0, -minY + Math.floor(minY), 0));
+                    } else if (player.input.movementForward <= 0F) {
+                        // 분기 2 (원본 L2765-L2777): 전진 해제 — 로컬 toCrawling boolean 반영,
+                        // wantClimbUp/Down 리셋, 조건부 높이 복귀. toCrawling=true 면 크롤 유지,
+                        // false 면 서기 (높이 +1).
+                        wasCrawling = toCrawlingLocal;
+                        isCrawling  = toCrawlingLocal;
+                        wantClimbUp   = false;
+                        wantClimbDown = false;
+                        if (!toCrawlingLocal) heightOffset = 0F;
+                        player.move(MovementType.SELF,
+                                new Vec3d(0,
+                                        -minY + Math.floor(minY) + (toCrawlingLocal ? 0F : 1F),
+                                        0));
+                    } else if (!toCrawlingLocal) {
+                        // 분기 3 (원본 L2778-L2783): 스니크 해제 (전진은 유지) — 높이 리셋 후
+                        // 위쪽(ceil) 스냅.
+                        heightOffset = 0F;
+                        player.move(MovementType.SELF,
+                                new Vec3d(0, Math.ceil(minY) - minY, 0));
+                    }
+                }
             }
 
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
