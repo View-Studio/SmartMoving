@@ -361,7 +361,7 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `sp.isUsingItem()` | `player.isUsingItem()` | ✓ |
 | `sp.capabilities.isFlying` | `player.getAbilities().flying` | ✓ |
 | `sp.setSprinting(bool)` | `player.setSprinting(bool)` | ✓ |
-| `toCrawling()` 함수 | — (inline 만) | ✓ 헬퍼 이식 (B-40 세션 44) / ⚠️ 잔여 호출 지점 L2751/L2760/L2767 미흡수 (Extended B-40-post) |
+| `toCrawling()` 함수 | — (inline 만) | ✓ 헬퍼 이식 (B-40 세션 44) / ✓ 잔여 호출 L2751/L2760/L2767 전부 흡수 확인 (B-40-post 세션 116 재검토 — B-17b1/b2 세션 48/73 에서 완료) |
 | `resetClimbing()` 메서드 | `Climber.resetClimbing()` | ✓ 이식 완료 (B-14 세션 57) |
 | `resetSwimming()` 메서드 | `SmartMovingSwimmer.resetSwimming(sm)` static private | ✓ 완전 이식 (B-10-reset-post 세션 114) — 8 필드 일괄 리셋 |
 | `standupIfPossible()` 메서드 | `ClientState.standupIfPossible(player)` / 2-arg 오버로드 + `resetHeightOffset` + `standUp` | ✓ 근사 이식 (B-N-standup 세션 115, §7 근사 4건) |

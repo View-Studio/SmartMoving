@@ -312,12 +312,19 @@ Orientation 판정 + ClimbGap 계산.
       **본체 §6 매핑 테이블 `standupIfPossible()` 표기 갱신** — "✗ 미이식" → "✓ 근사 이식".
 
 #### B-40-post. `toCrawling()` 잔여 호출 지점 L2751/L2760/L2767 이식 (세션 88 3차 감사 발견)
-- [ ] B-40-post. 본체 세션 41 L1883 기록된 `wasCrawling` 재설정 8 위치 중 B-27/B-35/B-36
-      에서 각각 L2566 / L2572 / L2812 / L2835 / L2860 을 흡수했으나 **L2751 / L2760 /
-      L2767 은 미해소**. Agent WebFetch 로 원본 해당 대역 확보 후 전환 블록 특정 +
-      이식 위치 결정. 예상 영역: 수영/다이빙 → 육상 전환 또는 그 반대 경로 내부 crawl
-      재설정 구간. 의존: Phase 5 B-7/B-9/B-11 swim 재구성 완료 후 자연 흡수 가능 —
-      선 Phase 5 후 남은 부분만 별도 원자화.
+- [x] B-40-post. ✅ **세션 116 완료 (재검토 — 이미 해소됨)** — 원본 L2749-L2784 대역
+      전수 read 결과 세션 88 3차 감사 분류가 부정확했음:
+      * **L2751** `wasCrawling = false;` — **필드 리셋** (toCrawling() 메서드 호출 아님).
+        B-17b1 세션 48 L1419 `wasCrawling = false;` 로 이식 완료 (canStandUp 분기 내).
+      * **L2760** `wasCrawling = toCrawling();` — 실제 메서드 호출. **B-17b2 세션 73
+        L1435** 이식 완료 (else if wasCrawlClimbing 분기 1 — !isClimbing).
+      * **L2767** `wasCrawling = toCrawling;` — **로컬 변수** 참조 (L2757 `boolean
+        toCrawling = sneakButton.Pressed || crawlToggled;`). **B-17b2 세션 73 L1442**
+        `wasCrawling = toCrawlingLocal;` 이식 완료 (분기 2 — moveForward <= 0F).
+      결론: L2751/L2760/L2767 3 지점 모두 세션 48/73 의 B-17b1/B-17b2 이식에 자동 흡수됨.
+      B-40-post 원자는 실제 수행 작업 없음 — 세션 88 3차 감사 시 원본 본체 미확인
+      상태에서 L1883 의 "wasCrawling 재설정 8 위치" 목록을 "toCrawling() 호출 지점" 으로
+      오분류한 결과. 체크박스 [x] — 코드 변경 없음.
 
 #### B-10b-pre. `wasJumpingOutOfWater` 필드 명시 신설 (세션 88 4차 확정 감사 발견)
 - [x] B-10b-pre. ✅ **세션 110 완료** — `SmartMovingClientState.wasJumpingOutOfWater`
@@ -492,6 +499,52 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 116 — 2026-04-24 — B-40-post 재검토 → **Phase 4 전체 완료**
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2745-L2785 전수 read** — L2751/L2760/L2767 의 실제 구조 확인.
+2. **세션 88 3차 감사 오분류 확인**:
+   * L2751 은 `wasCrawling = false` (필드 리셋, 메서드 호출 아님)
+   * L2760 은 `wasCrawling = toCrawling();` (실제 메서드 호출)
+   * L2767 은 `wasCrawling = toCrawling;` (지역 boolean 변수 참조 — L2757 선언)
+   * 3차 감사 시 원본 본체 미확인 + L1883 의 "wasCrawling 재설정 8 위치" 목록을
+     "toCrawling() 호출 지점" 으로 오분류함.
+3. **1.21.1 현재 상태 grep** — 3 지점 전부 이식 완료 확인:
+   * L2751 → B-17b1 세션 48 L1419 `wasCrawling = false;` (canStandUp 분기)
+   * L2760 → B-17b2 세션 73 L1435 `wasCrawling = toCrawling();`
+   * L2767 → B-17b2 세션 73 L1442 `wasCrawling = toCrawlingLocal;`
+4. **결론**: B-40-post 는 이미 B-17b1/B-17b2 이식에 자동 흡수됨. 코드 변경 없음.
+   Extended §3 체크박스 [x] 처리 + 본체 §6 매핑 표기 갱신 (⚠️ → ✓).
+5. **🎉 Phase 4 (B-10a-post / B-10b-pre / B-10b-post / B-10c-post / B-31c-post /
+   B-10-reset-post / B-N-standup / B-40-post) 전체 완료.**
+
+**완료 전 검증 체크리스트 (세션 116 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L2745-L2785 전수 read ✓
+- [근거] 1.21.1 `SmartMovingClientState.tickEssential` L1398-L1442 + L1419 + L1435 +
+  L1442 grep 으로 이식 상태 전수 확인 ✓
+- [대응] 3 지점 (L2751/L2760/L2767) 모두 원본 ↔ 1.21.1 대응 재확인 완료 ✓
+- [분기] `else if (wasCrawlClimbing)` 3분기 + 진입 조건 + canStandUp 분기 전수 식별 ✓
+- [상수] 없음 ✓
+- [타이밍] B-17b1/b2 이식 시점 (세션 48/73) 에 이미 정상 위치 배치됨 ✓
+- [근사] 없음 (재검토 작업) ✓
+- [신규] 세션 88 3차 감사 오분류 확인 — 향후 오분류 방지 위해 본체 §6 매핑 표기 명확화 ✓
+- [회귀] 코드 변경 없음 → 회귀 영향 없음 ✓
+- [빌드] 코드 변경 없음 — 빌드 검증 생략. 직전 세션 115 빌드 성공 상태 유지 ✓
+
+**다음 세션 권고**: **Phase 6 진입** — **B-42a** (`getMaxPlayerSolidBetween` AABB 정밀
+헬퍼 이식, 원본 1-based 위치). Phase 6 는 의존 순서상 Phase 5 이전 (Phase 5 가 AABB
+의존). B-42a/b/c/d 선행 → B-42-B5/B16/B20/B26/B35/B36/B39/B18a/b 승격. 예상 세션 규모:
+AABB 헬퍼 이식 복잡도에 따라 2-3 세션.
+
+**진행률** (세션 116 종료 시점):
+- Extended 완료: **30 원자** (B-19 22 + Phase 4 **8** = 22+8)
+- Extended 총 원자 ~61
+- **Extended 진행률: 30/61 ≈ 49%**
+- **포커스 #2 전체: (54+30)/115 ≈ 73%**
+- **Phase 3 + Phase 4 전체 완료** — Phase 6 진입 준비
 
 ### 세션 115 — 2026-04-24 — B-N-standup `standupIfPossible` 메서드 이식
 
