@@ -66,6 +66,9 @@ public final class SmartMovingSwimmer {
             sm.isDipping      = false;
             sm.isSwimming_sm  = false;
             sm.isDiving       = false;
+            // B-10a-post (세션 109): 원본 L548 `isShallowDiveOrSwim = false` 이식 —
+            // 물 밖 전환 시 shallow dive/swim 해제.
+            sm.isShallowDiveOrSwim = false;
             sm.waterMovementTicks = 0;
             sm.dippingDepth   = -1F;
             return;
@@ -81,6 +84,9 @@ public final class SmartMovingSwimmer {
             sm.isDipping     = true;
             sm.isSwimming_sm = false;
             sm.isDiving      = false;
+            // B-10a-post (세션 109): 원본 L507 공식 `couldStandUp && (isDiving || isSwimming)`.
+            // 강제 isDipping 경로는 swim/dive 모두 false → 자동 false.
+            sm.isShallowDiveOrSwim = false;
             // B-12 (세션 64): 원본 L481-L484 `if(swimming||diving) ticks++; else ticks=0;`.
             //   dipping 강제 경로는 swimming/diving 아님 → ticks=0 리셋.
             sm.waterMovementTicks = 0;
@@ -132,6 +138,14 @@ public final class SmartMovingSwimmer {
         } else {
             sm.waterMovementTicks = 0;
         }
+
+        // B-10a-post (세션 109): 원본 L507 `isShallowDiveOrSwim = couldStandUp && (isDiving ||
+        // isSwimming);` 이식. `couldStandUp` = B-5 (세션 63) 근사 `dippingDepth >= 0F &&
+        // dippingDepth <= 1.5F` (원본 AABB `minPlayerSwimWaterDepth` → fluidHeight 단일값).
+        // 소비처: B-36 분기 (a) 얕은 물 swim/dive → walking 전환 활성화 (이전 공식 미이식으로
+        // 항상 false 였음). B-11 Phase 5 (얕은 물 특수 분기) 에서도 진입 게이트로 소비.
+        boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
+        sm.isShallowDiveOrSwim = couldStandUp && (sm.isDiving || sm.isSwimming_sm);
     }
 
     // ── [8-2] handleSwimming ─────────────────────────────────────────────────

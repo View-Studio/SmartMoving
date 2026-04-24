@@ -241,10 +241,15 @@ Orientation 판정 + ClimbGap 계산.
 의존 필드는 B-10a/b/c / B-31c 세션 38 에서 이식됨. 공식 갱신만 남음.
 
 #### B-10a-post. `isShallowDiveOrSwim` 공식 이식
-- [ ] B-10a-post. 원본 L507 `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)`.
-      `couldStandUp` 은 Swimmer 지역 변수 (L169 이식 완료).
-      Swimmer.updateSwimState 말미 또는 handleSwimming 시작부에서 갱신.
-      이식 완료 시 B-36 분기 (a) 얕은 물 swim/dive → walking 전환 활성화.
+- [x] B-10a-post. ✅ **세션 109 완료** — 원본 L507 `isShallowDiveOrSwim = couldStandUp &&
+      (isDiving || isSwimming);` 이식. Swimmer.updateSwimState 에 3 지점 처리 추가:
+      * !isTouchingWater return 앞: `isShallowDiveOrSwim = false` (원본 L548)
+      * 3-OR 강제 isDipping 경로: false 리셋
+      * 말미 (waterMovementTicks 갱신 직후): 공식 `couldStandUp && (isDiving ||
+        isSwimming_sm)` 대입 (couldStandUp = B-5 세션 63 근사 `dippingDepth>=0F &&
+        dippingDepth<=1.5F`)
+      근사 없음 (couldStandUp 자체는 기존 근사). B-36 분기 (a) 얕은 물 swim/dive →
+      walking 전환 활성화 + B-11 Phase 5 (얕은 물 특수 분기) 진입 게이트 활성화.
 
 #### B-10b-post. `wantJumpOutOfWater` + `isJumpingOutOfWater` 공식 이식
 - [ ] B-10b-post. 원본 L486-L488:
@@ -473,6 +478,55 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 109 — 2026-04-24 — B-10a-post `isShallowDiveOrSwim` 공식 이식 (Phase 4 시작)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**Phase 3 (B-19) 완료 → Phase 4 진입.**
+
+**진행한 작업**:
+1. **원본 L500-L551 read** — `isShallowDiveOrSwim` 공식 위치 + useStandard 외 else 분기 확인.
+   * 원본 L507: `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming);`
+   * 원본 L548: else 분기 `isShallowDiveOrSwim = false;`
+2. **1.21.1 Swimmer.updateSwimState 3 지점 처리 추가**:
+   * L65-L71 `!isTouchingWater` return 앞: `isShallowDiveOrSwim = false` (원본 L548 대응)
+   * L80-L88 3-OR 강제 isDipping 경로: `isShallowDiveOrSwim = false` (swim/dive false
+     자동 반영 + 명시성)
+   * L130-L135 `waterMovementTicks` 갱신 **직후**: `couldStandUp = dippingDepth >= 0F &&
+     dippingDepth <= 1.5F` 지역 계산 + `sm.isShallowDiveOrSwim = couldStandUp &&
+     (isDiving || isSwimming_sm)` 공식 대입
+3. **`couldStandUp` 은 B-5 (세션 63) 기존 근사** — `dippingDepth` 단일값 기반. 원본 AABB
+   `minPlayerSwimWaterDepth` 정밀 스캔 미이식 (§7 B-5 근사와 연동). B-10a-post 자체는
+   근사 없이 공식 1:1 이식.
+
+**완료 전 검증 체크리스트 (세션 109 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L500-L551 read ✓
+- [근거] 의존 `isShallowDiveOrSwim` 필드 이식 완료 (B-10a 세션 38) + `couldStandUp`
+  근사 이식 완료 (B-5 세션 63) ✓
+- [대응] 3 지점 이식 원본 ↔ 1.21.1 side-by-side. 공식 `couldStandUp && (isDiving ||
+  isSwimming)` 원본 1:1 ✓
+- [분기] !isTouchingWater (원본 L548) / 3-OR 강제 isDipping (원본 L301 근방 + L507 swim/
+  dive false 자동 반영) / 정상 경로 공식 대입 (원본 L507) 전수 ✓
+- [상수] `1.5F` (couldStandUp threshold) 원본 동일 ✓
+- [타이밍] updateSwimState 말미 (ticks 갱신 직후) — 원본 L504-L508 (isDiving/isLevitating/
+  isSwimming 대입 직후 L507) 순서 보존. B-10d (세션 71) isLevitating 대입 후속으로 배치 ✓
+- [근사] 없음 — 공식 1:1. `couldStandUp` 지역 변수는 B-5 근사 동일 패턴 재사용 ✓
+- [신규] 없음 ✓
+- [회귀] B-36 분기 (a) 얕은 물 swim/dive → walking 전환 이전 항상 false → 이제 실제
+  couldStandUp 기반. B-11 Phase 5 진입 게이트 활성화 준비. 다른 호출처 없어 영향 최소 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-10b-pre** — `wasJumpingOutOfWater` 필드 명시 분리 (Phase 1 필드
+선언 연장선). 의존 없음. 예상 1 세션 작은 작업.
+
+**진행률** (세션 109 종료 시점):
+- Extended 완료: **23 원자** (B-19 완결 22 + **B-10a-post**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 23/61 ≈ 38%**
+- **포커스 #2 전체: (54+23)/115 ≈ 67%**
+- **Phase 4 진입** (B-10a-post 완료 / B-10b-pre / B-10b-post / B-10c-post / B-31c-post /
+  B-10-reset-post / B-N-standup / B-40-post 7 남음)
 
 ### 세션 108 — 2026-04-24 — 🎉 B-19a4 seekClimbGap + Climber 연결 — **B-19 전체 도미노 해소 완결**
 
