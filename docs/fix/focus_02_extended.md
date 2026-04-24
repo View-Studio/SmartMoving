@@ -156,8 +156,11 @@ Orientation 판정 + ClimbGap 계산.
       - [x] **B-19a2a3** (세션 101 완료): half-solid 판정 — `isLowerHalfFrontFullEmpty` +
             `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`. §7 근사 2건 (RedPower /
             BetterThanWolves / ASRope / LadderKit 생략 + ASGrapplingHook / Carpenters 생략).
-      - [ ] **B-19a2a4**: 잔여 보조 — `isOnMiddleLadderFront` + `isHeadedToRope` (mod 근사
-            false) + `getTriple` 등.
+      - [x] **B-19a2a4** (세션 102 완료): 잔여 보조 10 메서드 — vanilla 2 (`getTriple` +
+            `isHeadedToRope`) 1:1 + mod 8 (`isOnMiddleLadderFront` / `getCarpentersBlockData`
+            / `isOnAnchorFront` / `isASGrapplingHookFront` / `getRopeId` / `getAnchorId` /
+            `isASRope` / `isASGrapplingHook`) false/null 근사. §7 근사 3건 (Carpenters /
+            BetterThanWolves / ASGrapplingHook-RopesPlus-ASRope). **B-19a2a 전체 완료**.
       - [ ] **B-19a2b**: grab 상태 세팅 — `setHalfGrabType` 3 오버로드 +
             `setBottomGrabType` 3 오버로드 + `initializeLocal` + `initializeOffset` +
             `initialize(world, i, id, jhd, k, kd)`.
@@ -449,6 +452,67 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 102 — 2026-04-24 — B-19a2a4 잔여 보조 10 메서드 — **B-19a2a 전체 완료**
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L1241-L1272 + L1386-L1440 + L1487-L1511 + L2011-L2024 read** — 10 메서드 확인.
+2. **10 메서드 이식** — vanilla 2 (1:1) + mod 8 (근사):
+   * **vanilla 1:1**:
+     - `getTriple(primary, secondary)` static (원본 L2011-L2024) — 소수부 중심 오프셋
+       비교로 -1/0/1 반환. Pure math.
+     - `isHeadedToRope()` (원본 L1386-L1412) — `getTriple` 9 분기 (3x3) 로 Orientation
+       매칭. rope mod 판정용이지만 logic 자체는 pure.
+   * **mod 근사 8개**:
+     - `getCarpentersBlockData` static (Carpenters) → -1
+     - `isOnMiddleLadderFront(j_offset)` (Carpenters 간접) → false
+     - `isOnAnchorFront(j_offset)` (BetterThanWolves) → false
+     - `getAnchorId(j_offset)` static (BetterThanWolves) → null
+     - `isASGrapplingHookFront(state)` (ASGrapplingHook) → false
+     - `getRopeId(j_offset)` static (BetterThanWolves/RopesPlus) → null
+     - `isASRope(state)` static (ASRope) → false
+     - `isASGrapplingHook(state)` static (ASGrapplingHook) → false
+3. **본체 §7 B-19a2a4 근사 3건 등록**:
+   (1) Carpenters (isOnMiddleLadderFront + getCarpentersBlockData)
+   (2) BetterThanWolves (isOnAnchorFront + getAnchorId)
+   (3) ASGrapplingHook/RopesPlus/ASRope (isASGrapplingHookFront + getRopeId + isASRope +
+       isASGrapplingHook)
+
+**완료 전 검증 체크리스트 (세션 102 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1241-L1272 + L1386-L1440 + L1487-L1511
+  + L2011-L2024 전수 read ✓
+- [근거] Carpenters/BetterThanWolves/ASGrapplingHook/RopesPlus/ASRope mod 1.21.1 미이식
+  확인 (B-19a1b `isRope`/`isOnWallRope` false 근사 + §7 기존 등록과 일관) ✓
+- [대응] 10 메서드 원본 ↔ 1.21.1 side-by-side. `getTriple` 5 분기 / `isHeadedToRope`
+  3x3=9 분기 vanilla 1:1 + 8 mod 근사 false/null 단일 반환 ✓
+- [분기] `getTriple` (|primary|*2 < |secondary| / primary > 0 / primary < 0 / 0) 4갈래 +
+  `isHeadedToRope` (iTriple > 0 / < 0 / = 0) x (kTriple > 0 / < 0 / = 0) = 9갈래 전수
+  이식. mod 근사 8개는 본래 다중 분기지만 전체 false/null 반환으로 효과 동일 ✓
+- [상수] `getTriple` 내부 `0.5` 중심 오프셋 / `Math.abs(primary)*2` 비교 원본 동일 ✓
+- [타이밍] 순수 math/logic — 호출 타이밍 무관 ✓
+- [근사] **§7 B-19a2a4 근사 3건 등록 완료** (mod 3 카테고리 묶음) ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용. B-19a2c/d (hasHalfHold/hasBottomHold) 에서 이 헬퍼들을
+  전수 소비. mod 근사 false/null 반환이 `hasHalfHold`/`hasBottomHold` 의 mod 분기를
+  자연스럽게 건너뜀 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**B-19a2a (보조 헬퍼 전체 4 서브) 완료** — a2a1/a2a2/a2a3/a2a4. `hasHalfHold`/`hasBottomHold`
+이식 (B-19a2c/d) 을 위한 선행 인프라 완성.
+
+**다음 세션 권고**: **B-19a2b** — grab 상태 세팅. `setHalfGrabType` 3 오버로드 +
+`setBottomGrabType` 3 오버로드 + `initializeLocal` + `initializeOffset` + `initialize(world,
+i, id, jhd, k, kd)`. 원본 L937-L996 + 별도 위치. `hasHalfHold` 본체가 이 setter 를 직접
+소비. 예상 1 세션.
+
+**진행률** (세션 102 종료 시점):
+- Extended 완료: **13 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / **a2a4**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 13/61 ≈ 21%**
+- **포커스 #2 전체: (54+13)/115 ≈ 58%**
 
 ### 세션 101 — 2026-04-24 — B-19a2a3 half-solid 판정 (isLowerHalfFrontFullEmpty + isUpperHalfFrontAnySolid + isUpperHalfFrontFullSolid)
 

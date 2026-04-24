@@ -1999,4 +1999,171 @@ public class Orientation {
         }
         return solid;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2a4 (세션 102) — 잔여 보조
+    //   vanilla 1:1: getTriple / isHeadedToRope
+    //   mod 근사 (false/null): isOnMiddleLadderFront / getCarpentersBlockData /
+    //                           isOnAnchorFront / isASGrapplingHookFront /
+    //                           getRopeId / getAnchorId / isASRope / isASGrapplingHook
+    // 원본: Orientation.java L1241-L1259 / L1261-L1272 / L1386-L1412 / L1414-L1440 /
+    //       L1443-L1484 / L1487-L1511 / L2011-L2024.
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── vanilla 1:1 ─────────────────────────────────────────────────────────
+
+    /**
+     * 원본 L2011-L2024 `getTriple(double primary, double secondary)` — 두 좌표 소수부
+     * 중심 오프셋 비교로 -1 / 0 / 1 반환.
+     *
+     *   primary = primary - floor(primary) - 0.5
+     *   secondary = secondary - floor(secondary) - 0.5
+     *   |primary|*2 < |secondary| → 0
+     *   primary > 0 → 1
+     *   primary < 0 → -1
+     *   0 → 0
+     *
+     * Pure math — 근사 없음.
+     */
+    private static int getTriple(double primary, double secondary) {
+        primary = primary - Math.floor(primary) - 0.5;
+        secondary = secondary - Math.floor(secondary) - 0.5;
+
+        if (Math.abs(primary) * 2 < Math.abs(secondary))
+            return 0;
+        else if (primary > 0)
+            return 1;
+        else if (primary < 0)
+            return -1;
+        else
+            return 0;
+    }
+
+    /**
+     * 원본 L1386-L1412 `isHeadedToRope()` — `base_id`/`base_kd` 의 (i, k) triple 조합을
+     * 9 분기 (3x3) 로 매칭하여 Orientation 과 비교.
+     *
+     *   iTriple > 0, kTriple > 0 → this == NN
+     *   iTriple > 0, kTriple < 0 → this == NP
+     *   iTriple > 0, kTriple = 0 → this == NZ
+     *   iTriple < 0, kTriple > 0 → this == PN
+     *   iTriple < 0, kTriple < 0 → this == PP
+     *   iTriple < 0, kTriple = 0 → this == PZ
+     *   iTriple = 0, kTriple > 0 → this == ZN
+     *   iTriple = 0, kTriple < 0 → this == ZP
+     *   iTriple = 0, kTriple = 0 → this == ZZ
+     *
+     * rope mod 판정용이지만 자체는 pure logic — 근사 없이 1:1.
+     */
+    protected boolean isHeadedToRope() {
+        int iTriple = getTriple(base_id, base_kd);
+        int kTriple = getTriple(base_kd, base_id);
+
+        if (iTriple > 0) {
+            if (kTriple > 0)      return this == NN;
+            else if (kTriple < 0) return this == NP;
+            else                  return this == NZ;
+        } else if (iTriple < 0) {
+            if (kTriple > 0)      return this == PN;
+            else if (kTriple < 0) return this == PP;
+            else                  return this == PZ;
+        } else {
+            if (kTriple > 0)      return this == ZN;
+            else if (kTriple < 0) return this == ZP;
+            else                  return this == ZZ;
+        }
+    }
+
+    // ── mod 근사 (§7 B-19a2a4-approx 1/2/3) ────────────────────────────────
+
+    /**
+     * 원본 L1261-L1272 `getCarpentersBlockData(i, j_offset, k)` — Carpenters mod
+     * `TileEntity` 에서 reflection 으로 블록 data 추출.
+     *
+     * **§7 근사** (B-19a2a4-approx-1): Carpenters mod 1.21.1 미이식 → **항상 -1 반환**.
+     */
+    private static int getCarpentersBlockData(int i, int j_offset, int k) {
+        // 근사 이식 — 원본과 차이: Carpenters mod 미이식 → 항상 -1
+        return -1;
+    }
+
+    /**
+     * 원본 L1241-L1259 `isOnMiddleLadderFront(j_offset)` — Carpenters block 의 metadata
+     * switch 만 의존. `getCarpentersBlockData` 가 항상 -1 반환하므로 switch 매치 없음 →
+     * **항상 false**.
+     *
+     * **§7 근사** (B-19a2a4-approx-1 연동): Carpenters mod 미이식.
+     */
+    protected boolean isOnMiddleLadderFront(int j_offset) {
+        // 근사 이식 — 원본과 차이: Carpenters mod 미이식 → 항상 false
+        return false;
+    }
+
+    /**
+     * 원본 L1414-L1440 `isOnAnchorFront(j_offset)` — BetterThanWolves anchor 블록의 metadata
+     * switch.
+     *
+     * **§7 근사** (B-19a2a4-approx-2): BetterThanWolves mod 1.21.1 미이식 → **항상 false**.
+     * anchor 블록 존재 자체가 없음 (`isAnchorId` → false).
+     */
+    protected boolean isOnAnchorFront(int j_offset) {
+        // 근사 이식 — 원본과 차이: BetterThanWolves anchor mod 미이식 → 항상 false
+        return false;
+    }
+
+    /**
+     * 원본 L1487-L1511 `isASGrapplingHookFront(int metaData)` — ASGrapplingHook mod 의 8
+     * metadata 비트 조합 판정.
+     *
+     * **§7 근사** (B-19a2a4-approx-3): ASGrapplingHook mod 1.21.1 미이식 → **항상 false**.
+     * `isASGrapplingHook` 자체가 false 반환되어 선행 조건에서 제거되나 안전상 직접 false.
+     *
+     * 원본은 `int metaData` 파라미터이나 1.21.1 에선 사용 지점이 근사 삭제되므로 파라미터
+     * 형태와 무관 — `BlockState` 로 표면 매핑 (호출부 일관성).
+     */
+    protected boolean isASGrapplingHookFront(BlockState state) {
+        // 근사 이식 — 원본과 차이: ASGrapplingHook mod 미이식 → 항상 false
+        return false;
+    }
+
+    /**
+     * 원본 L1443+ `getRopeId(j_offset)` — BetterThanWolves `fcRopeBlock` / RopesPlus
+     * `blockRopeCentral` 판정 후 block 반환.
+     *
+     * **§7 근사** (B-19a2a4-approx-3): 두 mod 모두 미이식 → **항상 null**.
+     */
+    protected static BlockState getRopeId(int j_offset) {
+        // 근사 이식 — 원본과 차이: BetterThanWolves/RopesPlus rope 미이식 → null
+        return null;
+    }
+
+    /**
+     * 원본 `getAnchorId(j_offset)` — BetterThanWolves `fcAnchor` 판정.
+     *
+     * **§7 근사** (B-19a2a4-approx-2): BetterThanWolves mod 미이식 → **항상 null**.
+     */
+    protected static BlockState getAnchorId(int j_offset) {
+        // 근사 이식 — 원본과 차이: BetterThanWolves anchor mod 미이식 → null
+        return null;
+    }
+
+    /**
+     * 원본 `isASRope(Block block)` — ASRope mod `blockRope` 판정.
+     *
+     * **§7 근사** (B-19a2a4-approx-3): ASRope mod 미이식 → **항상 false**.
+     */
+    protected static boolean isASRope(BlockState state) {
+        // 근사 이식 — 원본과 차이: ASRope mod 미이식 → 항상 false
+        return false;
+    }
+
+    /**
+     * 원본 `isASGrapplingHook(Block block)` — ASGrapplingHook mod `blockGrHk` 판정.
+     *
+     * **§7 근사** (B-19a2a4-approx-3): ASGrapplingHook mod 미이식 → **항상 false**.
+     */
+    protected static boolean isASGrapplingHook(BlockState state) {
+        // 근사 이식 — 원본과 차이: ASGrapplingHook mod 미이식 → 항상 false
+        return false;
+    }
 }

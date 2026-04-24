@@ -440,6 +440,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a2a4 근사 3건** (세션 102): `Orientation` 잔여 보조 중 mod 전용 헬퍼 전체 근사
+  (vanilla 2: `getTriple` / `isHeadedToRope` 는 pure math/logic 으로 1:1):
+  (1) **Carpenters mod** — `getCarpentersBlockData(i, j_offset, k)` 항상 -1 /
+  `isOnMiddleLadderFront(j_offset)` 항상 false. Carpenters mod 1.21.1 미이식.
+  (2) **BetterThanWolves mod** — `isOnAnchorFront(j_offset)` 항상 false /
+  `getAnchorId(j_offset)` 항상 null. BetterThanWolves mod 미이식.
+  (3) **ASGrapplingHook / RopesPlus / ASRope mod** — `isASGrapplingHookFront(state)` /
+  `isASRope(state)` / `isASGrapplingHook(state)` 모두 false / `getRopeId(j_offset)`
+  null. 해당 mod 1.21.1 미이식. B-19a1b `isRope`/`isOnWallRope` false 근사와 연동.
+  vanilla ladder/vine/fence/trap door/door/wall/slab/stair 관련 경로는 100% 이식.
+  호출 지점 (hasHalfHold / hasBottomHold) 은 후속 세션에서 이 근사 false/null 반환을
+  전제로 조건 단순화.
 - **B-19a2a3 근사 2건** (세션 101): `Orientation` half-solid 판정 (`isLowerHalfFrontFullEmpty`,
   `isUpperHalfFrontAnySolid`, `isUpperHalfFrontFullSolid`) 이식 시 mod 호환 분기 생략:
   (1) `isLowerHalfFrontFullEmpty` — RedPower wire + BetterThanWolves anchor + ASRope +
