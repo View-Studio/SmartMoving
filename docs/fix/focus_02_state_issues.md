@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 57 — B Phase 2 계속 / B-14 + B-21) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 24 원자 완료 / ⏳ **B Phase 2 잔여 ~16 원자** |
+| 상태 | 🟡 진행 중 (세션 58 — B Phase 2 계속 / B-38) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 25 원자 완료 / ⏳ **B Phase 2 잔여 ~15 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -802,8 +802,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       IsRelevant 분기에 `isSliding=false; isCrawling=true` 추가.
 
 #### B-38. handleCeilingClimbing 진입 시 isCrawling=false 이식 (A-5 발견)
-- [ ] B-38. 원본 L1170 대응 — Climber.handleCeilingClimbing L571 isCeilingClimbing=true
-      이후 `sm.isCrawling = false` 추가.
+- [x] B-38. ✅ **세션 58 완료** — 원본 L1170 이식. `SmartMovingClimber.handleCeilingClimbing`
+      성공 분기 종료부 (L577 `sm.isCeilingClimbing = true` 직후, 분기 닫는 `}` 직전) 에
+      `sm.isCrawling = false;` 추가. 원본 L1162 isCeilingClimbing=true 와 L1170
+      isCrawling=false 가 동일한 성공 분기 내부 (속도/fallDistance 세팅 뒤) 에 위치하는
+      원본 순서 그대로 복원.
 
 #### B-39. landMotionPost 3분기 (isSlow + 0.5D) 이식 (A-5 발견)
 - [ ] B-39. 원본 L1392-L1403 3분기 (`crawlStandUpBottom > minY`) 중 **isSlow && > minY+0.5D
@@ -2405,6 +2408,44 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-26** (isSliding 직접 진입 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처.
 - **B-38** (handleCeilingClimbing 진입 isCrawling=false) — 한 줄 추가 단순.
 - **B-34** (capabilities.flying 해제 점프) — tryJump 단순 호출.
+
+### 세션 58 — 2026-04-24 — B Phase 2 B-38 (handleCeilingClimbing 진입 isCrawling=false)
+
+**진행한 작업**:
+- `SmartMovingClimber.handleCeilingClimbing` 성공 분기 종료부에 `sm.isCrawling = false;` 한 줄
+  추가 (L577 `sm.isCeilingClimbing = true;` 직후, 분기 `}` 직전).
+- 원본 L1170 대응. 원본 L1162 `isCeilingClimbing=true` 와 L1170 `isCrawling=false` 가 동일한
+  성공 분기 내부에 배치된 구조 1:1. 1.21.1 에서는 속도 세팅(L571)/fallDistance(L575) 후
+  isCeilingClimbing=true(L577) + isCrawling=false 순서.
+- 주석에 원본 라인 번호 + 위치 맥락 명시.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 58)**:
+- [근거] 원본 L1170 위치 (handleCeilingClimbing 진입 성공) 확정 자료 R-14.x +
+  R-14.10 #8 불일치 §16 세션 35 ✓
+- [근거] 원본 L1112-L1174 handleCeilingClimbing 구조 (R-12.4) 재확인 ✓
+- [대응] 한 줄 대입 원본 1:1 — 필드/값 동일 ✓
+- [분기] 없음 (성공 분기 종료부 단일 대입)
+- [상수] 없음
+- [타이밍] isCeilingClimbing=true 직후 — 원본 L1162/L1170 동일 분기 내부 배치 순서 일치 ✓
+- [근사] 없음
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 천장 클라이밍 진입 시 크롤 자동 해제 →
+  R-14.10 #8 해소. 다른 경로 (resetState 등) 의 isCrawling 갱신과 충돌 없음 (성공 분기
+  내부 한정).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #8 L1170 handleCeilingClimbing 진입 isCrawling=false (B-38 세션 58)
+- ⏳ #1~#7/#9~#15 (B-16/B-17b2/B-18/B-33/B-34/B-35/B-36/B-37/B-39/B-41 등)
+
+**Phase 2 진행 상황**: 25 원자 완료 / 잔여 ~15
+
+**다음 작업 권고**:
+- **B-34** (capabilities.flying 해제 점프 tryJump) — 원본 L2449-L2450. 단순. B-31a wasCrawling 선행 완료.
+- **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. B-19 Free climb 분기 내부 — 위치 탐색 필요.
+- **B-16** (wantClimbHolding/isClimbHolding 3-OR) — 원본 L2721-L2732. B-18 선행용 중요 블록.
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
 
 ---
 

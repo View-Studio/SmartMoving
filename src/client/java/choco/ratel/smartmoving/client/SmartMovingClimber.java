@@ -575,6 +575,10 @@ public final class SmartMovingClimber {
         player.fallDistance = 0;
 
         sm.isCeilingClimbing = true;
+        // B-38 (세션 58): 원본 L1170 `isCrawling = false` — handleCeilingClimbing 성공
+        // 분기 종료부에서 크롤 해제. 원본 L1162 isCeilingClimbing=true 와 함께 성공 분기
+        // 내부 (L1162-L1170 사이 속도 세팅 L571/fallDistance L575 완료 후) 배치.
+        sm.isCrawling = false;
     }
 
     /**
