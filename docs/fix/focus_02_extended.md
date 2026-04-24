@@ -161,9 +161,10 @@ Orientation 판정 + ClimbGap 계산.
             / `isOnAnchorFront` / `isASGrapplingHookFront` / `getRopeId` / `getAnchorId` /
             `isASRope` / `isASGrapplingHook`) false/null 근사. §7 근사 3건 (Carpenters /
             BetterThanWolves / ASGrapplingHook-RopesPlus-ASRope). **B-19a2a 전체 완료**.
-      - [ ] **B-19a2b**: grab 상태 세팅 — `setHalfGrabType` 3 오버로드 +
-            `setBottomGrabType` 3 오버로드 + `initializeLocal` + `initializeOffset` +
-            `initialize(world, i, id, jhd, k, kd)`.
+      - [x] **B-19a2b** (세션 103 완료): grab 상태 세팅 — `setHalfGrabType` 3 오버로드 +
+            `setBottomGrabType` 3 오버로드 + `setGrabType` static + `initialize` +
+            `initializeOffset` + `initializeLocal` (9 메서드). 근사 없음 — pure state
+            setting + math. `base_jhd`/`local_halfOffset` 필드 2개 추가.
       - [ ] **B-19a2c**: `hasHalfHold` 본체 (L608-L726) — vanilla 분기 이식 + mod 분기
             근사 생략.
       - [ ] **B-19a2d**: `hasBottomHold` 본체 (L728-L1000+) — 위 동일.
@@ -452,6 +453,68 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 103 — 2026-04-24 — B-19a2b grab 상태 세팅 + initialize 헬퍼 9 메서드
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L937-L995 (set*GrabType 6 + setGrabType static) + L2686-L2720 (initialize
+   3) read** 완료.
+2. **필드 2 추가**:
+   * `base_jhd` (double) — `initialize` 에서 설정 / `initializeOffset` 이 소비
+   * `local_halfOffset` (int) — `initializeLocal` 내부 중간값
+3. **9 메서드 이식** (근사 없음):
+   * `initialize(w, i, id, jhd, k, kd)` (원본 L2686-L2699) — world / base_i / base_id /
+     base_jhd / base_k / base_kd 설정 + remote_i/remote_k 계산 (`base_i + _i`, `base_k + _k`)
+   * `initializeOffset(offset_halfs, isClimbCrawling, isCrawlClimbing, isCrawling)` static
+     (원본 L2701-L2713) — crawl flag OR + offset_jhd 계산 + `MathHelper.floor` + jh_offset /
+     all_j / all_offset 분해. `MathHelper.floor_double` → `MathHelper.floor` 표면 매핑.
+   * `initializeLocal(localOffset)` static (원본 L2715-L2720) — local_halfOffset/local_half/
+     local_offset 계산
+   * `setGrabType(type, block, remote, hasGrab, metaClimb)` static (원본 L987-L995) — 최종
+     상태 필드 (grabRemote/grabType/grabBlock/grabMeta) 할당 + hasGrab 반환
+   * `setHalfGrabType` 3 오버로드 (원본 L937-L960):
+     - 2-arg 래퍼 (remote=true)
+     - 3-arg 래퍼 (metaClimb=-1)
+     - 4-arg 본체 — diagonal 진입 시 CCW/CW 2방향 `isUpperHalfFrontEmpty` AND 체크
+   * `setBottomGrabType` 3 오버로드 (원본 L962-L985):
+     - 동일 패턴, diagonal 체크에 `isLowerHalfFrontFullEmpty` 사용 (upper → lower 차이)
+4. **BlockState 타입 일관성** — 원본 `Block` 파라미터 → `BlockState` 표면 매핑 (B-19a1a
+   grabBlock 필드 타입과 일치).
+
+**완료 전 검증 체크리스트 (세션 103 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L937-L995 + L2686-L2720 전수 read ✓
+- [근거] B-19a1c4 isUpperHalfFrontEmpty + B-19a2a3 isLowerHalfFrontFullEmpty + B-19a1a
+  상태 필드 (world/grabBlock/grabType/grabRemote/grabMeta) + B-19a0 rotate 전수 충족 ✓
+- [대응] 9 메서드 원본 ↔ 1.21.1 side-by-side. set*GrabType 3+3 오버로드 + setGrabType
+  static + initialize 3 ✓
+- [분기] `setHalfGrabType` 본체 2갈래 (hasGrab + remote + _isDiagonal 시 엣지 체크 / 외
+  직접 setGrabType). `setBottomGrabType` 동일 패턴. `initializeOffset` crawl 3-OR +
+  offset 분해. 전수 식별 ✓
+- [상수] `NoGrab=0` 원본 동일 / offset_halfs 파라미터로 `0D`/`3D` 전달 (B-19a3
+  handsClimbing=3D / feetClimbing=0D) ✓
+- [타이밍] `initialize` → `initializeOffset` → `initializeLocal` → `isLadderSubstitute`
+  순서 확정 (B-19a2e/a3/a4 에서 소비). 본 세션은 선언만 ✓
+- [근사] 근사 없음 ✓
+- [신규] `base_jhd`/`local_halfOffset` 필드 2개 — 원본 static 필드 (L2730+). B-19a2a/b
+  범위에 맞게 신설 ✓
+- [회귀] 기존 코드 미사용. B-19a2c/d (hasHalfHold/hasBottomHold) 가 set*GrabType 호출 +
+  B-19a3 (handsClimbing/feetClimbing) 가 initializeOffset 호출 + B-19a2e
+  (isLadderSubstitute) 가 initializeLocal 호출 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a2c** — `hasHalfHold` 본체 (원본 L608-L726). vanilla 분기
+(isOnLadder/isOnLadderFront/iron_bars/wall/fence/cobblestone/slab/stair/trapDoor/door/
+baseVineClimbing/remoteVineClimbing) 이식 + mod 분기 (BetterThanWolves/RopesPlus/ASRope
+/Carpenters) 근사 생략. 의존 모두 이식 완료 (B-19a2a1-a4 + B-19a2b). 예상 1 세션.
+
+**진행률** (세션 103 종료 시점):
+- Extended 완료: **14 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / a2a4 / **a2b**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 14/61 ≈ 23%**
+- **포커스 #2 전체: (54+14)/115 ≈ 59%**
 
 ### 세션 102 — 2026-04-24 — B-19a2a4 잔여 보조 10 메서드 — **B-19a2a 전체 완료**
 

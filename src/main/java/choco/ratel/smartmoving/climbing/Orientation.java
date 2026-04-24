@@ -26,6 +26,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
 import java.util.HashSet;
@@ -448,9 +449,15 @@ public class Orientation {
     /**
      * `jh_offset` — 원본 `initializeOffset(double offset, ...)` 에서 설정하는 세로 오프셋
      * (플레이어 boundingBox 상대). `handsClimbing` 의 gap threshold 판정 (`_handClimbingHoldGap`)
-     * 에 사용. B-19a2/a3 이식 시 초기화 로직 추가.
+     * 에 사용. B-19a2b 이식 완료.
      */
     protected static double jh_offset;
+
+    /** 원본 L2730 `base_jhd` — `initialize` 에서 설정. `initializeOffset` 가 소비 (B-19a2b). */
+    protected static double base_jhd;
+
+    /** 원본 `local_halfOffset` — `initializeLocal` 내부 중간값 (B-19a2b). */
+    protected static int local_halfOffset;
 
     // ── 블록 식별 헬퍼 (원본 L1188-L1214) ──────────────────────────────────
 
@@ -2165,5 +2172,155 @@ public class Orientation {
     protected static boolean isASGrapplingHook(BlockState state) {
         // 근사 이식 — 원본과 차이: ASGrapplingHook mod 미이식 → 항상 false
         return false;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2b (세션 103) — grab 상태 세팅 + initialize 헬퍼
+    // 원본: Orientation.java L937-L995 (setHalfGrabType/setBottomGrabType/setGrabType),
+    //       L2686-L2720 (initialize / initializeOffset / initializeLocal).
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── initialize 계열 (원본 L2686-L2720) ─────────────────────────────────
+
+    /**
+     * 원본 L2686-L2699 `initialize(World w, int i, double id, double jhd, int k, double kd)`.
+     * 이 Orientation 기반 ladder gap 탐색 시작 시 static 상태 초기화.
+     *
+     *   world = w
+     *   base_i/base_id/base_jhd/base_k/base_kd 설정
+     *   remote_i = base_i + _i
+     *   remote_k = base_k + _k
+     */
+    protected void initialize(World w, int i, double id, double jhd, int k, double kd) {
+        world = w;
+
+        base_i = i;
+        base_id = id;
+        base_jhd = jhd;
+        base_k = k;
+        base_kd = kd;
+
+        remote_i = i + _i;
+        remote_k = k + _k;
+    }
+
+    /**
+     * 원본 L2701-L2713 `initializeOffset(double offset_halfs, boolean isClimbCrawling,
+     * boolean isCrawlClimbing, boolean isCrawling)`.
+     *
+     *   crawl = isClimbCrawling || isCrawlClimbing || isCrawling
+     *   offset_jhd = base_jhd + offset_halfs
+     *   offset_jh = floor(offset_jhd)
+     *   jh_offset = offset_jhd - offset_jh
+     *   all_j = offset_jh / 2
+     *   all_offset = offset_jh % 2
+     *
+     * 1.21.1 매핑: `MathHelper.floor_double(x)` → `MathHelper.floor(x)` (yarn 표면 매핑).
+     */
+    protected static void initializeOffset(double offset_halfs,
+                                           boolean isClimbCrawling,
+                                           boolean isCrawlClimbing,
+                                           boolean isCrawling) {
+        crawl = isClimbCrawling || isCrawlClimbing || isCrawling;
+
+        double offset_jhd = base_jhd + offset_halfs;
+        int offset_jh = MathHelper.floor(offset_jhd);
+        jh_offset = offset_jhd - offset_jh;
+
+        all_j = offset_jh / 2;
+        all_offset = offset_jh % 2;
+    }
+
+    /**
+     * 원본 L2715-L2720 `initializeLocal(int localOffset)`.
+     *
+     *   local_halfOffset = localOffset + all_offset
+     *   local_half = |local_halfOffset| % 2
+     *   local_offset = all_j + (local_halfOffset - local_half) / 2
+     */
+    protected static void initializeLocal(int localOffset) {
+        local_halfOffset = localOffset + all_offset;
+        local_half = Math.abs(local_halfOffset) % 2;
+        local_offset = all_j + (local_halfOffset - local_half) / 2;
+    }
+
+    // ── setGrabType 계열 (원본 L937-L995) ──────────────────────────────────
+
+    /**
+     * 원본 L987-L995 `setGrabType(int type, Block block, boolean remote, boolean hasGrab,
+     * int metaClimb)` — 최종 static 필드 할당 + hasGrab 반환.
+     *
+     *   grabRemote = remote
+     *   grabType = hasGrab ? type : NoGrab
+     *   grabBlock = block
+     *   grabMeta = metaClimb
+     *   return hasGrab
+     *
+     * 1.21.1 매핑: `Block` → `BlockState` (B-19a1a 필드 타입).
+     */
+    private static boolean setGrabType(int type, BlockState block, boolean remote,
+                                       boolean hasGrab, int metaClimb) {
+        grabRemote = remote;
+        grabType = hasGrab ? type : NoGrab;
+        grabBlock = block;
+        grabMeta = metaClimb;
+        return hasGrab;
+    }
+
+    /** 원본 L937-L940 `setHalfGrabType(int type, Block block)` — 래퍼 (`remote=true`). */
+    protected boolean setHalfGrabType(int type, BlockState block) {
+        return setHalfGrabType(type, block, true);
+    }
+
+    /** 원본 L942-L945 `setHalfGrabType(int type, Block block, boolean remote)` — 래퍼
+     *  (`metaClimb=-1`). */
+    protected boolean setHalfGrabType(int type, BlockState block, boolean remote) {
+        return setHalfGrabType(type, block, remote, -1);
+    }
+
+    /**
+     * 원본 L947-L960 `setHalfGrabType(int type, Block block, boolean remote, int metaClimb)` —
+     * half-grab 판정 본체.
+     *
+     *   hasGrab = type != NoGrab
+     *   hasGrab && remote && _isDiagonal 일 때 대각 진입 측면 2방향 `isUpperHalfFrontEmpty`
+     *   (CCW=rotate(90)/CW=rotate(-90)) 둘 다 true 여야 grab 유지. 아니면 hasGrab=false.
+     *   결과 setGrabType 위임.
+     */
+    protected boolean setHalfGrabType(int type, BlockState block, boolean remote, int metaClimb) {
+        boolean hasGrab = type != NoGrab;
+        if (hasGrab && remote && _isDiagonal) {
+            boolean edgeConnectCCW = rotate(90).isUpperHalfFrontEmpty(base_i, 0, remote_k);
+            boolean edgeConnectCW  = rotate(-90).isUpperHalfFrontEmpty(remote_i, 0, base_k);
+            hasGrab &= edgeConnectCCW && edgeConnectCW;
+        }
+        return setGrabType(type, block, remote, hasGrab, metaClimb);
+    }
+
+    /** 원본 L962-L965 `setBottomGrabType(int type, Block block)` — 래퍼. */
+    protected boolean setBottomGrabType(int type, BlockState block) {
+        return setBottomGrabType(type, block, true);
+    }
+
+    /** 원본 L967-L970 `setBottomGrabType(int type, Block block, boolean remote)` — 래퍼. */
+    protected boolean setBottomGrabType(int type, BlockState block, boolean remote) {
+        return setBottomGrabType(type, block, remote, -1);
+    }
+
+    /**
+     * 원본 L972-L985 `setBottomGrabType(int type, Block block, boolean remote, int metaClimb)` —
+     * bottom-grab 판정 본체.
+     *
+     * setHalfGrabType 과 유사하나 diagonal 엣지 체크에 `isLowerHalfFrontFullEmpty` 사용
+     * (upper half 가 아닌 lower half 관통 여부).
+     */
+    protected boolean setBottomGrabType(int type, BlockState block, boolean remote, int metaClimb) {
+        boolean hasGrab = type != NoGrab;
+        if (hasGrab && remote && _isDiagonal) {
+            boolean edgeConnectCCW = rotate(90).isLowerHalfFrontFullEmpty(base_i, 0, remote_k);
+            boolean edgeConnectCW  = rotate(-90).isLowerHalfFrontFullEmpty(remote_i, 0, base_k);
+            hasGrab &= edgeConnectCCW && edgeConnectCW;
+        }
+        return setGrabType(type, block, remote, hasGrab, metaClimb);
     }
 }
