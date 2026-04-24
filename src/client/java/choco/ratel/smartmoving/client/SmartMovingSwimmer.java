@@ -30,10 +30,11 @@ public final class SmartMovingSwimmer {
     private static final double OFFSET_SWIMMING = 1.4D;  // isDipping/isSwimming 경계
     private static final double OFFSET_DIVING   = 1.9D;  // isSwimming/isDiving 경계
 
-    // SwimCrawlWater 경계 상수 (SmartMovingContext, R-06)
-    // 1.21.1: wasHeightOffset=0 근사이므로 playerCrawlWaterBorder = dippingDepth 그대로 비교
-    private static final float SWIM_CRAWL_TOP = 0.65F;  // 크롤→수영 전환 하한 (SwimCrawlWaterTopBorder)
-    private static final float SWIM_CRAWL_MAX = 1.0F;   // 크롤 수경계 최대 (SwimCrawlWaterMaxBorder)
+    // SwimCrawlWater 경계 상수 (SmartMovingContext L41-L44, R-06)
+    private static final float SWIM_CRAWL_MAX    = 1.0F;    // SwimCrawlWaterMaxBorder
+    private static final float SWIM_CRAWL_TOP    = 0.65F;   // SwimCrawlWaterTopBorder
+    private static final float SWIM_CRAWL_MEDIUM = 0.6F;    // SwimCrawlWaterMediumBorder (B-36 분기 b/c)
+    private static final float SWIM_CRAWL_BOTTOM = 0.55F;   // SwimCrawlWaterBottomBorder (B-11 조건)
 
     // ── 8-2: 수중 이동 상수 ──────────────────────────────────────────────────
     // 원본: SmartMovingSelf.handleSwimming() 내 motionX/Y/Z 감쇠값
@@ -329,12 +330,14 @@ public final class SmartMovingSwimmer {
                 }
             }
         }
-        // swimDown 지역 변수는 diving 분기에서 diveDown 과 분리되어 사용 — 여기서는 설정 블록만.
-        if (wasSwimming && wantShallowSwim
-                && player.isSneaking() && cfg.swimDownOnSneak) {
+        // **B-9h 해소 (세션 130)**: 원본 L243-L244 `swimDown = sneak && _swimDownOnSneak` +
+        //   L292-L296 `if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false;
+        //   isFakeShallowWaterSneaking=true; }` 통합. swimDown 은 swimming A 경로
+        //   motionYDiff 계산 시 소비 (원본 L320-L321).
+        boolean swimDown = player.isSneaking() && cfg.swimDownOnSneak;
+        if (wasSwimming && wantShallowSwim && swimDown) {
+            swimDown = false;
             sm.isFakeShallowWaterSneaking = true;
-            // 원본 L244: swimDown=false — handleSwimming 내부 이후 로직에서 sneak-down 억제에
-            //   사용. 1.21.1 는 isSwimming 분기의 수직 속도에 swimDown 이 영향 주지 않으므로 불필요.
         } else {
             sm.isFakeShallowWaterSneaking = false;
         }
@@ -376,7 +379,8 @@ public final class SmartMovingSwimmer {
         //   isCrawling||isClimbCrawling||isCrawlClimbing 강제 dipping (원본 L301) 은
         //   updateSwimState L135 에서 이미 처리됨 — 여기선 수정 금지.
         double playerSwimWaterBorder9b = swimVals.playerSwimWaterBorder;
-        if (!sm.isCrawling && !sm.isClimbCrawling && !sm.isCrawlClimbing
+        boolean isForceDipping9b = sm.isCrawling || sm.isClimbCrawling || sm.isCrawlClimbing;
+        if (!isForceDipping9b
                 && playerSwimWaterBorder9b >= 0 && playerSwimWaterBorder9b <= 2) {
             double offset9b = playerSwimWaterBorder9b + 0.1625D;
             if (isPathA) {
@@ -398,6 +402,18 @@ public final class SmartMovingSwimmer {
             if (!cfg.isDivingEnabled()) {
                 sm.isDiving = false;
             }
+        }
+        // **B-9f 해소 (세션 130)**: (<0) 구간 handleSwimmingRejected (원본 L413-L414).
+        //   playerSwimWaterBorder < 0 이면 물 위/밖 → SM 미처리, vanilla travel() 위임.
+        //   강제 dipping (isCrawling 계열) 경로는 예외 (원본 L301-L302 이미 isDipping=true).
+        else if (!isForceDipping9b && playerSwimWaterBorder9b < 0) {
+            return false;
+        }
+
+        // **B-9g 해소 (세션 130)**: 원본 L445-L446 `if (diveUp) motionY -= 0.04` 보정.
+        //   swimming/diving/dipping 공통 — motion 계산 진입 전 수직 모션 감쇠.
+        if (diveUp) {
+            motionY -= 0.039999999105930328D;
         }
 
         // **B-9a 해소 (세션 128)**: handleSwimming 내부 offset 계산도 AABB 정밀화.
@@ -422,14 +438,23 @@ public final class SmartMovingSwimmer {
             motionZ *= DAMPING_DIPPING_XZ;
 
         } else if (sm.isSwimming_sm) {
-            // **B-9c 해소 (세션 129)**: 원본 L317-L348 A 경로 swimming 11단계 테이블 복원.
+            // **B-9c 해소 (세션 129, B-9h 갱신 세션 130)**: 원본 L317-L348 A 경로 swimming
+            //   11단계 테이블 복원 + swimDown 분기 (원본 L320-L321).
             //   B 경로는 isSwimming_sm=false 로 재분류되므로 이 분기 진입 없음.
-            //   원본: offset < 1.5 → -0.02, < 1.6 → -0.01, ..., else → 0.02 (11단계)
-            //   기존 13단계는 A 11단계 근사 — 원본 공식 1:1 (swimDown 분기는 B-9h 범위, 생략).
+            //   원본 L320: if (swimDown) motionYDiff = -0.05 * (isFast ? sprintFactor : 1)
+            //   원본 L322 부터 `if (offset < 1.6)` 등은 swimDown 분기 뒤 별도 if — swimDown 이
+            //   true 여도 offset 조건 충족하면 덮어쓰기 (원본 구조 그대로 이식).
             double offset = sm.dippingDepth + 0.1625D;
             double motionYDiff;
-            if      (offset < 1.5D)   motionYDiff = -0.02D;
-            else if (offset < 1.6D)   motionYDiff = -0.01D;
+            if (swimDown) {
+                motionYDiff = -0.05D * (sm.isFast ? cfg.sprintFactor : 1F);
+            } else if (offset < 1.5D) {
+                motionYDiff = -0.02D;
+            } else {
+                motionYDiff = 0D;   // 원본 L320 들어가지 않은 경로의 초기값
+            }
+            // 원본 L324 이후는 `if` (not else-if) — offset 조건 충족 시 덮어쓰기
+            if      (offset < 1.6D)   motionYDiff = -0.01D;
             else if (offset < 1.62D)  motionYDiff = -0.005D;
             else if (offset < 1.64D)  motionYDiff = -0.0025D;
             else if (offset < 1.66D)  motionYDiff = -0.00125D;
@@ -453,14 +478,33 @@ public final class SmartMovingSwimmer {
             sm.heightOffset = -1F;
 
         } else { // isDiving
-            // **B-9d 해소 (세션 129)**: 원본 L349-L358 (A 경로 diving [1.9, 2])
-            //   + L370-L397 (B 경로 diving 10단계 [1.5, 2]) 복원.
+            // **B-9d 해소 (세션 129, B-9e 갱신 세션 130)**: 원본 L349-L358 (A 경로 diving
+            //   [1.9, 2]) + L370-L397 (B 경로 diving 10단계 [1.5, 2]) + L400-L412 ((2, ∞)
+            //   구간 diving) 모두 복원.
             //   A 경로: diveUp / diveDown / default = moveSwim ? 0.04 : 0.02
             //   B 경로: diveDown / offset 10단계 (< 1.8 -0.02 ~ else 0.01)
-            //   (2, ∞) 구간 (B-9e 범위, 후속) — 현재 [1.9, 2] 만 정밀, 그 이상은 근사 유지.
+            //   (2, ∞): diveUp 시 isFast+playerSwimWaterBorder<2.5+isAir(j+3) → 0.11/sprintFactor
+            //          / else → 0.01+0.1*sf / diveDown → 0.01-0.1*sf / default → 0.01
             double motionYDiff = 0D;
             double offset9d = sm.dippingDepth + 0.1625D;
-            if (isPathA) {
+            double psw9e = swimVals.playerSwimWaterBorder;
+            if (psw9e > 2) {
+                // **B-9e 해소 (세션 130)**: (2, ∞) 구간 diving (원본 L400-L412)
+                if (diveUp) {
+                    // 원본 L404: isFast && psw < 2.5 && isAirBlock(i, j + 3, k) → 스프린트 점프 부스트
+                    if (sm.isFast && psw9e < 2.5D
+                            && player.getWorld().isAir(new net.minecraft.util.math.BlockPos(
+                                    swimVals.i, swimVals.j + 3, swimVals.k))) {
+                        motionYDiff = 0.11D / cfg.sprintFactor;
+                    } else {
+                        motionYDiff = 0.01D + 0.1D * speedFactor;
+                    }
+                } else if (diveDown) {
+                    motionYDiff = 0.01D - 0.1D * speedFactor;
+                } else {
+                    motionYDiff = 0.01D;
+                }
+            } else if (isPathA) {
                 // A 경로 diving (원본 L349-L358)
                 if (diveUp) {
                     motionYDiff = 0.05D * (sm.isFast ? cfg.sprintFactor : 1F);
@@ -500,6 +544,39 @@ public final class SmartMovingSwimmer {
             motionZ *= DAMPING_DIVING;
 
             sm.heightOffset = -1F;
+        }
+
+        // **B-11 해소 (세션 130)**: 원본 L513-L536 얕은 물 특수 분기.
+        //   isShallowDiveOrSwim && realMinPlayerSwimWaterDepth < SwimCrawlWaterBottomBorder(0.55)
+        //   → isSlow 면 크롤 전환, 아니면 걷기 전환 + 바닥 위치로 이동.
+        //   isShallowDiveOrSwim 는 B-9b 재분류 후 재계산 (원본 L507).
+        //   B-42a `getMaxPlayerSolidBetween` + B-42d `realMinPlayerSwimWaterDepth` 소비.
+        boolean isShallowDiveOrSwim11 = couldStandUp && (sm.isDiving || sm.isSwimming_sm);
+        sm.isShallowDiveOrSwim = isShallowDiveOrSwim11;
+        if (isShallowDiveOrSwim11
+                && swimVals.realMinPlayerSwimWaterDepth < SWIM_CRAWL_BOTTOM) {
+            if (sm.isSlow) {
+                // 얕은 물 swim/dive → 크롤 전환 (원본 L515-L524)
+                sm.heightOffset          = -1F;
+                sm.isCrawling            = true;
+                sm.isDiving              = false;
+                sm.isSwimming_sm         = false;
+                sm.isShallowDiveOrSwim   = false;
+                sm.isDipping             = true;
+            } else {
+                // 얕은 물 swim/dive → 걷기 전환 (원본 L525-L535)
+                sm.heightOffset = 0F;
+                double minY11 = player.getBoundingBox().minY;
+                double maxY11 = player.getBoundingBox().maxY;
+                double groundY11 = SmartMovingClientState.getMaxPlayerSolidBetween(
+                        player, minY11, maxY11, 0);
+                player.move(MovementType.SELF, new Vec3d(0, groundY11 - minY11, 0));
+                sm.isCrawling            = false;
+                sm.isDiving              = false;
+                sm.isSwimming_sm         = false;
+                sm.isShallowDiveOrSwim   = false;
+                sm.isDipping             = true;
+            }
         }
 
         // ── [8-5] isJumpingOutOfWater ────────────────────────────────────────

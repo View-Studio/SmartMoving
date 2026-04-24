@@ -360,14 +360,22 @@ Orientation 판정 + ClimbGap 계산.
 - [x] B-9d. B 경로 10-단계 diving offset 테이블 (1.5-1.9). **세션 129 완료** (원본
       L370-L397 10단계 1:1 + A 경로 diving (L349-L358) 분기도 함께 이식). isDiving 분기에
       isPathA 기반 A/B 경로 처리.
-- [ ] B-9e. `(2, ∞)` 구간 diving + diveUp/diveDown/moveSwim + isFast 분기.
-- [ ] B-9f. `(-∞, 0)` handleSwimmingRejected.
-- [ ] B-9g. `motionYDiff` 전체 적용 로직.
+- [x] B-9e. `(2, ∞)` 구간 diving + diveUp/diveDown/moveSwim + isFast 분기. **세션 130 완료**
+      (원본 L400-L412 이식 — diveUp 시 isFast+psw<2.5+isAir(j+3) 스프린트 부스트 0.11/sprintFactor
+      분기, 그 외 0.01+0.1*sf / diveDown 0.01-0.1*sf / default 0.01).
+- [x] B-9f. `(-∞, 0)` handleSwimmingRejected. **세션 130 완료** (playerSwimWaterBorder<0
+      이면서 isCrawling/isClimbCrawling/isCrawlClimbing 아닐 때 handleSwimming=false 반환 —
+      vanilla travel() 위임).
+- [x] B-9g. `motionYDiff` 전체 적용 로직. **세션 130 완료** (원본 L445-L446 `diveUp 시
+      motionY -= 0.04` 보정 복원. swimming/diving/dipping 공통 진입 전 보정).
 
 #### B-11. 얕은 물 특수 분기 이식
-- [ ] B-11. 원본 L513-L536 `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
+- [x] B-11. 원본 L513-L536 `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
       SwimCrawlWaterBottomBorder(0.55F)` 진입 조건 + isSlow 분기 (crawl 전환 / walking).
-      B-9 완료 + Phase 6 AABB 의존.
+      **세션 130 완료** (handleSwimming 말미 diving 분기 뒤 배치. `couldStandUp` 재사용 +
+      B-9b 재분류 후 `isShallowDiveOrSwim` 재계산. isSlow 시 크롤 전환 (heightOffset=-1),
+      아니면 걷기 전환 + `getMaxPlayerSolidBetween` 소비한 바닥 위치 이동). B-42a/B-42d
+      헬퍼 소비.
 
 #### B-7d. `isInLiquid()` 메서드 이식 (세션 88 4차 확정 감사 발견)
 - [x] B-7d. **세션 127 완료**. 원본 `SmartMovingBase.isInLiquid()` L411-L416 1:1 이식.
@@ -376,11 +384,11 @@ Orientation 판정 + ClimbGap 계산.
       소비 활성.
 
 #### B-9h. `swimDown = false` 설정 이식 (세션 88 4차 확정 감사 발견)
-- [ ] B-9h. 본체 §7 B-5 근사 (3) "swimDown=false (원본 L244) 미이식 — B-9 메인 분류 재작성
-      시 재검토" 를 Phase 5 명시 원자로 승격. 원본 L244 `swimDown` 지역 변수 초기값 false
-      설정 후 특정 조건 (isSlow + diveDown 등) 에서 갱신되는 경로 이식. `isFakeShallowWaterSneaking`
-      경로와 연계 가능. B-9 재작성 본문 중 어느 위치에 들어가는지는 Agent WebFetch 로 원본
-      확보 후 결정.
+- [x] B-9h. **세션 130 완료**. 원본 L243-L244 `swimDown = sneak && _swimDownOnSneak` +
+      L292-L295 `if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false;
+      isFakeShallowWaterSneaking=true; }` 통합 이식. swimming A 경로 motionYDiff 계산
+      시 `if (swimDown) motionYDiff = -0.05 * (isFast ? sprintFactor : 1F)` 소비 (원본
+      L319-L321). isFakeShallowWaterSneaking 기존 블록과 통합으로 중복 제거.
 
 ### Phase 6. AABB 정밀화 — §7 근사 8건 일괄 해소
 
@@ -539,6 +547,85 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 130 — 2026-04-25 — B-9e/f/g/h + B-11 — Phase 5 완결 (5 원자 일괄)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. B-9 메인 분류 재작성 3단계 +
+B-11 얕은 물 특수 분기 = **Phase 5 완결** 목표.
+
+**진행한 작업**:
+
+**1. B-9e — (2, ∞) 구간 diving** (원본 L400-L412):
+- `isDiving` 분기를 `playerSwimWaterBorder > 2` 조건으로 최상위 분기 추가.
+- `diveUp` 시 `isFast && psw < 2.5 && isAir(i, j+3, k)` 조건으로 스프린트 부스트
+  (`0.11 / sprintFactor`) 분기 / 아니면 `0.01 + 0.1 * speedFactor`.
+- `diveDown` / default 경로 1:1.
+- `SwimBorderValues.i/j/k` 필드 + `player.getWorld().isAir(BlockPos)` 소비.
+
+**2. B-9f — (<0) 구간 handleSwimmingRejected** (원본 L413-L414):
+- B-9b 재분류 `else if` 로 `!isForceDipping && playerSwimWaterBorder < 0` 조건 시
+  `return false` 추가. 강제 dipping 경로 (isCrawling||isClimbCrawling||isCrawlClimbing)
+  는 예외로 handleSwimming 계속 진행.
+
+**3. B-9g — motionY -= 0.04 보정** (원본 L445-L446):
+- swimming/diving/dipping 모든 분기 공통 진입 전 `if (diveUp) motionY -= 0.04` 보정 추가.
+- 수직 모션 감쇠로 중력 + 부력 균형 조정 — diveUp 키 효과에 영향.
+
+**4. B-9h — swimDown 변수** (원본 L243-L244 + L292-L295 + L319-L321):
+- 기존 isFakeShallowWaterSneaking 설정 블록과 통합.
+- `boolean swimDown = player.isSneaking() && cfg.swimDownOnSneak;` 초기값.
+- `if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false;
+  isFakeShallowWaterSneaking=true; }` 조건 설정.
+- swimming A 경로 motionYDiff 테이블에 `if (swimDown) motionYDiff = -0.05 *
+  (isFast ? sprintFactor : 1F)` 분기 추가 (원본 L319-L321).
+
+**5. B-11 — 얕은 물 특수 분기** (원본 L513-L536):
+- `SwimCrawlWaterBottomBorder = 0.55F` 상수 추가 (`SWIM_CRAWL_BOTTOM`).
+- `SwimCrawlWaterMediumBorder = 0.6F` 상수 (`SWIM_CRAWL_MEDIUM`) 도 함께 추가
+  (B-36 분기 b/c 이미 사용 중인 0.6F/0.55F 리터럴 → 상수화 대기).
+- handleSwimming 말미 diving 분기 뒤, isJumpingOutOfWater 전에 블록 배치:
+  * B-9b 재분류 후 `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming_sm)`
+    재계산.
+  * `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth < 0.55` 진입 조건.
+  * isSlow → crawl 전환 (heightOffset=-1F, isCrawling=true, isDipping=true).
+  * else → walking 전환 (`getMaxPlayerSolidBetween` 소비, bbox 바닥 이동, heightOffset=0F,
+    isDipping=true).
+
+**6. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**
+(4회 증분 실행 후 최종 통과).
+
+**완료 전 검증 체크리스트 (세션 130 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L243-L244 + L292-L295 + L319-L321 + L400-L412 +
+  L445-L446 + L513-L536 + `SmartMovingContext.java` L41-L44 전수 read ✓
+- [근거] 1.21.1 기존 SwimBorderValues (B-42d) / getMaxPlayerSolidBetween (B-42a) 활용 ✓
+- [대응] 원본 `sp.worldObj.isAirBlock(i, j, k)` → `player.getWorld().isAir(BlockPos)`.
+  `sp.moveEntity` → `player.move(MovementType.SELF, Vec3d)`. 표면 매핑 ✓
+- [분기] (2, ∞) 3-way + (<0) return false + diveUp 보정 공통 + swimDown swimming 분기 +
+  B-11 2-way (isSlow/!isSlow) 전수 이식 ✓
+- [상수] `0.04` (motionY 보정) / `0.11` (스프린트 부스트) / `0.1` / `2.0` / `2.5` /
+  `3` (j offset) / `0.55` / `0.6` (SwimCrawlWater 상수) 모두 원본 동일 ✓
+- [타이밍] B-9g 는 motion 계산 진입 전, B-11 은 diving 분기 뒤 + isJumpingOutOfWater 전
+  — 원본 L445 / L510-L513 순서 대응 ✓
+- [근사] 근사 없음 — 전수 1:1. 잔존: 없음 (Phase 5 완결) ✓
+- [신규] `SWIM_CRAWL_MEDIUM`/`SWIM_CRAWL_BOTTOM` 상수 신설 ✓
+- [회귀] 기존 swimming 11단계 (B-9c) / diving 10단계 (B-9d) / A/B 경로 재분류 (B-9b)
+  모두 유지. B-9g motionY -= 0.04 는 diveUp 시에만 영향. B-11 진입 조건 제한적
+  (realMinPlayerSwimWaterDepth<0.55 && isShallowDiveOrSwim). swimDown 분기 복원으로
+  `isFakeShallowWaterSneaking=true` 시 수직 감쇠 보정 원본 동일 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**🎉 Phase 5 완결** — B-7 4/4 + B-9 8/8 + B-11 1/1 = 13/13.
+
+**다음 세션 권고**: **Phase 7 진입** (B-48a/b/c / B-48b-dep / B-48b-fallback / B-49 /
+B-49b) — sprintKey 엣지 + isGroundSprinting 전환 후처리 + sprintJumpTolerance 등.
+Phase 6 B-42-B26 (Jumper SlideDown) 이 인프라 의존이었는데 Phase 7 에서 함께 묶어 처리.
+
+**진행률** (세션 130 종료 시점):
+- Extended 완료: **56 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 **13** = 56)
+- Extended 총 원자 ~61
+- **Extended 진행률: 56/61 ≈ 92%**
+- **포커스 #2 전체: (54+56)/115 ≈ 96%**
+- **🎉 Phase 5 완결** — Phase 7 진입 준비.
 
 ### 세션 129 — 2026-04-25 — B-9b/c/d — A/B 경로 분기 + swimming/diving offset 테이블 복원
 
