@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 63 — B Phase 2 계속 / B-5 + B-28) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 31 원자 완료 / ⏳ **B Phase 2 잔여 ~9 원자** |
+| 상태 | 🟡 진행 중 (세션 64 — B Phase 2 계속 / B-12) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 32 원자 완료 / ⏳ **B Phase 2 잔여 ~8 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -626,9 +626,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       AABB 근사 판정 필요 (`realMinPlayerSwimWaterDepth` 대응).
 
 #### B-12. `waterMovementTicks` 증분 조건 정정 (A-2 발견)
-- [ ] B-12. 원본 L481-L484 — `swimming || diving` 만 증분, else (dipping 포함) 0 리셋.
-      1.21.1 `updateSwimState` L82/L90 은 dipping 포함 증분 → 원본대로 정정. B-10b
-      `isJumpingOutOfWater` 의존.
+- [x] B-12. ✅ **세션 64 완료** — 원본 L481-L484 1:1 정정. `SmartMovingSwimmer.updateSwimState`
+      2곳 수정:
+      (1) L80-L86 크롤→isDipping 강제 분기: `sm.waterMovementTicks++` → `sm.waterMovementTicks = 0`
+          (dipping 강제 경로는 swimming/diving 아님)
+      (2) L88-L99 수심 분기 말미: 무조건 `sm.waterMovementTicks++` →
+          `if (sm.isSwimming_sm || sm.isDiving) ticks++; else ticks = 0;`
+      B-10b `isJumpingOutOfWater` 공식 (원본 L486-L487 `wantJumpOutOfWater +
+      ticks>10 || onGround`) 이식은 별도 원자 유지 — B-12 는 ticks 자체 정정만.
 
 #### B-13. 크롤↔수영 전환 조건 `isSliding` 추가 (A-2 발견)
 - [x] B-13. ✅ **세션 61 완료** — `SmartMovingSwimmer.handleSwimming` L126 조건
@@ -2701,6 +2706,49 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-12** (waterMovementTicks 증분 조건 정정) — 원본 L481-L484. 단순 조건 변경 가능성.
+
+### 세션 64 — 2026-04-24 — B Phase 2 B-12 (waterMovementTicks 증분 조건 정정)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.updateSwimState` 의 `waterMovementTicks` 갱신 2곳 원본 L481-L484
+  1:1 정정. 원본: `if(swimming || diving) ticks++; else ticks = 0;`.
+  * L80-L86 크롤/등반 크롤 → isDipping 강제 분기: `ticks++` → `ticks = 0` (dipping 강제
+    경로는 swimming/diving 아님).
+  * L88-L99 수심 분기 말미: 무조건 `ticks++` → `if (sm.isSwimming_sm || sm.isDiving)
+    ticks++; else ticks = 0;`.
+- 주석에 원본 라인 + 오역 원인 + B-10b isJumpingOutOfWater 공식 이식 대기 표기.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+- **B-10b 범위 분리**: isJumpingOutOfWater 공식 (원본 L486-L487 `wantJumpOutOfWater +
+  ticks>10 || onGround || wasJumpingOutOfWater`) 이식은 별도 원자로 유지 — B-12 는
+  ticks 갱신 정확성만.
+
+**완료 전 검증 체크리스트 (세션 64)**:
+- [근거] 원본 L481-L484 research/.../SmartMovingSelf.md L3106-L3110 확보 ✓
+- [근거] R-11.12 불일치 #9 `waterMovementTicks++ dipping 포함 증분 오역` 확정
+  (§16 세션 32) ✓
+- [대응] 2곳 모두 원본 `if(swim||dive) ticks++; else ticks=0` 1:1 ✓
+- [분기] else 브랜치 (ticks=0) 양 위치 모두 명시 ✓
+- [상수] 없음
+- [타이밍] updateSwimState 내 dipping/swimming/diving 확정 직후 — 원본 L481 순서 동일 ✓
+- [근사] 없음 — 1:1 이식
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. ticks 가 dipping 시 리셋되면서 wantJumpOutOfWater
+  경로 (ticks>10 조건) 가 dipping 체류 중 발동되지 않음 — 원본 의도 복원.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-11 A-2 불일치 현황**:
+- ✅ #3 isClimbCrawling 조건 누락 (B-6 세션 60)
+- ✅ #9 waterMovementTicks dipping 포함 증분 오역 (B-12 세션 64)
+- ✅ #11 crawl↔swim 전환 isSliding 누락 (B-13 세션 61)
+- ⏳ #1/#2/#4~#8/#10 (대부분 B-9 메인 분류 재작성 범위)
+
+**Phase 2 진행 상황**: 32 원자 완료 / 잔여 ~8
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-31b/c** 공식 이식 — B-41/B-35 범위 분배.
 
 ---
 

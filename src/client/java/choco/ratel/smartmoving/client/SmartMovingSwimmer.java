@@ -81,7 +81,9 @@ public final class SmartMovingSwimmer {
             sm.isDipping     = true;
             sm.isSwimming_sm = false;
             sm.isDiving      = false;
-            sm.waterMovementTicks++;
+            // B-12 (세션 64): 원본 L481-L484 `if(swimming||diving) ticks++; else ticks=0;`.
+            //   dipping 강제 경로는 swimming/diving 아님 → ticks=0 리셋.
+            sm.waterMovementTicks = 0;
             return;
         }
 
@@ -89,7 +91,14 @@ public final class SmartMovingSwimmer {
         sm.isDipping     = offset < OFFSET_SWIMMING;
         sm.isSwimming_sm = offset >= OFFSET_SWIMMING && offset < OFFSET_DIVING;
         sm.isDiving      = offset >= OFFSET_DIVING;
-        sm.waterMovementTicks++;
+        // B-12 (세션 64): 원본 L481-L484 정정 — swimming/diving 만 증분, dipping 포함
+        //   else 는 ticks=0 리셋. 기존 무조건 증분 (dipping 포함) 은 오역.
+        //   isJumpingOutOfWater 공식 (원본 L486-L487) 이식 시 이 ticks 값이 정확해야 함.
+        if (sm.isSwimming_sm || sm.isDiving) {
+            sm.waterMovementTicks++;
+        } else {
+            sm.waterMovementTicks = 0;
+        }
     }
 
     // ── [8-2] handleSwimming ─────────────────────────────────────────────────
