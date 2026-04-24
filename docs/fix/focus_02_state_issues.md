@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 74 — B Phase 2 계속 / B-35) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 44 원자 완료 / ⏳ **B Phase 2 잔여 13 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-26/B-33/B-36/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 75 — B Phase 2 계속 / B-26) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 45 원자 완료 / ⏳ **B Phase 2 잔여 12 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-33/B-36/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -412,6 +412,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `crawlStandUpBottom - minY ≈ 0` 근사 (발 아래 고체 바로 붙어있음 가정). `move(0, dy, 0)`
   이동량 생략 → `heightOffset = 0F` 리셋만. 공중에서 크롤 해제 시 정확도 낮음 (드물긴 함).
   분기 B (진입 엣지) 는 `heightOffset=-1F + move(0,-1D,0)` 1:1 이식.
+- **B-26 근사** (세션 75): `ClientState.tickEssential` B-25 IMPL-02 슬라이딩 직접 진입
+  블록에 원본 L2555-L2557 부수 동작 이식. `heightOffset = -1F` + `player.move(SELF, new Vec3d(0,
+  -1D, 0))` 1:1 이식. **`tryJump(Config.SlideDown, false, wasRunning, null)` 호출 생략** —
+  `Jumper.SLIDE_DOWN` 상수 + 전용 속도 공식 (원본 tryJump 내부 SlideDown 분기) 미이식.
+  `isFromRunning` 파라미터 영향 생략. 효과: 슬라이딩 진입 시 SlideDown 전용 하강 점프
+  추진 모션 누락 — 주로 시각/이펙트 영향, 핵심 상태 플래그에는 영향 없음.
 
 ---
 
@@ -838,12 +844,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       ※ wasRunning 저장 (B-43) 미이식 → wasRunning 분기 비활성. isGroundSprinting 분기만 활성.
 
 #### B-26. 직접 진입 부수 동작 이식 (A-4 발견)
-- [ ] B-26. 원본 L2555-L2560 부수 동작 이식:
-      - `heightOffset = -1F` 설정
-      - `move(0, -1D, 0)` — 1 블록 하강 (Box collision 체크 포함)
-      - `tryJump(Config.SlideDown, false, wasRunning, null)` 호출
-      - `isSliding = true; isHeadJumping = false; isAerodynamic = false`
-      의존: B-25 선행. `Config.SlideDown` 상수 1.21.1 이식 여부 확인 필요.
+- [x] B-26. ✅ **세션 75 완료 (근사 이식)** — 원본 L2555-L2560 이식. ClientState B-25
+      IMPL-02 블록 내 isSliding 직접 진입 성공 분기에 부수 동작 3건 추가:
+      * `heightOffset = -1F;` (원본 L2555) 1:1
+      * `player.move(MovementType.SELF, new Vec3d(0, -1D, 0));` (원본 L2556) 1:1
+      * `tryJump(Config.SlideDown, false, wasRunning, null)` (원본 L2557) **생략** —
+        §7 B-26 근사 등록. Jumper.SLIDE_DOWN 상수 + 전용 속도 공식 미이식. 효과: SlideDown
+        전용 하강 점프 추진 모션 누락 (주로 이펙트).
+      * `isSliding=true` / `isHeadJumping=false` / `isAerodynamic=false` — B-25 세션 55 이미 이식됨.
 
 #### B-27. `fallDistance > _fallingDistanceMinimum` 분기 이식 (A-4 발견)
 - [x] B-27. ✅ **세션 54 완료** — 원본 L2569-L2574 이식. SlideToHeadJumping 뒤에 배치:
@@ -3396,6 +3404,54 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
 - **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
+
+### 세션 75 — 2026-04-24 — B Phase 2 B-26 (isSliding 부수 동작 근사 이식)
+
+**진행한 작업**:
+- ClientState tickEssential B-25 IMPL-02 직접 진입 블록 성공 분기에 원본 L2555-L2557
+  부수 동작 3건 추가 (기존 필드 세팅 3건은 B-25 세션 55 이식):
+  ```java
+  heightOffset = -1F;                                     // 원본 L2555
+  player.move(MovementType.SELF, new Vec3d(0, -1D, 0));   // 원본 L2556
+  // tryJump(Config.SlideDown, false, wasRunning, null) 생략 (§7 B-26 근사)
+  isSliding = true;                                        // 원본 L2558 (B-25)
+  isHeadJumping = false;                                   // 원본 L2559 (B-25)
+  isAerodynamic = false;                                   // 원본 L2560 (B-25)
+  ```
+- §7 **B-26 근사 등록**: tryJump(Config.SlideDown) 호출 생략 — Jumper.SLIDE_DOWN 상수 +
+  SlideDown 전용 속도 공식 (원본 tryJump 내부 분기) 미이식. isFromRunning 파라미터 영향
+  생략. gameplay 영향: SlideDown 전용 하강 점프 추진 모션 누락 — 주로 시각/이펙트.
+- `MovementType`/`Vec3d` import 는 세션 73 B-17b2 에서 이미 추가됨.
+- 주석 정리: B-25 블록 헤더에서 "B-26 별도 원자" 표기 제거, 세션 75 완료 사실 반영.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 75)**:
+- [근거] 원본 L2555-L2560 research/.../SmartMovingSelf.md L3728-L3742 (R-13.4) 확보 ✓
+- [근거] R-13.9 #4 L2555-L2557 직접 진입 부수 동작 [누락] 확정 §16 세션 34 ✓
+- [대응] heightOffset + move 원본 1:1, tryJump 근사 명시 ✓
+- [분기] 없음 (순차 실행)
+- [상수] `-1F`/`-1D` 원본 동일 ✓
+- [타이밍] B-25 진입 6-AND 조건 성공 시 — 원본 L2553 조건 뒤 L2555 순서 복원 ✓
+- [근사] **tryJump(SlideDown) 생략 + §7 B-26 등록 + 주석 명시** ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 슬라이딩 진입 시 heightOffset=-1 + 1블록
+  하강 경로 복원. SlideDown 추진 누락으로 슬라이딩 수평 속도가 기존보다 작을 수 있음 —
+  §7 등록으로 향후 B-26b 서브 원자 검토 가능.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-13 A-4 불일치 현황**:
+- ✅ #3 직접 진입 6-AND 조건 (B-25 세션 55)
+- ✅ #4 직접 진입 부수 동작 (B-26 세션 75, 근사)
+- ✅ #5 isHeadJumping=false (B-25 세션 55)
+- ⏳ #1/#2/#6/#7~#13 (이전 완료 항목 중 수치 확인 필요)
+
+**Phase 2 진행 상황**: 45 원자 완료 / 잔여 12 원자
+
+**다음 작업 권고**:
+- **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+- **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
+- **B-39** (landMotionPost 3분기) — crawlStandUpBottom 근사 필요.
 
 ---
 
