@@ -188,36 +188,65 @@ Orientation 판정 + ClimbGap 계산.
 - [ ] B-20c. `cfg.smartClimb` 분기 이식 — handsSubstitute/feetSubstitute 판정 (PZ/NZ/ZP/ZN
       방향 isHandsLadderSubstitute/isFeetLadderSubstitute) + 조합별 motionY.
 
+### Phase 9. SmartStatistics + Options 후속 엣지 케이스
+
+**세션 88 추가** — 세션 85 분리 취소 + 전수 감사에서 발견된 잔여 엣지.
+
+#### B-50. SmartStatisticsFactory 이식 (B-1c 근사 해소)
+- [ ] B-50. 원본 `SmartStatisticsFactory.getInstance(sp).getTickDistance()` 이식 — SmartRender
+      측 플레이어 tick 이동 거리 통계 시스템. B-1c3 세션 51 에서 `isClimbSprintSpeed = true`
+      근사 이식한 부분 해소용. 규모 대 (SmartRender 별도 인프라 전체 이식 필요).
+      엄격 이식이면: 플레이어별 tick 이동량 수집 + 통계 캐시 + getter 제공.
+      간소 근사면: 단순 `getVelocity().horizontalLength()` 로 tick 거리 대체 가능.
+      B-1c 의 `isClimbSprintSpeed` 는 "등반 중 충분한 속도 유지" 판정이라 근사로도 실용.
+      상세 이식 전에 Agent WebFetch 로 원본 SmartStatisticsFactory 코드 + 사용 지점 전수
+      확보 필요.
+
+#### B-48b-dep. `Options._runOnSprintRelease` / `_walkOnSprintRelease` 필드 이식
+- [ ] B-48b-dep. 1.21.1 SmartMovingConfig 미이식 — grep 확인 (세션 88). Phase 7 B-48b
+      (isGroundSprinting 전환 후처리) 의존 필드. 이식 시 `Options` 위치 (SmartMovingConfig
+      또는 별도 Options 클래스) + 기본값 (Modified 계열) 확인.
+
+#### B-48b-fallback. B-48 불가능 시 근사 판단
+- [ ] B-48b-fallback. 원본 L2697-L2709 `isGroundSprinting` 전환 후처리 본문 확보 후 의존
+      필드 `wasRunningWhenSprintStarted` / `isStandupSprintingOrRunning()` 등 이식 난이도
+      평가. 대규모 이식 불가 시 §7 근사 등록 (원본 의도: sprint 해제 후 walk/run 전환 시
+      관성 유지).
+
 ---
 
 ## 4. 의존 순서 + 실행 권고
 
 ```
-Phase 3 (B-19 도미노 해소) ← 최우선 (의존 다수 활성화)
+Phase 3 (B-19 도미노 해소)       ← 최우선 (의존 다수 활성화)
     ↓
-Phase 4 (B-10 공식 완성)   ← B-36 분기 (a) 활성화
+Phase 4 (B-10 + B-31c 공식 완성) ← B-36 분기 (a) 활성화
     ↓
-Phase 6 (AABB 정밀화)      ← Phase 5/7/8 이전 또는 병행
+Phase 6 (AABB 정밀화)            ← Phase 5/7/8 이전 또는 병행
     ↓
-Phase 5 (B-7/B-9/B-11)     ← Phase 6 AABB 필요
+Phase 5 (B-7/B-9/B-11)           ← Phase 6 AABB 필요
     ↓
-Phase 7 (B-48/B-49)        ← 독립 가능
+Phase 7 (B-48/B-49)              ← 독립 가능
     ↓
-Phase 8 (Simple/Smart)     ← 독립 가능
+Phase 8 (Simple/Smart)           ← 독립 가능
+    ↓
+Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ```
 
-**추정 원자 수**: 약 30 신규 원자 + 일부 재이식.
-**추정 세션 수**: 25-35 세션.
+**추정 원자 수**: 약 33 신규 원자 + 일부 재이식 (Phase 9 신설로 3개 추가).
+**추정 세션 수**: 25-40 세션.
 **Agent WebFetch 필요**: 대부분 원자 (원본 본문 리서치 미확보 대역 많음).
 
 ---
 
 ## 5. 작업 기록
 
-### 세션 88 — 2026-04-24 — 엄격 완료 결정 + Extended 파일 분리
+### 세션 88 — 2026-04-24 — 엄격 완료 결정 + Extended 파일 분리 + 전수 감사 2회
 
 **사용자 지시**:
 > 무조건적인 엄격 완료야. 포커스 파일이 길어질거 같으면 포커스2익스텐디드 파일을 만들어도됨.
+> 포커스2 파일에서 미결되고 완료되지 않은 것들은 다 익스텐디드 파일로 옮겨왔는지 꼼꼼히
+> 확인해 (2회)
 
 **결정**:
 1. 세션 85 "별도 포커스 분리" 결정 취소 — Phase 3~8 모두 포커스 #2 범위로 복원.
@@ -226,12 +255,31 @@ Phase 8 (Simple/Smart)     ← 독립 가능
 4. focus_14/15/16/17 별도 포커스 분리 계획 **취소** — 본 Extended 가 대체.
 5. C-4/C-5 는 Phase 3~8 완료 후로 연기.
 
+**전수 감사 1차 (누락 2건 발견)**:
+- **B-31c `initializeCrawling` 공식** — Extended Phase 4 미등록 → 추가.
+- **B-31b 체크박스 구식** — B-41 세션 70 완료 상태 반영.
+
+**전수 감사 2차 (누락 3건 추가 발견)**:
+- **B-1c `isClimbSprintSpeed = true` 근사** — §7 미등록 → 본체 §7 에 추가.
+- **SmartStatisticsFactory 이식 필요** — Extended 어느 Phase 에도 없음 → Phase 9 신설.
+- **Options `_runOnSprintRelease` / `_walkOnSprintRelease`** — grep 확인 1.21.1 미이식 →
+  Phase 9 B-48b-dep 로 추가.
+- Phase 9 "SmartStatistics + 후속 엣지 케이스" 신설 (B-50 / B-48b-dep / B-48b-fallback).
+
+**참고 사항 (세션 88 확인)**:
+- `_sprintFactor` / `_sprintExhaustionStart/Stop` / `_sprintDuringItemUsage` /
+  `_diveControlVertical` / `_flyCloseToGround` 등 Config 필드는 **이미 이식 완료** — 본체 §6
+  매핑 표의 "미이식" 표기가 구식. Extended 진행 중 표기 갱신 가능 (사소).
+- 본체 §6 "⚠️ 확인 필요" 3건도 현 시점에서 확인 완료 가능 (Extended 진행 중).
+
 **진행한 작업**:
 - `focus_02_extended.md` 신규 생성 (이 파일).
-- `focus_02_state_issues.md` §1 상태 변경 (Extended 진행 중).
-- `focus_02_state_issues.md` §17 에 Extended 참조 + 분리 취소 기록.
+- `focus_02_state_issues.md` §1 상태 변경 (Extended 진행 중) + §17 Extended 참조 + §7
+  B-1c 근사 추가 등록 + §10 Extended 이전 명시 전수 + §10 B-N 섹션에 ⭐ Extended 이전
+  안내 표 추가.
+- `focus_02_extended.md` Phase 3~9 원자 약 33개 등록 (Phase 9 신설 반영).
 - `playtest_fixes.md` 의 focus_14 분리 메모 업데이트 (Extended 흡수).
-- 코드 변경 없음 — 메타 결정 세션.
+- 코드 변경 없음 — 메타 결정 + 문서 구조 재편 세션.
 
 **다음 세션**: Phase 3 B-19a 시작 — Agent WebFetch 로 원본 L906-L1020 Orientation 판정
 본문 확보 후 Climber 에 이식.

@@ -439,6 +439,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-1c 근사** (세션 51, 세션 88 등록): `SmartMovingClientState.tickEssential` B-1c3
+  `isClimbSprintSpeed` 판정 — 원본은 `SmartStatisticsFactory.getInstance(sp).getTickDistance()`
+  (SmartRender 측 tick 이동 거리 통계) 기반. 1.21.1 SmartStatisticsFactory 전체 미이식 →
+  `true` 근사 (모든 등반 속도 허용). 주석으로 명시됨 (ClientState 내부). **→ Extended Phase 9
+  (SmartStatistics 이식) 에서 해소 대기**. B-1d/B-1f 의 `isClimbSprinting` 의존 필드 계산에
+  영향 — 등반 스프린트가 사실상 항상 가능한 상태 (엄격 이식은 통계 수집 인프라 필요).
 
 ---
 
@@ -1123,6 +1129,8 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 | B-42 | Phase 6 (B-42a~d + 승격 8건) | AABB 정밀화 + §7 근사 일괄 해소 |
 | §16 세션 65 (2) | Phase 7 (B-48a/b/c) | sprint 엣지 + isGroundSprinting 전환 후처리 |
 | §16 세션 65 (3) | Phase 7 (B-49) | grabKeyStopPressed |
+| B-1c SmartStatistics 근사 (§7 추가) | Phase 9 (B-50) | SmartStatisticsFactory 이식 |
+| Options `_runOnSprintRelease/_walkOnSprintRelease` | Phase 9 (B-48b-dep) | Options 필드 + B-48b 의존 |
 
 모든 미완료 항목은 Extended 에서 관리 — 본체는 완료된 기록 보존 목적.
 
