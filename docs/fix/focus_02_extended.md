@@ -402,8 +402,9 @@ Orientation 판정 + ClimbGap 계산.
       조건 판정 복원.
 - [ ] B-42-B26. Jumper `tryJump(SlideDown, ...)` 속도 공식 이식 (원본 tryJump 내부 SlideDown
       분기).
-- [ ] B-42-B35. ClientState `crawlStandUpBottom` 정밀 계산 + `move(0, crawlStandUpBottom -
-      minY, 0)` 이동량 복원.
+- [x] B-42-B35. ClientState `crawlStandUpBottom` 정밀 계산 + `move(0, crawlStandUpBottom -
+      minY, 0)` 이동량 복원. **세션 122 완료** (분기 A 내부에서 `getMaxPlayerSolidBetween(minY-1,
+      minY, crawlOverEdge ? 0 : -0.05)` 직접 호출, move 이동량 복원). §7 B-35 근사 해소.
 - [ ] B-42-B36. ClientState B-36 분기 (a) 이동량 복원.
 - [ ] B-42-B39. ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤 전환 본문 활성.
 - [ ] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 — AABB/판정
@@ -510,6 +511,68 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 122 — 2026-04-25 — B-42-B35 `crawlStandUpBottom` 정밀 이동량 복원
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 승격 2번째 원자.
+
+**진행한 작업**:
+1. **현재 근사 지점 식별** (ClientState.java L1545-L1549):
+   * B-35 분기 A: `wasCrawling && !isCrawling && !initializeCrawling && !flying`
+   * 기존 근사: `heightOffset = 0F` 만 수행, `move(0, crawlStandUpBottom - minY, 0)` 생략.
+2. **원본 공식 확인** (로컬 grep `crawlStandUpBottom` in SmartMovingSelf.java):
+   * L2396: `double crawlStandUpBottom = -1;` (지역 변수 초기값)
+   * L2399: `crawlStandUpBottom = getMaxPlayerSolidBetween(minY - (initializeCrawling ?
+     0D : 1D), minY, crawlOverEdge ? 0 : -0.05);` (isCrawling||isClimbCrawling 시에만)
+   * L2825: `move(0, (crawlStandUpBottom - sp.boundingBox.minY), 0, true);`
+3. **분기 A 시점 분석**:
+   * `wasCrawling=true, isCrawling=false` → L2399 계산 시점엔 아직 isCrawling=true
+     (이후 L2442 `isCrawling = canCrawl && ...` 에서 해제). 즉 이전 틱 계산된
+     `crawlStandUpBottom` 값이 분기 A 에서 유효.
+   * 1.21.1 에서는 tick 내부 지역 변수 대신 분기 A 안에서 직접 재계산 (값 동일).
+4. **Config 필드 확인** — `cfg.crawlOverEdge` 이미 이식 완료 (세션 이전).
+5. **분기 A 정밀 이식** (ClientState.java L1545-L1555):
+   ```java
+   if (wasCrawling && !isCrawling && !initializeCrawling
+           && !player.getAbilities().flying) {
+       heightOffset = 0F;
+       double minY = player.getBoundingBox().minY;
+       double horizontalTolerance = cfg.crawlOverEdge ? 0 : -0.05;
+       double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
+               minY - 1D, minY, horizontalTolerance);
+       player.move(MovementType.SELF, new Vec3d(0, crawlStandUpBottom - minY, 0));
+   }
+   ```
+6. **§7 B-35 근사 해소 기록** — focus_02_state_issues.md 의 B-35 근사 블록에 취소선 +
+   "세션 122 B-42-B35 해소 완료" 기록.
+7. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 122 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2396-L2402 (crawlStandUpBottom 계산) +
+  L2822-L2826 (B-35 분기 A 사용) 로컬 read ✓
+- [근거] 1.21.1 Config `crawlOverEdge` 필드 존재 확인 ✓
+- [대응] 원본 `getMaxPlayerSolidBetween(minY - 1D, minY, crawlOverEdge ? 0 : -0.05)` →
+  B-42a `getMaxPlayerSolidBetween(player, minY - 1D, minY, horizontalTolerance)` 1:1 ✓
+- [분기] 분기 A 조건 (wasCrawling && !isCrawling && !initializeCrawling && !flying) 보존,
+  내부 공식만 정밀화. `initializeCrawling=false` 이므로 offset 1D 고정 ✓
+- [상수] `1D` / `0` / `-0.05` 원본 동일 ✓
+- [타이밍] B-35 블록 내 분기 A 위치 유지 — 원본 L2822-L2826 에 정확히 대응 ✓
+- [근사] B-35 근사 해소 — §7 갱신 ✓
+- [신규] 없음 ✓
+- [회귀] 분기 B (진입 엣지) 는 세션 74 이미 1:1, 본 세션 영향 없음. MixinEntityClient
+  L134 `crawlOverEdge` 소비 (fall damage 로직) 는 독립 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42-B36** (B-36 분기 (a) 얕은 물 swim/dive → walking 이동량 복원
+— 원본 L2843 `move(0, getMaxPlayerSolidBetween(minY, maxY, 0) - minY, 0)`). 의존 게이트
+`isShallowDiveOrSwim` 는 세션 121 B-42-B5 해소로 이제 정확히 계산됨 → (a) 분기 활성 조건 충족.
+
+**진행률** (세션 122 종료 시점):
+- Extended 완료: **36 원자** (B-19 22 + Phase 4 8 + Phase 6 **6** = 36)
+- Extended 총 원자 ~61
+- **Extended 진행률: 36/61 ≈ 59%**
+- **포커스 #2 전체: (54+36)/115 ≈ 78%**
+- **Phase 6 승격 2/8 — B-42-B5 + B-42-B35 완료**
 
 ### 세션 121 — 2026-04-25 — B-42-B5 `couldStandUp` 근사 해소 (Swimmer 2 지점)
 

@@ -1532,20 +1532,23 @@ public final class SmartMovingClientState {
                 }
             }
 
-            // B-35 (세션 74): 원본 L2822-L2836 wasCrawling↔isCrawling 전환 후처리 이식 (근사).
-            // 원본 의미: 크롤 해제 (서기 전환) 또는 크롤 진입 시 heightOffset 및 위치 보정.
-            // ※ 근사 이식 (§7 B-35 근사 등록):
-            //   `crawlStandUpBottom` = 원본 `getMaxPlayerSolidBetween(minY - 1D, minY, ...)`
-            //   (발 아래 0-1블록 범위 최고 고체 Y) 정밀 AABB 스캔 미이식 →
-            //   `crawlStandUpBottom - minY ≈ 0` 근사 (발 아래 고체 바로 붙어있음 가정).
-            //   `move(0, crawlStandUpBottom - minY, 0)` 이동량 생략 → heightOffset 리셋만.
-            //   공중 크롤 해제 시 정확도 낮음 (드물긴 함).
+            // B-35 (세션 74) → **B-42-B35 해소 (세션 122)**: 원본 L2822-L2836 정밀 이식.
+            // 원본 L2825 `move(0, (crawlStandUpBottom - sp.boundingBox.minY), 0, true)` 복원.
+            // `crawlStandUpBottom` 은 원본 L2399 지역 변수 (isCrawling||isClimbCrawling 시에만
+            // 계산). B-35 분기 A 진입 시점엔 `wasCrawling=true` 이고 L2399 계산 당시 isCrawling
+            // 이 true 였으므로 값 확보 가능 — 1.21.1 에서는 분기 A 내부에서 직접 재계산.
             // 분기 A: wasCrawling && !isCrawling && !initializeCrawling && !flying
-            //   → resetHeightOffset (heightOffset = 0F). move 생략 (근사).
+            //   → resetHeightOffset + move(0, crawlStandUpBottom - minY, 0).
             if (wasCrawling && !isCrawling && !initializeCrawling
                     && !player.getAbilities().flying) {
                 heightOffset = 0F;
-                // 근사: crawlStandUpBottom - minY ≈ 0 → player.move(0,0,0) no-op 생략.
+                // 원본 L2399: getMaxPlayerSolidBetween(minY - (initializeCrawling ? 0D : 1D), minY,
+                //   crawlOverEdge ? 0 : -0.05). 분기 A 는 initializeCrawling=false 이므로 오프셋 1D.
+                double minY = player.getBoundingBox().minY;
+                double horizontalTolerance = cfg.crawlOverEdge ? 0 : -0.05;
+                double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
+                        minY - 1D, minY, horizontalTolerance);
+                player.move(MovementType.SELF, new Vec3d(0, crawlStandUpBottom - minY, 0));
             }
             // 분기 B: (isCrawling && !wasCrawling) || initializeCrawling
             //   → setHeightOffset(-1F) + move(0, -1D, 0) + (initializeCrawling → toCrawling())

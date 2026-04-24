@@ -408,12 +408,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   (2) `blocked` = `currentScreen != null && !currentScreen.allowUserInput` (원본 L2393).
   1.21.1 `allowUserInput` 필드 제거됨 → `currentScreen != null` 단일 조건 근사. 모든 열린
   screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작) — 원본 의도와 근접.
-- **B-35 근사** (세션 74): `ClientState.tickEssential` B-17 블록 뒤 + R-09 블록 앞에
-  wasCrawling↔isCrawling 전환 후처리 (원본 L2822-L2836) 근사 이식. 분기 A 의
-  `crawlStandUpBottom` 정밀 AABB (`getMaxPlayerSolidBetween(minY-1, minY, ...)`) 미이식 →
-  `crawlStandUpBottom - minY ≈ 0` 근사 (발 아래 고체 바로 붙어있음 가정). `move(0, dy, 0)`
-  이동량 생략 → `heightOffset = 0F` 리셋만. 공중에서 크롤 해제 시 정확도 낮음 (드물긴 함).
-  분기 B (진입 엣지) 는 `heightOffset=-1F + move(0,-1D,0)` 1:1 이식.
+- ~~**B-35 근사** (세션 74)~~ → **세션 122 B-42-B35 해소 완료**:
+  `ClientState.tickEssential` B-17 블록 뒤 + R-09 블록 앞에 wasCrawling↔isCrawling 전환
+  후처리 (원본 L2822-L2836) 이식. 분기 A 의 `crawlStandUpBottom` 정밀 AABB 복원:
+  `getMaxPlayerSolidBetween(minY - 1D, minY, crawlOverEdge ? 0 : -0.05)` (B-42a 헬퍼
+  소비) → `move(0, crawlStandUpBottom - minY, 0)` 이동량 완전 이식. 공중 크롤 해제 시
+  정확도 확보. 분기 B (진입 엣지) `heightOffset=-1F + move(0,-1D,0)` 는 세션 74 이미 1:1.
 - **B-26 근사** (세션 75): `ClientState.tickEssential` B-25 IMPL-02 슬라이딩 직접 진입
   블록에 원본 L2555-L2557 부수 동작 이식. `heightOffset = -1F` + `player.move(SELF, new Vec3d(0,
   -1D, 0))` 1:1 이식. **`tryJump(Config.SlideDown, false, wasRunning, null)` 호출 생략** —
