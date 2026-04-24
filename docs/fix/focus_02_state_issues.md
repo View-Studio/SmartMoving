@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 61 — B Phase 2 계속 / B-13) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 28 원자 완료 / ⏳ **B Phase 2 잔여 ~12 원자** |
+| 상태 | 🟡 진행 중 (세션 62 — B Phase 2 계속 / B-37) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 29 원자 완료 / ⏳ **B Phase 2 잔여 ~11 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -812,8 +812,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: B-10a `isShallowDiveOrSwim` / B-10c `isStillSwimmingJump` + `wouldWantClimb` 선행.
 
 #### B-37. handleClimbing wall 오르기 crawl 진입 이식 (A-5 발견)
-- [ ] B-37. 원본 L985-L986 이식 — Climber.handleClimbing wantClimbUp + handsClimbing
-      IsRelevant 분기에 `isSliding=false; isCrawling=true` 추가.
+- [x] B-37. ✅ **세션 62 완료** — 원본 L985-L986 이식. `SmartMovingClimber.handleClimbing`
+      L385 `if (wantClimbUp)` 블록 내부 최상단 (속도 분기 앞) 에 추가:
+      `if (sm.isSliding && handsClimbing.isRelevant()) { sm.isSliding=false;
+      sm.isCrawling=true; }`. 슬라이딩 상태에서 grab+전진 입력하면 크롤로 전환하여
+      벽 오르기 시작 경로 복원. 원본 L987 `handsClimbing.ToUp()` 은 별도 이슈 (B-37
+      범위 외).
 
 #### B-38. handleCeilingClimbing 진입 시 isCrawling=false 이식 (A-5 발견)
 - [x] B-38. ✅ **세션 58 완료** — 원본 L1170 이식. `SmartMovingClimber.handleCeilingClimbing`
@@ -2590,6 +2594,53 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존 — 규모 중.
+
+### 세션 62 — 2026-04-24 — B Phase 2 B-37 (handleClimbing wall 오르기 crawl 진입)
+
+**진행한 작업**:
+- `SmartMovingClimber.handleClimbing` L385 `if (wantClimbUp)` 블록 내부 최상단 (속도
+  분기 L386 앞) 에 원본 L985-L986 이식:
+  ```java
+  if (sm.isSliding && handsClimbing.isRelevant()) {
+      sm.isSliding  = false;
+      sm.isCrawling = true;
+  }
+  ```
+- 원본 위치: handleClimbing Free Climbing 분기 내 `if (wantClimbUp)` 첫 줄. 1.21.1 대응
+  위치는 이미 `wantClimbUp` 분기가 이식된 Climber L385 — 내부 블록 진입 직후 배치.
+- 슬라이딩 + grab + 전진 입력 조합 → 크롤로 전환하여 벽 오르기 시작하는 경로 복원.
+- 원본 L987 `handsClimbing = handsClimbing.ToUp()` 은 B-37 범위 외 (별도 이슈).
+- B-19 Free Climb 분기 내부 이슈는 Orientation/ClimbGap 계산 범위 — wantClimbUp 블록
+  자체는 이식되어 있어 B-37 진행 가능.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 62)**:
+- [근거] 원본 L985-L986 원문 확보 (research/.../SmartMovingSelf.md L4088-L4099 R-14.6) ✓
+- [근거] R-14.10 #7 L986 wall 오르기 crawl 진입 [누락] 확정 §16 세션 35 ✓
+- [대응] if 조건 + 2줄 대입 원본 1:1 ✓
+- [분기] 없음 (단일 if)
+- [상수] 없음
+- [타이밍] `wantClimbUp` 블록 진입 첫 줄 — 원본 L985 위치 1:1 ✓
+- [근사] 없음. `handsClimbing.IsRelevant()` → `handsClimbing.isRelevant()` 표면 매핑만
+  (Java 네이밍 컨벤션).
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 슬라이딩 중 등반 시작 경로 복원 — 다른
+  isSliding/isCrawling 갱신과 충돌 없음 (wantClimbUp + handsClimbing.isRelevant 게이트).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #4 L2449-L2450 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #7 L986 wall 오르기 crawl 진입 (B-37 세션 62)
+- ✅ #8 L1170 handleCeilingClimbing 진입 isCrawling=false (B-38 세션 58)
+- ⏳ #1~#3/#5/#6/#9~#15
+
+**Phase 2 진행 상황**: 29 원자 완료 / 잔여 ~11
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존 — 규모 중.
+- **B-31b/c** 공식 이식 (wantCrawlNotClimb / initializeCrawling) — B-41/B-35 범위 분배.
 
 ---
 

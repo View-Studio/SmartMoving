@@ -383,6 +383,13 @@ public final class SmartMovingClimber {
         boolean isUp;
 
         if (wantClimbUp) {
+            // B-37 (세션 62): 원본 L985-L986 이식 — wall 오르기 진입 시 슬라이딩+크롤 전환.
+            //   if (isSliding && handsClimbing.IsRelevant()) { isSliding=false; isCrawling=true; }
+            // 슬라이딩 중에 grab+전진 입력하면 크롤로 전환하여 벽 오르기 시작.
+            if (sm.isSliding && handsClimbing.isRelevant()) {
+                sm.isSliding  = false;
+                sm.isCrawling = true;
+            }
             if (handsClimbing == HandsClimbing.FAST_UP || feetClimbing == FeetClimbing.FAST_UP) {
                 value = FAST_UP_MOTION; isUp = true;
             } else if (handsClimbing.isUp() && feetClimbing.isUp()) {
