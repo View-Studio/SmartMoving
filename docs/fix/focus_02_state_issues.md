@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 60 — B Phase 2 계속 / B-6) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 27 원자 완료 / ⏳ **B Phase 2 잔여 ~13 원자** |
+| 상태 | 🟡 진행 중 (세션 61 — B Phase 2 계속 / B-13) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 28 원자 완료 / ⏳ **B Phase 2 잔여 ~12 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -617,8 +617,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       `isJumpingOutOfWater` 의존.
 
 #### B-13. 크롤↔수영 전환 조건 `isSliding` 추가 (A-2 발견)
-- [ ] B-13. `SmartMovingSwimmer.handleSwimming` L119/L124 SwimCrawlWater 전환 조건에
-      원본 L418 `(isCrawling || isSliding)` 반영. 현재 `wasCrawling` 만 체크.
+- [x] B-13. ✅ **세션 61 완료** — `SmartMovingSwimmer.handleSwimming` L126 조건
+      `wasCrawling && sm.dippingDepth >= 0F` → `(wasCrawling || sm.isSliding) &&
+      sm.dippingDepth >= 0F` 로 확장. 원본 L2434 (= R-06 L418) `(isCrawling || isSliding) &&
+      playerCrawlWaterBorder < SwimCrawlWaterMaxBorder` 1:1 복원. 원본 isCrawling 은
+      L2415 분기 뒤라 1.21.1 진입 시 스냅샷 `wasCrawling` 과 의미적 등가. isSliding 은
+      L121 에서 수정 안 되므로 원본과 동일 시점. L121 `isCrawling && dippingDepth >
+      SWIM_CRAWL_TOP` 조건은 원본 L2415 와 일치 (isSliding 불필요) — 수정 없음.
 
 #### B-14. `resetClimbing()` 메서드 신설 + handleClimbing 진입 시 호출 (A-3 발견)
 - [x] B-14. ✅ **세션 57 완료** — 원본 L1474-L1486 `resetClimbing()` 이식.
@@ -2541,6 +2546,50 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
   내부 — wantClimbUp/handsClimbing.IsRelevant 의존 위치 탐색 필요.
 - **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+
+### 세션 61 — 2026-04-24 — B Phase 2 B-13 (crawl↔swim 전환 isSliding 추가)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.handleSwimming` L126 조건 확장. 원본 L2434 (= R-06 L418)
+  `(isCrawling || isSliding) && playerCrawlWaterBorder < SwimCrawlWaterMaxBorder` 1:1 복원:
+  * 기존: `if (wasCrawling && sm.dippingDepth >= 0F)`
+  * 정정: `if ((wasCrawling || sm.isSliding) && sm.dippingDepth >= 0F)`
+- 주석에 원본 라인 + 등가성 근거 (`wasCrawling` = L121 이전 스냅샷 / isSliding L121 에서
+  수정 안 됨) 명시.
+- L121 `isCrawling && dippingDepth > SWIM_CRAWL_TOP` 조건은 원본 L2415 와 일치 (isSliding
+  불필요) — §10 B-13 의 "L119/L124" 범위 중 L119 는 수정 대상 아님 확정.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 61)**:
+- [근거] 원본 L2434 (R-06 L418) `(isCrawling || isSliding) && playerCrawlWaterBorder <
+  SwimCrawlWaterMaxBorder` (research/.../SmartMovingSelf.md L2434 + L3066) 확보 ✓
+- [근거] R-11.6 크롤↔수영 전환 + R-11.12 불일치 #11 확정 자료 §16 세션 32 ✓
+- [대응] OR 2항 원본 1:1 — 필드명/논리 연산자/순서 동일 ✓
+- [분기] 없음 (if 조건 확장)
+- [상수] 없음
+- [타이밍] `wasCrawling` 캡처 시점 L118 (진입 직후) = 원본 L2415 이전 시점. isSliding 은
+  L121 에서 변경 안 되므로 원본 L2434 시점과 일치 ✓
+- [근사] 1.21.1 `playerCrawlWaterBorder = dippingDepth` + `SwimCrawlWaterMaxBorder` → `SWIM_CRAWL_MAX`
+  상수 매핑은 R-11.12 기존 이식 (근사 아님). isSliding 추가는 1:1.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. isSliding 시 얕은 물 반발 경로 활성화 —
+  원본 의도 복원. B-25 (isSliding 직접 진입 6-AND) 이식 완료 후라 실제 작동 가능.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-11 A-2 불일치 현황**:
+- ✅ #3 isClimbCrawling 조건 누락 (B-6 세션 60)
+- ✅ #11 crawl↔swim 전환 isSliding 누락 (B-13 세션 61)
+- ⏳ #1/#2/#4~#10 (B-7/B-8/B-9/B-11/B-12 등 — 대부분 B-9 메인 분류 재작성 범위)
+
+**Phase 2 진행 상황**: 28 원자 완료 / 잔여 ~12
+
+**다음 작업 권고**:
+- **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. Free climb 분기 내부
+  `wantClimbUp + handsClimbing.IsRelevant` 조건. Climber L374-L375 지역 변수 존재 —
+  해당 분기 위치 탐색 후 단순 2줄 추가 가능.
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존 — 규모 중.
 
 ---
 

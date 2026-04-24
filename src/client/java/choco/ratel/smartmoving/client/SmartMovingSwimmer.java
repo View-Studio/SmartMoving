@@ -123,7 +123,11 @@ public final class SmartMovingSwimmer {
         }
 
         // ② playerCrawlWaterBorder 판정 (이전 틱에서 크롤링 중이었던 경우)
-        if (wasCrawling && sm.dippingDepth >= 0F) {
+        // B-13 (세션 61): 원본 L2434 `(isCrawling || isSliding) && playerCrawlWaterBorder <
+        // SwimCrawlWaterMaxBorder` 에 맞춰 `|| sm.isSliding` 추가. 원본 isCrawling 은
+        // L2415 분기에서 해제 후 시점이라 1.21.1 의 진입 시 스냅샷 wasCrawling 과 등가.
+        // isSliding 은 L121 에서 수정 안 되므로 원본과 동일 시점.
+        if ((wasCrawling || sm.isSliding) && sm.dippingDepth >= 0F) {
             float playerCrawlWaterBorder = sm.dippingDepth;
             if (playerCrawlWaterBorder < SWIM_CRAWL_MAX) {
                 if (playerCrawlWaterBorder < SWIM_CRAWL_TOP) {
