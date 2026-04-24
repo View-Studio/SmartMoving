@@ -88,7 +88,8 @@
 | 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | ✅ 완료 (2026-04-25, 세션 134) — Extended 67/67 전수 완결 | 없음 |
 | 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | 🟠 현재 포커스 (B-42-B26 확장, ~110 원자) | #2 완료 |
 | 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟡 병행 대기 (B-42c (2) 확장, ~15 원자) | #2 완료 |
-| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 | #2 / #2.5 / #2.6 완료 |
+| 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟡 Phase 1 완료 / Phase 2 대기 (서버 sync, ~20 원자) | #2 완료 |
+| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 | #2 / #2.5 / #2.6 / #2.7 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
 

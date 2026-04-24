@@ -464,11 +464,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   move(0, -gap, 0)`, 아니면 `resetHeightOffset`. `mustCrawl/sneak/crawlToggled` 조건
   아니면 `resetHeightOffset` 만.
   → **B-42-B18b Mixin 신설 원자 자체 불필요 확정**. Phase 6 최종 근사 해소.
-- **B-N-standup 근사** (세션 115, 세션 136 갱신):
-  ~~(1) `resetHeightOffset` boundingBox/height 조작 생략~~ → **영향 0 확정 (세션 136 재평가)**:
-    1.21.1 vanilla POSE 시스템 (`MixinPlayerEntityClient.sm_updatePose_client` — SWIMMING/
-    SLIDING POSE 강제 + cancel) 이 hitbox/키 자동 관리. POSE 전환 시 vanilla 가 bbox 복원.
-    기능 동치 — 해소 불필요.
+- **B-N-standup 근사** (세션 115, 세션 136/137 갱신):
+  (1) `resetHeightOffset` boundingBox/height 조작 생략:
+    ~~세션 136 "영향 0 확정"~~ → **세션 137 재평가**: POSE 시스템이 구조적 대체는 맞지만 SM
+    이 반환하는 EntityDimensions 값 자체가 원본 (0.6×0.8, eyeHeight 0.62) 과 **달랐음**
+    (1.21.1: 0.6×1.0, eyeHeight 0.4). 0.2 블록 차이로 1 블록 통로 통과 실패 가능. **세션 137
+    Phase 1 해소 완료**: 모든 SM 활성 상태 (isCrawling/isClimbCrawling/isHeadJumping/
+    isSliding/isSwimming_sm/isDiving/isFlying/isLevitating) → 0.6×0.8 + eyeHeight 0.62F
+    통일. POSE 매핑도 전수 확장 (SWIMMING/SLIDING 독점, vanilla 기능 유지).
+    **→ focus_02_7 Phase 2 (서버 동기화) 로 완전 동치 완결 대기**.
   ~~(2) `standUp` move 이동 생략~~ → **세션 136 해소 완료**: `standUp(player, gap)` 시그니처로
     변경, 원본 L2216 `move(0, 1D - gapUnderneight, 0, true)` 1:1 복원. B-42a `getGapUnderneight`
     헬퍼 소비.
@@ -479,7 +483,7 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
     → isSliding` / else → `toCrawling`). 2-arg 오버로드 `sneakPressed` / `grabPressed` 조건
     분기 전수.
   (4) 2-arg 오버로드 `sp.capabilities.isFlying = false` 분기 — 1.21.1 vanilla 비행 상태 직접
-    조작은 client-server sync 필요. **→ focus_06 후속 (서버 sync 인프라 범위)**.
+    조작은 client-server sync 필요. **→ focus_03 §18.1 이관 (세션 136)**.
     B-24 (세션 53) `restoreFromFlying = true` 설정 직후 `standupIfPossible(player, false, true)`
     호출 연결 완결.
 - ~~**B-31c-post 근사 1건** (세션 113)~~ → **세션 134 해소 완료**:
