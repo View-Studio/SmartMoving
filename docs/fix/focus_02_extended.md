@@ -262,9 +262,11 @@ Orientation 판정 + ClimbGap 계산.
       B-12 ticks + vanilla horizontalCollision/isOnGround).
 
 #### B-10c-post. `isStillSwimmingJump` false 리셋
-- [ ] B-10c-post. 원본 L550 `useStandard` 경로에서 `isStillSwimmingJump = false` 리셋.
-      현재 B-36 분기 (a) 에서 true 설정만 있고 리셋 경로 없음.
-      B-9 메인 분류 재작성 시 자연스럽게 포함되나 Phase 4 에서 별도 이식 가능.
+- [x] B-10c-post. ✅ **세션 112 완료** — 원본 L550 `useStandard` 경로에서
+      `isStillSwimmingJump = false` 리셋 이식. 1.21.1 `Swimmer.updateSwimState` 의
+      `!isTouchingWater` return 경로에 한 줄 추가 (물 밖 전환 시 수영 점프 hold 상태
+      해제). true 설정은 B-36 분기 (a) (원본 L2845, ClientState 세션 78 이식 완료) 에서만.
+      resetState 리셋 (L1735) 은 세션 38 이식 완료. 근사 없음.
 
 #### B-31c-post. `initializeCrawling` 공식 이식
 - [ ] B-31c-post. `initializeCrawling` 필드는 B-31c 세션 38 에서 이식됨 — true 설정 로직은
@@ -480,6 +482,48 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 112 — 2026-04-24 — B-10c-post `isStillSwimmingJump` 리셋 (원본 L550)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L550 + L2359 + L2845 grep** — isStillSwimmingJump 갱신 3 지점 확인:
+   * L550: useStandard 경로 false 리셋 (이식 대상)
+   * L2359: resetState false — 1.21.1 L1735 이식 완료 (세션 38)
+   * L2845: B-36 분기 (a) true 설정 — 1.21.1 ClientState L1535 이식 완료 (세션 78)
+2. **Swimmer.updateSwimState `!isTouchingWater` return 경로에 `isStillSwimmingJump = false`
+   추가** (원본 L550 대응 — 물 밖 전환 시 수영 점프 hold 해제).
+3. **3-OR 강제 isDipping 경로에는 추가 안 함** — 원본 L544-L550 useStandard 경로는 완전
+   리셋 (dipping=false 포함). 1.21.1 3-OR 강제 isDipping 경로는 dipping=true 유지 —
+   원본 L544-L550 대응 아님. 안전상 리셋 안 함 (원본 동작 유지).
+
+**완료 전 검증 체크리스트 (세션 112 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L550 + L2359 + L2845 grep ✓
+- [근거] 1.21.1 resetState L1735 + B-36 분기 (a) L1535 이식 확인 ✓
+- [대응] 원본 L550 ↔ 1.21.1 updateSwimState `!isTouchingWater` 경로 한 줄 추가.
+  완전 리셋 경로 동치 ✓
+- [분기] 원본 else (useStandard) 분기 vs 1.21.1 `!isTouchingWater` return — 둘 다 swim/
+  dive/dipping/isShallowDiveOrSwim/isStillSwimmingJump 전부 false 설정 경로로 대응 ✓
+- [상수] 없음 ✓
+- [타이밍] `isShallowDiveOrSwim = false` (B-10a-post) 직후 배치 — 원본 L548-L550 순서 보존 ✓
+- [근사] 없음 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 isStillSwimmingJump 는 true 설정 (B-36) 후 리셋 경로 미이식으로 계속
+  true 유지 가능성이 있었음. 이제 물 밖 전환 시 정상 리셋. B-9 재작성 시 useStandard
+  경로에서도 리셋 추가 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-31c-post** — `initializeCrawling` true 설정 경로 이식 (원본 공식
+미확인 — Agent WebFetch 로 `initializeCrawling = true` 설정 지점 전수 확인 필요). 예상 1-2
+세션.
+
+**진행률** (세션 112 종료 시점):
+- Extended 완료: **26 원자** (B-19 22 + B-10a-post + B-10b-pre + B-10b-post + **B-10c-post**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 26/61 ≈ 43%**
+- **포커스 #2 전체: (54+26)/115 ≈ 70%**
+- **Phase 4**: 4/8 (4 남음 — B-31c-post / B-10-reset-post / B-N-standup / B-40-post)
 
 ### 세션 111 — 2026-04-24 — B-10b-post `wantJumpOutOfWater` + `isJumpingOutOfWater` 공식
 

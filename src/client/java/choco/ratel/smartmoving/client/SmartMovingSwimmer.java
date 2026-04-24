@@ -75,6 +75,10 @@ public final class SmartMovingSwimmer {
             // B-10a-post (세션 109): 원본 L548 `isShallowDiveOrSwim = false` 이식 —
             // 물 밖 전환 시 shallow dive/swim 해제.
             sm.isShallowDiveOrSwim = false;
+            // B-10c-post (세션 112): 원본 L550 `isStillSwimmingJump = false` 이식 —
+            // 물 밖 전환 (원본 useStandard 경로) 시 수영 점프 hold 상태 해제.
+            // true 설정은 B-36 분기 (a) (원본 L2845, ClientState 이식 완료) 에서만.
+            sm.isStillSwimmingJump = false;
             sm.waterMovementTicks = 0;
             sm.dippingDepth   = -1F;
             return;
