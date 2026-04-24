@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 71 — B Phase 2 계속 / B-10d) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 41 원자 완료 / ⏳ **B Phase 2 잔여 ~2 원자** |
+| 상태 | 🟡 진행 중 (세션 72 — B Phase 2 계속 / B-17b2-pre) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 42 원자 완료 / ⏳ **B Phase 2 잔여 15 원자** (세션 72 §1 집계 재정비: B-7/B-9/B-11/B-17b2/B-18/B-19/B-20/B-26/B-33/B-35/B-36/B-39/B-42/B-44b/B-44c — B-17b2-pre 는 B-17b2 서브로 카운트에서 별도) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -748,6 +748,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       - `!wasCrawlClimbing → wasCrawling=false, isCrawling=false`
 - [ ] B-17b2. **잔여** — 원본 L2755-L2783 `else if(wasCrawlClimbing)` 복합 전환 3분기.
       `wantClimbUp/wantClimbDown` 필드 + `move()` API 의존 — 별도 원자.
+- [x] **B-17b2-pre** ✅ **세션 72 완료** — B-17b2 선행 의존 필드 3개 승격. ClientState:
+      `wantClimb` / `wantClimbUp` / `wantClimbDown` public 필드 신설.
+      tickEssential B-16 블록 직후에 원본 L2491-L2500 `wantClimbUp/wantClimbDown` 계산 이식.
+      B-16c 블록 `wantClimb16` 지역 → `this.wantClimb` 필드 승격. resetState 리셋 3건 추가.
+      의존 전수 이식 확인: isVineAnyClimbing (B-15d) / isFacedToSolidVine (B-16a) /
+      나머지 vanilla. 연산자 우선순위 (&& > ||) 주의 — 원본 `(wantClimb && forward>0) ||
+      (vineClimb + jump + crawl/slide 충돌 조건)` 1:1.
 
 #### B-18. `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 이식 (A-3 발견)
 - [ ] B-18. 원본 L2786-L2820 이식:
@@ -3212,6 +3219,58 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 필드 승격 선행.
 - **B-20** (Standard/Simple Base Climb) — Climber 구조 변경 — 규모 중.
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+
+### 세션 72 — 2026-04-24 — B Phase 2 B-17b2-pre (wantClimb/Up/Down 필드 승격)
+
+**진행한 작업**:
+- §1 진행 상황 재정비 — 세션 71 "잔여 ~2" 는 오집계. §10 `- [ ] B-` grep 결과 잔여 15개
+  (B-7/B-9/B-11/B-17b2/B-18/B-19/B-20/B-26/B-33/B-35/B-36/B-39/B-42/B-44b/B-44c). 대부분
+  중간-대형 규모 의존 엮임. 후속 원자는 서브 분해 + 근사 이식 전략 필요.
+- **B-17b2 선행 서브 원자 "B-17b2-pre"** 신설 진행:
+  * ClientState 필드 3개 승격: `wantClimb` / `wantClimbUp` / `wantClimbDown` public boolean.
+    주석에 원본 L2479/L2491-L2500 공식 + 연산자 우선순위 주의 명시.
+  * B-16 블록의 지역 `wantClimb16` → `this.wantClimb` 필드 할당으로 전환.
+  * tickEssential B-16 블록 직후에 `wantClimbUp/wantClimbDown` 계산 블록 추가. 원본
+    L2491-L2500 1:1:
+    ```java
+    wantClimbUp =
+            (wantClimb && forward17 > 0F)
+            || ((isVineAnyClimbing && jumpPressed17
+                    && !(sneakPressedRaw && isFacedVine17))
+                && (!isCrawling || hCollision17)
+                && (!isSliding  || hCollision17));
+    wantClimbDown = wantClimb && forward17 <= 0F && !wantCrawl;
+    ```
+    연산자 우선순위 (&& > ||) 적용 — 전진 등반 OR (덩굴+점프 + 크롤/슬라이딩 수평충돌 조건).
+  * resetState 리셋 3건 추가.
+- Climber 지역 `wantClimbUp`/`wantClimbDown` (L374-L375) 는 그대로 유지 — 추후 B-17b2 본체
+  이식 시 Climber 지역 변수를 필드 참조로 전환할 계획 (B-17b2 의 `else if (wasCrawlClimbing)`
+  블록이 ClientState 에 있어야 하므로 필드 기반 통일).
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 72)**:
+- [근거] 원본 L2479/L2491-L2500 Agent WebFetch (세션 68) 로 확보 ✓
+- [근거] R-12.5/R-12.6 `wantClimb`/`wantClimbUp/Down` 필드 승격 필요성 확정 ✓
+- [대응] 3개 필드 + 승격 코드 + 계산 블록 원본 1:1 ✓
+- [분기] wantClimbUp 의 OR-연결 2분기 + 각 AND 조건 명시 + wantClimbDown 3-AND ✓
+- [상수] 없음 (float 0F 비교)
+- [타이밍] B-16 블록 직후 — 원본 L2479 wantClimb 계산 뒤 L2491 wantClimbUp 순서 복원 ✓
+- [근사] 없음 — 1:1 이식. `jumpButton.Pressed` → `_jumpPressed3a` / `sneakButton.Pressed` →
+  `sneakPressedRaw` / `isp.isCollidedHorizontally` → `player.horizontalCollision` 표면 매핑만.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. wantClimbUp/Down 이 이전 항상 false →
+  실제 조건 기반 갱신. 기존 Climber L374-L375 지역 변수는 영향 없음 (독립 계산).
+  B-17b2 본체에서 이 필드 활용 가능.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**Phase 2 진행 상황**: 42 원자 완료 (B-17b2-pre 서브 추가) / 잔여 15 원자
+
+**다음 작업 권고**:
+- **B-17b2** 본체 — else if(wasCrawlClimbing) 3분기 이식. ClientState 에 배치. wantClimbUp/
+  Down 필드 준비 완료. move() API / crawlStandUpBottom 근사 필요.
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 중간.
+- **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
 
 ---
 

@@ -221,6 +221,32 @@ public final class SmartMovingClientState {
     /** 클라이밍 홀딩 — 수직 이동 없이 제자리 유지. setShouldClimbSpeed에서 relevant=false 시 참조. */
     public boolean isClimbHolding;
 
+    /**
+     * 원본 SmartMovingSelf L2479 `wantClimb = Config.isFreeClimbingEnabled() && wouldWantClimb`.
+     * 등반 의도 (지역 변수에서 필드 승격). B-16c 세션 69 에서 `wouldWantClimb` 4-OR 완전 이식.
+     * B-17b2-pre 세션 72: 지역 `wantClimb16` → public 필드 승격 (B-17b2 `else if (wasCrawlClimbing)`
+     * 블록에서 참조 필요). 사용처: wantClimbUp/wantClimbDown 의존.
+     */
+    public boolean wantClimb;
+
+    /**
+     * 원본 SmartMovingSelf L2491-L2495 `wantClimbUp`:
+     *   (wantClimb && moveForward > 0F)
+     *   || (isVineAnyClimbing && jumpButton.Pressed
+     *       && !(sneakButton.Pressed && isFacedToSolidVine))
+     *      && (!isCrawling || isCollidedHorizontally)
+     *      && (!isSliding  || isCollidedHorizontally)
+     * 연산자 우선순위 주의 (&& > ||): 전진 등반 OR (덩굴+점프 + 크롤/슬라이딩 충돌 조건).
+     * B-17b2-pre 세션 72. Climber 지역 변수 L374 은 동일 로직 축약 — 필드 값 사용 전환 예정.
+     */
+    public boolean wantClimbUp;
+
+    /**
+     * 원본 SmartMovingSelf L2497-L2500 `wantClimbDown = wantClimb && moveForward <= 0F && !wantCrawl`.
+     * B-17b2-pre 세션 72. Climber 지역 변수 L375 은 단순 버전 — 필드 값 사용 전환 예정.
+     */
+    public boolean wantClimbDown;
+
     /** 클라이밍 중 크롤 공간 전환 상태 (손이 낮은 천장 아래로 들어갈 때). */
     public boolean isClimbCrawling;
 
@@ -950,15 +976,40 @@ public final class SmartMovingClientState {
                         && !isHeadJumping
                         && !wantCrawlNotClimb
                         && !_disabled3a;
-                boolean wantClimb16 = cfg0.freeClimb && cfg0.enabled && wouldWantClimb16;
+                // B-17b2-pre (세션 72): `wantClimb16` 지역 → public 필드 승격.
+                wantClimb = cfg0.freeClimb && cfg0.enabled && wouldWantClimb16;
 
                 // 원본 L2721-L2732 3-OR:
                 boolean wantClimbHolding =
                         (isClimbHolding && sneakPressedRaw)
                         || (isClimbing && blocked)
-                        || (wantClimb16 && !isSwimming_sm && !isDiving && !isCrawling
+                        || (wantClimb && !isSwimming_sm && !isDiving && !isCrawling
                                 && (sneakPressedRaw || crawlToggled));
                 isClimbHolding = wantClimbHolding && isClimbing;
+            }
+
+            // B-17b2-pre (세션 72): 원본 L2491-L2500 `wantClimbUp/wantClimbDown` 계산 이식.
+            // 원본 L2491-L2495 wantClimbUp:
+            //   (wantClimb && moveForward > 0F)
+            //   || ((isVineAnyClimbing && jumpPressed && !(sneakPressed && isFacedToSolidVine))
+            //       && (!isCrawling || isCollidedHorizontally)
+            //       && (!isSliding  || isCollidedHorizontally))
+            // 연산자 우선순위 (&& > ||): 전진 등반 OR (덩굴+점프 + 크롤/슬라이딩 충돌 조건).
+            // 원본 L2497-L2500 wantClimbDown: `wantClimb && moveForward <= 0F && !wantCrawl`.
+            // 의존: isVineAnyClimbing (B-15d), isFacedToSolidVine (B-16a), 기타 모두 이식 완료.
+            {
+                boolean jumpPressed17 = _jumpPressed3a;  // B-3a 에서 계산된 지역 변수
+                boolean isFacedVine17 = SmartMovingClimber.isFacedToSolidVine(player, isClimbCrawling);
+                float   forward17     = player.input.movementForward;
+                boolean hCollision17  = player.horizontalCollision;
+
+                wantClimbUp =
+                        (wantClimb && forward17 > 0F)
+                        || ((isVineAnyClimbing && jumpPressed17
+                                && !(sneakPressedRaw && isFacedVine17))
+                            && (!isCrawling || hCollision17)
+                            && (!isSliding  || hCollision17));
+                wantClimbDown = wantClimb && forward17 <= 0F && !wantCrawl;
             }
 
             // B-1c2 (세션 51): collidedHorizontallyTickCount 매 틱 갱신.
@@ -1469,6 +1520,9 @@ public final class SmartMovingClientState {
         wantCrawlNotClimb       = false;
         initializeCrawling      = false;
         wantSprint              = false;
+        wantClimb               = false;
+        wantClimbUp             = false;
+        wantClimbDown           = false;
         isGroundSprinting       = false;
         collidedHorizontallyTickCount = 0;
         restoreFromFlying       = false;
