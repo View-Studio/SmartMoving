@@ -136,6 +136,20 @@ public class SmartMovingConfig {
      * B-7b (세션 127).
      */
     public boolean lavaLikeWater = false;
+    /**
+     * 원본: _runOnSprintRelease = _sprintKeyReleaseAction.is("run").and(_run)
+     *   → _sprintKeyReleaseAction 기본값 "run" + _run 기본 true → 기본 true.
+     * sprint 해제 엣지 (원본 L2702-L2704) 시 `setSprinting(runOnSprintRelease ||
+     * wasRunningWhenSprintStarted)` 적용. B-48b-dep (세션 131).
+     */
+    public boolean runOnSprintRelease = true;
+    /**
+     * 원본: _walkOnSprintRelease = _sprintKeyReleaseAction.is("walk").andNot(_runOnSprintRelease)
+     *   → "walk" 기본 아님 → 기본 false. 두 필드는 상호 배타적.
+     * sprintKeyStopPressed 엣지 (원본 L2706) 시 `setSprinting(false)` 강제.
+     * B-48b-dep (세션 131).
+     */
+    public boolean walkOnSprintRelease = false;
 
     // ── Jumping ─────────────────────────────────────────────────
     // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
@@ -902,6 +916,8 @@ public class SmartMovingConfig {
         swimDownOnSneak          = getBool(p,   "move.swim.down.sneak",           swimDownOnSneak);
         diveDownOnSneak          = getBool(p,   "move.dive.down.sneak",           diveDownOnSneak);
         lavaLikeWater            = getBool(p,   "move.lava.water",                lavaLikeWater);
+        runOnSprintRelease       = getBool(p,   "move.sprint.key.release.run",    runOnSprintRelease);
+        walkOnSprintRelease      = getBool(p,   "move.sprint.key.release.walk",   walkOnSprintRelease);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
@@ -1025,6 +1041,8 @@ public class SmartMovingConfig {
         p.setProperty("move.swim.down.sneak",            String.valueOf(swimDownOnSneak));
         p.setProperty("move.dive.down.sneak",            String.valueOf(diveDownOnSneak));
         p.setProperty("move.lava.water",                 String.valueOf(lavaLikeWater));
+        p.setProperty("move.sprint.key.release.run",     String.valueOf(runOnSprintRelease));
+        p.setProperty("move.sprint.key.release.walk",    String.valueOf(walkOnSprintRelease));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));

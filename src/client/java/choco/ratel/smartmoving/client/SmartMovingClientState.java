@@ -538,6 +538,33 @@ public final class SmartMovingClientState {
     /** sneakKey.isPressed() 이전 틱 값 — 엣지 감지 내부 추적. */
     public boolean prevSneakKeyPressed;
 
+    /**
+     * 원본 sprintButton.StartPressed — 이번 틱 스프린트키 엣지(새로 눌림). B-48a (세션 131).
+     * isGroundSprinting 전환 후처리 (원본 L2697-L2709) 에서 소비.
+     */
+    public boolean sprintKeyStartPressed;
+    /**
+     * 원본 sprintButton.StopPressed — 이번 틱 스프린트키 엣지(새로 뗌). B-48a (세션 131).
+     * 원본 L2706 `if (_walkOnSprintRelease && sprintButton.StopPressed)` 조건용.
+     */
+    public boolean sprintKeyStopPressed;
+    /** sprintKey.isPressed() 이전 틱 값 — 엣지 감지 내부 추적. B-48a (세션 131). */
+    public boolean prevSprintKeyPressed;
+
+    /**
+     * 원본 wasGroundSprinting — 이전 틱 isGroundSprinting 저장 (원본 L2678).
+     * B-48c (세션 131). isGroundSprinting 전환 후처리 (원본 L2697-L2702) 의
+     * 엣지 판정 (`isGroundSprinting && !wasGroundSprinting` / `wasGroundSprinting &&
+     * !isGroundSprinting`) 용.
+     */
+    public boolean wasGroundSprinting;
+
+    /**
+     * 원본 wasRunningWhenSprintStarted — sprint 시작 시점의 vanilla isSprinting() snapshot
+     * (원본 L2699 저장 / L2704 복원). B-48b (세션 131). sprint 종료 엣지에서 복원됨.
+     */
+    public boolean wasRunningWhenSprintStarted;
+
     /** 원본 jumpButton.StopPressed — 이번 틱 점프키 엣지(새로 뗌). StartPressed는 jumpKeyStartPressed. */
     public boolean jumpKeyStopPressed;
 
@@ -797,6 +824,13 @@ public final class SmartMovingClientState {
         sneakKeyStartPressed = curSneakPressed && !prevSneakKeyPressed;
         sneakKeyStopPressed  = !curSneakPressed && prevSneakKeyPressed;
         prevSneakKeyPressed = curSneakPressed;
+
+        // B-48a (세션 131): sprintKey 엣지 필드 — sneakKey 패턴 그대로 적용.
+        // 원본 sprintButton.StartPressed / StopPressed 대응.
+        boolean curSprintPressed = opts.sprintKey.isPressed();
+        sprintKeyStartPressed = curSprintPressed && !prevSprintKeyPressed;
+        sprintKeyStopPressed  = !curSprintPressed && prevSprintKeyPressed;
+        prevSprintKeyPressed = curSprintPressed;
 
         // B-46 (세션 66): 원본 `grabButton.StartPressed` 이식.
         // vanilla `KeyBinding.wasPressed()` 는 카운터 소비성이라 같은 틱 2회째부터 false.
@@ -1164,7 +1198,9 @@ public final class SmartMovingClientState {
                 boolean _canAllSprint17 = _canHorizontallySprint17 && _canVerticallySprint17;
 
                 // 원본 L2678-L2684 6 Sprint 변종.
-                // (wasGroundSprinting 지역 변수는 전환 후처리 전용 — 미이식 경로에서만 사용 → 생략)
+                // **B-48c 해소 (세션 131)**: 원본 L2678 `wasGroundSprinting = isGroundSprinting;`
+                //   이전 틱 저장 — B-48b 전환 후처리 엣지 판정용.
+                wasGroundSprinting = isGroundSprinting;
                 isGroundSprinting = _canHorizontallySprint17
                         && (player.isOnGround() || isLevitating)
                         && !isSwimming_sm && !isDiving && !isClimbing;
@@ -1185,6 +1221,24 @@ public final class SmartMovingClientState {
                         || _isCeilingSprinting17
                         || _isFlyingSprinting17
                         || _isClimbSprinting17;  // 원본 L2695 중복 그대로 보존
+
+                // **B-48b 해소 (세션 131)**: 원본 L2697-L2709 isGroundSprinting 전환 후처리.
+                //   sprint 시작 엣지 → wasRunningWhenSprintStarted 저장 + vanilla setSprinting
+                //     (isStandupSprintingOrRunning 조건).
+                //   sprint 종료 엣지 → setSprinting(runOnSprintRelease || wasRunningWhenSprintStarted).
+                //   walkOnSprintRelease + sprintKeyStopPressed → setSprinting(false) 강제.
+                if (isGroundSprinting && !wasGroundSprinting) {
+                    // 시작 엣지 (원본 L2697-L2701)
+                    wasRunningWhenSprintStarted = player.isSprinting();
+                    player.setSprinting(isStandupSprintingOrRunning(player));
+                } else if (wasGroundSprinting && !isGroundSprinting) {
+                    // 종료 엣지 (원본 L2702-L2705)
+                    player.setSprinting(cfg0.runOnSprintRelease || wasRunningWhenSprintStarted);
+                }
+                // 원본 L2706-L2709: walkOnSprintRelease + sprintKeyStopPressed → 강제 해제
+                if (cfg0.walkOnSprintRelease && sprintKeyStopPressed) {
+                    player.setSprinting(false);
+                }
             }
 
             // isFlying 원본: sp.capabilities.isFlying
@@ -2156,6 +2210,21 @@ public final class SmartMovingClientState {
     private boolean vanilla() {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         return !cfg.enabled || cfg.vanillaStyle;
+    }
+
+    /**
+     * 원본 SmartMovingSelf L3234-L3237 `public boolean isStandupSprintingOrRunning()`:
+     *   return (isFast || sp.isSprinting()) && sp.onGround && !isSliding && !isCrawling;
+     * **파생 메서드** — 필드 저장 없음. 매 호출마다 재계산.
+     * 사용처: B-48b 전환 후처리 (원본 L2700 `sp.setSprinting(isStandupSprintingOrRunning())`) /
+     *   원본 L2902 `canBackJump = ... && !isStandupSprintingOrRunning()`.
+     * B-48b (세션 131).
+     */
+    public boolean isStandupSprintingOrRunning(ClientPlayerEntity player) {
+        return (isFast || player.isSprinting())
+                && player.isOnGround()
+                && !isSliding
+                && !isCrawling;
     }
 
     /**

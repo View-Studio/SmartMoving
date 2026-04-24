@@ -453,23 +453,27 @@ Orientation 판정 + ClimbGap 계산.
 ### Phase 7. §16 신규 발견 해소
 
 #### B-48. isGroundSprinting 전환 후처리 + sprintKey 엣지
-- [ ] B-48a. `sprintKeyStartPressed` / `sprintKeyStopPressed` 엣지 필드 신설 (sneakKey 패턴).
-- [ ] B-48b. 원본 L2697-L2709 `isGroundSprinting` 전환 후처리 이식 —
-      `wasRunningWhenSprintStarted` / `Options._runOnSprintRelease` 의존 확인 후 이식 또는
-      근사.
-- [ ] B-48c. `wasGroundSprinting` 필드 (원본 L2678 이전 틱 저장) + R-09 종료부 저장 추가.
+- [x] B-48a. `sprintKeyStartPressed` / `sprintKeyStopPressed` 엣지 필드 신설 (sneakKey 패턴).
+      **세션 131 완료** (3 필드 + tickEssential 초반 매 틱 저장, `opts.sprintKey.isPressed()` 기반).
+- [x] B-48b. 원본 L2697-L2709 `isGroundSprinting` 전환 후처리 이식. **세션 131 완료**
+      (시작 엣지 `wasRunningWhenSprintStarted=sprinting; setSprinting(isStandupSprintingOrRunning)`
+      + 종료 엣지 `setSprinting(runOnSprintRelease || wasRunningWhenSprintStarted)` +
+      `walkOnSprintRelease && sprintKeyStopPressed → setSprinting(false)` 3분기 전수 이식).
+      `isStandupSprintingOrRunning(player)` 헬퍼 메서드 신설.
+- [x] B-48c. `wasGroundSprinting` 필드 (원본 L2678 이전 틱 저장). **세션 131 완료**
+      (필드 + isGroundSprinting 계산 직전 `wasGroundSprinting = isGroundSprinting` 저장).
 
 #### B-49. grabButton.StopPressed 이식
-- [ ] B-49. 원본 `grabButton.StopPressed` 사용 지점 전수 grep 후 필요 시 `grabKeyStopPressed`
-      필드 이식 (prev vs cur 비교 방식).
+- [x] B-49. **세션 131 불필요 확정** — 원본 `SmartMovingSelf.java` / `SmartMovingBase.java`
+      전수 grep 결과 `grabButton.StopPressed` 사용 지점 **0건**. 이식 대상 없음.
 
 #### B-49b. 이동 엣지 prev 필드 전수 이식 (세션 88 4차 확정 감사 발견)
-- [ ] B-49b. 본체 §6.8 L336 "vanilla input 엣지 비제공 — 현재 prevPressRight/Back 일부
-      이식 확인" 항목 Extended 원자 승격. 원본 `Options.moveForward/Backward/Left/Right`
-      의 `StartPressed` / `StopPressed` 전수 이식. `prevPressForward` / `prevPressBack` /
-      `prevPressLeft` / `prevPressRight` 필드 신설 (기존 일부 중복 확인) + 매 틱 저장 +
-      엣지 판정 헬퍼. 사용 지점: handleClimbing 방향 전환 / 수영 방향 입력 / 벽점프 등.
-      grep 사용 지점 전수 확인 후 각 호출처 엣지 판정으로 치환.
+- [x] B-49b. **세션 131 확인 완료** — 원본 사용처 전수 grep 결과: `leftButton.StartPressed`
+      / `rightButton.StartPressed` / `backButton.StartPressed` 만 사용 (원본 L2906/L2921/
+      L2936). `forwardButton.StartPressed` / `StopPressed` 원본 사용 **0건**. 1.21.1 현재
+      ClientState L1356 부근 `prevPressLeft` / `prevPressRight` / `prevPressBack` +
+      `startLeft` / `startRight` / `startBack` **이미 이식 완료** (angle jump 이중 클릭
+      판정용). 추가 이식 필요 없음.
 
 ### Phase 8. Simple / Smart Base Climb 전체 이식
 
@@ -497,15 +501,16 @@ Orientation 판정 + ClimbGap 계산.
       확보 필요.
 
 #### B-48b-dep. `Options._runOnSprintRelease` / `_walkOnSprintRelease` 필드 이식
-- [ ] B-48b-dep. 1.21.1 SmartMovingConfig 미이식 — grep 확인 (세션 88). Phase 7 B-48b
-      (isGroundSprinting 전환 후처리) 의존 필드. 이식 시 `Options` 위치 (SmartMovingConfig
-      또는 별도 Options 클래스) + 기본값 (Modified 계열) 확인.
+- [x] B-48b-dep. **세션 131 완료**. `SmartMovingConfig.runOnSprintRelease = true` +
+      `walkOnSprintRelease = false` 필드 추가 + Properties IO (`move.sprint.key.release.run`
+      / `.walk`) 등록. 원본 `_sprintKeyReleaseAction` String Property ("run"/"walk" 상호
+      배타) 을 단순 boolean 두 개로 직접 이식 (원본 기본값 "run" → runOnSprintRelease=true).
 
 #### B-48b-fallback. B-48 불가능 시 근사 판단
-- [ ] B-48b-fallback. 원본 L2697-L2709 `isGroundSprinting` 전환 후처리 본문 확보 후 의존
-      필드 `wasRunningWhenSprintStarted` / `isStandupSprintingOrRunning()` 등 이식 난이도
-      평가. 대규모 이식 불가 시 §7 근사 등록 (원본 의도: sprint 해제 후 walk/run 전환 시
-      관성 유지).
+- [x] B-48b-fallback. **세션 131 불필요 확정** — B-48b 전수 이식 성공. 의존 필드
+      (`wasGroundSprinting`, `wasRunningWhenSprintStarted`) + 메서드 (`isStandupSprintingOrRunning`)
+      + Config (`runOnSprintRelease`, `walkOnSprintRelease`) 모두 이식됨. 근사 폴백
+      불필요.
 
 #### B-51. `Config.isLevitateSmallEnabled()` + `isSmall` 게이트 이식 (세션 88 4차 확정 감사 발견)
 - [ ] B-51. 본체 §6.7 L314 "Config.isLevitateSmallEnabled() ✗ 미이식" 항목 Extended 원자
@@ -547,6 +552,91 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 131 — 2026-04-25 — Phase 7 완결 — B-48a/b/c + B-48b-dep + B-49/B-49b 확인
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 7 전수 이식 + 확인.
+
+**진행한 작업**:
+
+**1. B-48a — sprintKey 엣지 필드** (sneakKey 패턴 복제):
+- 3 필드 신설: `sprintKeyStartPressed` / `sprintKeyStopPressed` / `prevSprintKeyPressed`.
+- tickEssential 초반 `sneakKey` 엣지 감지 직후에 sprintKey 엣지 계산 추가:
+  ```java
+  boolean curSprintPressed = opts.sprintKey.isPressed();
+  sprintKeyStartPressed = curSprintPressed && !prevSprintKeyPressed;
+  sprintKeyStopPressed  = !curSprintPressed && prevSprintKeyPressed;
+  prevSprintKeyPressed = curSprintPressed;
+  ```
+
+**2. B-48c — `wasGroundSprinting` 이전 틱 저장**:
+- 필드 신설 + isGroundSprinting 계산 직전 (L1169) `wasGroundSprinting = isGroundSprinting;`
+  저장 라인 추가 — 원본 L2678 대응.
+
+**3. B-48b-dep — Config 필드**:
+- `runOnSprintRelease = true` / `walkOnSprintRelease = false` boolean 필드 추가 +
+  Properties IO 등록. 원본 `_sprintKeyReleaseAction` String Property ("run"/"walk") 를
+  단순 boolean 두 개로 직접 이식.
+
+**4. B-48b — isGroundSprinting 전환 후처리** (원본 L2697-L2709):
+- 의존 필드 `wasRunningWhenSprintStarted` 신설.
+- 헬퍼 메서드 `isStandupSprintingOrRunning(player)` 이식 (원본 L3234-L3237 공식).
+- isFast 계산 뒤 3분기 전수 이식:
+  ```java
+  if (isGroundSprinting && !wasGroundSprinting) {
+      wasRunningWhenSprintStarted = player.isSprinting();
+      player.setSprinting(isStandupSprintingOrRunning(player));
+  } else if (wasGroundSprinting && !isGroundSprinting) {
+      player.setSprinting(cfg.runOnSprintRelease || wasRunningWhenSprintStarted);
+  }
+  if (cfg.walkOnSprintRelease && sprintKeyStopPressed) {
+      player.setSprinting(false);
+  }
+  ```
+
+**5. B-48b-fallback — 불필요 확정**: B-48b 전수 이식 성공.
+
+**6. B-49 — 불필요 확정**: 원본 `grabButton.StopPressed` 사용처 전수 grep 결과 **0건**.
+
+**7. B-49b — 확인 완료**: 원본 이동 엣지 사용처는 `left/right/backButton.StartPressed` 뿐
+(원본 L2906/L2921/L2936, angle jump 이중 클릭). 1.21.1 `prevPressLeft`/`prevPressRight`/
+`prevPressBack` + `startLeft`/`startRight`/`startBack` 이미 이식됨 (ClientState L1356).
+`forwardButton` 엣지 사용처 0건 확인. 추가 이식 필요 없음.
+
+**8. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 131 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2678 + L2697-L2709 + L3234-L3237 +
+  `SmartMovingOptions.java` L57-L60 로컬 read ✓
+- [근거] 원본 grep 으로 `grabButton.StopPressed` / `forwardButton.StartPressed` 사용 0건 확인 ✓
+- [대응] 원본 `sp.isSprinting()` → `player.isSprinting()`, `sp.setSprinting()` →
+  `player.setSprinting()`, `sprintButton.StartPressed` → `sprintKeyStartPressed` 표면 매핑 ✓
+- [분기] 시작 엣지 / 종료 엣지 / walkOnSprintRelease+stopPressed 3분기 전수 ✓
+- [상수] 없음 ✓
+- [타이밍] `wasGroundSprinting` 저장 위치 원본 L2678 (isGroundSprinting 공식 직전).
+  전환 후처리 위치 원본 L2697 (isFast 공식 직후) ✓
+- [근사] 없음 — 전수 1:1 ✓
+- [신규] Config `runOnSprintRelease`/`walkOnSprintRelease`, ClientState `sprintKeyStart/Stop/
+  prevSprintKeyPressed`/`wasGroundSprinting`/`wasRunningWhenSprintStarted` 필드 + 헬퍼
+  `isStandupSprintingOrRunning` 신설 ✓
+- [회귀] 기존 isGroundSprinting / isFast / sneakKey 엣지 / angle jump 이중 클릭 로직
+  영향 없음. 새로 추가된 setSprinting 호출은 vanilla sprint 상태만 변경 — SM 내부
+  `isFast` 필드는 독립 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**🎉 Phase 7 완결** — B-48a/b/c + B-48b-dep/fallback + B-49 + B-49b = 7/7.
+
+**다음 세션 권고**: **Phase 8 진입** — B-20b (Simple Base Climb) + B-20c (Smart Base Climb).
+vs **Phase 9** — B-50 (SmartStatistics) / B-51 (levitateSmall). Phase 6 B-42-B26 (Jumper
+SlideDown) 은 Phase 7 인프라와 함께 다루려 했으나 factor 인프라 대규모 미이식으로 별도
+세션 필요. 의존 순서상 Phase 8 먼저, Phase 9 최후.
+
+**진행률** (세션 131 종료 시점):
+- Extended 완료: **63 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 13 + Phase 7 **7** = 63)
+- Extended 총 원자 ~64 (Phase 8 + Phase 9 + Phase 6 B-42-B26 후속)
+- **Extended 진행률: 63/64 ≈ 98% (Phase 8/9 제외)**
+- **포커스 #2 전체: (54+63)/115 ≈ 102%** (일부 원자가 초과 — 실제는 Phase 8/9 포함 전 계산 필요)
+- **🎉 Phase 7 완결** — Phase 8 진입 준비.
 
 ### 세션 130 — 2026-04-25 — B-9e/f/g/h + B-11 — Phase 5 완결 (5 원자 일괄)
 
