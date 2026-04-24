@@ -150,8 +150,9 @@ Orientation 판정 + ClimbGap 계산.
       - [x] **B-19a2a1** (세션 99 완료): wall 판정 보조 — `headedToFrontSideWall` +
             `headedToBaseWall` 3 오버로드 + `headedToBaseGrabWall` 2 오버로드. 근사 없음
             (B-19a1c3b `getWallFlag` 근사에만 의존).
-      - [ ] **B-19a2a2**: vine 보조 — `baseVineClimbing` 2 오버로드 + `remoteVineClimbing`
-            2 오버로드.
+      - [x] **B-19a2a2** (세션 100 완료): vine 보조 — `baseVineClimbing` 2 오버로드 +
+            `remoteVineClimbing` 2 오버로드. 근사 없음 (hasVineOrientation + isVine +
+            getHorizontalBorderGap 의존 전수 충족).
       - [ ] **B-19a2a3**: half-solid 판정 — `isLowerHalfFrontFullEmpty` +
             `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`.
       - [ ] **B-19a2a4**: 잔여 보조 — `isOnMiddleLadderFront` + `isHeadedToRope` (mod 근사
@@ -447,6 +448,52 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 100 — 2026-04-24 — B-19a2a2 vine 보조 (baseVineClimbing + remoteVineClimbing 2 오버로드씩)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 `.tmp_research/Orientation.java.md` L1087-L1146 재확인** (세션 92 read 완료).
+2. **4 메서드 이식** (근사 없음):
+   * `baseVineClimbing(int j_offset)` (원본 L1087-L1103) — int 반환 (DefaultMeta=-1 /
+     VineFrontMeta=0 / VineSideMeta=1). `isOnVine` 선행 체크 + `isOnVineFront` 우선 +
+     4 orthogonal vine 측면 체크.
+   * `baseVineClimbing(int j_offset, Orientation orientation)` (원본 L1105-L1113) —
+     자기 자신 제외 + `orientation.rotate(180).hasVineOrientation(world, base_i, local_offset
+     + j_offset, base_k)` + `orientation.getHorizontalBorderGap() >= 0.65`.
+   * `remoteVineClimbing(int j_offset)` (원본 L1120-L1132) — `isBehindVine && isOnVineBack`
+     우선 → VineFrontMeta, 4 orthogonal 측면 체크 → VineSideMeta.
+   * `remoteVineClimbing(int j_offset, Orientation orientation)` (원본 L1134-L1146) —
+     `(base_i - orientation._i, j_offset, base_k - orientation._k)` 위치 vine + 방향 +
+     경계거리 조건.
+3. **의존 전수 충족**:
+   * `isOnVine` / `isVine` / `getBlock` (B-19a1a)
+   * `isOnVineFront` / `isBehindVine` / `isOnVineBack` / `hasVineOrientation` (B-19a1b)
+   * `getHorizontalBorderGap()` 인스턴스 오버로드 (B-19a1a)
+   * `rotate` (B-19a0)
+
+**완료 전 검증 체크리스트 (세션 100 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1087-L1146 전수 read ✓
+- [근거] 의존 메서드 (isOnVine/isVine/getBlock/isOnVineFront/isBehindVine/isOnVineBack/
+  hasVineOrientation/getHorizontalBorderGap/rotate) 전수 이식 확인 ✓
+- [대응] 4 메서드 원본 ↔ 1.21.1 side-by-side. `baseVineClimbing` front/side 우선순위 +
+  4 orthogonal 재귀. `remoteVineClimbing` 동일 패턴. ✓
+- [분기] `baseVineClimbing(j_offset)` 4 분기 (vine 없음 / front / 4 orthogonal side / 외) +
+  `baseVineClimbing(j_offset, orientation)` 2 갈래 (this → false / 실제 조건) +
+  `remoteVineClimbing(j_offset)` 동일 + `remoteVineClimbing(j_offset, orientation)` 동일 ✓
+- [상수] `DefaultMeta=-1` / `VineFrontMeta=0` / `VineSideMeta=1` (B-19a0 이식) +
+  `0.65F` / `0.65` 경계거리 임계값 ✓
+- [타이밍] 순수 메서드 호출 — 호출 타이밍 무관 ✓
+- [근사] 근사 없음 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용. B-19a2c/d (hasHalfHold/hasBottomHold) + B-19a2e (isLadderSubstitute)
+  가 이 헬퍼를 소비 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a2a3** — half-solid 판정. `isLowerHalfFrontFullEmpty` (원본 L2065-L2112,
+RedPower + BetterThanWolves 근사 포함) + `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`
+(원본 위치 확인 필요). 예상 1 세션.
 
 ### 세션 99 — 2026-04-24 — B-19a2a1 wall 판정 보조 (headedToFrontSideWall + headedToBaseWall 3 + headedToBaseGrabWall 2)
 

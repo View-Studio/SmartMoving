@@ -1807,4 +1807,97 @@ public class Orientation {
             return true;
         return false;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2a2 (세션 100) — vine 보조 (baseVineClimbing + remoteVineClimbing 각 2 오버로드)
+    // 원본: Orientation.java L1087-L1103 + L1105-L1113 (baseVineClimbing),
+    //       L1120-L1132 + L1134-L1146 (remoteVineClimbing).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L1087-L1103 `baseVineClimbing(int j_offset)` — base 위치에 vine 이 있을 때,
+     * 이 Orientation 방향으로 등반 가능한 vine meta 타입 반환.
+     *
+     *   (1) `isOnVine(j_offset)` false → `DefaultMeta` (-1)
+     *   (2) `isOnVineFront(j_offset)` (vine 이 이 방향으로 붙어있음) → `VineFrontMeta` (0)
+     *   (3) 4 orthogonal (PZ/NZ/ZP/ZN) 중 어느 하나가 `baseVineClimbing(j_offset, orientation)` true →
+     *       `VineSideMeta` (1)
+     *   (4) 외 → `DefaultMeta`
+     */
+    protected int baseVineClimbing(int j_offset) {
+        boolean result = isOnVine(j_offset);
+        if (result) {
+            result = isOnVineFront(j_offset);
+            if (result)
+                return VineFrontMeta;
+
+            if (baseVineClimbing(j_offset, PZ)
+                    || baseVineClimbing(j_offset, NZ)
+                    || baseVineClimbing(j_offset, ZP)
+                    || baseVineClimbing(j_offset, ZN))
+                return VineSideMeta;
+        }
+        return DefaultMeta;
+    }
+
+    /**
+     * 원본 L1105-L1113 `baseVineClimbing(int j_offset, Orientation orientation)` — 지정한
+     * orientation 기준 vine 측면 등반 가능 판정.
+     *
+     *   (1) `orientation == this` → false (자기 자신은 front 판정에서 처리됨)
+     *   (2) `orientation.rotate(180).hasVineOrientation(world, base_i, local_offset + j_offset, base_k)` AND
+     *       `orientation.getHorizontalBorderGap() >= 0.65` → true
+     *
+     * 의미: vine 이 orientation 의 반대쪽에 붙어있고 (rotate(180)), 플레이어가 orientation
+     * 방향 경계에 충분히 가까움 (0.65 이상) → 그 orientation 으로 등반 가능.
+     */
+    protected boolean baseVineClimbing(int j_offset, Orientation orientation) {
+        if (orientation == this) return false;
+
+        return orientation.rotate(180).hasVineOrientation(world, base_i,
+                local_offset + j_offset, base_k)
+            && orientation.getHorizontalBorderGap() >= 0.65;
+    }
+
+    /**
+     * 원본 L1120-L1132 `remoteVineClimbing(int j_offset)` — remote 위치 vine 등반 meta.
+     *
+     *   (1) `isBehindVine && isOnVineBack` → `VineFrontMeta`
+     *   (2) 4 orthogonal 중 어느 하나 `remoteVineClimbing(j_offset, orientation)` true →
+     *       `VineSideMeta`
+     *   (3) 외 → `DefaultMeta`
+     */
+    protected int remoteVineClimbing(int j_offset) {
+        if (isBehindVine(j_offset) && isOnVineBack(j_offset))
+            return VineFrontMeta;
+
+        if (remoteVineClimbing(j_offset, PZ)
+                || remoteVineClimbing(j_offset, NZ)
+                || remoteVineClimbing(j_offset, ZP)
+                || remoteVineClimbing(j_offset, ZN))
+            return VineSideMeta;
+
+        return DefaultMeta;
+    }
+
+    /**
+     * 원본 L1134-L1146 `remoteVineClimbing(int j_offset, Orientation orientation)`.
+     *
+     *   (1) `orientation == this` → false
+     *   (2) `(base_i - orientation._i, j_offset, base_k - orientation._k)` 좌표에서
+     *       vine 블록 + `orientation.hasVineOrientation` + `getHorizontalBorderGap >= 0.65F`
+     *
+     * 의미: orientation 의 반대쪽 한 칸 위치에 vine 이 그 orientation 방향으로 붙어있고,
+     * 경계 거리 조건 만족.
+     */
+    protected boolean remoteVineClimbing(int j_offset, Orientation orientation) {
+        if (orientation == this) return false;
+
+        int i = base_i - orientation._i;
+        int k = base_k - orientation._k;
+        BlockState state = getBlock(i, j_offset, k);
+        return isVine(state)
+            && orientation.hasVineOrientation(world, i, local_offset + j_offset, k)
+            && orientation.getHorizontalBorderGap() >= 0.65F;
+    }
 }
