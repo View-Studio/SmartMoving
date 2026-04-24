@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 73 — B Phase 2 계속 / B-17b2) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 43 원자 완료 / ⏳ **B Phase 2 잔여 14 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-26/B-33/B-35/B-36/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 74 — B Phase 2 계속 / B-35) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 44 원자 완료 / ⏳ **B Phase 2 잔여 13 원자** (B-7/B-9/B-11/B-18/B-19/B-20/B-26/B-33/B-36/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -406,6 +406,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   (2) `blocked` = `currentScreen != null && !currentScreen.allowUserInput` (원본 L2393).
   1.21.1 `allowUserInput` 필드 제거됨 → `currentScreen != null` 단일 조건 근사. 모든 열린
   screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작) — 원본 의도와 근접.
+- **B-35 근사** (세션 74): `ClientState.tickEssential` B-17 블록 뒤 + R-09 블록 앞에
+  wasCrawling↔isCrawling 전환 후처리 (원본 L2822-L2836) 근사 이식. 분기 A 의
+  `crawlStandUpBottom` 정밀 AABB (`getMaxPlayerSolidBetween(minY-1, minY, ...)`) 미이식 →
+  `crawlStandUpBottom - minY ≈ 0` 근사 (발 아래 고체 바로 붙어있음 가정). `move(0, dy, 0)`
+  이동량 생략 → `heightOffset = 0F` 리셋만. 공중에서 크롤 해제 시 정확도 낮음 (드물긴 함).
+  분기 B (진입 엣지) 는 `heightOffset=-1F + move(0,-1D,0)` 1:1 이식.
 
 ---
 
@@ -901,12 +907,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       IMPL-01 종료 시점 최종값. B-31a wasCrawling 필드 이식 (세션 41) 완료 상태.
 
 #### B-35. wasCrawling↔isCrawling 전환 후처리 이식 (A-5 발견)
-- [ ] B-35. 원본 L2822-L2836 이식 — 두 방향 전환 시:
-      - `wasCrawling && !isCrawling && !initializeCrawling && !flying` →
-        resetHeightOffset + `move(0, crawlStandUpBottom - minY, 0)`
-      - `(isCrawling && !wasCrawling) || initializeCrawling` →
-        `setHeightOffset(-1F)` + `move(0, -1D, 0)` + (initializeCrawling 이면 toCrawling)
-      의존: B-31a/B-31c + B-40 toCrawling 헬퍼 선행.
+- [x] B-35. ✅ **세션 74 완료 (근사 이식)** — 원본 L2822-L2836 이식. ClientState tickEssential
+      B-17 블록 뒤 + R-09 블록 앞에 배치:
+      * 분기 A (`wasCrawling && !isCrawling && !initializeCrawling && !flying`):
+        `heightOffset = 0F` 리셋. `move(0, crawlStandUpBottom - minY, 0)` 이동량은 근사로 생략
+        (§7 B-35 근사 등록).
+      * 분기 B (`(isCrawling && !wasCrawling) || initializeCrawling`):
+        `heightOffset = -1F` + `player.move(SELF, new Vec3d(0, -1D, 0))` + `if (initializeCrawling)
+        toCrawling();` 1:1 이식.
+      근사 사유: `crawlStandUpBottom` = `getMaxPlayerSolidBetween(minY-1, minY, ...)` 정밀
+      AABB 스캔 미이식. 일반적으로 `crawlStandUpBottom ≈ minY` (발 아래 고체) 이므로 이동량 ≈ 0.
+      의존 전수 충족: B-31a wasCrawling / B-31c initializeCrawling 필드 / B-40 toCrawling() /
+      MovementType/Vec3d import (세션 73).
 
 #### B-36. grab.StartPressed 수영/크롤 3분기 이식 (A-5 발견)
 - [ ] B-36. 원본 L2838-L2861 이식 — grab 엣지 3분기:
@@ -3327,6 +3339,63 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
 - **B-35** (wasCrawling↔isCrawling 전환 후처리) — crawlStandUpBottom 근사 필요.
+
+### 세션 74 — 2026-04-24 — B Phase 2 B-35 (전환 후처리 근사 이식)
+
+**진행한 작업**:
+- ClientState tickEssential B-17 블록 (L1370 `}`) 뒤 + R-09 블록 앞에 원본 L2822-L2836
+  wasCrawling↔isCrawling 전환 후처리 2분기 이식:
+  ```java
+  // 분기 A: wasCrawling && !isCrawling && !initializeCrawling && !flying
+  if (wasCrawling && !isCrawling && !initializeCrawling
+          && !player.getAbilities().flying) {
+      heightOffset = 0F;  // resetHeightOffset 근사
+      // move(0, crawlStandUpBottom - minY, 0) 이동량 생략 (근사)
+  }
+  // 분기 B: (isCrawling && !wasCrawling) || initializeCrawling
+  if ((isCrawling && !wasCrawling) || initializeCrawling) {
+      heightOffset = -1F;
+      player.move(MovementType.SELF, new Vec3d(0, -1D, 0));
+      if (initializeCrawling) toCrawling();
+  }
+  ```
+- §7 **B-35 근사 등록**: `crawlStandUpBottom = getMaxPlayerSolidBetween(minY-1, minY, ...)`
+  정밀 AABB 스캔 미이식 → `crawlStandUpBottom ≈ minY` 근사로 이동량 0. 공중 크롤 해제
+  정확도 낮으나 드문 상황.
+- 의존 전수 충족: B-31a wasCrawling / B-31c initializeCrawling 필드 / B-40 toCrawling() /
+  세션 73 MovementType/Vec3d import 재사용.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 74)**:
+- [근거] 원본 L2822-L2836 research/.../SmartMovingSelf.md + R-14.9 확보 ✓
+- [근거] R-14.10 #10 `landMotionPost` / #11 `crawl 전환 후처리` 불일치 §16 세션 35 ✓
+- [대응] 2분기 조건 + 본문 원본 1:1 (이동량 근사 제외) ✓
+- [분기] 분기 A 4-AND + 분기 B 2-OR 명시 ✓
+- [상수] `-1D` / `-1F` / `0F` 원본 동일 ✓
+- [타이밍] B-17 뒤 + R-09 앞 — 원본 L2822 (L2737 isCrawlClimbing 뒤) 순서 복원 ✓
+- [근사] `crawlStandUpBottom - minY ≈ 0` 명시 + §7 B-35 근사 등록 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. wasCrawling→!isCrawling 전환 시
+  heightOffset 리셋 복원 (B-32 세션 44 canCrawl 이식으로 실제 전환 발생 가능). 진입 시
+  heightOffset=-1 + 1블록 하강 경로 복원. toCrawling() 호출은 initializeCrawling 필드가
+  B-31c 공식 미이식으로 항상 false 라 발동 안 함 (B-35 자체 기능엔 영향 없음).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #4 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #7 wall 오르기 crawl 진입 (B-37 세션 62)
+- ✅ #8 handleCeilingClimbing isCrawling=false (B-38 세션 58)
+- ✅ #10/#11 전환 후처리 분기 (B-35 세션 74, 근사)
+- ✅ #12 wantCrawlNotClimb (B-41 세션 70)
+- ⏳ #1~#3/#5/#6/#9/#13~#15
+
+**Phase 2 진행 상황**: 44 원자 완료 / 잔여 13 원자
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 중간.
+- **B-20** (Standard/Simple Base Climb) — Climber 구조 변경. 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+- **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
 
 ---
 

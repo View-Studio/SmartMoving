@@ -1369,6 +1369,29 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // B-35 (세션 74): 원본 L2822-L2836 wasCrawling↔isCrawling 전환 후처리 이식 (근사).
+            // 원본 의미: 크롤 해제 (서기 전환) 또는 크롤 진입 시 heightOffset 및 위치 보정.
+            // ※ 근사 이식 (§7 B-35 근사 등록):
+            //   `crawlStandUpBottom` = 원본 `getMaxPlayerSolidBetween(minY - 1D, minY, ...)`
+            //   (발 아래 0-1블록 범위 최고 고체 Y) 정밀 AABB 스캔 미이식 →
+            //   `crawlStandUpBottom - minY ≈ 0` 근사 (발 아래 고체 바로 붙어있음 가정).
+            //   `move(0, crawlStandUpBottom - minY, 0)` 이동량 생략 → heightOffset 리셋만.
+            //   공중 크롤 해제 시 정확도 낮음 (드물긴 함).
+            // 분기 A: wasCrawling && !isCrawling && !initializeCrawling && !flying
+            //   → resetHeightOffset (heightOffset = 0F). move 생략 (근사).
+            if (wasCrawling && !isCrawling && !initializeCrawling
+                    && !player.getAbilities().flying) {
+                heightOffset = 0F;
+                // 근사: crawlStandUpBottom - minY ≈ 0 → player.move(0,0,0) no-op 생략.
+            }
+            // 분기 B: (isCrawling && !wasCrawling) || initializeCrawling
+            //   → setHeightOffset(-1F) + move(0, -1D, 0) + (initializeCrawling → toCrawling())
+            if ((isCrawling && !wasCrawling) || initializeCrawling) {
+                heightOffset = -1F;
+                player.move(MovementType.SELF, new Vec3d(0, -1D, 0));
+                if (initializeCrawling) toCrawling();
+            }
+
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
             // wasSneaking/wasCrawling/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
