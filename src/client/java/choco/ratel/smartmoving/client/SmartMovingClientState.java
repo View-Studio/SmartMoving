@@ -1020,6 +1020,18 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // B-34 (세션 59): 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling &&
+            // capabilities.flying → tryJump(Config.Up, null, null, null)`.
+            // 크롤 해제 시점에 vanilla 비행 모드면 Up 점프 발동 (비행 상승 보조).
+            // 원본에서는 isCrawling 공식 직후 + contextContinueCrawl 해제 뒤에 위치.
+            // 1.21.1 에서는 IMPL-01 블록 (L988-L1021) 종료 직후 배치 — isCrawling 최종값
+            // 확정 뒤. wasCrawling 은 L761 tickEssential 초반 일괄 저장된 이전 틱 값.
+            // tryJump(Config.Up, null, null, null) → 1.21.1 tryJump(player, sm, UP, 0F)
+            //   (angle==null → vanilla Up 경로).
+            if (wasCrawling && !isCrawling && player.getAbilities().flying) {
+                SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, 0F);
+            }
+
             // B-25 (세션 55): IMPL-02 직접 진입 6-AND 조건 완전 복원 (원본 L2553-L2561).
             //   기존 `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping`
             //   간소 매핑 제거 → 원본 공식:

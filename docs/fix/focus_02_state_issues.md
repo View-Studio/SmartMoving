@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 58 — B Phase 2 계속 / B-38) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 25 원자 완료 / ⏳ **B Phase 2 잔여 ~15 원자** |
+| 상태 | 🟡 진행 중 (세션 59 — B Phase 2 계속 / B-34) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 26 원자 완료 / ⏳ **B Phase 2 잔여 ~14 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -779,8 +779,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       의존: B-31a `wasCrawling` / B-32 canCrawl 정정 선행.
 
 #### B-34. capabilities.flying 해제 점프 이식 (A-5 발견)
-- [ ] B-34. 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling && capabilities.flying
-      → tryJump(Config.Up, null, null, null)`. 의존: B-31a 선행.
+- [x] B-34. ✅ **세션 59 완료** — 원본 L2449-L2450 이식. ClientState tickEssential
+      IMPL-01 블록 (L988-L1021) 종료 직후, B-25 IMPL-02 앞에 배치:
+      `if (wasCrawling && !isCrawling && player.getAbilities().flying) {
+         SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, 0F); }`.
+      원본 `tryJump(Config.Up, null, null, null)` (4-param, angle==null) → 1.21.1
+      `tryJump(player, sm, UP, 0F)` (2-param 축소, charge=0 → vanilla Up 경로) 표면 매핑.
+      wasCrawling 은 L761 tickEssential 초반 일괄 저장된 이전 틱 값. isCrawling 은
+      IMPL-01 종료 시점 최종값. B-31a wasCrawling 필드 이식 (세션 41) 완료 상태.
 
 #### B-35. wasCrawling↔isCrawling 전환 후처리 이식 (A-5 발견)
 - [ ] B-35. 원본 L2822-L2836 이식 — 두 방향 전환 시:
@@ -2446,6 +2452,52 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. B-19 Free climb 분기 내부 — 위치 탐색 필요.
 - **B-16** (wantClimbHolding/isClimbHolding 3-OR) — 원본 L2721-L2732. B-18 선행용 중요 블록.
 - **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+
+### 세션 59 — 2026-04-24 — B Phase 2 B-34 (capabilities.flying 해제 점프)
+
+**진행한 작업**:
+- ClientState tickEssential IMPL-01 블록 (L988-L1021) 종료 직후 + B-25 IMPL-02 앞에 원본
+  L2449-L2450 이식. 원본: `if (wasCrawling && !isCrawling && esp.capabilities.isFlying)
+  tryJump(Config.Up, null, null, null);`
+- 1.21.1 코드:
+  ```java
+  if (wasCrawling && !isCrawling && player.getAbilities().flying) {
+      SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, 0F);
+  }
+  ```
+- 표면 매핑: `esp.capabilities.isFlying` → `player.getAbilities().flying` /
+  `tryJump(Config.Up, null, null, null)` → `tryJump(player, sm, UP, 0F)` (4-param 축소).
+  원본 `angle==null` 은 1.21.1 `charge=0F` 와 동일 의미 (vanilla Up 경로).
+- 주석으로 원본 라인 + 배치 이유 (wasCrawling L761 이전 틱 저장 + isCrawling IMPL-01 최종값) 명시.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 59)**:
+- [근거] 원본 L2449-L2450 확보 (research/.../SmartMovingSelf.md L4026-L4028 R-14.3) ✓
+- [근거] R-14.10 #4 불일치 `capabilities.flying 해제 점프` 확정 자료 §16 세션 35 ✓
+- [대응] if 조건 3-AND + tryJump 호출 원본 1:1 ✓
+- [분기] 없음 (단일 if)
+- [상수] `SmartMovingJumper.UP = 0` 이식 완료 확인 ✓
+- [타이밍] IMPL-01 종료 직후 — isCrawling 최종값 확정 시점. wasCrawling 은 L761 tickEssential
+  초반 저장된 이전 틱 값. 원본 L2441 직후 위치와 의미적 동치 ✓
+- [근사] `tryJump` 4-param→2-param 축소는 B-1 세션 25 이식 결정. `angle==null ↔ charge=0F`
+  vanilla Up 경로 등가 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 비행 모드에서 크롤 해제 시 tryJump 발동 경로
+  복원. 다른 호출 지점과 간섭 없음.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #4 L2449-L2450 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #8 L1170 handleCeilingClimbing 진입 isCrawling=false (B-38 세션 58)
+- ⏳ #1~#3/#5~#7/#9~#15
+
+**Phase 2 진행 상황**: 26 원자 완료 / 잔여 ~14
+
+**다음 작업 권고**:
+- **B-16** (wantClimbHolding/isClimbHolding 3-OR) — 원본 L2721-L2732. B-18 선행용 중요 블록.
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장.
+- **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. Free climb 분기 내부.
+- **B-39** (landMotionPost 3분기 isSlow > minY+0.5D) — 원본 L1392-L1403. ClientState 내부.
 
 ---
 
