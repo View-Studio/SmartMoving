@@ -106,9 +106,24 @@ Orientation 판정 + ClimbGap 계산.
             `isOnVineFront`/`Back` / `isBehindLadder`/`Vine`) + rope 2 (전체 false 근사) +
             trap door 4 (`isOnOpenTrapDoor`/`isTrapDoorFront`/`getOpenTrapDoorOrientation`/
             `isRemoteSolid`). §7 B-19a1b 근사 2건 등록 (LadderKit/Carpenters 모드 + rope 3종).
-      - [ ] **B-19a1c**: accessibility 판정 — `isBaseAccessible` 2 오버로드 / `isFullAccessible` /
-            `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` /
-            `isUpperHalfFrontEmpty`.
+      - [ ] **B-19a1c**: accessibility 판정 (세션 93 재분해: 4 서브)
+            세션 93 원본 L2342-L2560 + 관련 헬퍼 L2020-L2340 read 결과 `isBaseAccessible`
+            이 7 분기 + `isRemoteAccessible` 12+ 분기 + stair/slab/fence/wall/door 식별 헬퍼
+            10+ 의존. 한 세션 불가 → 4 서브 분해:
+            - [x] **B-19a1c1** (세션 93 완료): 기본 블록 식별 + stair/slab/fence/wall/door
+                  헬퍼 (isStairCompact / isTopStairCompact / isStairCompactFront·Back
+                  8분기 / isBottomStairCompactFront·NotBack / isTopStairCompactFront·Back /
+                  isHalfBlock / isTopHalfBlock / isBottomHalfBlock / isFence / isFenceBase /
+                  isWallBlock / isDoor / isDoorTop / isFenceGate / isOpenFenceGate /
+                  isClosedFenceGate). §7 근사 4건 등록.
+            - [ ] **B-19a1c2**: `isEmpty` + `isBaseAccessible` 2 오버로드 (7 분기 —
+                  isEmpty / RedPower 무시 / isFullEmpty / isOpenTrapDoor / isClosedTrapDoor /
+                  isWallBlock / Rope / isDoor / Carpenters).
+            - [ ] **B-19a1c3**: `isRemoteAccessible` + `isAccessAccessible` +
+                  `isDoorFrontBlocked` + `headedToFrontWall` + `headedToRemoteFlatWall` +
+                  `remoteLadderClimbing`.
+            - [ ] **B-19a1c4**: `isFullAccessible` + `isFullExtentAccessible` +
+                  `isJustLowerHalfExtentAccessible` + `isUpperHalfFrontEmpty`.
 
 - [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
       (원본 L477-L606 + L608-L648 `hasHalfHold` + `hasBottomHold`)
@@ -398,6 +413,67 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 93 — 2026-04-24 — B-19a1c1 블록 식별 + stair/slab/fence/wall/door 헬퍼
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2342-L2560 + 관련 헬퍼 L2020-L2340 read** — `isBaseAccessible` 7 분기 +
+   `isRemoteAccessible` 12+ 분기 + stair/slab/fence/wall/door 식별 헬퍼 10+ 의존 확인.
+   한 세션 불가 → B-19a1c 4 서브 재분해.
+2. **Extended §3 B-19a1c 서브 4개 재분해** — c1/c2/c3/c4.
+3. **B-19a1c1 이식** — 블록 식별 + stair/slab/fence/wall/door 판정 헬퍼 18개:
+   * Stair 헬퍼 6 (원본 L1544-L1615): `isStairCompact` (class 기반) +
+     `isTopStairCompact` (HALF) + `isStairCompactFront` (8 분기) +
+     `isStairCompactBack` (8 분기) + `isTopStairCompactFront` + `isTopStairCompactBack` +
+     `isBottomStairCompactFront` + `isBottomStairCompactNotBack`
+   * Slab 헬퍼 3 (원본 L2026-L2056): `isHalfBlock` (SlabBlock 제외 DOUBLE) +
+     `isTopHalfBlock` (SlabType.TOP) + `isBottomHalfBlock` (SlabType.BOTTOM + BedBlock 예외)
+   * Fence 헬퍼 5 (원본 L2177-L2222): `isFenceBase` (FenceBlock + WallBlock) +
+     `isFenceGate` + `isClosedFenceGate` + `isOpenFenceGate` + `isFence` (좌표 래퍼 포함)
+   * Wall 헬퍼 1 (원본 L2333-L2340): `isWallBlock` (PaneBlock + FenceBase)
+   * Door 헬퍼 2 (원본 L2289-L2298): `isDoor` (DoorBlock) + `isDoorTop` (HALF==UPPER)
+4. **1.21.1 매핑 핵심** — vanilla 1.7.10 metadata → 1.21.1 BlockState property:
+   * stair `metadata & 3`: 0=EAST/1=WEST/2=SOUTH/3=NORTH ↔ `StairsBlock.FACING`
+   * stair `metadata & 4`: ↔ `StairsBlock.HALF == BlockHalf.TOP`
+   * slab `metadata & 8`: ↔ `SlabBlock.TYPE == SlabType.TOP/BOTTOM`
+   * door `metadata == 8`: ↔ `DoorBlock.HALF == DoubleBlockHalf.UPPER`
+   * fenceGate `metadata & 4 == 0`: ↔ `!FenceGateBlock.OPEN`
+5. **Import 추가 8건**: `DoorBlock` / `FenceBlock` / `FenceGateBlock` / `PaneBlock` /
+   `SlabBlock` / `StairsBlock` / `WallBlock` + enum 3 (`BlockHalf` / `DoubleBlockHalf` /
+   `SlabType`).
+6. **본체 §7 B-19a1c1 근사 4건 등록**:
+   (1) `isStairCompact` — `_knownCompactStairBlocks` (mod stair 리스트) 생략
+   (2) `isHalfBlock` — `_knownHalfBlocks` (mod slab) 생략
+   (3) `isBottomHalfBlock` — BetterThanWolves anchor 블록 예외 생략
+   (4) `isWallBlock` — `_knownThinWallBlocks` + Carpenters `_blockCarpentersLadder` 생략
+
+**완료 전 검증 체크리스트 (세션 93 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1544-L1615 / L2026-L2063 / L2177-L2222
+  / L2289-L2340 대역 전수 read ✓
+- [근거] vanilla 1.7.10 metadata 비트 → 1.21.1 BlockState property 매핑 각 블록 타입별
+  1:1 검증 (stair facing/half / slab type / door half / fenceGate open) ✓
+- [대응] 18 메서드 원본 ↔ 1.21.1 side-by-side. stair 8 분기 (orthogonal 4 + diagonal 4 OR) /
+  slab 3 / fence 5 / wall 1 / door 2 전수 ✓
+- [분기] `isStairCompactFront` 8 분기 + `isStairCompactBack` 8 분기 + `isBottomHalfBlock`
+  BedBlock 예외 + `isWallBlock` PaneBlock OR FenceBase 전수 ✓
+- [상수] 없음 (class/property 기반 식별) — 매핑 상수는 vanilla Direction/BlockHalf/
+  DoubleBlockHalf/SlabType enum ✓
+- [타이밍] 헬퍼는 호출 시점 무관 (pure block state inspection). `initialize` 후속 호출에서
+  사용 ✓
+- [근사] **§7 B-19a1c1 근사 4건 등록 완료**. 각 함수 JavaDoc 에 "근사 이식 — 원본과 차이"
+  주석 ✓
+- [신규] 없음. `BedBlock` 은 `net.minecraft.block.BedBlock` fully qualified 참조 (import 불필요
+  — 1회 사용) ✓
+- [회귀] 기존 Climber/ClientState 는 새 헬퍼 미사용 → compileClientJava 무영향. B-19a1a/b
+  상태 필드/World 접근 헬퍼 활용 — getBlock 경유 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a1c2** — `isEmpty` + `isBaseAccessible` 2 오버로드 이식. 원본
+L2342-L2399 (B-19a1c1 헬퍼 18개 대부분 직접 사용) + `isEmpty` L2537-L2541 +
+`isOpenTrapDoor(i, j_offset, k)` / `isClosedTrapDoor(i, j_offset, k)` / `isTrapDoor(i, j_offset, k)`
+좌표 래퍼 3. 추가 §7 근사: RedPower wire + ASRope + Carpenters 분기 생략 예상. 1 세션.
 
 ### 세션 92 — 2026-04-24 — B-19a1b `Orientation` front/back/rope/trapdoor 헬퍼 이식
 

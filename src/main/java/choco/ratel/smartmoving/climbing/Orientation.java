@@ -4,11 +4,21 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.block.AbstractSignBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.DoorBlock;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.LadderBlock;
+import net.minecraft.block.PaneBlock;
 import net.minecraft.block.PressurePlateBlock;
+import net.minecraft.block.SlabBlock;
+import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.block.VineBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.WallSignBlock;
+import net.minecraft.block.enums.BlockHalf;
+import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
@@ -810,5 +820,212 @@ public class Orientation {
         BlockPos pos = new BlockPos(i + _i, j, k + _k);
         BlockState state = world.getBlockState(pos);
         return isSolid(state, world, pos);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c1 (세션 93) — 블록 식별 + stair/slab/fence/wall/door 헬퍼
+    // 원본: Orientation.java L1544-L1615 (stair metadata), L2026-L2063 (slab),
+    //       L2177-L2222 (fence/fenceGate), L2289-L2323 (door/doorFrontBlocked),
+    //       L2333-L2340 (wallBlock).
+    //
+    // 1.21.1 매핑 핵심:
+    //   - vanilla 1.7.10 stair `metadata & 3` (0=EAST/1=WEST/2=SOUTH/3=NORTH) ↔
+    //     `StairsBlock.FACING` Direction property
+    //   - `metadata & 4` (TOP half bit) ↔ `StairsBlock.HALF == BlockHalf.TOP`
+    //   - slab `metadata & 8` ↔ `SlabBlock.TYPE == SlabType.TOP/BOTTOM`
+    //   - door `metadata == 8` (upper marker) ↔ `DoorBlock.HALF == DoubleBlockHalf.UPPER`
+    //   - fenceGate `metadata & 4 == 0` (closed) ↔ `!FenceGateBlock.OPEN`
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Stair (원본 L1544-L1615) ────────────────────────────────────────────
+
+    /**
+     * 원본 L2059-L2063 `isStairCompact(Block)`.
+     *
+     * **§7 근사** (B-19a1c1-approx-1): 원본 `_knownCompactStairBlocks` (mod 추가 stair
+     * 리스트) 체크 생략 — 해당 모드 1.21.1 미이식. vanilla StairsBlock 만 감지.
+     */
+    public static boolean isStairCompact(BlockState state) {
+        // 근사 이식 — 원본과 차이: _knownCompactStairBlocks (mod stair) 제외
+        return state != null && state.getBlock() instanceof StairsBlock;
+    }
+
+    /**
+     * 원본 L1612-L1615 `isTopStairCompact(int stairMetadata)` — `(metadata & 4) != 0`.
+     * 1.21.1: `StairsBlock.HALF == BlockHalf.TOP`.
+     */
+    public static boolean isTopStairCompact(BlockState state) {
+        return isStairCompact(state) && state.get(StairsBlock.HALF) == BlockHalf.TOP;
+    }
+
+    /**
+     * 원본 L1568-L1588 `isStairCompactFront(int stairMetadata)` — `metadata & 3` 를 facing
+     * 방향으로 해석하여 이 Orientation 과 매치되는지.
+     *
+     * 원본 매핑 (`metadata & 3`):
+     *   0 = EAST  → PZ
+     *   1 = WEST  → NZ
+     *   2 = SOUTH → ZP
+     *   3 = NORTH → ZN
+     *
+     * 1.21.1 매핑: `StairsBlock.FACING` Direction 직접 비교.
+     * diagonal 은 2 방향 OR.
+     */
+    public boolean isStairCompactFront(BlockState state) {
+        if (!isStairCompact(state)) return false;
+        Direction facing = state.get(StairsBlock.FACING);
+        if (this == NZ) return facing == Direction.WEST;
+        if (this == PZ) return facing == Direction.EAST;
+        if (this == ZP) return facing == Direction.SOUTH;
+        if (this == ZN) return facing == Direction.NORTH;
+        if (this == PN) return facing == Direction.EAST  || facing == Direction.NORTH;
+        if (this == PP) return facing == Direction.EAST  || facing == Direction.SOUTH;
+        if (this == NN) return facing == Direction.WEST  || facing == Direction.NORTH;
+        if (this == NP) return facing == Direction.WEST  || facing == Direction.SOUTH;
+        return false;
+    }
+
+    /**
+     * 원본 L1590-L1610 `isStairCompactBack` — facing 이 탐색 **반대** 방향인 경우.
+     */
+    public boolean isStairCompactBack(BlockState state) {
+        if (!isStairCompact(state)) return false;
+        Direction facing = state.get(StairsBlock.FACING);
+        if (this == NZ) return facing == Direction.EAST;
+        if (this == PZ) return facing == Direction.WEST;
+        if (this == ZP) return facing == Direction.NORTH;
+        if (this == ZN) return facing == Direction.SOUTH;
+        if (this == PN) return facing == Direction.WEST  || facing == Direction.SOUTH;
+        if (this == PP) return facing == Direction.WEST  || facing == Direction.NORTH;
+        if (this == NN) return facing == Direction.EAST  || facing == Direction.SOUTH;
+        if (this == NP) return facing == Direction.EAST  || facing == Direction.NORTH;
+        return false;
+    }
+
+    /** 원본 L1556-L1560 — `isTopStairCompact && isStairCompactFront`. */
+    public boolean isTopStairCompactFront(BlockState state) {
+        return isTopStairCompact(state) && isStairCompactFront(state);
+    }
+
+    /** 원본 L1562-L1566 — `isTopStairCompact && isStairCompactBack`. */
+    public boolean isTopStairCompactBack(BlockState state) {
+        return isTopStairCompact(state) && isStairCompactBack(state);
+    }
+
+    /** 원본 L1550-L1554 — `!isTopStairCompact && isStairCompactFront` (bottom half + front). */
+    public boolean isBottomStairCompactFront(BlockState state) {
+        return isStairCompact(state) && !isTopStairCompact(state) && isStairCompactFront(state);
+    }
+
+    /** 원본 L1544-L1548 — `!isTopStairCompact && !isStairCompactBack`. */
+    public boolean isBottomStairCompactNotBack(BlockState state) {
+        return isStairCompact(state) && !isTopStairCompact(state) && !isStairCompactBack(state);
+    }
+
+    // ── Slab (원본 L2026-L2056) ────────────────────────────────────────────
+
+    /**
+     * 원본 L2053-L2056 `isHalfBlock(Block)` — `BlockSlab && !isOpaqueCube()`.
+     * 1.21.1: `instanceof SlabBlock` + `SlabType != DOUBLE` (double slab 은 full block).
+     *
+     * **§7 근사** (B-19a1c1-approx-2): 원본 `_knownHalfBlocks` (mod slab) 체크 생략.
+     */
+    public static boolean isHalfBlock(BlockState state) {
+        // 근사 이식 — 원본과 차이: _knownHalfBlocks (mod slab) 제외
+        if (state == null || !(state.getBlock() instanceof SlabBlock)) return false;
+        return state.get(SlabBlock.TYPE) != SlabType.DOUBLE;
+    }
+
+    /**
+     * 원본 L2038-L2041 `isTopHalfBlock(Block, int metadata)` — `isHalfBlock && (metadata & 8) != 0`.
+     * 1.21.1: `SlabType.TOP`.
+     */
+    public static boolean isTopHalfBlock(BlockState state) {
+        return isHalfBlock(state) && state.get(SlabBlock.TYPE) == SlabType.TOP;
+    }
+
+    /**
+     * 원본 L2026-L2036 `isBottomHalfBlock(Block, int metadata)`.
+     *   (1) `isHalfBlock && (metadata & 8) == 0`
+     *   (2) `block == bed` (BedBlock)
+     *   (3) BetterThanWolves anchor + metadata == 1 (mod) — **§7 근사 생략**
+     *
+     * **§7 근사** (B-19a1c1-approx-3): BetterThanWolves anchor 체크 생략. vanilla BedBlock
+     * 예외는 `instanceof BedBlock` 로 1:1 이식.
+     */
+    public static boolean isBottomHalfBlock(BlockState state) {
+        if (state == null) return false;
+        if (isHalfBlock(state) && state.get(SlabBlock.TYPE) == SlabType.BOTTOM) return true;
+        // 근사 이식 — 원본과 차이: BetterThanWolves anchor 제외
+        return state.getBlock() instanceof net.minecraft.block.BedBlock;
+    }
+
+    // ── Fence / FenceGate (원본 L2177-L2222) ────────────────────────────────
+
+    /**
+     * 원본 L2177-L2181 `isFenceBase(Block)` — `FenceBlock || WallBlock`.
+     */
+    public static boolean isFenceBase(BlockState state) {
+        return state != null && (state.getBlock() instanceof FenceBlock
+                              || state.getBlock() instanceof WallBlock);
+    }
+
+    /**
+     * 원본 L2208-L2212 `isFenceGate(Block)` — `FenceGateBlock` (+ mod 리스트 근사 제외).
+     */
+    public static boolean isFenceGate(BlockState state) {
+        return state != null && state.getBlock() instanceof FenceGateBlock;
+    }
+
+    /** 원본 L2219-L2222 `isClosedFenceGate(int metadata)` — `(metadata & 4) == 0`. */
+    public static boolean isClosedFenceGate(BlockState state) {
+        return isFenceGate(state) && !state.get(FenceGateBlock.OPEN);
+    }
+
+    /** 원본 L2214-L2217 `isOpenFenceGate(Block, int metadata)`. */
+    public static boolean isOpenFenceGate(BlockState state) {
+        return isFenceGate(state) && state.get(FenceGateBlock.OPEN);
+    }
+
+    /** 원본 L2183-L2187 `isFence(Block, int i, int j_offset, int k)` — base + closed gate. */
+    public static boolean isFence(BlockState state) {
+        return isFenceBase(state) || isClosedFenceGate(state);
+    }
+
+    /** 원본 L2189-L2192 `isFence(int i, int j_offset, int k)` — 좌표 기반 래퍼. */
+    public static boolean isFence(int i, int j_offset, int k) {
+        return isFence(getBlock(i, j_offset, k));
+    }
+
+    // ── Wall / Door (원본 L2289-L2340) ─────────────────────────────────────
+
+    /**
+     * 원본 L2333-L2340 `isWallBlock(Block, int i, int j_offset, int k)`.
+     *   `BlockPane || isFence(block, i, j_offset, k) || (Carpenters && ...)`.
+     *
+     * **§7 근사** (B-19a1c1-approx-4): Carpenters `_blockCarpentersLadder` 분기 +
+     * `_knownThinWallBlocks` (mod pane 리스트) 생략. vanilla PaneBlock + FenceBlock +
+     * WallBlock (FenceBase) + closed FenceGate 만.
+     */
+    public static boolean isWallBlock(BlockState state) {
+        // 근사 이식 — 원본과 차이: _knownThinWallBlocks + _blockCarpentersLadder 제외
+        if (state == null) return false;
+        return state.getBlock() instanceof PaneBlock || isFence(state);
+    }
+
+    /**
+     * 원본 L2289-L2293 `isDoor(Block)` — vanilla wooden_door / iron_door.
+     * 1.21.1: `DoorBlock` 은 oak/spruce/birch/... + iron + copper 등 전부 포괄.
+     */
+    public static boolean isDoor(BlockState state) {
+        return state != null && state.getBlock() instanceof DoorBlock;
+    }
+
+    /**
+     * 원본 L2295-L2298 `isDoorTop(int metaData)` — `metaData == 8` (upper half 마커).
+     * 1.21.1: `DoorBlock.HALF == DoubleBlockHalf.UPPER`.
+     */
+    public static boolean isDoorTop(BlockState state) {
+        return isDoor(state) && state.get(DoorBlock.HALF) == DoubleBlockHalf.UPPER;
     }
 }

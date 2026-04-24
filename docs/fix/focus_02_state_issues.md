@@ -440,6 +440,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1c1 근사 4건** (세션 93): `Orientation` 기본 블록 식별 + stair/slab/fence/wall/door
+  헬퍼 이식 시 mod 호환성 관련 원본 분기 생략:
+  (1) `isStairCompact` — 원본 `_knownCompactStairBlocks` (mod 추가 stair 리스트) 체크 생략.
+  vanilla `StairsBlock` 만 감지.
+  (2) `isHalfBlock` — 원본 `_knownHalfBlocks` (mod slab 리스트) 체크 생략. vanilla
+  `SlabBlock` 만. `!isOpaqueCube()` 는 `SlabType != DOUBLE` 로 1:1 매핑.
+  (3) `isBottomHalfBlock` — BetterThanWolves anchor 블록 (metadata==1 예외) 생략. vanilla
+  `BedBlock` 예외는 1:1 이식.
+  (4) `isWallBlock` — `_knownThinWallBlocks` (mod pane) + Carpenters `_blockCarpentersLadder`
+  생략. vanilla `PaneBlock` + `FenceBlock` + `WallBlock` + closed `FenceGateBlock` 만.
+  각 근사는 해당 함수 JavaDoc 에 "근사 이식 — 원본과 차이: X" 주석. 1.21.1 vanilla 블록
+  식별은 모두 정확 — mod 추가 블록이 있는 환경에서만 영향.
 - **B-19a1b 근사 2건** (세션 92): `Orientation` front/back/rope/trapdoor 헬퍼 이식 시
   모드 호환성 관련 원본 분기 생략:
   (1) `hasLadderOrientation` / `getKnownLadderOrientation` — 원본 `_ladderKitLadderTypes`
