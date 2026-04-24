@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 66 — B Phase 2 계속 / B-46) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 34 원자 완료 / ⏳ **B Phase 2 잔여 ~6 원자** |
+| 상태 | 🟡 진행 중 (세션 67 — B Phase 2 계속 / B-8) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 35 원자 완료 / ⏳ **B Phase 2 잔여 ~5 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -609,9 +609,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       미이식 시 각각 신설 원자 분해 (B-7a/b/c).
 
 #### B-8. `Config.isSwimmingEnabled() / isDivingEnabled()` 게이트 추가 (A-2 발견)
-- [~] B-8. **헬퍼 신설 완료 (세션 39)** — `cfg.isSwimmingEnabled()` /
-      `cfg.isDivingEnabled()` 이식됨. 남은 작업: `updateSwimState` 에서 게이트 적용
-      (원본 L239/L438-L440 대응) — B-7 와 함께 진행.
+- [x] B-8. ✅ **세션 67 완료** — 원본 L436-L441 Config 게이트 이식.
+      `SmartMovingSwimmer.updateSwimState` 말미 (offset 기반 3상태 결정 직후) 에 게이트
+      블록 추가:
+      * `!cfg.isSwimmingEnabled() → isSwimming_sm = false; isDipping = false`
+      * `!cfg.isDivingEnabled()   → isDiving = false`
+      Config 비활성화 시 **상태 플래그 자체를 false 로 정화** → 소비처 (#1/#3/#4) 잘못된
+      true 참조 방지. 기존 handleSwimming `return false` 는 경로만 차단하고 플래그 정화
+      안 했음 (오역). `useStandard` 재판정은 B-9 메인 분류 재작성 범위 — 여기선 플래그
+      정화만. 헬퍼 이식은 세션 39 B-2/B-3a/B-8 에서 완료.
 
 #### B-9. 메인 분류 공식 재작성 (A-2 발견 — 가장 큰 수정)
 - [ ] B-9. 원본 L303-L414 3-갈래 메인 분류 이식:
@@ -2862,6 +2868,57 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-48** 신설 후보 (isGroundSprinting 전환 후처리 + sprintKey 엣지) — 규모 중.
+
+### 세션 67 — 2026-04-24 — B Phase 2 B-8 (Config 게이트 updateSwimState 적용)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.updateSwimState` 말미 (offset 기반 3상태 결정 직후, waterMovementTicks
+  증분 앞) 에 원본 L436-L441 Config 게이트 이식:
+  ```java
+  SmartMovingConfig cfg = SmartMovingConfig.Config;
+  if (!cfg.isSwimmingEnabled()) { sm.isSwimming_sm = false; sm.isDipping = false; }
+  if (!cfg.isDivingEnabled())   sm.isDiving = false;
+  ```
+- 원본 시멘틱: `swimming = !useStandard && swimming && Config.isSwimmingEnabled();
+  diving = ... && Config.isDivingEnabled(); dipping = ... && Config.isSwimmingEnabled();`.
+  Config 비활성화 시 해당 상태 플래그 false 정화.
+- `useStandard` 재판정 (vanilla swim 경로로 위임) 은 B-9 메인 분류 재작성 범위로 분리 —
+  B-8 은 **상태 플래그 정화만** 수행.
+- 주석에 원본 라인 + 기존 handleSwimming return false 는 경로 차단만이고 플래그 정화 안
+  됨 (오역) 표기.
+- 헬퍼 `cfg.isSwimmingEnabled()` / `cfg.isDivingEnabled()` 는 세션 39 B-2/B-3a/B-8 에서
+  이미 이식됨.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 67)**:
+- [근거] 원본 L436-L441 research/.../SmartMovingSelf.md L3089-L3098 (R-11.7) 확보 ✓
+- [근거] R-11.12 불일치 #2 `Config 게이트 누락` 확정 §16 세션 32 ✓
+- [대응] `isSwimming_sm`/`isDipping` 2건 + `isDiving` 1건 게이트 원본 1:1 ✓
+- [분기] Swimmer 게이트 / Diving 게이트 양쪽 명시 ✓
+- [상수] 없음
+- [타이밍] offset 분류 직후 — 원본 L436 위치 (분류 뒤 재게이트) 동일 ✓
+- [근사] useStandard 재판정 생략 — B-9 범위. 현재 handleSwimming return false 로 vanilla
+  경로 위임은 여전히 동작. 플래그 정화는 이번 세션에 확정.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. swim/dive Config 비활성화 시 상태 플래그가
+  false 로 정화 → 애니메이션/전환/키 커맨드 (포커스 #1/#3/#4) 잘못된 true 참조 방지.
+  기존 handleSwimming 경로 차단과 함께 안전 네트.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-11 A-2 불일치 현황**:
+- ✅ #2 Config 게이트 누락 (B-8 세션 67)
+- ✅ #3 isClimbCrawling 조건 누락 (B-6 세션 60)
+- ✅ #9 waterMovementTicks dipping 증분 오역 (B-12 세션 64)
+- ✅ #11 crawl↔swim 전환 isSliding 누락 (B-13 세션 61)
+- ⏳ #1/#4~#8/#10 (대부분 B-9 메인 분류 재작성 범위)
+
+**Phase 2 진행 상황**: 35 원자 완료 / 잔여 ~5
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
 
 ---
 

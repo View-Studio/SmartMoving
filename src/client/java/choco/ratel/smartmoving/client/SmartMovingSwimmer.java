@@ -91,6 +91,24 @@ public final class SmartMovingSwimmer {
         sm.isDipping     = offset < OFFSET_SWIMMING;
         sm.isSwimming_sm = offset >= OFFSET_SWIMMING && offset < OFFSET_DIVING;
         sm.isDiving      = offset >= OFFSET_DIVING;
+
+        // B-8 (세션 67): 원본 L436-L441 Config 게이트 이식.
+        //   swimming = !useStandard && swimming && Config.isSwimmingEnabled();
+        //   diving   = !useStandard && diving   && Config.isDivingEnabled();
+        //   dipping  = !useStandard && dipping  && Config.isSwimmingEnabled();
+        // Config 비활성화 시 상태 플래그를 false 로 정화 → 소비처 (#1/#3/#4) 가 잘못된
+        // true 를 참조하지 않도록. 기존은 handleSwimming 에서 return false 로 근사만 —
+        // 상태 플래그 자체는 정화 안 됨 (오역).
+        // useStandard 는 B-9 (메인 분류 재작성) 범위 — 여기선 플래그 정화만.
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.isSwimmingEnabled()) {
+            sm.isSwimming_sm = false;
+            sm.isDipping     = false;
+        }
+        if (!cfg.isDivingEnabled()) {
+            sm.isDiving = false;
+        }
+
         // B-12 (세션 64): 원본 L481-L484 정정 — swimming/diving 만 증분, dipping 포함
         //   else 는 ticks=0 리셋. 기존 무조건 증분 (dipping 포함) 은 오역.
         //   isJumpingOutOfWater 공식 (원본 L486-L487) 이식 시 이 ticks 값이 정확해야 함.
