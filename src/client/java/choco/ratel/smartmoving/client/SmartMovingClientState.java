@@ -433,6 +433,19 @@ public final class SmartMovingClientState {
     public boolean isJumpingOutOfWater;
 
     /**
+     * 원본 SmartMovingSelf L105 `boolean wasJumpingOutOfWater = isJumpingOutOfWater`
+     * updateEntityActionState 내부 **지역 snapshot**. 이후 handleSwimming L229 파라미터로
+     * 전달되어 L487 `isJumpingOutOfWater = wantJumpOutOfWater && (... || wasJumpingOutOfWater)`
+     * 공식에 사용 (틱 간 hysteresis).
+     *
+     * **§7 근사** (B-10b-pre): 1.21.1 은 Swimmer.updateSwimState + handleSwimming 으로 분리
+     * → 지역 snapshot 공유 불가 → 이전 틱 값 저장용 **public 필드로 승격**. 저장은
+     * `Swimmer.updateSwimState` 진입 첫 줄 (원본 L105 대응 위치). B-10b-post 공식 이식
+     * (세션 미정) 에서 이 필드 참조.
+     */
+    public boolean wasJumpingOutOfWater;
+
+    /**
      * 원본 SmartMovingSelf L1438 / L550 갱신:
      *   useStandard 경로에서 isStillSwimmingJump = false
      * grab.StartPressed 수영 전환 (L2844) 에서 true 설정 — 수영 점프 hold 상태.
@@ -1718,6 +1731,7 @@ public final class SmartMovingClientState {
         wasLevitating           = false;
         isShallowDiveOrSwim     = false;
         isJumpingOutOfWater     = false;
+        wasJumpingOutOfWater    = false;
         isStillSwimmingJump     = false;
         wantCrawlNotClimb       = false;
         initializeCrawling      = false;

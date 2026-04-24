@@ -440,6 +440,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-10b-pre 근사 1건** (세션 110): `wasJumpingOutOfWater` — 원본은 SmartMovingSelf
+  L105 의 **updateEntityActionState 내부 지역 snapshot** (`boolean wasJumpingOutOfWater =
+  isJumpingOutOfWater;`). 이후 handleSwimming L229 에 파라미터로 전달되어 L487 공식
+  (`isJumpingOutOfWater = wantJumpOutOfWater && (... || wasJumpingOutOfWater)`) 에 사용.
+  1.21.1 은 `Swimmer.updateSwimState` + `handleSwimming` **두 정적 메서드로 분리** 되어
+  지역 snapshot 공유 불가 → **public 필드로 승격**. 저장은 `Swimmer.updateSwimState`
+  진입 첫 줄 (원본 L105 대응 위치). 구조적 차이 — 시멘틱은 원본과 동치 (hysteresis
+  유지). B-10b-post 공식 이식 시 이 필드 참조.
 - **B-19a2e 근사 1건** (세션 106): `Orientation.isLadderSubstitute` 본체 이식 시
   `ClimbGap.Meta` 필드 생략 — 원본 `out_climbGap.Meta = grabMeta` 는 vanilla 1.7.10 의
   `Block+int meta` 쌍 저장. 1.21.1 `BlockState` 는 metadata 를 property 로 내재 →

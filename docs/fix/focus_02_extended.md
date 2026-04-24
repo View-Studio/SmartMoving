@@ -307,10 +307,11 @@ Orientation 판정 + ClimbGap 계산.
       선 Phase 5 후 남은 부분만 별도 원자화.
 
 #### B-10b-pre. `wasJumpingOutOfWater` 필드 명시 신설 (세션 88 4차 확정 감사 발견)
-- [ ] B-10b-pre. B-10b-post "의존: wasJumpingOutOfWater 이전 틱 저장 필요" 를 별도 원자로
-      분리. `SmartMovingClientState` public boolean 필드 신설 + resetState 리셋 + R-09
-      종료부 저장 (`wasJumpingOutOfWater = isJumpingOutOfWater`). B-10b-post 진행 전
-      선행 완료 필요. Phase 1 필드 선언 규칙 연장선.
+- [x] B-10b-pre. ✅ **세션 110 완료** — `SmartMovingClientState.wasJumpingOutOfWater`
+      public boolean 필드 신설 + resetState 리셋 + `Swimmer.updateSwimState` 진입 첫 줄에
+      `sm.wasJumpingOutOfWater = sm.isJumpingOutOfWater` 저장. 원본 L105 지역 snapshot 을
+      1.21.1 updateSwimState/handleSwimming 분리 구조에서 필드로 승격. **§7 B-10b-pre 근사
+      1건 등록** (지역 → 필드 구조 차이, 시멘틱 동치).
 
 ### Phase 5. B-7 / B-9 / B-11 본체 — 수중 3상태 완전 재구성
 
@@ -478,6 +479,50 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 110 — 2026-04-24 — B-10b-pre `wasJumpingOutOfWater` 필드 승격
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L105 + L229 + L487 grep** — 원본 `wasJumpingOutOfWater` 는 `updateEntityActionState`
+   내부 **지역 변수 snapshot** (L105). handleSwimming 에 파라미터로 전달 → L487 공식에서
+   hysteresis 제공.
+2. **1.21.1 클래스 분리 구조 대응** — Swimmer.updateSwimState 와 handleSwimming 이 2개의
+   정적 메서드로 분리되어 지역 변수 공유 불가 → **필드로 승격** (§7 근사 등록).
+3. **3 지점 수정**:
+   * `SmartMovingClientState.isJumpingOutOfWater` 필드 (L433) 직후에 `wasJumpingOutOfWater`
+     public boolean 필드 신설 + JavaDoc (원본 L105 + 근사 사유 명시).
+   * `resetState` (L1720 근처) 에 `wasJumpingOutOfWater = false` 리셋 추가.
+   * `Swimmer.updateSwimState` 진입 **첫 줄** (isTouchingWater 체크 전) 에
+     `sm.wasJumpingOutOfWater = sm.isJumpingOutOfWater` 저장 (원본 L105 대응 위치).
+4. **본체 §7 B-10b-pre 근사 1건 등록** — 지역 snapshot → 필드 승격 (클래스 분리 대응).
+
+**완료 전 검증 체크리스트 (세션 110 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L105 + L487 + L229 grep ✓
+- [근거] 1.21.1 `isJumpingOutOfWater` 필드 (B-10b 세션 38) 이식 완료 ✓
+- [대응] 원본 지역 변수 snapshot ↔ 1.21.1 필드 저장 동치 (시멘틱 보존) ✓
+- [분기] 없음 (단순 필드 + 대입) ✓
+- [상수] 없음 ✓
+- [타이밍] Swimmer.updateSwimState 진입 첫 줄 저장 — 원본 L105 가 handleSwimming 호출
+  직전에 있으므로 1.21.1 updateSwimState 가 handleSwimming 직전 호출되는 구조에서 동치
+  시점 ✓
+- [근사] **§7 B-10b-pre 근사 1건 등록** (지역 → 필드 승격, 구조 차이) ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 변경 없음 (신규 필드). B-10b-post 공식 이식 시 참조 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-10b-post** — 원본 L486-L487 `wantJumpOutOfWater` + `isJumpingOutOfWater`
+공식 이식. 의존: `wasJumpingOutOfWater` (B-10b-pre 완료) + `isJumpingOutOfWater` 필드
+(B-10b 세션 38) + `waterMovementTicks` (B-12 세션 64). 예상 1 세션.
+
+**진행률** (세션 110 종료 시점):
+- Extended 완료: **24 원자** (B-19 완결 22 + B-10a-post + **B-10b-pre**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 24/61 ≈ 39%**
+- **포커스 #2 전체: (54+24)/115 ≈ 68%**
+- **Phase 4**: 2/8 (나머지 6 — B-10b-post / B-10c-post / B-31c-post / B-10-reset-post /
+  B-N-standup / B-40-post)
 
 ### 세션 109 — 2026-04-24 — B-10a-post `isShallowDiveOrSwim` 공식 이식 (Phase 4 시작)
 

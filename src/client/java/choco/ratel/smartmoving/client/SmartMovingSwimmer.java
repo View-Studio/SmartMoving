@@ -62,6 +62,12 @@ public final class SmartMovingSwimmer {
      *   offset ≥  1.9 → isDiving    (완전 잠수)
      */
     public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientState sm) {
+        // B-10b-pre (세션 110): 원본 L105 `boolean wasJumpingOutOfWater = isJumpingOutOfWater`
+        // 지역 snapshot. 1.21.1 은 updateSwimState + handleSwimming 분리 → 필드로 승격.
+        // §7 B-10b-pre 근사. B-10b-post 공식 `isJumpingOutOfWater = ... || wasJumpingOutOfWater`
+        // 이식 시 이 이전 틱 값 참조.
+        sm.wasJumpingOutOfWater = sm.isJumpingOutOfWater;
+
         if (!player.isTouchingWater()) {
             sm.isDipping      = false;
             sm.isSwimming_sm  = false;
