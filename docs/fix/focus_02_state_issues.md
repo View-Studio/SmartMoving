@@ -642,10 +642,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       주석에 원본 라인 + B-18 의존 명시.
 
 #### B-7. Swimmer `updateSwimState` 진입 조건 복원 (A-2 발견)
-- [ ] B-7. 원본 L232 진입 조건 (`!isFlying && !isLiquidClimbing && (isInWater || (wasSwimming
-      && isInLiquid) || (Config.isLavaLikeWaterEnabled() && handleLavaMovement()))`) 복원.
-      의존 확인: `isLiquidClimbing` / `isInLiquid()` / `Config.isLavaLikeWaterEnabled()` —
-      미이식 시 각각 신설 원자 분해 (B-7a/b/c).
+- [~] B-7. **→ Extended Phase 5 (B-7a/b/c) 로 이전** (세션 88). 원본 L232 진입 조건
+      복원. 세부 분해: B-7a (isLiquidClimbing) / B-7b (lavaLikeWater 헬퍼) / B-7c (진입 조건
+      정밀 이식). 상세 [`focus_02_extended.md#phase-5`](focus_02_extended.md) 참조.
 
 #### B-8. `Config.isSwimmingEnabled() / isDivingEnabled()` 게이트 추가 (A-2 발견)
 - [x] B-8. ✅ **세션 67 완료** — 원본 L436-L441 Config 게이트 이식.
@@ -659,22 +658,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       정화만. 헬퍼 이식은 세션 39 B-2/B-3a/B-8 에서 완료.
 
 #### B-9. 메인 분류 공식 재작성 (A-2 발견 — 가장 큰 수정)
-- [ ] B-9. 원본 L303-L414 3-갈래 메인 분류 이식:
-      - (a) playerSwimWaterBorder/totalSwimWaterBorder 계산 (AABB 근사 또는 getFluidHeight 활용)
-      - (b) `[0, 2]` 구간 A/B 서브 분기 (`diveUp || moveSwim || wantShallowSwim`)
-      - (c) A 경로 11-단계 swimming offset 테이블 (1.4~1.9)
-      - (d) B 경로 10-단계 diving offset 테이블 (1.5~1.9)
-      - (e) `(2, ∞)` 구간 항상 diving + diveUp/diveDown/moveSwim + isFast 분기
-      - (f) `(-∞, 0)` handleSwimmingRejected
-      - (g) motionYDiff 전체 적용 로직
-      - ※ 규모 매우 큼 — 세션 여러 회 분할 권장 (B-9a~g 서브원자 신설 가능)
+- [~] B-9. **→ Extended Phase 5 (B-9a~g) 로 이전** (세션 88). 원본 L303-L414 3-갈래 메인
+      분류 이식. 7 서브 원자 분해 — AABB 정밀 (Phase 6) 의존 다수. 상세
+      [`focus_02_extended.md#phase-5`](focus_02_extended.md) 참조.
 
 #### B-10. 미이식 필드 4건 ClientState 이식 + 갱신 로직 (A-2 발견)
-- [~] B-10a. **필드만 이식 완료 (세션 38)** — `isShallowDiveOrSwim` 필드 ClientState 추가.
-      공식 갱신 (`couldStandUp && (isDiving || isSwimming_sm)` 원본 L507) 은 B-9 수정 시 이식.
-- [~] B-10b. **필드만 이식 완료 (세션 38)** — `isJumpingOutOfWater` 필드 추가. 조건 이식
+- [~] B-10a. **필드만 이식 완료 (세션 38) / 공식 → Extended Phase 4 B-10a-post** — `isShallowDiveOrSwim` 필드 ClientState 추가.
+      공식 갱신 (`couldStandUp && (isDiving || isSwimming_sm)` 원본 L507) 은 Extended 이전.
+- [~] B-10b. **필드만 이식 완료 (세션 38) / 공식 → Extended Phase 4 B-10b-post** — `isJumpingOutOfWater` 필드 추가. 조건 이식
       (wantJumpOutOfWater + waterMovementTicks>10 원본 L486-L487) 은 B-12 수정 시.
-- [~] B-10c. **필드만 이식 완료 (세션 38)** — `isStillSwimmingJump` 필드 추가. false 리셋
+- [~] B-10c. **필드만 이식 완료 (세션 38) / 공식 → Extended Phase 4 B-10c-post** — `isStillSwimmingJump` 필드 추가. false 리셋
       (useStandard 경로 원본 L550) 은 B-9 수정 시.
 - [x] B-10d. ✅ **세션 71 완료** — 원본 L474 + L505 공식 이식. Swimmer.updateSwimState Config
       게이트 뒤에 배치:
@@ -686,9 +679,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       B-43 세션 56 `wasLevitating = isLevitating` 저장이 이제 실제 값 참조.
 
 #### B-11. 얕은 물 특수 분기 이식 (A-2 발견)
-- [ ] B-11. 원본 L513-L536 이식 — `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
-      SwimCrawlWaterBottomBorder` 진입 조건 + isSlow 분기 (crawl 전환 / walking 전환).
-      AABB 근사 판정 필요 (`realMinPlayerSwimWaterDepth` 대응).
+- [~] B-11. **→ Extended Phase 5 로 이전** (세션 88). 원본 L513-L536 얕은 물 특수 분기 이식.
+      AABB 정밀 (Phase 6) 의존. 상세 [`focus_02_extended.md#phase-5`](focus_02_extended.md)
+      참조.
 
 #### B-12. `waterMovementTicks` 증분 조건 정정 (A-2 발견)
 - [x] B-12. ✅ **세션 64 완료** — 원본 L481-L484 1:1 정정. `SmartMovingSwimmer.updateSwimState`
@@ -831,12 +824,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       sneakPressedRaw/crawlToggled` 모두 접근 가능 (빌드 성공 확인).
 
 #### B-19. `hasClimbCrawlGap` / `hasClimbGap` / `isNeighborClimbing` 갱신 로직 이식 (A-3 발견)
-- [ ] B-19. 원본 handleClimbing Free Climbing 분기 (L896-L1108) 내부 Orientation 판정
-      → hasClimbCrawlGap / hasClimbGap / isNeighborClimbing 계산. 규모 큼 — 서브원자
-      분해 (B-19a: Orientation 4방향 판정 / B-19b: ClimbGap out 파라미터 / ...).
+- [~] B-19. **→ Extended Phase 3 (B-19a/b/c/d) 로 이전** (세션 88). 원본 handleClimbing
+      Free Climbing 분기 (L896-L1108) 내부 Orientation 판정 → hasClimbCrawlGap /
+      hasClimbGap / isNeighborClimbing 계산. **포커스 #2 최우선 도미노 해소** — 세션
+      47/48/68/69/72/73/77/81/83 이식한 B-17/B-18/B-16c 공식이 모두 이 원자에 의존.
+      상세 [`focus_02_extended.md#phase-3`](focus_02_extended.md) 참조.
 
 #### B-20. Standard / Simple Base Climb 이식 (A-3 발견)
-- [x] B-20. ✅ **세션 76 완료 (부분, Standard 만)** — 원본 L820-L823 Standard Base Climb
+- [x] B-20. ✅ **세션 76 완료 (Standard 만) / Simple·Smart → Extended Phase 8 (B-20b/c)** —
+      원본 L820-L823 Standard Base Climb
       `isClimbing 설정 안 함` 원칙 복원. SmartMovingClimber.handleClimbing L305-L313 Standard
       분기에서 `setOnlyShouldClimbSpeed` (L273 `isClimbing=true` 내장) → `setShouldClimbSpeed`
       (isClimbing 안 건드림) 로 교체. 속도 보정 (motionY = 0.2 * combinedFactor) 유지.
@@ -932,10 +928,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       L910/L959/L1045). 개명 후 동일 필드가 다용도로 사용됨 — 현재 이식된 용도는
       (1) tickEssential 이전 틱 저장 + (2) R-09 willStartCrawl 판정 2건. 나머지 (3)(4)(5)
       갱신 위치는 B-33/B-34/B-35/B-36/B-41 수정 시 추가 등록.
-- [~] B-31b. **필드만 이식 완료 (세션 38)** — `wantCrawlNotClimb` 필드 추가. L2452-L2461
-      갱신 블록은 B-41 범위.
-- [~] B-31c. **필드만 이식 완료 (세션 38)** — `initializeCrawling` 필드 추가. 관련 로직은
-      B-35 전환 후처리 범위.
+- [x] B-31b. ✅ **B-41 세션 70 에서 공식 이식 완료** — `wantCrawlNotClimb` 필드 (세션 38)
+      + 갱신 블록 (B-41 세션 70 `wantCrawlNotClimb = (이전값 || (grabJustPressed &&
+      !wasCrawling)) && grab.isPressed() && forward>0 && isCrawling && horizontalCollision;`)
+      이식 완료. 상태 `[~]` → `[x]` 로 갱신 (세션 88 문서 정리).
+- [~] B-31c. **필드만 이식 완료 (세션 38) / 공식 → Extended Phase 4 B-31c-post** —
+      `initializeCrawling` 필드 추가. 공식 이식 (true 설정 경로) 은 미이식 — 현재 항상 false.
+      Extended Phase 4 B-31c-post 에서 이식 예정 (Agent WebFetch 로 원본 true 설정 지점
+      확인 필요).
 
 #### B-32. `canCrawl` 공식 원본 5-AND 복원 (A-5 발견 — 1:1 원칙 위배)
 - [x] B-32. ✅ **세션 44 완료** — ClientState IMPL-01 `canCrawl` 공식 원본 L2434-L2439 로
@@ -1049,11 +1049,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (세션 38) / B-31a wasCrawling (세션 41) / B-46 grabJustPressed (세션 66) 모두 완료.
 
 #### B-42. `mustCrawl` AABB 정밀 개선 (A-5 발견 — 근사 이식 기록)
-- [x] B-42. ✅ **세션 79 완료 (별도 포커스 분리)** — AABB 정밀 근사 개선은 포커스 #2 범위
-      외로 결정. `focus_14_aabb_precision.md` 로 분리 (§17 기록). §7 에 현재 근사 지점 전수
-      등록됨 (B-5/B-16 blocked/B-20/B-26/B-35/B-36 등 — 모두 AABB 정밀 스캔 미이식에서 파생).
-      후속 포커스에서 일괄 해소 예정. **단 B-42 자체는 "현재 근사 유지" 결정으로 해소** —
-      추가 코드 변경 없음.
+- [~] B-42. **~~세션 79 별도 포커스 분리 완료~~ (세션 88 취소) → Extended Phase 6 (B-42a~d
+      + B-42-B5/B16/B20/B26/B35/B36/B39/B18) 로 이전**. AABB 정밀 근사 개선 + §7 근사 8건
+      일괄 승격. 세션 88 엄격 완료 결정으로 포커스 #2 범위 복원. 상세
+      [`focus_02_extended.md#phase-6`](focus_02_extended.md) 참조.
 
 #### B-43. R-09 블록 종료부 저장 2건 이식 (A-6 발견)
 - [x] B-43. ✅ **세션 56 완료** — 원본 L3043-L3044 이식. ClientState R-09 블록 종료부
@@ -1104,6 +1103,29 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 
 #### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
+---
+
+### ⭐ Extended 이전 원자 안내 (세션 88)
+
+다음 원자들은 `[~]` 상태로 **[`focus_02_extended.md`](focus_02_extended.md) 에서 계속 진행**:
+
+| 원자 | Extended Phase | 내용 요약 |
+|------|---------------|-----------|
+| B-7 | Phase 5 (B-7a/b/c) | updateSwimState 진입 조건 + 용암 등반 |
+| B-9 | Phase 5 (B-9a~g) | 메인 분류 3-갈래 재작성 + offset 테이블 |
+| B-10a | Phase 4 (B-10a-post) | isShallowDiveOrSwim 공식 |
+| B-10b | Phase 4 (B-10b-post) | wantJumpOutOfWater / isJumpingOutOfWater 공식 |
+| B-10c | Phase 4 (B-10c-post) | isStillSwimmingJump false 리셋 |
+| B-11 | Phase 5 | 얕은 물 특수 분기 |
+| B-19 | Phase 3 (B-19a/b/c/d) | Orientation/ClimbGap/isNeighborClimbing 갱신 (**최우선**) |
+| B-20 (Simple/Smart) | Phase 8 (B-20b/c) | Simple/Smart Base Climb 완전 이식 |
+| B-31c | Phase 4 (B-31c-post) | initializeCrawling true 설정 공식 |
+| B-42 | Phase 6 (B-42a~d + 승격 8건) | AABB 정밀화 + §7 근사 일괄 해소 |
+| §16 세션 65 (2) | Phase 7 (B-48a/b/c) | sprint 엣지 + isGroundSprinting 전환 후처리 |
+| §16 세션 65 (3) | Phase 7 (B-49) | grabKeyStopPressed |
+
+모든 미완료 항목은 Extended 에서 관리 — 본체는 완료된 기록 보존 목적.
+
 ### C. 검증
 - [x] C-1. ✅ **세션 85 완료** — `./gradlew clean build` 성공 (10 actionable tasks, 9s).
       compileJava + compileClientJava + remapJar + assemble + build 전 단계 통과. 경고는
@@ -1117,7 +1139,9 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       포커스 분리 (B-7/B-9+B-11/B-19/B-42 → focus_14/15/16/17) + §7 근사 7건 등록 + C-1/C-2
       통과 전체 기록.
 - [ ] C-4. 사용자 인게임 재검증 (§3 재현 케이스 실제 채워지면 매칭 확인)
+      — **세션 88: Extended §6 로 이전 (Phase 3~8 완료 후 수행)**
 - [ ] C-5. `playtest_fixes.md` "현재 포커스" → `#3` 갱신
+      — **세션 88: Extended §6 로 이전 (Phase 3~8 완료 후 수행)**
 
 ---
 
@@ -1139,6 +1163,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 ---
 
 ## 13. 완료 전 검증 체크리스트
+
+> **주의** (세션 88): 아래 체크리스트는 포커스 #2 **최종 완료** 기준.
+> Phase 3~8 Extended 작업 전체 완료 + Extended §6 최종 C 단계 (C-4/C-5) 통과 후 해소.
+> 현재 본체 B Phase 1/2 + C-1/C-2/C-3 까지만 완료 — Extended 진행 후 재평가.
 
 - [ ] §3 표의 모든 케이스가 "예상 == 실제" 매칭
 - [ ] 각 수정이 리서치 파일 원본 라인과 1:1 대응
@@ -4216,14 +4244,16 @@ Orientation 판정 본문 확보 후 Climber 에 이식.
    - 원본 사용 지점은 isGroundSprinting 전환 후처리 (L2697-L2709 / B-48 범위) 에서
      확인 필요. 필요 시 `sprintKeyStartPressed` / `sprintKeyStopPressed` 필드 신설.
    - 분류: [누락] — B-48 수행 시 함께 평가.
+   - **→ Extended Phase 7 B-48a/b/c 로 이전** (세션 88).
 
 3. **`grab.StopPressed` 미이식**
    - 원본에서 `grabButton.StopPressed` 사용 여부 전수 확인 필요. 사용 지점 있으면
      별도 엣지 필드 (`grabKeyStopPressed`) 신설.
    - 분류: [누락] — B-N 신설 대기.
+   - **→ Extended Phase 7 B-49 로 이전** (세션 88).
 
 **우선순위**: (1) 이 가장 영향 큼 — 현재 다중 호출 구조로 IMPL-01 grab 엣지 판정 오동작
-가능. B-18/B-33 등 핵심 공식 재작성 시 반드시 해소 필요.
+가능. B-18/B-33 등 핵심 공식 재작성 시 반드시 해소 필요. **(1) 은 B-46 세션 66 해소**.
 
 ### 세션 29 A-1 — `isSlow`/`isFast` 3건 불일치 확정
 

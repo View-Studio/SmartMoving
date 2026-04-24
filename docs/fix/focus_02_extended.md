@@ -78,9 +78,9 @@ Orientation 판정 + ClimbGap 계산.
       `hasNeighborClimbGap` / `hasNeighborClimbCrawlGap` 갱신.
       필드 이식은 B-15c 세션 40 완료 — 갱신 로직만 추가.
 
-### Phase 4. B-10 공식 완성 — isShallowDiveOrSwim / isJumpingOutOfWater / isStillSwimmingJump
+### Phase 4. B-10 + B-31c 공식 완성 — isShallowDiveOrSwim / isJumpingOutOfWater / isStillSwimmingJump / initializeCrawling
 
-의존 필드는 B-10a/b/c 세션 38 에서 이식됨. 공식 갱신만 남음.
+의존 필드는 B-10a/b/c / B-31c 세션 38 에서 이식됨. 공식 갱신만 남음.
 
 #### B-10a-post. `isShallowDiveOrSwim` 공식 이식
 - [ ] B-10a-post. 원본 L507 `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)`.
@@ -101,6 +101,17 @@ Orientation 판정 + ClimbGap 계산.
 - [ ] B-10c-post. 원본 L550 `useStandard` 경로에서 `isStillSwimmingJump = false` 리셋.
       현재 B-36 분기 (a) 에서 true 설정만 있고 리셋 경로 없음.
       B-9 메인 분류 재작성 시 자연스럽게 포함되나 Phase 4 에서 별도 이식 가능.
+
+#### B-31c-post. `initializeCrawling` 공식 이식
+- [ ] B-31c-post. `initializeCrawling` 필드는 B-31c 세션 38 에서 이식됨 — true 설정 로직은
+      미이식 (현재 항상 false). 원본 사용 지점:
+      (1) B-35 분기 B 의 `(isCrawling && !wasCrawling) || initializeCrawling` 에서 **소비**.
+      (2) B-35 분기 B 본문 `if (initializeCrawling) toCrawling();` 에서 **소비**.
+      (3) B-35 분기 A 의 `!initializeCrawling` 에서 **소비** (억제 조건).
+      Agent WebFetch 로 원본 `initializeCrawling = true` 설정 지점 확인 필요
+      (예상 위치: grab 엣지 + 특정 조건 — 원본 `updateEntityActionState` 내 어딘가).
+      현재 true 설정 경로 없어 B-35 분기 B 의 "initializeCrawling → toCrawling() 추가 호출"
+      경로가 완전히 비활성. 공식 이식 후 Crawl 초기화 경로 활성화.
 
 ### Phase 5. B-7 / B-9 / B-11 본체 — 수중 3상태 완전 재구성
 
