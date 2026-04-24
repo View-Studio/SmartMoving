@@ -825,10 +825,9 @@ public final class SmartMovingClientState {
             // 원본 R-09 토글 블록 이전 값 저장 (willStartSneak/willStartCrawl 엣지 계산용).
             // B-44 (세션 43): wasSneaking 저장은 isSlow 공식 직전(L2716)으로 이동 — B-2 함께.
             // B-44c (세션 82): wasClimbCrawling 저장은 B-18 isClimbCrawling 공식 직전
-            //   (원본 L2786 대응) 으로 이동 완료 — 여기서 제거.
-            // wasCrawling 은 여전히 여기 유지 (B-33 메인 공식 재작성 시 함께 이동 예정 — B-44b).
-            // 원본 L2441 `wasCrawling = isCrawling`.
-            wasCrawling = isCrawling;
+            //   (원본 L2786 대응) 으로 이동 완료.
+            // B-44b (세션 84): wasCrawling 저장도 B-33 isCrawling 매 틱 공식 직전 (원본 L2441)
+            //   으로 이동 완료 — 여기 일괄 저장 전부 제거됨.
 
             // ── mustCrawl / inputContinueCrawl / contextContinueCrawl 해제 / wantCrawl pre-compute ─
             // 원본 L1792-L1794 (mustCrawl), L2407-L2418 (inputContinueCrawl + contextContinueCrawl 해제),
@@ -1124,42 +1123,40 @@ public final class SmartMovingClientState {
             // wasCollidedHorizontally: 이전 틱 물리 결과 (HEAD에서 캡처 → 원본 beforeOnUpdate)
             wasCollidedHorizontally = player.horizontalCollision;
 
-            // IMPL-01: 크롤링 진입/유지/해제 — wantCrawl/mustCrawl 필드는 isSlow 계산 앞에서 이미 확정됨.
+            // B-33 + B-44b (세션 84): 원본 L2441-L2447 매 틱 공식으로 전환.
+            // IMPL-01 이원화 구조 (if (!isCrawling) 진입 / else 유지/해제) 를 원본의 단일
+            // 매 틱 재계산으로 교체. 해제 판정은 wantCrawl 의 `inputContinueCrawl` /
+            // `contextContinueCrawl` 조건이 false 되면 자동 false.
+            //
+            // 원본 L2441-L2447:
+            //   wasCrawling = isCrawling;
+            //   isCrawling = canCrawl && (wantCrawl || mustCrawl);
+            //   if (!isCrawling) contextContinueCrawl = false;  (L2446-L2447 — 이미 L822)
+            //
+            // 의존:
+            //   wantCrawl / mustCrawl — pre-compute 블록 (L845-L892) 에서 이미 계산됨
+            //   canCrawl (B-32 세션 44) — 원본 L2434-L2439 5-AND.
+            //   SwimCrawlWaterTopBorder = 0.65F (SmartMovingContext).
+            //
+            // 기존 IMPL-01 의 별도 "grab 재 누름 → crawlToggled=false" 해제 분기는 제거:
+            // 원본은 R-09 블록 (L2966-L3045) 의 `willStopCrawl → crawlToggled=false` 로 자동
+            // 처리. willStopCrawl = `!isCrawling && !isCrawlClimbing && !isClimbCrawling` 조건
+            // 은 매 틱 공식 결과를 참조하므로 일관성 유지.
+            // crawlToggled 설정은 toCrawling() 호출 (B-40 / B-36 / B-18b / B-35 등) 에서 독립
+            // 수행.
+            //
+            // B-44b (세션 84): wasCrawling 저장을 공식 직전으로 이동 (원본 L2441).
+            // tickEssential 초반 L829 의 일괄 저장은 제거됨.
             SmartMovingConfig cfg = SmartMovingConfig.Config;
             if (cfg.crawl) {
-                // B-46 (세션 66): 지역 grabJustPressed 제거 — tickEssential 초반 1회 저장된
-                // public 필드 `grabJustPressed` 참조 (L1035 `if (grabJustPressed)` 는 필드로 resolve).
-                if (!isCrawling) {
-                    // B-32 (세션 44): 원본 L2434-L2439 canCrawl 5-AND 완전 복원. 잉여
-                    //   (!isCrawlClimbing && !isCeilingClimbing && !isSliding && !isHeadJumping
-                    //    && !isFlying) 제거 — 원본에 없는 조건 (1:1 원칙).
-                    //   원본 공식 그대로: !swim && !dive && (!dipping || border) && !climbing
-                    //                    && fallDistance < _fallingDistanceMinimum.
-                    //   border 상수 SwimCrawlWaterTopBorder = 0.65F (원본 SmartMovingContext).
-                    boolean canCrawl = !isSwimming_sm
-                            && !isDiving
-                            && (!isDipping || dippingDepth < 0.65F)
-                            && !isClimbing
-                            && player.fallDistance < cfg.fallingDistanceMinimum;
-                    if (canCrawl && (wantCrawl || mustCrawl)) {
-                        // B-40 (세션 44): 원본 L3047-L3054 toCrawling() 헬퍼 호출로 치환.
-                        toCrawling();
-                    }
-                } else {
-                    // wantCrawl/mustCrawl 은 위 pre-compute 블록에서 확정 — mustCrawl 은 canCrawl 게이트 포함.
-                    if (mustCrawl) {
-                        // 공간 부족 — 강제 유지
-                    } else if (crawlToggled) {
-                        if (grabJustPressed) {
-                            isCrawling = false;
-                            crawlToggled = false;
-                        }
-                    } else {
-                        if (!player.isSneaking()) {
-                            isCrawling = false;
-                        }
-                    }
-                }
+                boolean canCrawl = !isSwimming_sm
+                        && !isDiving
+                        && (!isDipping || dippingDepth < 0.65F)
+                        && !isClimbing
+                        && player.fallDistance < cfg.fallingDistanceMinimum;
+                wasCrawling = isCrawling;                              // 원본 L2441
+                isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
+                // contextContinueCrawl 해제 (L2446-L2447) 는 L822 pre-compute 블록에 이미 이식.
             }
 
             // B-34 (세션 59): 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling &&

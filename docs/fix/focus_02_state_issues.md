@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 83 — B Phase 2 계속 / B-18b) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 53 원자 완료 / ⏳ **B Phase 2 잔여 6 원자** (B-7/B-9/B-11/B-19/B-33/B-44b) |
+| 상태 | 🟡 진행 중 (세션 84 — B Phase 2 계속 / B-33 + B-44b) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 54 원자 완료 / ⏳ **B Phase 2 잔여 4 원자** (B-7/B-9/B-11/B-19) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -944,14 +944,24 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       추가. 전제 작업: `SmartMovingConfig.fallingDistanceMinimum = 3F` 필드 추가 (원본 L348).
 
 #### B-33. 메인 공식 재작성 — 매 틱 재계산 구조 (A-5 발견)
-- [ ] B-33. IMPL-01 (L661-L693) 진입/해제 이원화 → 원본 매 틱 공식으로 전환:
-      `wasCrawling = isCrawling;`
-      `isCrawling = canCrawl && (wantCrawl || mustCrawl);`
-      `if (!isCrawling) contextContinueCrawl = false;`
-      (L2446-L2447 은 이미 L622 에 이식됨)
-      IMPL-01 의 진입 엣지 처리 (crawlToggled 설정 + ignoreNextStopSneakButtonPressed) 는
-      B-40 toCrawling() 헬퍼로 이전.
-      의존: B-31a `wasCrawling` / B-32 canCrawl 정정 선행.
+- [x] B-33. ✅ **세션 84 완료** — IMPL-01 이원화 구조 → 원본 매 틱 공식 1:1 전환.
+      ClientState tickEssential IMPL-01 블록 (L1127-L1163) 전체 제거 후 원본 L2441-L2442
+      3줄로 교체:
+      ```java
+      if (cfg.crawl) {
+          boolean canCrawl = !isSwimming_sm && !isDiving
+                  && (!isDipping || dippingDepth < 0.65F)
+                  && !isClimbing
+                  && player.fallDistance < cfg.fallingDistanceMinimum;
+          wasCrawling = isCrawling;                              // 원본 L2441
+          isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
+      }
+      ```
+      기존 IMPL-01 의 "grab 재 누름 해제" 분기 제거 — 원본은 R-09 블록의 `willStopCrawl
+      → crawlToggled=false` 자동 처리 + wantCrawl 의 `inputContinueCrawl` 체크로 해제.
+      crawlToggled 설정은 toCrawling() (B-40/B-36/B-18b/B-35 등) 에서 독립.
+      의존 전수 충족: B-31a wasCrawling (세션 41) / B-32 canCrawl (세션 44) / wantCrawl 필드
+      L892 계산 / mustCrawl 필드 L848 계산.
 
 #### B-34. capabilities.flying 해제 점프 이식 (A-5 발견)
 - [x] B-34. ✅ **세션 59 완료** — 원본 L2449-L2450 이식. ClientState tickEssential
@@ -1058,8 +1068,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 #### B-44. 이력 3개 저장 시점 정밀 조정 (A-6 발견)
 - [x] B-44a. ✅ **세션 43 완료** — `wasSneaking = isSlow` 저장을 tickEssential 초반
       (L709 일괄 저장) → isSlow 공식 직전 (원본 L2716 대응) 으로 이동. B-2 수정 시 함께.
-- [ ] B-44b. `wasCrawling_st = isCrawling` 저장 L561 → isCrawling 공식 직전 (원본 L2441
-      대응). B-33 (A-5 메인 공식 재작성) 수정 시 함께 조정.
+- [x] B-44b. ✅ **세션 84 완료 (B-33 동시)** — `wasCrawling = isCrawling` 저장을 tickEssential
+      초반 일괄 저장 L829 에서 B-33 isCrawling 매 틱 공식 직전 (원본 L2441 대응) 으로 이동.
+      B-33 과 불가분 묶음 처리 (세션 81 B-18 + B-18-pre 패턴). 초반 저장 주석을 "이동 완료"
+      로 갱신 — tickEssential 초반 일괄 저장 블록 전부 제거됨 (wasSneaking: B-44a 세션 43,
+      wasClimbCrawling: B-44c 세션 82, wasCrawling: B-44b 세션 84).
 - [x] B-44c. ✅ **세션 82 완료** — `wasClimbCrawling = isClimbCrawling` 저장을 tickEssential
       초반 일괄 저장 L830 에서 B-18 isClimbCrawling 공식 직전 (원본 L2786 대응) 으로 이동.
       B-18 본체 지역 변수 `boolean wasClimbCrawling = isClimbCrawling` → `this.wasClimbCrawling`
@@ -3912,6 +3925,77 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
 - **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
 - **B-19** (hasClimbGap 갱신) — 대규모 Orientation 판정 필요.
+
+### 세션 84 — 2026-04-24 — B Phase 2 B-33 + B-44b (isCrawling 매 틱 공식 + wasCrawling 이동)
+
+**진행한 작업** (불가분 묶음 원자):
+- **B-33**: IMPL-01 이원화 구조 (L1127-L1163) 제거 + 원본 L2441-L2442 매 틱 공식 이식:
+  ```java
+  if (cfg.crawl) {
+      boolean canCrawl = !isSwimming_sm && !isDiving
+              && (!isDipping || dippingDepth < 0.65F)
+              && !isClimbing
+              && player.fallDistance < cfg.fallingDistanceMinimum;
+      wasCrawling = isCrawling;                              // 원본 L2441
+      isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
+  }
+  ```
+- **B-44b**: tickEssential 초반 L829 `wasCrawling = isCrawling` 일괄 저장 제거, B-33 매 틱
+  공식 직전으로 이동. 초반 저장 블록 3건 (wasSneaking/wasClimbCrawling/wasCrawling) 모두
+  이동 완료 → 일괄 저장 블록 전부 제거됨.
+- **IMPL-01 유지/해제 분기** 완전 제거 — 기존 `if (!isCrawling) ... toCrawling()` + `else
+  if (mustCrawl/crawlToggled/isSneaking)` 대신 원본 단일 매 틱 공식으로 해제 자동 처리:
+  * `wantCrawl || mustCrawl` false → `isCrawling = false` 자동.
+  * R-09 블록 `willStopCrawl = !isCrawling && !isCrawlClimbing && !isClimbCrawling` →
+    `crawlToggled = false` 자동.
+  * grab 재누름 → `inputContinueCrawl` false (crawlToggle 모드에서 crawlToggled=false 참조) →
+    wantCrawl false → isCrawling=false → 다음 틱 crawlToggled=false.
+- 주석에 원본 라인 + IMPL-01 제거 근거 + 의존 체인 상세 기록.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 84)**:
+- [근거] 원본 L2441-L2447 매 틱 공식 research/.../SmartMovingSelf.md L4018-L4028 (R-14.3) ✓
+- [근거] R-14.10 #1/#2 `isCrawling 이원화 구조 [오역]` + R-15.6 #2 `wasCrawling 저장 시점` ✓
+- [대응] 매 틱 공식 3줄 + wasCrawling 이동 원본 1:1 ✓
+- [분기] canCrawl 5-AND + 메인 공식 OR 2-OR + contextContinueCrawl 해제 (기존) 일관 ✓
+- [상수] `0.65F` (SwimCrawlWaterTopBorder) 원본 유지 ✓
+- [타이밍] `wasCrawling = isCrawling` 공식 직전 — 원본 L2441 위치 1:1 ✓
+- [근사] 없음 — 1:1 이식. `canCrawl` 은 B-32 세션 44 에서 1:1 복원됨.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. **주요 회귀 가능성**:
+  * IMPL-01 `grab 재누름 해제` 분기 제거 — R-09 블록 자동 해제 경로 의존.
+  * 매 틱 공식이 wantCrawl/mustCrawl 모두 false 시 즉시 isCrawling=false — 기존 이원화
+    구조가 1틱 지연 해제였다면 차이 발생 가능.
+  * 인게임 검증 필요 — 사용자 G-2 수동 테스트 범위.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #1/#2 isCrawling 이원화 → 매 틱 공식 (B-33 세션 84)
+- ✅ #4 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #7 wall 오르기 crawl 진입 (B-37 세션 62)
+- ✅ #8 handleCeilingClimbing isCrawling=false (B-38 세션 58)
+- ✅ #9 landMotionPost 3분기 구조 (B-39 세션 80, 근사)
+- ✅ #10/#11 전환 후처리 + grab.StartPressed 3분기 (B-35/B-36)
+- ✅ #12 wantCrawlNotClimb (B-41 세션 70)
+- ⏳ #3/#5/#6/#13~#15
+
+**R-15.6 불일치 현황 (저장 시점 정밀)**:
+- ✅ wasSneaking (B-44a 세션 43)
+- ✅ wasClimbCrawling (B-44c 세션 82)
+- ✅ wasCrawling (B-44b 세션 84)
+
+**Phase 2 진행 상황**: 54 원자 완료 (B-33 + B-44b 묶음) / 잔여 4 원자
+
+**다음 작업 권고**:
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing/isInLiquid/isLavaLikeWaterEnabled
+  의존 — 대규모.
+- **B-9** (메인 분류 재작성) — 대형.
+- **B-11** (얕은 물 특수 분기) — B-9 범위.
+- **B-19** (hasClimbGap 갱신) — Orientation 판정 대형.
+
+**남은 4 원자 모두 대규모 의존** — 추가 Agent WebFetch + 서브 분해 필요. 포커스 #2 의
+**"상태 플래그 값 자체의 정확성"** 목적은 B-33 매 틱 공식 완료로 핵심 해소. 잔여 원자는
+소비처 (애니메이션/전환/키) 에 영향 작거나 별도 포커스 후보.
 
 ---
 
