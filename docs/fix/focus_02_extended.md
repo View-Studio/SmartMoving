@@ -71,11 +71,25 @@ Orientation 판정 + ClimbGap 계산.
 
 **원본 근거**: `.tmp_research/Orientation.java.md` (WebFetch 저장, 2860줄).
 
-- [ ] **B-19a0. `Orientation` 클래스 기본 구조 신설** (원본 Orientation L36-L205)
-      * 9 상수 (ZZ/PZ/NZ/ZP/ZN/PP/NN/PN/NP) + `_i`/`_k` 필드 + 생성자
-      * `isWithinAngle` / `isRotationForClimbing` / `getKnownLadderOrientation` / `addTo`
-      * `getHorizontalBorderGap` / `isTunnelAhead` / `getClimbingOrientations` (정적 헬퍼)
-      * 1.21.1 `choco.ratel.smartmoving.climbing.Orientation` 패키지에 신설.
+- [x] **B-19a0. `Orientation` 클래스 기본 구조 신설** ✅ **세션 90 완료**
+      (원본 Orientation L36-L205 + L998-L1085)
+      * 9 상수 (ZZ/PZ/NZ/ZP/ZN/PP/NN/PN/NP) + `_i`/`_k` + `_isDiagonal` + 각도 필드 3 +
+        생성자 이식 완료
+      * Meta 상수 3 (DefaultMeta/VineFrontMeta/VineSideMeta) + 내부 상수 top/middle/base/sub/
+        subSub/NoGrab/HalfGrab/AroundGrab
+      * `Orthogonals` HashSet + 정적 초기화
+      * `setClimbingAngles` 3 오버로드 + `isWithinAngle` 2 오버로드 + `isRotationForClimbing`
+      * `rotate(int angle)` 0/±45/±90/±135/±180 전수 이식
+      * `getOrientation` / `getClimbingOrientations` / `addTo` (정적 HashSet 캐시 포함)
+      * `getHorizontalBorderGap(double i, double k)` static-coord 버전 (인스턴스 `base_id`/
+        `base_kd` 기반 오버로드는 B-19a1 이후)
+      * **미포함 (B-19a1+ 이후)**: `isTunnelAhead` / `getKnownLadderOrientation` /
+        `isFeetLadderSubstitute` / `isHandsLadderSubstitute` / `baseVineClimbing` /
+        `seekClimbGap` / `handsClimbing` / `feetClimbing` / `isLadderSubstitute` 등
+        SmartMovingContext 의존 메서드
+      * `SmartMovingConfig` 에 `freeClimbingOrthogonalDirectionAngle=90F` /
+        `freeClimbingDiagonalDirectionAngle=80F` 2 필드 + load/save 이식 (원본 L129-L130)
+      * 빌드: `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (6s)
 
 - [ ] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼**
       (원본 SmartMovingContext / Orientation 의 `isOnLadderOrVine` / `isOnOpenTrapDoor` /
@@ -374,6 +388,62 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 90 — 2026-04-24 — B-19a0 `Orientation` 클래스 기본 구조 신설
+
+**사용자 지시**: "무조건 엄격 1대1 완료" — 세션 89 에서 제시한 근사 이식 대안 각하,
+서브 5개 완전 이식 방침 확정.
+
+**진행한 작업**:
+1. **Config 2 필드 이식** (원본 SmartMovingConfig L129-L130):
+   * `freeClimbingOrthogonalDirectionAngle = 90F` (Positive, 기본 90F)
+   * `freeClimbingDiagonalDirectionAngle = 80F` (Positive, 기본 80F)
+   * load (`loadProperties`) + save (`saveProperties`) 전수 이식.
+   * WebFetch 로 원본 기본값 2건 직접 확인 완료.
+2. **`choco.ratel.smartmoving.climbing.Orientation` 클래스 신설** — 원본 L36-L205 +
+   L998-L1085 (각도 판정 인프라) 대역 1:1 이식:
+   * 9 방향 상수 + Meta 3 + 내부 상수 8 + `Orthogonals` HashSet
+   * 생성자 + `setClimbingAngles` 3 오버로드 (i/k 조합 → 방향각 스위치 + halfAreaAngle 계산
+     + min/max 정규화)
+   * `isWithinAngle` 2 오버로드 (인스턴스 + static) + `isRotationForClimbing`
+   * `rotate(int angle)` 8갈래 switch (0/±45/±90/±135/±180)
+   * `getOrientation(player, tolerance, orthogonals, diagonals)` — 플레이어 회전각 기반
+     방향 선택. 1.21.1 `player.getYaw()` 표면 매핑.
+   * `getClimbingOrientations(player, orth, diag)` — 정적 HashSet 캐시 반환 + `addTo`
+     보조 (원본 L262-L297 1:1)
+   * `getHorizontalBorderGap(i, k)` — 4 orthogonal 방향별 블록 경계 거리 계산 (static-coord
+     버전만 이식; `base_id`/`base_kd` 기반 인스턴스 오버로드는 B-19a1 이후)
+3. **원본 근거 주석 전수** — 각 메서드/필드마다 원본 L번호 (예 L39-L49 / L81-L88 /
+   L998-L1037 / L1064-L1085) 매핑.
+4. **`extends SmartMovingContext` 미적용** (B-19a1 에서 추가 예정) — B-19a0 은 순수
+   기하/각도 판정만 포함. JavaDoc 에 명시.
+
+**완료 전 검증 체크리스트 (세션 90 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L36-L205 + L998-L1085 직접 read ✓
+- [근거] 원본 `SmartMovingConfig.java` L129-L130 WebFetch 로 기본값 (90F / 80F) 확인 ✓
+- [대응] 9 상수 + 5 내부 상수 + `_i`/`_k`/`_isDiagonal` + 각도 3필드 + 생성자 원본 1:1 ✓
+- [대응] `setClimbingAngles` i/k 스위치 9갈래 + halfAreaAngle 계산 + min/max 정규화 원본 1:1 ✓
+- [대응] `rotate` 8갈래 + 4 직접 매핑 + 4 재귀 원본 1:1 ✓
+- [대응] `getOrientation` / `getClimbingOrientations` / `addTo` / `getHorizontalBorderGap`
+  원본 1:1 ✓
+- [분기] 모든 switch/if 분기 (setClimbingAngles 3x3 / rotate 8 / getOrientation 2x2 +
+  8 방향) 전수 이식 ✓
+- [상수] `90F`/`80F`/`135F/90F/45F/180F/0F/360F/225F/270F/315F` 등 각도 상수 원본 동일 ✓
+- [타이밍] `Orientation` 은 정적 상수 초기화 (JVM 로딩 시 1회). 런타임 호출 타이밍 없음 ✓
+- [근사] 없음 — 1:1 엄격 이식. `EntityPlayer` → `PlayerEntity` / `rotationYaw` →
+  `getYaw()` / `Config._xxx.value` → `SmartMovingConfig.Config.xxx` 는 1.21.1 Fabric 표면 매핑 ✓
+- [신규] B-19a0 에 `getHorizontalBorderGap` 인스턴스 오버로드 미포함 — B-19a1
+  SmartMovingContext 이식 시 추가 명시. JavaDoc 에 기록 ✓
+- [회귀] compileJava + compileClientJava 모두 BUILD SUCCESSFUL (6s) ✓
+  * 기존 `Orientation` 없는 상태 → 신설이므로 기존 호출처 없음
+  * Config 2 필드 추가는 기존 호출처 없음 (B-19a1~a4 에서 소비)
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (6s) ✓
+
+**다음 세션 권고**: **B-19a1** — `SmartMovingContext` 수직 상태 헬퍼 이식. 원본
+`SmartMovingContext.java` Agent WebFetch 확보 필요. 의존 헬퍼 10+ 이식 (`isOnLadderOrVine`/
+`isOnOpenTrapDoor`/`isRope`/`isOnWallRope`/`isBaseAccessible`/`isFullAccessible`/
+`isFullExtentAccessible`/`isJustLowerHalfExtentAccessible`/`isFullEmpty`/`isSolid`).
+규모 큼 — 세션 2-3 회 분할 예상. B-19a2 `isLadderSubstitute` 본체가 이 모든 헬퍼 의존.
 
 ### 세션 89 — 2026-04-24 — B-19a 원본 확보 + 서브 원자 5개 재분해
 

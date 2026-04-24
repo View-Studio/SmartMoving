@@ -76,6 +76,20 @@ public class SmartMovingConfig {
     public boolean freeClimbAutoVine = true;
     public float freeClimbingUpSpeedFactor   = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float freeClimbingDownSpeedFactor = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
+    /**
+     * 원본 SmartMovingConfig L129 `_freeClimbingOrthogonalDirectionAngle` Positive — 기본값 `90F`.
+     * "클라이밍 N/S/E/W 붙잡기 각도(도)". `Orientation.setClimbingAngles` 가 orthogonal 방향
+     * (PZ/NZ/ZP/ZN) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 90F → 각 방향마다 ±45도
+     * 범위 내 시선일 때 등반 가능. B-19a0 (세션 90).
+     */
+    public float freeClimbingOrthogonalDirectionAngle = 90F;
+    /**
+     * 원본 SmartMovingConfig L130 `_freeClimbingDiagonalDirectionAngle` Positive — 기본값 `80F`.
+     * "클라이밍 NE/NW/SE/SW 붙잡기 각도(도)". `Orientation.setClimbingAngles` 가 diagonal 방향
+     * (PP/NN/PN/NP) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 80F → 각 대각 방향마다 ±40도.
+     * B-19a0 (세션 90).
+     */
+    public float freeClimbingDiagonalDirectionAngle = 80F;
     public float ceilingClimbingSpeedFactor = 0.2F;
     // 원본: Config._freeClimbFallDamageStartDistance = 2F, _freeClimbFallDamageFactor = 2F
     public float freeClimbFallDamageStartDistance = 2.0F;
@@ -826,6 +840,8 @@ public class SmartMovingConfig {
         smartClimb               = getBool(p,   "move.climb.smart",               smartClimb);
         freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
         freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
+        freeClimbingOrthogonalDirectionAngle = getFloat(p, "move.climb.free.direction.orthogonal.angle", freeClimbingOrthogonalDirectionAngle);
+        freeClimbingDiagonalDirectionAngle   = getFloat(p, "move.climb.free.direction.diagonal.angle",   freeClimbingDiagonalDirectionAngle);
         ceilingClimbingSpeedFactor = getFloat(p, "move.climb.ceiling.speed.factor", ceilingClimbingSpeedFactor);
         freeClimbFallDamageStartDistance = getFloat(p, "move.climb.free.fall.damage.start", freeClimbFallDamageStartDistance);
         freeClimbFallDamageFactor        = getFloat(p, "move.climb.free.fall.damage.factor", freeClimbFallDamageFactor);
@@ -945,6 +961,8 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.smart",                String.valueOf(smartClimb));
         p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
         p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
+        p.setProperty("move.climb.free.direction.orthogonal.angle", String.valueOf(freeClimbingOrthogonalDirectionAngle));
+        p.setProperty("move.climb.free.direction.diagonal.angle",   String.valueOf(freeClimbingDiagonalDirectionAngle));
         p.setProperty("move.climb.ceiling.speed.factor", String.valueOf(ceilingClimbingSpeedFactor));
         p.setProperty("move.climb.free.fall.damage.start", String.valueOf(freeClimbFallDamageStartDistance));
         p.setProperty("move.climb.free.fall.damage.factor", String.valueOf(freeClimbFallDamageFactor));
