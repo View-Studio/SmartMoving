@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 81 — B Phase 2 계속 / B-18-pre + B-18) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 51 원자 완료 / ⏳ **B Phase 2 잔여 7 원자** (B-7/B-9/B-11/B-19/B-33/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 82 — B Phase 2 계속 / B-44c) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 52 원자 완료 / ⏳ **B Phase 2 잔여 6 원자** (B-7/B-9/B-11/B-19/B-33/B-44b) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -1046,8 +1046,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (L709 일괄 저장) → isSlow 공식 직전 (원본 L2716 대응) 으로 이동. B-2 수정 시 함께.
 - [ ] B-44b. `wasCrawling_st = isCrawling` 저장 L561 → isCrawling 공식 직전 (원본 L2441
       대응). B-33 (A-5 메인 공식 재작성) 수정 시 함께 조정.
-- [ ] B-44c. `wasClimbCrawling = isClimbCrawling` 저장 L562 → isClimbCrawling 공식 직전
-      (원본 L2786 대응). B-18 (A-3 isClimbCrawling 이식) 수정 시 함께 조정.
+- [x] B-44c. ✅ **세션 82 완료** — `wasClimbCrawling = isClimbCrawling` 저장을 tickEssential
+      초반 일괄 저장 L830 에서 B-18 isClimbCrawling 공식 직전 (원본 L2786 대응) 으로 이동.
+      B-18 본체 지역 변수 `boolean wasClimbCrawling = isClimbCrawling` → `this.wasClimbCrawling`
+      public 필드 저장으로 전환. 동일 값이므로 B-18 공식 결과 영향 없음. 초반 저장 주석도
+      갱신 (B-44c 이동 완료 기록). 원본 구조 1:1 정렬 완료.
 
 #### B-45. `isSneakToggleEnabled()` / `isCrawlToggleEnabled()` Config 헬퍼 신설 + 호출 정리 (세션 44 발견)
 - [x] B-45a. ✅ **세션 45 완료** — `SmartMovingConfig.isSneakToggleEnabled()` /
@@ -3790,6 +3793,48 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-44c** (wasClimbCrawling 저장 시점 조정) — B-18 완료로 단독 실행 가능 검토.
 - **B-44b** (wasCrawling 저장 시점) — B-33 동시 조정 필요.
 - **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
+
+### 세션 82 — 2026-04-24 — B Phase 2 B-44c (wasClimbCrawling 저장 시점 이동)
+
+**진행한 작업**:
+- `wasClimbCrawling = isClimbCrawling` 저장 위치 재정비:
+  * 기존: tickEssential 초반 L830 에 일괄 저장 (B-44 세션 36 A-6 에서 "결과적 동치" 로
+    유지되던 위치)
+  * 정정: B-18 공식 직전 (원본 L2786 `wasClimbCrawling = isClimbCrawling` 위치 복원)
+- B-18 본체 지역 변수 `boolean wasClimbCrawling = isClimbCrawling` → `this.wasClimbCrawling`
+  public 필드 저장으로 전환 — 필드와 지역 변수 동일 값 (스코프 충돌 없음).
+- L826-L830 주석 갱신: B-44c 이동 완료 + B-44b (wasCrawling) 는 B-33 동시 조정 대기 명시.
+- 동일 값이므로 B-18 공식 결과 영향 없음 — 구조 1:1 정렬만 수행.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 82)**:
+- [근거] 원본 L2786 `wasClimbCrawling = isClimbCrawling` 공식 직전 저장 위치 확정 ✓
+- [근거] R-15.6 불일치 #2 `저장 시점 정밀 조정` 확정 §16 세션 36 ✓
+- [대응] 저장 위치 이동 + 지역 변수 → 필드 통합. 원본 1:1 정렬 ✓
+- [분기] 없음 (단순 이동)
+- [상수] 없음
+- [타이밍] B-18 본체 진입 직후 — 원본 L2786 순서 1:1 ✓
+- [근사] 없음 — 결과적 동치 (같은 값 저장).
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 지역 변수와 필드 동일 값이므로 B-18 공식
+  결과 불변. 초반 저장 제거 → `willStartCrawl` 판정 (R-09 블록 L1504 `isClimbCrawling &&
+  !wasClimbCrawling`) 도 동일 값 참조 (tickEssential 내 저장 시점이 R-09 앞이므로 순서 유지).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**A-6 R-15.6 불일치 현황**:
+- ✅ #1 R-09 블록 종료부 저장 (B-43 세션 56)
+- ✅ #2 저장 시점 정밀 조정:
+  * wasSneaking → isSlow 공식 직전 (B-44a 세션 43)
+  * wasClimbCrawling → isClimbCrawling 공식 직전 (B-44c 세션 82)
+  * wasCrawling → isCrawling 공식 직전 (B-44b, B-33 동시 조정 대기)
+
+**Phase 2 진행 상황**: 52 원자 완료 / 잔여 6 원자
+
+**다음 작업 권고**:
+- **B-18b** (해제 엣지 본문) — Agent WebFetch 로 L2819-L2820 상세 확보 후 이식.
+- **B-44b** (wasCrawling 저장 시점) — B-33 동시 조정 필요.
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
+- **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
 
 ---
 

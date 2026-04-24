@@ -824,10 +824,11 @@ public final class SmartMovingClientState {
         } else {
             // 원본 R-09 토글 블록 이전 값 저장 (willStartSneak/willStartCrawl 엣지 계산용).
             // B-44 (세션 43): wasSneaking 저장은 isSlow 공식 직전(L2716)으로 이동 — B-2 함께.
-            //   wasCrawling / wasClimbCrawling 는 해당 B-N 수정 시 동일하게 이동 예정.
-            // 원본 L2441 `wasCrawling = isCrawling`, 원본 L2786 `wasClimbCrawling = isClimbCrawling`.
+            // B-44c (세션 82): wasClimbCrawling 저장은 B-18 isClimbCrawling 공식 직전
+            //   (원본 L2786 대응) 으로 이동 완료 — 여기서 제거.
+            // wasCrawling 은 여전히 여기 유지 (B-33 메인 공식 재작성 시 함께 이동 예정 — B-44b).
+            // 원본 L2441 `wasCrawling = isCrawling`.
             wasCrawling = isCrawling;
-            wasClimbCrawling = isClimbCrawling;
 
             // ── mustCrawl / inputContinueCrawl / contextContinueCrawl 해제 / wantCrawl pre-compute ─
             // 원본 L1792-L1794 (mustCrawl), L2407-L2418 (inputContinueCrawl + contextContinueCrawl 해제),
@@ -1432,7 +1433,10 @@ public final class SmartMovingClientState {
             //   요약만 — 현재 `climbIntoCount = 0` 리셋만 이식. 나머지 크롤 전환/resetHeightOffset
             //   은 추후 Agent WebFetch 후 별도 서브 원자 (B-18b) 로 분해.
             {
-                boolean wasClimbCrawling = isClimbCrawling;
+                // B-44c (세션 82): 공식 직전 저장 (원본 L2786 대응). tickEssential 초반
+                //   일괄 저장에서 이동 완료. 지역 변수 제거 → public 필드 `wasClimbCrawling`
+                //   으로 통합 (동일 값).
+                wasClimbCrawling = isClimbCrawling;
                 boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
                 boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
 
