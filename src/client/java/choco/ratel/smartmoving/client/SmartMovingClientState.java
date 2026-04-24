@@ -917,6 +917,38 @@ public final class SmartMovingClientState {
             // B-2 (세션 43): 기존 `sneakContinueInput && wouldIsSneaking` 중복 제거 → 원본 1:1.
             isSlow = wantSneak && wouldIsSneaking;
 
+            // B-16 (세션 68): 원본 L2721-L2732 wantClimbHolding/isClimbHolding 3-OR 갱신 공식 이식.
+            // 원본 L2718 isSlow 직후 L2721 wantClimbHolding 순서 복원.
+            // ※ 근사 이식 (§7 B-16 근사 등록) — 의존 필드 2건:
+            //   (a) `wantClimb` = Config.isFreeClimbingEnabled() && wouldWantClimb (원본 L2479).
+            //       wouldWantClimb (L2467) 의 4-OR 중 `isFacedToLadder` / `isFacedToSolidVine`
+            //       및 `freeClimbAutoLadder/Vine` Config 필드 미이식 → 2-OR 근사 (grab +
+            //       isClimbHolding+sneak). B-16a~c 서브 원자로 완전 이식 계획.
+            //   (b) `blocked` = currentScreen!=null && !currentScreen.allowUserInput (원본 L2393).
+            //       1.21.1 `allowUserInput` 필드 제거됨 → 모든 열린 screen 을 입력 차단으로 근사.
+            {
+                net.minecraft.client.MinecraftClient mc16 =
+                        net.minecraft.client.MinecraftClient.getInstance();
+                boolean blocked = mc16.currentScreen != null;
+
+                // 근사 wouldWantClimb (원본 L2467-L2477 의 2-OR + 억제):
+                boolean wouldWantClimb16 =
+                        (grabPressed0 || (isClimbHolding && sneakPressedRaw))
+                        && (!isSliding || (grabPressed0 && player.input.movementForward > 0F))
+                        && !isHeadJumping
+                        && !wantCrawlNotClimb
+                        && !_disabled3a;
+                boolean wantClimb16 = cfg0.freeClimb && cfg0.enabled && wouldWantClimb16;
+
+                // 원본 L2721-L2732 3-OR:
+                boolean wantClimbHolding =
+                        (isClimbHolding && sneakPressedRaw)
+                        || (isClimbing && blocked)
+                        || (wantClimb16 && !isSwimming_sm && !isDiving && !isCrawling
+                                && (sneakPressedRaw || crawlToggled));
+                isClimbHolding = wantClimbHolding && isClimbing;
+            }
+
             // B-1c2 (세션 51): collidedHorizontallyTickCount 매 틱 갱신.
             //   수평 충돌 연속 틱 카운터. can* 판정 (원본 L2675) 에 사용.
             if (player.horizontalCollision) collidedHorizontallyTickCount++;

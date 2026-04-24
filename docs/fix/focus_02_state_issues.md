@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 67 — B Phase 2 계속 / B-8) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 35 원자 완료 / ⏳ **B Phase 2 잔여 ~5 원자** |
+| 상태 | 🟡 진행 중 (세션 68 — B Phase 2 계속 / B-16 근사) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 36 원자 완료 / ⏳ **B Phase 2 잔여 ~7 원자** (B-16 근사 완료, B-16a/b/c 서브 분해 추가) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -400,6 +400,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   4방향만
   (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
   동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
+- **B-16 근사** (세션 68): `SmartMovingClientState.tickEssential` 내 wantClimbHolding/
+  isClimbHolding 3-OR 갱신 공식 (원본 L2721-L2732) 구조 1:1 이식. 의존 필드 2건 근사:
+  (1) `wantClimb` = `Config.isFreeClimbingEnabled() && wouldWantClimb` (원본 L2479) 의
+  `wouldWantClimb` (L2467) 4-OR 중 2개 (`isFacedToLadder` / `isFacedToSolidVine`) 미이식.
+  `freeClimbAutoLadder/Vine` Config 필드 미이식 → 해당 분기 false. 2-OR 근사 (grab +
+  isClimbHolding+sneak). **B-16a~c 서브 원자로 완전 이식 계획** (각각 Climber 헬퍼 + Config
+  필드 + wouldWantClimb 4-OR 확장).
+  (2) `blocked` = `currentScreen != null && !currentScreen.allowUserInput` (원본 L2393).
+  1.21.1 `allowUserInput` 필드 제거됨 → `currentScreen != null` 단일 조건 근사. 모든 열린
+  screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작).
 
 ---
 
@@ -685,11 +695,33 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 - [x] B-15f. ✅ **세션 40 완료** — `handsEdgeBlock` / `feetEdgeBlock` BlockState 필드 추가 (원본 Block+meta → 1.21.1 BlockState 흡수 — vanilla API 표면 매핑) + resetState null 리셋. 갱신 로직은 B-19 범위.
 
 #### B-16. `wantClimbHolding` / `isClimbHolding` 갱신 블록 이식 (A-3 발견)
-- [ ] B-16. 원본 L2721-L2732 3-OR 공식 이식:
-      `wantClimbHolding = (isClimbHolding && sneakPressed) || (isClimbing && blocked) ||
-      (wantClimb && !isSwimming && !isDiving && !isCrawling && (sneakPressed || crawlToggled))`
-      → `isClimbHolding = wantClimbHolding && isClimbing`.
-      의존: `wantClimb` / `blocked` 필드 확인.
+- [x] B-16. ✅ **세션 68 완료 (근사 이식)** — 원본 L2721-L2732 3-OR 공식 **구조 1:1 이식**.
+      tickEssential isSlow 공식 직후 (원본 L2718 → L2721 순서) 에 블록 추가:
+      `wantClimbHolding = (isClimbHolding && sneak) || (isClimbing && blocked) ||
+      (wantClimb && !swim && !dive && !crawl && (sneak || crawlToggled));
+       isClimbHolding = wantClimbHolding && isClimbing;`
+      **의존 필드 2건 근사** (§7 B-16 근사 등록):
+      (a) `wantClimb` — 원본 `Config.isFreeClimbingEnabled() && wouldWantClimb`. 4-OR 중
+          `isFacedToLadder`/`isFacedToSolidVine` + `freeClimbAutoLadder/Vine` Config 미이식
+          → 2-OR 근사 (`grab || isClimbHolding+sneak`).
+      (b) `blocked` — 원본 `currentScreen!=null && !currentScreen.allowUserInput`. 1.21.1
+          `allowUserInput` 제거됨 → `currentScreen != null` 단일 조건 근사.
+      Agent WebFetch (세션 68) 로 `wantClimb`/`blocked`/`wouldWantClimb` 원본 정의 확보.
+      **B-16 완전 이식은 서브 원자 B-16a/b/c 로 분해** (아래).
+
+#### B-16a. `isFacedToLadder` / `isFacedToSolidVine` 헬퍼 이식 (B-16 근사 해소 서브)
+- [ ] B-16a. 원본 헬퍼 2개 Climber 에 이식 — grab 키 없이도 자동 등반 진입 판정에 사용.
+      수평 Direction 4방향 × 블록 탐색 (Ladder/Vine). B-16 `wouldWantClimb` 4-OR 중 3번째/
+      4번째 분기 활성화 조건.
+
+#### B-16b. `Config.freeClimbAutoLadder` / `freeClimbAutoVine` Config 필드 이식 (B-16 근사 해소 서브)
+- [ ] B-16b. 원본 Config 필드 2건 추가. 기본값 확인 후 SmartMovingConfig 에 이식.
+      `wouldWantClimb` 4-OR 의 auto 분기 활성화 게이트.
+
+#### B-16c. `wouldWantClimb` 4-OR 완전 이식 (B-16 근사 해소 서브)
+- [ ] B-16c. 현재 2-OR (grab + isClimbHolding+sneak) → 원본 4-OR 확장. B-16a/b 선행 후
+      `(Config.freeClimbAutoLadder && isFacedToLadder()) || (Config.freeClimbAutoVine &&
+      isFacedToSolidVine())` 2개 분기 추가.
 
 #### B-17. `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (A-3 발견)
 - [x] B-17a. ✅ **세션 47 완료** — `isCrawlClimbing` 메인 5-AND 공식 이식 (원본 L2737).
@@ -2919,6 +2951,75 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
+
+### 세션 68 — 2026-04-24 — B Phase 2 B-16 (wantClimbHolding 3-OR 근사 이식)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 `wantClimb` (L2479) / `blocked` (L2393) / `wouldWantClimb` (L2467)
+  정의 확보. 핵심 발견:
+  * `wantClimb` = `Config.isFreeClimbingEnabled() && wouldWantClimb` (단순 grab 아님)
+  * `wouldWantClimb` = 4-OR (grab / isClimbHolding+sneak / autoLadder / autoVine) +
+    4-AND 억제 (isSliding 제외 / !isHeadJumping / !wantCrawlNotClimb / !disabled)
+  * `blocked` = `currentScreen != null && !currentScreen.allowUserInput` — GUI 입력 차단
+    상태 (수평 충돌 아님). 1.21.1 `allowUserInput` 필드 제거됨.
+- 의존 필드 `isFacedToLadder` / `isFacedToSolidVine` / `freeClimbAutoLadder/Vine` Config
+  필드 모두 1.21.1 미이식 확인 (grep 결과 0건).
+- **근사 이식 전략** (세션 63 B-5 패턴): 핵심 공식 `wantClimbHolding` 3-OR + `isClimbHolding`
+  갱신 **구조만 1:1**, 의존 `wantClimb`/`blocked` 는 근사 + §7 B-16 근사 지점 등록.
+- ClientState tickEssential isSlow 공식 (L918) 직후에 B-16 블록 이식:
+  ```java
+  {
+      MinecraftClient mc16 = MinecraftClient.getInstance();
+      boolean blocked = mc16.currentScreen != null;
+      boolean wouldWantClimb16 =
+              (grabPressed0 || (isClimbHolding && sneakPressedRaw))
+              && (!isSliding || (grabPressed0 && player.input.movementForward > 0F))
+              && !isHeadJumping && !wantCrawlNotClimb && !_disabled3a;
+      boolean wantClimb16 = cfg0.freeClimb && cfg0.enabled && wouldWantClimb16;
+
+      boolean wantClimbHolding =
+              (isClimbHolding && sneakPressedRaw)
+              || (isClimbing && blocked)
+              || (wantClimb16 && !isSwimming_sm && !isDiving && !isCrawling
+                      && (sneakPressedRaw || crawlToggled));
+      isClimbHolding = wantClimbHolding && isClimbing;
+  }
+  ```
+- §10 B-16 체크 + **서브 원자 B-16a/b/c 추가** (완전 이식 경로):
+  * B-16a: `isFacedToLadder/isFacedToSolidVine` 헬퍼 Climber 이식
+  * B-16b: `Config.freeClimbAutoLadder/freeClimbAutoVine` 필드 이식
+  * B-16c: `wouldWantClimb` 2-OR → 4-OR 확장
+- §7 B-16 근사 2건 등록 (wantClimb 2-OR / blocked allowUserInput 제거).
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 68)**:
+- [근거] Agent WebFetch 로 원본 L2393/L2467-L2477/L2479-L2481/L2721-L2732 확보 ✓
+- [근거] R-12.7 `isClimbHolding` (갱신 로직 없음 — 필드는 있으나 항상 false) 불일치
+  §16 세션 33 #6/#7 재확인 ✓
+- [대응] 3-OR + `isClimbHolding = wantClimbHolding && isClimbing` 공식 구조 1:1 ✓
+- [분기] 3-OR 각 항 + `wouldWantClimb` 2-OR + 4-AND 억제 명시 ✓
+- [상수] 없음
+- [타이밍] isSlow 공식 직후 (원본 L2718 → L2721) 순서 복원 ✓
+- [근사] **2건 근사 주석 + §7 등록** (wantClimb 2-OR / blocked 단순화) ✓
+- [신규] B-16a/b/c 서브 원자 §10 추가 ✓
+- [회귀] compileJava + compileClientJava 모두 ✓. `isClimbHolding` 이 이전 항상 false 에서
+  실제 값 갱신으로 전환 — 소비처 (`isCrawlClimbing` 공식 `wasCrawling||isCrawlClimbing` 등)
+  가 실제 값 참조. B-16c 완료 시 4-OR 확장으로 자동 등반 경로 활성.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing() 매 틱 호출 (B-14 세션 57)
+- ✅ #6/#7 isClimbHolding/wantClimbHolding 갱신 (B-16 세션 68, 근사)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 자동 해소 세션 57)
+- ⏳ #2~#5/#8~#12/#14 (B-17b2/B-18/B-19/B-20 등)
+
+**Phase 2 진행 상황**: 36 원자 완료 (B-16 근사) + B-16a/b/c 서브 추가 → 잔여 ~7
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
+- **B-16a/b/c** (B-16 근사 해소 서브) — 자동 등반 경로 완전 이식 — 규모 중.
 
 ---
 
