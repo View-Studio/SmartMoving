@@ -1935,6 +1935,106 @@ public final class SmartMovingClientState {
         return Math.max(result, yMin);
     }
 
+    /**
+     * 원본 SmartMovingBase L131-L152 `getLiquidBorder(i, j, k)` 근사 이식.
+     * 해당 블록의 액체 높이 (0.0~1.0F) 반환. 0 = 비액체.
+     *
+     * 원본 판정 순서:
+     *   1. water / flowing_water → getNormalWaterBorder
+     *   2. FiniteLiquid 모드 → getFiniteLiquidWaterBorder
+     *   3. lava / flowing_lava → _lavaLikeWater ? getNormalWaterBorder : 0F
+     *   4. Material.lava → _lavaLikeWater ? 1F : 0F
+     *   5. Material.water → getNormalWaterBorder
+     *   6. material.isLiquid() → 1F
+     *   7. 그 외 → 0F
+     *
+     * 1.21.1 매핑:
+     *   - `world.getBlock(i,j,k).getMaterial()` → `world.getFluidState(pos)` 로 단순화
+     *   - `FluidState.isIn(FluidTags.WATER)` + `getHeight(world, pos)` → 물 높이 (0~1)
+     *   - **§7 근사 (B-42c-a)**: FiniteLiquid mod 분기 생략 (mod 1.21.1 미이식)
+     *   - **§7 근사 (B-42c-b)**: `_lavaLikeWater` Config 필드 미이식 → lava 처리 생략
+     *     (lava 는 항상 `0F` 반환). 원본 default 값은 false 이므로 근사 영향 제한적.
+     *   - **§7 근사 (B-42c-c)**: Normal/Material.water 분기 통합 — FluidState 는 항상
+     *     `getHeight()` 반환. `getNormalWaterBorder` 의 metadata 기반 구분
+     *     (`>=8→1F / ==0+air→0.8875F / 기타→(8-meta)/8F`) 은 1.21.1 `FluidState.getHeight`
+     *     내부 로직에 흡수됨 (FlowableFluid 구현).
+     *
+     * B-42c (세션 119) — Phase 6 세 번째 원자 (액체 경계 헬퍼).
+     */
+    private static float getLiquidBorder(ClientPlayerEntity player, int i, int j, int k) {
+        net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(i, j, k);
+        net.minecraft.fluid.FluidState fluid = player.getWorld().getFluidState(pos);
+        if (fluid.isEmpty()) return 0F;
+        // 근사 이식 — 원본과 차이: water 만 처리. lava 는 _lavaLikeWater 미이식으로 0F
+        if (fluid.isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+            return fluid.getHeight(player.getWorld(), pos);
+        }
+        return 0F;
+    }
+
+    /**
+     * 원본 SmartMovingBase L418-L432 `getMaxPlayerLiquidBetween(yMin, yMax)` 이식.
+     *
+     * 플레이어 X/Z 위치의 [yMin, yMax] Y 구간에서 yMax→yMin 방향(위→아래) 탐색.
+     * 첫 번째 액체 블록 발견 시 `j + liquidBorder` 반환. 없으면 `yMin`.
+     *
+     * 호출처:
+     *   - 원본 SmartMovingSelf L265 `totalSwimWaterBorder` (swim 경계)
+     *   - `isInLiquid()` (원본 L411-L416) 본체
+     *
+     * B-42c (세션 119).
+     */
+    public static double getMaxPlayerLiquidBetween(ClientPlayerEntity player,
+                                                    double yMin, double yMax) {
+        int i = net.minecraft.util.math.MathHelper.floor(player.getX());
+        int jMin = net.minecraft.util.math.MathHelper.floor(yMin);
+        int jMax = net.minecraft.util.math.MathHelper.floor(yMax);
+        int k = net.minecraft.util.math.MathHelper.floor(player.getZ());
+
+        for (int j = jMax; j >= jMin; j--) {   // 위에서 아래로 탐색
+            float swimWaterBorder = getLiquidBorder(player, i, j, k);
+            if (swimWaterBorder > 0) {
+                return j + swimWaterBorder;
+            }
+        }
+        return yMin;
+    }
+
+    /**
+     * 원본 SmartMovingBase L434-L451 `getMinPlayerLiquidBetween(yMin, yMax)` 이식.
+     *
+     * 플레이어 X/Z 위치의 [yMin, yMax] Y 구간에서 yMin→yMax 방향(아래→위) 탐색.
+     * 첫 액체 발견 시:
+     *   - `j > yMin` : 블록이 yMin 보다 위 → `j` 반환 (블록 하단)
+     *   - `j + border > yMin` : 블록 액체 상단이 yMin 초과 → `yMin` 반환
+     * 없으면 `yMax`.
+     *
+     * 호출처:
+     *   - 원본 SmartMovingSelf L1372 / L2414 `crawlStandUpLiquidCeiling`
+     *   - `isInLiquid()` (원본 L411-L416) 본체
+     *
+     * B-42c (세션 119).
+     */
+    public static double getMinPlayerLiquidBetween(ClientPlayerEntity player,
+                                                    double yMin, double yMax) {
+        int i = net.minecraft.util.math.MathHelper.floor(player.getX());
+        int jMin = net.minecraft.util.math.MathHelper.floor(yMin);
+        int jMax = net.minecraft.util.math.MathHelper.floor(yMax);
+        int k = net.minecraft.util.math.MathHelper.floor(player.getZ());
+
+        for (int j = jMin; j <= jMax; j++) {   // 아래에서 위로 탐색
+            float swimWaterBorder = getLiquidBorder(player, i, j, k);
+            if (swimWaterBorder > 0) {
+                if (j > yMin) {
+                    return j;
+                } else if (j + swimWaterBorder > yMin) {
+                    return yMin;
+                }
+            }
+        }
+        return yMax;
+    }
+
     // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
 
     /**

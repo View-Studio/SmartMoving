@@ -482,6 +482,24 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   minPlayerSwimWaterCeiling/actuallySolidHeight 판정 약간 보수적, 실용 등가). 호출처:
   원본 SmartMovingSelf L266 `minPlayerSwimWaterCeiling` / L1151 `actuallySolidHeight` /
   L1373·L2400 `crawlStandUpCeiling`. **B-42b 는 crawl standup ceiling 판정의 기반**.
+- **B-42c 근사 3건** (세션 119): `ClientState.getLiquidBorder(player, i, j, k)` +
+  `getMaxPlayerLiquidBetween(player, yMin, yMax)` + `getMinPlayerLiquidBetween(player,
+  yMin, yMax)` 액체 경계 헬퍼 이식 — 원본 `SmartMovingBase` L131-L152 (getLiquidBorder)
+  + L418-L432 (max) + L434-L451 (min). 두 경계 메서드 본체는 1:1 이식 (X/Z 1칸 세로
+  스캔). `getLiquidBorder` 헬퍼 근사 3건:
+  (1) **FiniteLiquid mod 분기 생략** (원본 L141 `SmartMovingOptions.hasFiniteLiquid`
+  → `getFiniteLiquidWaterBorder`) — FiniteLiquid mod 1.21.1 미이식. `hasFiniteLiquid`
+  Config 필드 자체 미신설.
+  (2) **`_lavaLikeWater` Config 필드 미이식** (원본 L143/L147 `Config._lavaLikeWater.value`
+  조건) → lava 처리 생략, 항상 `0F` 반환. 원본 default = false 이므로 평시 영향 없으나,
+  옵션 활성 시 lava 수영 기능 누락.
+  (3) **`getNormalWaterBorder` metadata 기반 높이 계산** (원본 L153-L164, `>=8→1F /
+  ==0+air→0.8875F / 기타→(8-meta)/8F`) → 1.21.1 `FluidState.getHeight(world, pos)`
+  FlowableFluid 구현에 흡수. viewing-position 기반 계산이라 metadata 완전 동치는 아니나
+  (특히 위가 공기인 수면의 `0.8875F` 근사값) vanilla 물리와 일치하는 height.
+  호출처: 원본 SmartMovingSelf L265 `totalSwimWaterBorder` / L1372·L2414
+  `crawlStandUpLiquidCeiling` / `isInLiquid` 본체. **B-42c 는 액체 수영/크롤 천장 판정
+  기반**.
 - **B-10b-pre 근사 1건** (세션 110): `wasJumpingOutOfWater` — 원본은 SmartMovingSelf
   L105 의 **updateEntityActionState 내부 지역 snapshot** (`boolean wasJumpingOutOfWater =
   isJumpingOutOfWater;`). 이후 handleSwimming L229 에 파라미터로 전달되어 L487 공식

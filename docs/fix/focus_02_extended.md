@@ -380,7 +380,10 @@ Orientation 판정 + ClimbGap 계산.
 - [x] B-42b. `getMinPlayerSolidBetween(double y1, double y2, double dOffset)` 이식 —
       위 범위 내 최저 고체 블록 Y. **세션 118 완료** (`ClientState` static helper, B-42a
       대칭, §7 B-42b 근사 동일 패턴 등록).
-- [ ] B-42c. `getMinPlayerLiquidBetween(double y1, double y2)` 이식 — 최저 액체 Y.
+- [x] B-42c. `getMinPlayerLiquidBetween(double y1, double y2)` + `getMaxPlayerLiquidBetween`
+      + `getLiquidBorder` 통합 이식 — 최저/최고 액체 Y. **세션 119 완료** (`ClientState`
+      static helpers, FluidState/FluidTags.WATER 기반, §7 B-42c 근사 3건 등록:
+      FiniteLiquid/_lavaLikeWater/getNormalWaterBorder).
 - [ ] B-42d. `realMinPlayerSwimWaterDepth` / `playerCrawlWaterBorder` 등 AABB 기반 파생값
       이식.
 
@@ -501,6 +504,64 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 119 — 2026-04-24 — B-42c 액체 경계 헬퍼 3종 (`getLiquidBorder` + `getMax/MinPlayerLiquidBetween`)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 B-42c 원자 (액체 헬퍼).
+
+**진행한 작업**:
+1. **원본 소스 확보**:
+   * `docs/research/original/smartmoving/moving/SmartMovingBase.md`:
+     - L210-L233 `getLiquidBorder(i, j, k)` — 액체 높이 (0.0~1.0F)
+     - L249-L263 `getNormalWaterBorder(i, j, k)` — metadata 기반 물 높이
+     - L560-L577 `getMaxPlayerLiquidBetween(yMin, yMax)` — 위→아래 스캔
+     - L584-L604 `getMinPlayerLiquidBetween(yMin, yMax)` — 아래→위 스캔
+   * `.tmp_research/SmartMovingSelf.java` grep 호출처 3곳:
+     - L265 `totalSwimWaterBorder` (swim 경계 판정)
+     - L1372 / L2414 `crawlStandUpLiquidCeiling` (standupIfPossible / tickEssential)
+2. **1.21.1 Config 상태 확인**:
+   * `lavaLikeWater` 필드 **미이식** (grep 결과 0 matches) → 근사 등록.
+   * `hasFiniteLiquid` 필드 **미이식** → FiniteLiquid mod 자체 1.21.1 미이식.
+3. **B-42c 본문 이식** (`SmartMovingClientState.java` B-42b 직후):
+   * `getLiquidBorder(player, i, j, k)` — `FluidState.getHeight(world, pos)` 근사.
+     water 만 처리 (lava 는 0F 반환).
+   * `getMaxPlayerLiquidBetween(player, yMin, yMax)` — `jMax→jMin` 역순 탐색, 첫 액체
+     발견 시 `j + border` 반환. 없으면 `yMin`.
+   * `getMinPlayerLiquidBetween(player, yMin, yMax)` — `jMin→jMax` 탐색, 조건부 `j` /
+     `yMin` / `yMax` 분기 1:1.
+4. **§7 B-42c 근사 3건 등록**:
+   * (1) FiniteLiquid mod 분기 생략 (mod 미이식).
+   * (2) `_lavaLikeWater` Config 필드 미이식 → lava 항상 0F (default false 이므로 평시
+     영향 없음, lava 수영 기능만 누락).
+   * (3) `getNormalWaterBorder` metadata 계산 → `FluidState.getHeight` 흡수 (수면
+     `0.8875F` 근사값은 vanilla FlowableFluid 로 근사, 완전 동치 아님).
+5. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 119 기준)**:
+- [근거] 원본 `SmartMovingBase.md` L131-L182 + L411-L451 read ✓
+- [근거] 호출처 3곳 `.tmp_research/SmartMovingSelf.java` grep ✓
+- [대응] `sp.posX/Z` → `player.getX/Z()`, `MathHelper.floor_double` → `MathHelper.floor`,
+  `world.getBlock(i,j,k)` → `world.getFluidState(BlockPos)` 표면 매핑 ✓
+- [분기] Max 메서드 (yMax→yMin 역순) / Min 메서드 (jMin→jMax + `j>yMin` `j+border>yMin`
+  else 3분기) / getLiquidBorder (FluidTags.WATER 단일 분기) 이식 완료 ✓
+- [상수] 원본 L600 `j > yMin` / `j + swimWaterBorder > yMin` 상수 조건 1:1 ✓
+- [타이밍] helper 신설 — 호출 지점은 후속 원자 ✓
+- [근사] §7 B-42c 근사 3건 등록 (FiniteLiquid / lavaLikeWater / NormalWaterBorder) ✓
+- [신규] 세 메서드 신설 — 본체 §16 변경 없음 ✓
+- [회귀] 현재 호출 지점 없음 → 회귀 영향 없음 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42d** (`realMinPlayerSwimWaterDepth` / `playerSwimWaterBorder` /
+`playerCrawlWaterBorder` 등 AABB 기반 파생값 이식). 이 필드들은 원본 `updateEntityActionState`
+(L228-L267) 의 지역 계산인데 Swimmer/ClientState 필드 승격 필요. B-42a~c 헬퍼 참조.
+이후 승격 8건 (B-42-B5/B16/B20/B26/B35/B36/B39/B18a/b).
+
+**진행률** (세션 119 종료 시점):
+- Extended 완료: **33 원자** (B-19 22 + Phase 4 8 + Phase 6 **3** = 33)
+- Extended 총 원자 ~61
+- **Extended 진행률: 33/61 ≈ 54%**
+- **포커스 #2 전체: (54+33)/115 ≈ 76%**
+- **Phase 6 B-42 본체 3/4 — 고체/액체 헬퍼 모두 완료**
 
 ### 세션 118 — 2026-04-24 — B-42b `getMinPlayerSolidBetween` AABB 정밀 헬퍼 (B-42a 대칭)
 
