@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 79 — B Phase 2 계속 / B-42 분리) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 49 원자 완료 / ⏳ **B Phase 2 잔여 9 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-39/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 80 — B Phase 2 계속 / B-39 근사) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 50 원자 완료 / ⏳ **B Phase 2 잔여 8 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -429,6 +429,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   - minY` 이동량 — AABB 정밀 스캔 미이식 → `0` 근사 (발 아래 고체 가정) 로 `player.move`
   호출 생략, `heightOffset = 0F` 리셋만 수행. 분기 (b)/(c) 는 1:1. B-10a isShallowDiveOrSwim
   공식 미이식으로 분기 (a) 자체도 항상 false — 근사 영향 제한.
+- **B-39 근사** (세션 80): `ClientState.fromSwimmingOrDiving` 에 원본 L1392-L1403 3분기
+  구조 복원. `else` 분기 진입은 되나 본문은 no-op (주석만). `crawlStandUpBottom` AABB
+  정밀 스캔 미이식 → `≈ minY` 근사 → `minY + 0.5D` 초과 조건 항상 false → isSlow 크롤
+  전환 미발동. `move(0, crawlStandUpBottom - minY, 0)` 이동량도 0 근사 생략. 현재 동작
+  유지 + 구조 복원으로 focus_14 (AABB 정밀) 완료 시 자동 활성 경로 확보.
 
 ---
 
@@ -980,8 +985,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       원본 순서 그대로 복원.
 
 #### B-39. landMotionPost 3분기 (isSlow + 0.5D) 이식 (A-5 발견)
-- [ ] B-39. 원본 L1392-L1403 3분기 (`crawlStandUpBottom > minY`) 중 **isSlow && > minY+0.5D
-      → crawling** 서브 분기 ClientState fromSwimmingOrDiving 에 추가 (현재 2분기만 이식).
+- [x] B-39. ✅ **세션 80 완료 (근사 이식, 구조 복원)** — ClientState.fromSwimmingOrDiving
+      에 원본 L1392-L1403 3분기 구조 복원. `else` 분기 추가 (`canStandUp && !hasLiquidCeiling`
+      뒤). 본문은 no-op 주석만 — `crawlStandUpBottom` AABB 스캔 미이식 → `minY + 0.5D`
+      조건 항상 false → isSlow 크롤 전환 + 이동량 모두 생략. §7 B-39 근사 등록. 완전 이식은
+      focus_14 AABB 정밀 완료 시 자동 활성 경로 확보 — 주석으로 명시.
 
 #### B-40. `toCrawling()` 헬퍼 메서드 신설 + 호출 지점 정리 (A-5 발견)
 - [x] B-40. ✅ **세션 44 완료** — 원본 L3047-L3054 `toCrawling()` 메서드 이식
@@ -3670,6 +3678,40 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사로 실효성 낮음.
 - **B-44b** (wasCrawling 저장 시점 이동) — B-33 동시 조정 필요.
 - **B-7** (updateSwimState 진입 조건) — isLiquidClimbing/isInLiquid/isLavaLikeWaterEnabled 의존.
+
+### 세션 80 — 2026-04-24 — B Phase 2 B-39 (landMotionPost 3분기 구조 복원 근사)
+
+**진행한 작업**:
+- `ClientState.fromSwimmingOrDiving` 에 원본 L1392-L1403 3분기 구조 복원.
+  기존 `canStandUp=false` (1) + `hasLiquidCeiling=true` (2) 분기 뒤에 `else` 분기 신설.
+- 본문은 no-op 주석만 — `crawlStandUpBottom` AABB 정밀 스캔 미이식이므로 원본 조건
+  `isSlow && crawlStandUpBottom > minY + 0.5D` 를 근사로 `false` 처리. `move(0,
+  crawlStandUpBottom - minY, 0)` 이동량도 `0` 근사 생략.
+- 현재 동작 유지 + 구조 복원으로 focus_14 AABB 정밀 완료 시 자동 활성 경로 확보. 주석에
+  원본 원문 + 근사 사유 + focus_14 완료 시 활성 지시 명시.
+- §7 B-39 근사 등록. §10 체크박스 해소. §15 세션 80 로그.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공 (주석만 추가).
+
+**완료 전 검증 체크리스트 (세션 80)**:
+- [근거] 원본 L1392-L1403 research/.../SmartMovingSelf.md L3211-L3229 (R-11.11) 확보 ✓
+- [근거] R-14.10 #9 `landMotionPost 3분기 중 1개 누락` §16 세션 35 확정 ✓
+- [대응] else 분기 추가 (원본 3분기 구조 복원) — 본문은 주석만 (근사) ✓
+- [분기] else 진입 자체는 가능 (canStandUp 성공 + !hasLiquidCeiling 시) ✓
+- [상수] 없음 (0.5D 는 주석에만 명시)
+- [타이밍] 기존 fromSwimmingOrDiving 본체 블록 마지막 else — 원본 L1392 else if 순서 동일 ✓
+- [근사] **본문 전체 근사 (crawlStandUpBottom AABB 미이식)** + §7 B-39 등록 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. else 분기 본문이 no-op 이므로 기존 동작
+  완전 유지. 구조 복원만으로 focus_14 완료 시 자동 활성화 경로 확보.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**Phase 2 진행 상황**: 50 원자 완료 / 잔여 8 원자
+
+**다음 작업 권고**:
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+- **B-44b** (wasCrawling 저장 시점 이동) — B-33 동시 조정 필요 (단독 무의미).
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
+- **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
 
 ---
 

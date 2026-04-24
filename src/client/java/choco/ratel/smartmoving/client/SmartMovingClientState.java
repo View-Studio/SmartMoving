@@ -1910,6 +1910,22 @@ public final class SmartMovingClientState {
                 contextContinueCrawl = true;
                 isDipping = false;
                 heightOffset = -1F;
+            } else {
+                // B-39 (세션 80): 원본 L1392-L1403 3분기 구조 복원 (근사).
+                // 원본: else if (crawlStandUpBottom > minY) {
+                //           if (isSlow && crawlStandUpBottom > minY + 0.5D) {
+                //               isCrawling = true; isDipping = false; setHeightOffset(-1F);
+                //           }
+                //           move(0, crawlStandUpBottom - minY, 0);
+                //       }
+                // ※ 근사 이식 (§7 B-39 근사 등록):
+                //   `crawlStandUpBottom` AABB 정밀 스캔 (`getMaxPlayerSolidBetween(minY-1,
+                //   minY, ...)`) 미이식 → `crawlStandUpBottom ≈ minY` 근사 → `minY + 0.5D`
+                //   초과 조건 항상 false → isSlow 분기 미발동.
+                //   `move(0, crawlStandUpBottom - minY, 0)` 이동량도 0 근사로 생략.
+                //   현재 동작: else 분기 진입하나 no-op (기존 동작 유지).
+                //   완전 이식: focus_14_aabb_precision (§17) 에서 crawlStandUpBottom 정밀
+                //     계산 후 isSlow 크롤 전환 + 이동량 활성.
             }
         }
     }
