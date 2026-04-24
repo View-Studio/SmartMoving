@@ -564,6 +564,82 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 
 ## 5. 작업 기록
 
+### 세션 136 — 2026-04-25 — B-N-standup 재평가 + 근사 (1)(2)(3) 해소 완료 + (4) focus_03 이관
+
+**사용자 지시**: B-N-standup 근사 영향 재평가. (1)(2) 는 POSE 시스템 대체로 영향 0 확정,
+(3) 은 B-42a/b 헬퍼 소비로 즉시 해소, (4) vanilla isFlying sync 는 네트워크 주제라 관련
+포커스로 이관.
+
+**진행한 작업**:
+
+**1. 재평가 — (1)(2) 영향 0 확정**:
+- `resetHeightOffset` boundingBox/height 조작 생략 → 1.21.1 `MixinPlayerEntityClient.
+  sm_updatePose_client` (매 틱 SWIMMING/SLIDING POSE 강제 + cancel) 이 hitbox/키 자동 관리.
+  POSE 전환 시 vanilla 가 bbox 복원. **기능 동치 — 해소 불필요**.
+- `standUp` `move(0, 1D - gap, 0)` 이동 생략 → POSE 시스템 + vanilla 중력 대체. 이 세션
+  (3) 해소에 포함됨 (원본 move 이동 1:1 이식).
+
+**2. 해소 — (3) `standupIfPossible` gap 조건 정밀 복원**:
+- `ClientState.getGapUnderneight(player)` static 헬퍼 신설 (B-42a 소비):
+  `minY - getMaxPlayerSolidBetween(minY - 1.1D, minY, 0)` 원본 L845-L848 1:1.
+- `ClientState.getGapOverneight(player)` static 헬퍼 신설 (B-42b 소비):
+  `getMinPlayerSolidBetween(maxY, maxY + 1.1D, 0) - maxY` 원본 L850-L853 1:1.
+- `standUp(player, gap)` 시그니처 변경 — 원본 L2214-L2219 `move(0, 1D - gap, 0)` 1:1 이식.
+- `toSlidingOrCrawling(player, gap)` 메서드 신설 — 원본 L2222-L2230 1:1 이식
+  (`move(0, -gap, 0)` + `isSlidingEnabled && (grab || wasHeadJumping) → isSliding` /
+  else `toCrawling()`).
+- `standupIfPossible(player)` 무인자 정밀 재작성 — 원본 L2165-L2184 1:1:
+  ```java
+  if (heightOffset >= 0) return;
+  double gap = getGapUnderneight(player);
+  boolean groundClose = gap < 1D;
+  if (!groundClose) resetHeightOffset();
+  else {
+      double overGap = getGapOverneight(player);
+      boolean standUpPossible = gap + overGap >= 1D;
+      if (standUpPossible) standUp(player, gap);
+      else toSlidingOrCrawling(player, gap);
+  }
+  ```
+- `standupIfPossible(player, tryLanding, restoreFromFlying)` 2-arg 정밀 재작성 — 원본
+  L2186-L2212 1:1. `!groundClose && !sneakPressed` / `standUpPossible && !(sneakPressed
+  && grabPressed)` / else 3분기 전수 복원.
+
+**3. 이관 — (4) vanilla `capabilities.isFlying = false`**:
+- Creative 비행 자동 해제. 1.21.1 client-server sync 네트워크 인프라 필요.
+- `focus_03_transition_conditions.md` §18.1 으로 이관 — 확정 원자 (B-N-standup-4) 로 기록.
+  - 18.1a-f 6 서브 원자 (Mixin/패킷/조건/Config/테스트).
+  - 의존: `UpdatePlayerAbilitiesC2SPacket` + `Options._flyCloseToGround` Config + tryLanding
+    계산 경로.
+  - 규모 소-중 (2-3 세션 예상).
+
+**4. §7 B-N-standup 근사 기록 갱신**:
+- (1)(2) 영향 0 확정 표기
+- (3) 해소 완료 표기
+- (4) focus_03 §18.1 이관 표기
+
+**5. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 136 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2165-L2230 + `SmartMovingBase.java` L845-L853 전수 read ✓
+- [근거] 1.21.1 POSE 시스템 `MixinPlayerEntityClient.sm_updatePose_client` 확인 — (1)(2) 영향 0 실증 ✓
+- [대응] 원본 `sp.boundingBox.minY/maxY` → `player.getBoundingBox().minY/maxY`, `move(0, dy, 0, true)` →
+  `player.move(MovementType.SELF, new Vec3d(0, dy, 0))`, `sneakButton.Pressed` →
+  `player.isSneaking()`, `grabButton.Pressed` → `SmartMovingKeys.grab.isPressed()` ✓
+- [분기] 2-arg 오버로드 3분기 전수 복원 (`!groundClose && !sneakPressed` / `standUpPossible
+  && !(sneak && grab)` / else) + tryLanding 분기 ✓
+- [상수] `1.1D` (getGap 범위) / `1D` (groundClose 임계 + standUpPossible 임계) 원본 동일 ✓
+- [타이밍] 호출 순서 원본 L2165-L2184 / L2186-L2212 절대 순서 보존 ✓
+- [근사] (1)(2) 영향 0 확정 / (3) 완전 해소 / (4) focus_03 §18 이관 ✓
+- [신규] `getGapUnderneight` / `getGapOverneight` / `toSlidingOrCrawling` 3 메서드 신설 ✓
+- [회귀] 기존 `standUp()` no-arg 호출처 없음 (grep 확인). `standupIfPossible` 2 오버로드 호출처
+  (B-24 세션 53 `standupIfPossible(player, false, true)` 1곳) 유지 — 시그니처 동일 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**결과**: B-N-standup 근사 4건 → **(1)(2) 영향 0 / (3) 해소 / (4) 이관** = Extended §7
+근사에서 B-N-standup 계열 **전부 정리**. 실질 남은 작업은 focus_03 §18.1 (Creative 비행
+sync).
+
 ### 세션 134 — 2026-04-25 — 🏆 Extended 전수 완결 — B-42-B26 (SlideDown 경량) + B-31c-post 정밀 + 부모 체크박스 정리
 
 **사용자 지시**: 익스텐디드 전 미결 사항 완결 후 다음 포커스 전환.

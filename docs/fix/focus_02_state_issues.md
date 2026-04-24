@@ -464,23 +464,24 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   move(0, -gap, 0)`, 아니면 `resetHeightOffset`. `mustCrawl/sneak/crawlToggled` 조건
   아니면 `resetHeightOffset` 만.
   → **B-42-B18b Mixin 신설 원자 자체 불필요 확정**. Phase 6 최종 근사 해소.
-- **B-N-standup 근사 4건** (세션 115): `standupIfPossible` 메서드 이식 시 1.21.1 API 제약
-  + AABB 정밀 헬퍼 미이식으로 인한 다수 근사:
-  (1) `resetHeightOffset` — 원본 `sp.boundingBox.minY += heightOffset; sp.height -=
-  heightOffset; heightOffset = 0F` 중 boundingBox/height 조작 생략. 1.21.1 vanilla API
-  에서 직접 조작 불허 → `heightOffset = 0F` 만.
-  (2) `standUp` — 원본 `move(0, 1D - gapUnderneight, 0, true)` 이동 생략. `getGapUnderneight`
-  AABB 미이식으로 정확한 gap 불명. 상태 전환 (isCrawling=false / isHeadJumping=false /
-  resetHeightOffset) 만.
-  (3) `standupIfPossible` — 원본 `gapUnderneight < 1D` (groundClose) + `gapUnderneight +
-  gapOverneight >= 1D` (standUpPossible) AABB 체크 → `canStandUp(player)` 근사 단일 판정.
-  `!groundClose` 공중 분기 통합. `toSlidingOrCrawling` 호출 생략 (후속 원자 범위).
-  (4) 2-arg 오버로드 `tryLanding && groundClose && standUpPossible → sp.capabilities.isFlying
-  = false` 분기 — 1.21.1 `player.getAbilities().flying` 직접 조작은 client-server
-  sync 미보장 → SM 측 `isFlying` 만 false. vanilla 비행 상태는 별도 경로 (Mixin/네트워크)
-  로 해제 필요.
-  B-24 (세션 53) `restoreFromFlying = true` 설정 직후 `standupIfPossible(player, false, true)`
-  호출 연결 완결.
+- **B-N-standup 근사** (세션 115, 세션 136 갱신):
+  ~~(1) `resetHeightOffset` boundingBox/height 조작 생략~~ → **영향 0 확정 (세션 136 재평가)**:
+    1.21.1 vanilla POSE 시스템 (`MixinPlayerEntityClient.sm_updatePose_client` — SWIMMING/
+    SLIDING POSE 강제 + cancel) 이 hitbox/키 자동 관리. POSE 전환 시 vanilla 가 bbox 복원.
+    기능 동치 — 해소 불필요.
+  ~~(2) `standUp` move 이동 생략~~ → **세션 136 해소 완료**: `standUp(player, gap)` 시그니처로
+    변경, 원본 L2216 `move(0, 1D - gapUnderneight, 0, true)` 1:1 복원. B-42a `getGapUnderneight`
+    헬퍼 소비.
+  ~~(3) `standupIfPossible` gap 조건 간소화~~ → **세션 136 해소 완료**: 두 오버로드 모두
+    원본 L2165-L2212 1:1 복원. `getGapUnderneight` / `getGapOverneight` 헬퍼 신설 (B-42a/b
+    소비). `groundClose` + `standUpPossible` 조건 분기 전수 복원. `toSlidingOrCrawling(player,
+    gap)` 메서드도 신설 (원본 L2222-L2230 1:1 — `isSlidingEnabled && (grab || wasHeadJumping)
+    → isSliding` / else → `toCrawling`). 2-arg 오버로드 `sneakPressed` / `grabPressed` 조건
+    분기 전수.
+  (4) 2-arg 오버로드 `sp.capabilities.isFlying = false` 분기 — 1.21.1 vanilla 비행 상태 직접
+    조작은 client-server sync 필요. **→ focus_06 후속 (서버 sync 인프라 범위)**.
+    B-24 (세션 53) `restoreFromFlying = true` 설정 직후 `standupIfPossible(player, false, true)`
+    호출 연결 완결.
 - ~~**B-31c-post 근사 1건** (세션 113)~~ → **세션 134 해소 완료**:
   원본 L2346 `getMaxPlayerSolidBetween(minY, maxY, 0) > minY` 정밀 복원. 기존 `!canStandUp`
   근사 → B-42a 헬퍼 직접 소비. initializeCrawling true 설정 조건이 원본 AABB 정밀 판정

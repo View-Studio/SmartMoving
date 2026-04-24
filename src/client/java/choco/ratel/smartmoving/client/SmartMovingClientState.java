@@ -2353,89 +2353,156 @@ public final class SmartMovingClientState {
     }
 
     /**
-     * 원본 L2214-L2219 `standUp(double gapUnderneight)`:
+     * 원본 `SmartMovingBase.getGapUnderneight()` L845-L848 정밀 이식.
+     *   return sp.boundingBox.minY - getMaxPlayerSolidBetween(minY - 1.1D, minY, 0);
+     *
+     * 발 아래 고체까지 거리 (0~1.1D). `groundClose = gap < 1D` 판정용.
+     * B-N-standup-3 (세션 136) — B-42a 헬퍼 소비로 §7 근사 해소.
+     */
+    public static double getGapUnderneight(ClientPlayerEntity player) {
+        Box bb = player.getBoundingBox();
+        return bb.minY - getMaxPlayerSolidBetween(player, bb.minY - 1.1D, bb.minY, 0);
+    }
+
+    /**
+     * 원본 `SmartMovingBase.getGapOverneight()` L850-L853 정밀 이식.
+     *   return getMinPlayerSolidBetween(maxY, maxY + 1.1D, 0) - maxY;
+     *
+     * 머리 위 고체까지 거리 (0~1.1D). `standUpPossible = gap + overGap >= 1D` 판정용.
+     * B-N-standup-3 (세션 136) — B-42b 헬퍼 소비로 §7 근사 해소.
+     */
+    public static double getGapOverneight(ClientPlayerEntity player) {
+        Box bb = player.getBoundingBox();
+        return getMinPlayerSolidBetween(player, bb.maxY, bb.maxY + 1.1D, 0) - bb.maxY;
+    }
+
+    /**
+     * 원본 L2214-L2219 `standUp(double gapUnderneight)` 정밀 이식:
      *   move(0, (1D - gapUnderneight), 0, true);
      *   isCrawling = false;
      *   isHeadJumping = false;
      *   resetHeightOffset();
      *
-     * **§7 근사** (B-N-standup-approx-2): 원본 `move(0, 1D - gapUnderneight, 0, true)`
-     * 이동 생략 — 1.21.1 AABB `getGapUnderneight` 미이식. `canStandUp` 기반 근사에서
-     * 정확한 gap 알 수 없음. 핵심 상태 전환 (crawl/headJump 해제 + heightOffset 리셋) 만.
+     * heightOffset=-1F 상태의 hitbox 를 원위치 복원 + 바닥 스냅. 1.21.1 vanilla POSE 가
+     * hitbox 자체는 자동 복원하므로 `move` 는 바닥 스냅 전용 효과.
+     * B-N-standup-3 (세션 136).
      */
-    public void standUp() {
-        // 근사 이식 — 원본과 차이: move(0, 1D - gapUnderneight, 0) 이동 생략
+    public void standUp(ClientPlayerEntity player, double gapUnderneight) {
+        // 원본 L2216: move(0, 1D - gapUnderneight, 0, true)
+        player.move(MovementType.SELF, new Vec3d(0, 1D - gapUnderneight, 0));
         this.isCrawling    = false;
         this.isHeadJumping = false;
         resetHeightOffset();
     }
 
     /**
-     * 원본 L2165-L2183 `standupIfPossible()` 무인자 오버로드:
+     * 원본 L2222-L2230 `toSlidingOrCrawling(double gapUnderneight)` 정밀 이식:
+     *   move(0, (-gapUnderneight), 0, true);
+     *   if (Config.isSlidingEnabled() && (grabButton.Pressed || wasHeadJumping))
+     *       isSliding = true;
+     *   else
+     *       wasCrawling = toCrawling();
+     *
+     * 서기 공간 부족 시 슬라이딩(grab + slide 활성 or 헤드점프 착지) 또는 크롤링 전환.
+     * B-N-standup-3 (세션 136).
+     */
+    public void toSlidingOrCrawling(ClientPlayerEntity player, double gapUnderneight) {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        // 원본 L2224: move(0, -gapUnderneight, 0, true)
+        player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
+        // 원본 L2226-L2229: grabPressed || wasHeadJumping 이면 isSliding, 아니면 toCrawling
+        if (cfg.slide && cfg.enabled
+                && (SmartMovingKeys.grab.isPressed() || this.wasHeadJumping)) {
+            this.isSliding = true;
+        } else {
+            this.wasCrawling = this.toCrawling();
+        }
+    }
+
+    /**
+     * 원본 L2165-L2184 `standupIfPossible()` 무인자 오버로드 정밀 이식:
      *   if (heightOffset >= 0) return;
-     *   groundClose = gapUnderneight < 1D;
+     *   double gap = getGapUnderneight();
+     *   boolean groundClose = gap < 1D;
      *   if (!groundClose) resetHeightOffset();
      *   else {
-     *       standUpPossible = gapUnderneight + gapOverneight >= 1D;
-     *       if (standUpPossible) standUp(gapUnderneight);
-     *       else toSlidingOrCrawling(gapUnderneight);
+     *       double overGap = getGapOverneight();
+     *       boolean standUpPossible = gap + overGap >= 1D;
+     *       if (standUpPossible) standUp(gap);
+     *       else toSlidingOrCrawling(gap);
      *   }
      *
-     * **§7 근사** (B-N-standup-approx-3): AABB 정밀 gap 측정 미이식 → `canStandUp(player)`
-     * 근사. `canStandUp` 은 플레이어 머리 위 공간 여부 → `standUpPossible` 판정에 대응.
-     * `!groundClose` 분기 (공중) 는 별도 판별 없이 단순 `canStandUp` 기준으로 통합.
-     * `toSlidingOrCrawling` 호출은 추후 B-N 원자에서 이식 (현재 슬라이딩/크롤 재시도 생략).
+     * B-N-standup-3 해소 (세션 136): AABB 정밀 gap 측정 복원. 기존 `canStandUp` 근사 제거.
      */
     public void standupIfPossible(ClientPlayerEntity player) {
         if (this.heightOffset >= 0) return;
 
-        // 근사 이식 — 원본과 차이: gapUnderneight/gapOverneight AABB 스캔 → canStandUp 근사
-        if (canStandUp(player)) {
-            standUp();
+        double gapUnderneight = getGapUnderneight(player);
+        boolean groundClose = gapUnderneight < 1D;
+        if (!groundClose) {
+            resetHeightOffset();
         } else {
-            // toSlidingOrCrawling 호출 생략 — 현재는 heightOffset 만 유지 (슬라이딩/크롤 재시도
-            // 경로는 후속 원자 범위). 근사 이식 — 원본과 차이: toSlidingOrCrawling 미호출.
+            double gapOverneight = getGapOverneight(player);
+            boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
+            if (standUpPossible) {
+                standUp(player, gapUnderneight);
+            } else {
+                toSlidingOrCrawling(player, gapUnderneight);
+            }
         }
     }
 
     /**
      * 원본 L2186-L2212 `standupIfPossible(boolean tryLanding, boolean restoreFromFlying)` —
-     * 비행 해제 포함 오버로드:
+     * 비행 해제 포함 오버로드 정밀 이식:
      *   if (heightOffset >= 0) return;
+     *   gap = getGapUnderneight();
+     *   groundClose = gap < 1D;
+     *   overGap = groundClose ? getGapOverneight() : -1D;
+     *   standUpPossible = gap + overGap >= 1D;
+     *
      *   if (tryLanding && groundClose && standUpPossible) {
      *       isFlying = false;
-     *       sp.capabilities.isFlying = false;
+     *       sp.capabilities.isFlying = false;   // ★ focus_06 후속 (vanilla 비행 해제 sync)
      *       restoreFromFlying = true;
      *   }
      *   if (!restoreFromFlying) return;
-     *   ... standUp or toSlidingOrCrawling ...
      *
-     * B-24 세션 53 에서 `restoreFromFlying = true` 설정 후 이 메서드 호출해야 standupIfPossible
-     * 연결 완결. 현재 1.21.1 은 B-24 에서 이 호출이 빠져있음 (미이식 명시).
+     *   if (!groundClose && !sneakPressed) resetHeightOffset();
+     *   else if (standUpPossible && !(sneakPressed && grabPressed)) standUp(gap);
+     *   else toSlidingOrCrawling(gap);
      *
-     * **§7 근사** (B-N-standup-approx-4): tryLanding 경로 내 `sp.capabilities.isFlying = false`
-     * 는 1.21.1 `player.getAbilities().flying = false` 로 설정 시 vanilla 쪽 동기화 필요
-     * (Mixin / 네트워크) — 1.21.1 에서는 direct 조작 불허. 근사로 상태 필드만 리셋.
+     * B-N-standup-3 해소 (세션 136): gap/overGap 정밀 + sneak/grab 조건 분기 전수 복원.
+     *
+     * **§7 근사 잔존 (B-N-standup-approx-4)**: `sp.capabilities.isFlying = false` 는
+     *   client-server sync 필요 → focus_06 후속 대기. 현재 SM 측 `isFlying = false` 만.
      */
     public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
         if (this.heightOffset >= 0) return;
 
-        boolean canStand = canStandUp(player);
+        double gapUnderneight = getGapUnderneight(player);
+        boolean groundClose = gapUnderneight < 1D;
+        double gapOverneight = groundClose ? getGapOverneight(player) : -1D;
+        boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
 
-        if (tryLanding && canStand) {
+        if (tryLanding && groundClose && standUpPossible) {
             this.isFlying = false;
-            // 근사 이식 — 원본과 차이: sp.capabilities.isFlying = false → vanilla 비행 상태
-            // 직접 조작은 client-server sync 필요. `player.getAbilities().flying = false` 는
-            // 서버 검증 미반영으로 효과 불확실. 현재는 SM 측 isFlying 만 false.
+            // 근사 이식 — 원본과 차이: sp.capabilities.isFlying = false → client-server sync
+            //   필요 (focus_06 후속). 현재 SM 측 isFlying 만 false.
             restoreFromFlying = true;
         }
 
         if (!restoreFromFlying) return;
 
-        if (canStand) {
-            standUp();
+        boolean sneakPressed = player.isSneaking();
+        boolean grabPressed  = SmartMovingKeys.grab.isPressed();
+
+        if (!groundClose && !sneakPressed) {
+            resetHeightOffset();
+        } else if (standUpPossible && !(sneakPressed && grabPressed)) {
+            standUp(player, gapUnderneight);
         } else {
-            // toSlidingOrCrawling 호출 생략 — 동일 근사 (위)
+            toSlidingOrCrawling(player, gapUnderneight);
         }
     }
 
