@@ -1,7 +1,18 @@
 package choco.ratel.smartmoving.climbing;
 
 import choco.ratel.smartmoving.config.SmartMovingConfig;
+import net.minecraft.block.AbstractSignBlock;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.LadderBlock;
+import net.minecraft.block.PressurePlateBlock;
+import net.minecraft.block.TrapdoorBlock;
+import net.minecraft.block.VineBlock;
+import net.minecraft.block.WallSignBlock;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 import java.util.HashSet;
 
@@ -354,7 +365,7 @@ public class Orientation {
      *
      * **Overload (static 위치 기반)**: 엔티티 위치가 아닌 임의 좌표 기반 계산 필요 시
      * 호출자가 직접 i, k 를 추출하여 static 버전 호출. 인스턴스 기반 오버로드 (원본 L231-L234
-     * `base_id`/`base_kd` 사용) 는 SmartMovingContext 의존이므로 B-19a1 이후 추가.
+     * `base_id`/`base_kd` 사용) 는 getHorizontalBorderGap() 로 제공 (B-19a1a).
      */
     public double getHorizontalBorderGap(double i, double k) {
         if (this == NZ) return i % 1;
@@ -362,5 +373,227 @@ public class Orientation {
         if (this == ZN) return k % 1;
         if (this == ZP) return 1 - (k % 1);
         return 0D;
+    }
+
+    /**
+     * 원본 L231-L234 `getHorizontalBorderGap()` — 인스턴스 필드 `base_id`/`base_kd` 기반.
+     * `seekClimbGap` 진입 시 `initialize(world, i, id, jhd, k, kd)` 가 `base_id=id`/`base_kd=kd`
+     * 설정한 후 호출되는 패턴.
+     */
+    public double getHorizontalBorderGap() {
+        return getHorizontalBorderGap(base_id, base_kd);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1a (세션 91) — 상태 필드 + 기본 블록 식별/판정 헬퍼
+    // 원본: Orientation.java L2729-L2744 static 필드 + L1148-L2625 메서드 대역
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── 인스턴스 상태 필드 (원본 L2729-L2744) ───────────────────────────────
+    //
+    // 원본은 `Orientation extends SmartMovingContext` 의 static 필드. 1.21.1 에선 쓰레드
+    // 안정성 개선 여지 있으나 **1:1 이식 원칙** 유지 — 동일하게 static 보관. 호출자가
+    // `initialize(world, i, id, jhd, k, kd)` 로 전역 상태 설정 후 헬퍼 호출하는 패턴.
+
+    /** 원본 L2729 — 현재 처리 중인 World. `initialize` 에서 설정. */
+    protected static World world;
+    /** 원본 L2731 — 플레이어 기준 Y (base_j). `all_offset = local_offset` 의 절대 Y 기준. */
+    protected static int all_j;
+    /** 원본 L2731 — 현재 탐색 대상 Y 오프셋 누적. `isLadderSubstitute` 진입 시 0 리셋. */
+    protected static int all_offset;
+    /** 원본 L2732 — base (플레이어 위치) X. */
+    protected static int base_i;
+    /** 원본 L2732 — base (플레이어 위치) Z. */
+    protected static int base_k;
+    /** 원본 L2733 — base X 소수부 포함 (플레이어 정확한 위치). */
+    protected static double base_id;
+    /** 원본 L2733 — base Z 소수부 포함. */
+    protected static double base_kd;
+    /** 원본 L2734 — remote (이 Orientation 방향 인접 블록) X. `base_i + _i`. */
+    protected static int remote_i;
+    /** 원본 L2734 — remote Z. `base_k + _k`. */
+    protected static int remote_k;
+    /** 원본 L2735 — 플레이어 크롤링 상태 (isSmallClimbing). */
+    protected static boolean crawl;
+    /** 원본 L2738 — local_offset 과 결합해 실제 Y 좌표 결정 (half block 단위 탐색). */
+    protected static int local_half;
+    /** 원본 L2739 — `all_j + all_offset` 의 상대 오프셋. 각 `isLadderSubstitute` 호출마다 변동. */
+    protected static int local_offset;
+
+    /** 원본 L2741 — 잡기 대상이 remote 블록인지 (base 가 아닌). */
+    protected static boolean grabRemote;
+    /** 원본 L2742 — 잡기 종류 (NoGrab/HalfGrab/AroundGrab). */
+    protected static int grabType;
+    /** 원본 L2743 — 잡은 블록 state. (원본은 `Block` + `grabMeta` int 쌍; 1.21.1 은
+     *  `BlockState` 단일 객체 표면 매핑 — metadata 는 BlockState property 로 내장.) */
+    protected static BlockState grabBlock;
+    /** 원본 L2744 — `grabMeta` 원본 Meta 정수. 1.21.1 `grabBlock` 내부 property 로 접근 가능
+     *  하므로 `DefaultMeta` (=-1) 기본값 유지. 세부 메타 쿼리는 `grabBlock` property 직접 읽기. */
+    protected static int grabMeta = DefaultMeta;
+
+    /**
+     * `jh_offset` — 원본 `initializeOffset(double offset, ...)` 에서 설정하는 세로 오프셋
+     * (플레이어 boundingBox 상대). `handsClimbing` 의 gap threshold 판정 (`_handClimbingHoldGap`)
+     * 에 사용. B-19a2/a3 이식 시 초기화 로직 추가.
+     */
+    protected static double jh_offset;
+
+    // ── 블록 식별 헬퍼 (원본 L1188-L1214) ──────────────────────────────────
+
+    /**
+     * 원본 L1188-L1191 — `block == Block.getBlockFromName("ladder")`.
+     * 1.21.1 매핑: `instanceof LadderBlock`. vanilla ladder 블록 식별.
+     */
+    public static boolean isLadder(BlockState state) {
+        return state != null && state.getBlock() instanceof LadderBlock;
+    }
+
+    /**
+     * 원본 L1193-L1196 — vanilla vine 블록 식별.
+     */
+    public static boolean isVine(BlockState state) {
+        return state != null && state.getBlock() instanceof VineBlock;
+    }
+
+    /**
+     * 원본 L1198-L1202 `isLadderOrVine` — ladder/vine/LadderKit 조합.
+     *
+     * **§7 근사 이식 (B-19a1a-approx-1)**: 원본 `isBlockIdOfType(block, _ladderKitLadderTypes)`
+     * (LadderKit 모드 호환) 미이식 — 해당 모드 1.21.1 에 없음. 순수 vanilla ladder/vine 만 감지.
+     */
+    public static boolean isLadderOrVine(BlockState state) {
+        // 근사 이식 — 원본과 차이: _ladderKitLadderTypes (LadderKit 모드) 제외
+        return isLadder(state) || isVine(state);
+    }
+
+    /**
+     * 원본 L2241-L2244 `isTrapDoor(Block block)` — vanilla trap door 식별.
+     * 1.21.1 `instanceof TrapdoorBlock` (oak/iron/copper/bamboo 등 모든 trapdoor 포괄).
+     */
+    public static boolean isTrapDoor(BlockState state) {
+        return state != null && state.getBlock() instanceof TrapdoorBlock;
+    }
+
+    /**
+     * 원본 `isClosedTrapDoor(int metadata)` — metadata 의 3번째 비트 (0x4) 가 OPEN 상태.
+     * 1.21.1 `TrapdoorBlock.OPEN` property.
+     */
+    public static boolean isClosedTrapDoor(BlockState state) {
+        return isTrapDoor(state) && !state.get(TrapdoorBlock.OPEN);
+    }
+
+    /**
+     * 원본 L1210-L1215 — `block.isLadder(world, i, j, k, player)` Forge hook.
+     *
+     * **§7 근사 이식 (B-19a1a-approx-2)**: 1.21.1 Fabric 에 동등 훅 없음.
+     * `BlockTags.CLIMBABLE` 태그 기반 근사 — vanilla ladder/vine + 모드가 태그에 추가한
+     * 블록 감지. 원본 의도 (플레이어 기준 등반 가능 여부) 와 거의 등가.
+     */
+    public static boolean isClimbable(World world, int i, int j, int k) {
+        // 근사 이식 — 원본과 차이: Forge Block.isLadder(world,x,y,z,player) hook → BlockTags.CLIMBABLE
+        BlockState state = world.getBlockState(new BlockPos(i, j, k));
+        return state.isIn(BlockTags.CLIMBABLE);
+    }
+
+    // ── Material / Solid 헬퍼 (원본 L2155-L2175, L2616-L2619) ──────────────
+
+    /**
+     * 원본 L2616-L2619 `isSolid(Material material)` — `material.isSolid() && blocksMovement()`.
+     *
+     * **§7 근사 이식 (B-19a1a-approx-3)**: 1.21.1 (1.19+) 에서 Material API 완전 제거.
+     * `state.isSolidBlock(world, pos)` 가 원본 2-조건 AND 와 가장 근접 — Material.isSolid 는
+     * "블록 공간을 solid 로 채움", blocksMovement 은 "이동 막음". 1.21.1 isSolidBlock 은
+     * "light propagation + collision" 통합 기준. 실용상 유사.
+     */
+    public static boolean isSolid(BlockState state, World world, BlockPos pos) {
+        // 근사 이식 — 원본과 차이: Material API 제거 → state.isSolidBlock() 단일 기준
+        return state != null && state.isSolidBlock(world, pos);
+    }
+
+    /**
+     * 원본 L2155-L2175 `isFullEmpty(Block block)` — 블록이 플레이어 이동 비가로막음.
+     *
+     * 원본 체크 순서:
+     *   (1) null → true
+     *   (2) `!isSolid(material)` → empty
+     *   (3) 예외: standing_sign / wall_sign / pressure_plate → empty 로 승격
+     *   (4) 예외: ASGrapplingHook → empty
+     *   (5) 예외: ASRope → non-empty (solid 로 복귀)
+     *
+     * **§7 근사 이식 (B-19a1a-approx-4)**: (4)(5) `hasASGrapplingHook`/`hasRopesPlus`
+     * 모드 호환 미이식 — 해당 모드 1.21.1 에 없음 → 체크 생략.
+     * (3) standing sign / wall sign 은 `AbstractSignBlock`/`WallSignBlock` 로 전수 감지.
+     * pressure plate 는 `PressurePlateBlock`.
+     */
+    public static boolean isFullEmpty(BlockState state, World world, BlockPos pos) {
+        if (state == null) return true;
+        boolean empty = !isSolid(state, world, pos);
+        if (!empty) {
+            Block blk = state.getBlock();
+            if (blk instanceof AbstractSignBlock)     empty = true;  // standing_sign + wall_sign 통합
+            else if (blk instanceof WallSignBlock)    empty = true;  // 중복 안전
+            else if (blk instanceof PressurePlateBlock) empty = true;
+            // 근사 이식 — 원본과 차이: hasASGrapplingHook/hasRopesPlus 모드 체크 생략
+        }
+        return empty;
+    }
+
+    // ── World 접근 헬퍼 (원본 L2621-L2639) ──────────────────────────────────
+
+    /**
+     * 원본 L2621-L2624 `getBlock(int i, int j_offset, int k)`.
+     * `local_offset + j_offset` Y 좌표의 블록 반환.
+     */
+    protected static BlockState getBlock(int i, int j_offset, int k) {
+        return world.getBlockState(new BlockPos(i, local_offset + j_offset, k));
+    }
+
+    /**
+     * 원본 L2636-L2639 `getBaseBlockId(int j_offset)`. base 위치 (플레이어 위치) 블록 반환.
+     * 1.21.1 매핑: `Block` → `BlockState` (metadata 내장).
+     */
+    protected static BlockState getBaseBlockId(int j_offset) {
+        return world.getBlockState(new BlockPos(base_i, local_offset + j_offset, base_k));
+    }
+
+    /**
+     * 원본 `getRemoteBlockId(int j_offset)` — remote 위치 (인접 블록) 블록 반환.
+     * 1.21.1 매핑: BlockState.
+     */
+    protected static BlockState getRemoteBlockId(int j_offset) {
+        return world.getBlockState(new BlockPos(remote_i, local_offset + j_offset, remote_k));
+    }
+
+    // ── 기본 ladder/vine 체크 (원본 L1148-L1186) ────────────────────────────
+
+    /**
+     * 원본 L1148-L1158 `isOnLadder(int j_offset)` — base 위치에 ladder 가 있는지.
+     *   (1) `isLadder(baseBlock)` → true
+     *   (2) `isVine(baseBlock)` → false (vine 은 별도 체크)
+     *   (3) `isClimbable(world, base_i, Y, base_k)` → true (Forge ladder hook)
+     *   (4) → false
+     */
+    protected static boolean isOnLadder(int j_offset) {
+        BlockState state = getBaseBlockId(j_offset);
+        if (isLadder(state)) return true;
+        if (isVine(state))   return false;
+        if (isClimbable(world, base_i, local_offset + j_offset, base_k)) return true;
+        return false;
+    }
+
+    /**
+     * 원본 L1172-L1175 `isOnVine(int j_offset)` — base 위치에 vine 이 있는지.
+     */
+    protected static boolean isOnVine(int j_offset) {
+        return isVine(getBaseBlockId(j_offset));
+    }
+
+    /**
+     * 원본 L1182-L1186 `isOnLadderOrVine(int j_offset)`.
+     * `isLadderOrVine(baseBlock) || isVine(grabBlock)` — base 의 ladder/vine 또는 이미
+     * 잡고 있는 grabBlock 이 vine 인 경우.
+     */
+    protected static boolean isOnLadderOrVine(int j_offset) {
+        return isLadderOrVine(getBaseBlockId(j_offset)) || isVine(grabBlock);
     }
 }

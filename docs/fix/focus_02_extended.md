@@ -91,14 +91,22 @@ Orientation 판정 + ClimbGap 계산.
         `freeClimbingDiagonalDirectionAngle=80F` 2 필드 + load/save 이식 (원본 L129-L130)
       * 빌드: `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (6s)
 
-- [ ] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼**
-      (원본 SmartMovingContext / Orientation 의 `isOnLadderOrVine` / `isOnOpenTrapDoor` /
-      `isRope` / `isOnWallRope` / `isBaseAccessible` / `isFullAccessible` /
-      `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` / `isFullEmpty` /
-      `isSolid`)
-      * `SmartMovingContext` 원본 Agent WebFetch 필요.
-      * 1.21.1 BlockState 매핑 (ladder/vine/trapdoor/rope 식별 — rope 은 SmartMoving 모드
-        블록, 1.21.1 vanilla 외부).
+- [ ] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼** (세션 91 재분해: 3 서브)
+      세션 91 원본 확보 결과 헬퍼 전부 `Orientation.java` L2729-L2744 내부 static 필드 +
+      L1148-L2625 메서드 대역에 있음. `SmartMovingContext.java` 자체는 상수/initialize 만.
+      규모 크므로 서브 3개 분해:
+      - [x] **B-19a1a** (세션 91 완료): 상태 필드 13 + 블록 식별 헬퍼 (`isLadder`/`isVine`/
+            `isLadderOrVine`/`isTrapDoor`/`isClosedTrapDoor`/`isClimbable`) + Material 헬퍼
+            2 (`isSolid`/`isFullEmpty`) + World 접근 3 (`getBlock`/`getBaseBlockId`/
+            `getRemoteBlockId`) + 기본 3 ladder/vine 체크 (`isOnLadder`/`isOnVine`/
+            `isOnLadderOrVine`). §7 근사 4-5 등록.
+      - [ ] **B-19a1b**: front/back/rope/trapdoor 인스턴스 헬퍼 — `isOnLadderFront` /
+            `isOnLadderBack` / `isOnVineFront` / `isOnVineBack` / `hasLadderOrientation` /
+            `hasVineOrientation` / `isRope` / `isOnWallRope` / `isOnOpenTrapDoor` /
+            `isTrapDoorFront` 등.
+      - [ ] **B-19a1c**: accessibility 판정 — `isBaseAccessible` 2 오버로드 / `isFullAccessible` /
+            `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` /
+            `isUpperHalfFrontEmpty`.
 
 - [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
       (원본 L477-L606 + L608-L648 `hasHalfHold` + `hasBottomHold`)
@@ -388,6 +396,76 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 91 — 2026-04-24 — B-19a1a `Orientation` 상태 필드 + core 헬퍼 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지 (세션 90 재사용 프롬프트).
+
+**진행한 작업**:
+1. **원본 확보 추가** — Agent WebFetch 로 `net.smart.moving.SmartMovingContext.java` 확인:
+   상수/initialize 만 있고 수직 상태 헬퍼 없음. 실제 의존 헬퍼 전부 **`Orientation.java`
+   내부** (L1148-L2625) 확인. L2729-L2744 에 static 상태 필드 13개 선언.
+2. **Extended §3 B-19a1 서브 3개 분해** — 원본 범위가 너무 커서 한 세션 불가:
+   * B-19a1a (이 세션): 상태 필드 + 블록 식별 헬퍼 + Material 2 + World 접근 3 + 기본
+     ladder/vine 체크 3
+   * B-19a1b: front/back/rope/trapdoor 인스턴스 헬퍼
+   * B-19a1c: accessibility 판정 (`isBaseAccessible` 외)
+3. **`Orientation.java` 상태 필드 13 추가** (원본 L2729-L2744 1:1):
+   * `world` (World) / `all_j`/`all_offset` (int) / `base_i`/`base_k`/`remote_i`/`remote_k`
+     (int) / `base_id`/`base_kd` (double) / `crawl` (boolean) / `local_half`/`local_offset`
+     (int) / `grabRemote` (boolean) / `grabType` (int) / `grabBlock` (BlockState) / `grabMeta`
+     (int) / `jh_offset` (double, B-19a2/a3 초기화)
+4. **블록 식별 헬퍼 6 이식** (원본 L1188-L1214 + L2241):
+   * `isLadder(state)` → `instanceof LadderBlock`
+   * `isVine(state)` → `instanceof VineBlock`
+   * `isLadderOrVine(state)` → OR (LadderKit 모드 체크 근사 생략)
+   * `isTrapDoor(state)` → `instanceof TrapdoorBlock`
+   * `isClosedTrapDoor(state)` → `isTrapDoor && !state.get(TrapdoorBlock.OPEN)`
+   * `isClimbable(world, i, j, k)` → `BlockTags.CLIMBABLE` 태그 근사
+5. **Material 헬퍼 2 이식** (원본 L2155-L2175, L2616-L2619):
+   * `isSolid(state, world, pos)` — Material API 제거 → `state.isSolidBlock` 근사
+   * `isFullEmpty(state, world, pos)` — `AbstractSignBlock`/`WallSignBlock`/
+     `PressurePlateBlock` 예외 처리. ASGrapplingHook/RopesPlus 모드 체크 생략 (근사).
+6. **World 접근 3 이식** (원본 L2621-L2639):
+   * `getBlock(i, j_offset, k)` / `getBaseBlockId(j_offset)` / `getRemoteBlockId(j_offset)`
+7. **기본 ladder/vine 체크 3 이식** (원본 L1148-L1186):
+   * `isOnLadder(j_offset)` — ladder 또는 isClimbable 태그
+   * `isOnVine(j_offset)` — vine 전용
+   * `isOnLadderOrVine(j_offset)` — base 블록 OR `grabBlock` vine 체크
+8. **`getHorizontalBorderGap()` 인스턴스 오버로드 추가** (원본 L231-L234) — `base_id`/
+   `base_kd` 필드 이식으로 호출 가능해짐.
+9. **본체 §7 에 B-19a1a 근사 4건 등록** — LadderKit / Forge ladder hook / Material API /
+   mod 호환 블록. 각 근사 사유 + 1.21.1 대체 수단 명시.
+
+**완료 전 검증 체크리스트 (세션 91 기준)**:
+- [근거] 원본 `Orientation.java` L1148-L2744 대역 전수 read (`.tmp_research/Orientation.java.md`) ✓
+- [근거] `SmartMovingContext.java` WebFetch → 상태 필드는 `Orientation` 내부 확정 ✓
+- [대응] 13 상태 필드 + 6 블록 식별 + 2 Material + 3 World + 3 기본 체크 + 1 HorizontalBorderGap
+  오버로드 원본 1:1 (근사 4건 제외) ✓
+- [분기] `isOnLadder` 3갈래 (ladder / vine false / climbable) + `isFullEmpty` 4갈래 (null /
+  solid / sign-pressure / 모드 생략) + `isLadderOrVine` OR + `isClosedTrapDoor` AND 전부
+  원본 보존 ✓
+- [상수] `DefaultMeta=-1` / `VineFrontMeta=0` / `VineSideMeta=1` / `NoGrab/HalfGrab/AroundGrab`
+  / top/middle/base/sub/subSub 원본 값 유지 (세션 90 이식) ✓
+- [타이밍] `initialize(world, i, id, jhd, k, kd)` 가 상태 필드 설정 후 헬퍼 호출 패턴
+  원본 유지. `initialize` 자체는 B-19a2/a4 이식 시 추가 ✓
+- [근사] **§7 B-19a1a 근사 4건 등록 완료**:
+  (1) `isLadderOrVine` LadderKit 제외
+  (2) `isClimbable` Forge hook → BlockTags.CLIMBABLE
+  (3) `isSolid` Material → `isSolidBlock`
+  (4) `isFullEmpty` mod 호환 체크 생략
+  각 함수 JavaDoc 에 "근사 이식 — 원본과 차이: X" 주석 ✓
+- [신규] `getHorizontalBorderGap()` 인스턴스 오버로드 (세션 90 JavaDoc 에 "B-19a1 이후
+  추가" 로 예고, 본 세션에서 base_id/base_kd 필드 이식하며 자연 추가) ✓
+- [회귀] 기존 `SmartMovingClimber.handleClimbing` 은 새 Orientation 필드/헬퍼 미사용 →
+  compileClientJava 무영향. Config 변경 없음 (세션 90 이미 추가). 다른 이식 영향 없음 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (6s) ✓
+
+**다음 세션 권고**: **B-19a1b** — front/back/rope/trapdoor 인스턴스 헬퍼 이식:
+`isOnLadderFront` / `isOnLadderBack` / `isOnVineFront` / `isOnVineBack` (원본 L1217-L1238)
++ `hasLadderOrientation` / `hasVineOrientation` (원본 L1311+) + `isRope` / `isOnWallRope` /
+`isOnOpenTrapDoor` / `isTrapDoorFront`. rope/wallRope 은 SmartMoving 모드 블록 →
+**전체 false 근사** (§7 등록). 예상 규모: 1 세션.
 
 ### 세션 90 — 2026-04-24 — B-19a0 `Orientation` 클래스 기본 구조 신설
 

@@ -440,6 +440,20 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1a 근사 4건** (세션 91): `choco.ratel.smartmoving.climbing.Orientation` 에 기본
+  블록 식별 + Material 헬퍼 이식 시 1.21.1 API 제약으로 불가피한 근사 등록:
+  (1) `isLadderOrVine(state)` — 원본 `isBlockIdOfType(block, _ladderKitLadderTypes)` 추가
+  체크 생략. LadderKit 모드 1.21.1 에 미이식 → 순수 vanilla ladder/vine 만 감지.
+  (2) `isClimbable(world, i, j, k)` — 원본 Forge `Block.isLadder(world, x, y, z, player)`
+  훅 → 1.21.1 `BlockTags.CLIMBABLE` 태그 기반. vanilla 기본 태그에 ladder/vine 포함 +
+  모드가 추가한 climbable 블록 감지 — 원본 의도와 거의 등가.
+  (3) `isSolid(state, world, pos)` — 원본 `material.isSolid() && material.blocksMovement()`
+  → 1.21.1 `state.isSolidBlock(world, pos)`. Material API 1.19+ 에서 완전 제거 →
+  isSolidBlock 이 light propagation + collision 통합 기준으로 AND 조건에 근접.
+  (4) `isFullEmpty(state, world, pos)` — 원본 `hasASGrapplingHook`/`hasRopesPlus` 모드
+  호환 체크 생략 (해당 모드 1.21.1 에 없음). vanilla sign/wall_sign/pressure_plate 예외
+  처리는 `AbstractSignBlock`/`WallSignBlock`/`PressurePlateBlock` 로 1:1 이식.
+  B-19a1b/c 진행 시 이 근사들이 연쇄 영향 → B-19a4 `seekClimbGap` 결과 정확도에 반영.
 - **B-1c 근사** (세션 51, 세션 88 등록): `SmartMovingClientState.tickEssential` B-1c3
   `isClimbSprintSpeed` 판정 — 원본은 `SmartStatisticsFactory.getInstance(sp).getTickDistance()`
   (SmartRender 측 tick 이동 거리 통계) 기반. 1.21.1 SmartStatisticsFactory 전체 미이식 →
