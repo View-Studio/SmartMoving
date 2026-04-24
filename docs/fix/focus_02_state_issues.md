@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 70 — B Phase 2 계속 / B-41) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 40 원자 완료 / ⏳ **B Phase 2 잔여 ~3 원자** |
+| 상태 | 🟡 진행 중 (세션 71 — B Phase 2 계속 / B-10d) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 41 원자 완료 / ⏳ **B Phase 2 잔여 ~2 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -643,8 +643,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (wantJumpOutOfWater + waterMovementTicks>10 원본 L486-L487) 은 B-12 수정 시.
 - [~] B-10c. **필드만 이식 완료 (세션 38)** — `isStillSwimmingJump` 필드 추가. false 리셋
       (useStandard 경로 원본 L550) 은 B-9 수정 시.
-- [ ] B-10d. `isLevitating` **필드는 이미 L179 에 존재** — 공식 이식 `diving && !diveUp &&
-      !diveDown && moveStrafe==0 && moveForward==0` 원본 L474/L505 만 남음. B-9 범위로 이전.
+- [x] B-10d. ✅ **세션 71 완료** — 원본 L474 + L505 공식 이식. Swimmer.updateSwimState Config
+      게이트 뒤에 배치:
+      `diveUp = player.input.jumping; diveDown = player.isSneaking() && cfg.diveDownOnSneak;`
+      `isLevitating = isDiving && !diveUp && !diveDown && movementSideways==0F && movementForward==0F;`
+      원본 `diveUp = isp.getIsJumpingField()` (L468) / `diveDown = sneak && Config._diveDownOnSneak`
+      (L469) 지역 변수 이식. ClientState `sendStatePacket` L1775 `isLevitating = false` 강제
+      리셋 제거 — updateSwimState 갱신값 유지. 필드 선언 주석도 "수중 정적 자세" 의미 명시.
+      B-43 세션 56 `wasLevitating = isLevitating` 저장이 이제 실제 값 참조.
 
 #### B-11. 얕은 물 특수 분기 이식 (A-2 발견)
 - [ ] B-11. 원본 L513-L536 이식 — `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
@@ -3150,6 +3156,62 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
+
+### 세션 71 — 2026-04-24 — B Phase 2 B-10d (isLevitating 공식 이식)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.updateSwimState` Config 게이트 (L103-L110) 뒤, ticks 증분 앞에
+  원본 L474 + L505 이식:
+  ```java
+  boolean diveUp16   = player.input.jumping;
+  boolean diveDown16 = player.isSneaking() && cfg.diveDownOnSneak;
+  sm.isLevitating = sm.isDiving
+          && !diveUp16 && !diveDown16
+          && player.input.movementSideways == 0F
+          && player.input.movementForward == 0F;
+  ```
+  원본 `diveUp = isp.getIsJumpingField()` (L468) / `diveDown = sneak && Config._diveDownOnSneak`
+  (L469) 지역 변수 + `levitating = diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0`
+  (L474) + `isLevitating = levitating` (L505) 1:1.
+- **ClientState `sendStatePacket` L1775 강제 `isLevitating = false` 제거** — 원본 주석
+  "로프 미구현" 이유로 덮어쓰던 것이 updateSwimState 갱신값을 무효화. 원본 L505 의 주요
+  용도는 "수중 정적 자세" 이므로 계산값 유지. 주석 갱신.
+- 필드 선언 L323 주석 갱신 — "로프 등 부양" → "원본 L505 수중 정적 자세" 의미 명시.
+- **B-43 세션 56 연결**: R-09 블록 종료부 `wasLevitating = isLevitating` 저장이 이제 실제
+  isLevitating 값 참조 (이전엔 항상 false 였음).
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 71)**:
+- [근거] 원본 L468-L469/L474/L505 research/.../SmartMovingSelf.md L3106-L3119 (R-11.8) +
+  L468-L469 (R-11) 확보 ✓
+- [근거] R-11.12 불일치 #11 `isLevitating 필드 미이식` 확정 §16 세션 32 ✓
+- [대응] diveUp/diveDown 지역 변수 + levitating 5-AND 공식 원본 1:1 ✓
+- [분기] 5-AND 전체 항 명시 (isDiving / !diveUp / !diveDown / sideways=0 / forward=0) ✓
+- [상수] 없음 (float 0F 비교)
+- [타이밍] updateSwimState Config 게이트 뒤 (isDiving 확정 후) — 원본 L505 위치와
+  의미적 등가 (isDiving 확정 직후) ✓
+- [근사] 없음 — 1:1 이식. `isp.getIsJumpingField()` → `player.input.jumping` 표면 매핑만.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. sendStatePacket 강제 false 제거로
+  isLevitating 네트워크 전송값이 실제 수중 정적 자세 반영. 애니메이션 (isDive Quarter-Sixteenth
+  수직각) 에서 정상 참조. B-43 wasLevitating 저장이 실제 값 참조 (B-43 세션 56 효과 증폭).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-11 A-2 불일치 현황**:
+- ✅ #2 Config 게이트 누락 (B-8 세션 67)
+- ✅ #3 isClimbCrawling 조건 누락 (B-6 세션 60)
+- ✅ #9 waterMovementTicks dipping 증분 오역 (B-12 세션 64)
+- ✅ #11 isLevitating 필드+공식 이식 (B-10d 세션 71, 필드는 L179 기존)
+- ✅ #12 crawl↔swim 전환 isSliding (B-13 세션 61) — 기존 R-11 번호 재확인
+- ⏳ #1/#4~#8/#10 (대부분 B-9 메인 분류 재작성 범위)
+
+**Phase 2 진행 상황**: 41 원자 완료 / 잔여 ~2
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 필드 승격 선행.
+- **B-20** (Standard/Simple Base Climb) — Climber 구조 변경 — 규모 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
 
 ---
 

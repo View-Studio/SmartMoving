@@ -109,6 +109,21 @@ public final class SmartMovingSwimmer {
             sm.isDiving = false;
         }
 
+        // B-10d (세션 71): 원본 L474 + L505 `isLevitating = levitating` 이식.
+        //   levitating = diving && !diveUp && !diveDown && moveStrafing==0 && moveForward==0
+        // 원본 L468-L469:
+        //   diveUp   = isp.getIsJumpingField()       → player.input.jumping
+        //   diveDown = sneak && Config._diveDownOnSneak.value
+        // 완전 정적 잠수 상태 (입력 전혀 없음) 판정. 애니메이션(isDive Quarter-Sixteenth 수직
+        // 각도 적용 조건) 등에 사용. R-11 A-2 불일치 #11 해소. 필드는 L179 기존 이식됨.
+        boolean diveUp16   = player.input.jumping;
+        boolean diveDown16 = player.isSneaking() && cfg.diveDownOnSneak;
+        sm.isLevitating = sm.isDiving
+                && !diveUp16
+                && !diveDown16
+                && player.input.movementSideways == 0F
+                && player.input.movementForward == 0F;
+
         // B-12 (세션 64): 원본 L481-L484 정정 — swimming/diving 만 증분, dipping 포함
         //   else 는 ticks=0 리셋. 기존 무조건 증분 (dipping 포함) 은 오역.
         //   isJumpingOutOfWater 공식 (원본 L486-L487) 이식 시 이 ticks 값이 정확해야 함.

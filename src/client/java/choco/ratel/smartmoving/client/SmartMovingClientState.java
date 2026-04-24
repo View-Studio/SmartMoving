@@ -320,8 +320,11 @@ public final class SmartMovingClientState {
 
     /**
      * 원본: SmartMovingSelf.isLevitating (bit 19 of State 패킷).
-     * 로프 등 부양 상태. SM 1.21.1 로프 미구현이므로 로컬은 항상 false.
+     * 원본 L505 갱신 공식: `isLevitating = diving && !diveUp && !diveDown &&
+     *   moveStrafing==0 && moveForward==0` (수중 정적 자세).
+     * 로프 블록 용도는 1.21.1 미구현이나 주요 용도는 수중 정적 조건이라 유효.
      * 애니메이션(isDive)에서 Quarter-Sixteenth 수직각 적용 조건.
+     * B-10d (세션 71): updateSwimState 에서 매 틱 갱신.
      */
     public boolean isLevitating;
 
@@ -1772,7 +1775,10 @@ public final class SmartMovingClientState {
         isJumping          = !player.isOnGround() && !isClimbing && !isSwimming_sm && !isDiving && !isDipping;
         doFallingAnimation = !player.isOnGround() && player.getVelocity().y < -0.1D
                               && !isClimbing && !isSwimming_sm && !isDiving;
-        isLevitating       = false; // 로프 미구현
+        // B-10d (세션 71): isLevitating 강제 false 제거. 원본 L505 `isLevitating = diving &&
+        //   !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (수중 정적 자세) 는
+        //   updateSwimState (세션 71) 에서 이미 갱신됨. 로프 블록은 1.21.1 미구현이나 원본
+        //   isLevitating 의 주요 용도 (L505) 는 수중 정적 조건이라 유효.
 
         SmartMovingState s = new SmartMovingState();
         s.actualFeetClimbType  = actualFeetClimbType;
