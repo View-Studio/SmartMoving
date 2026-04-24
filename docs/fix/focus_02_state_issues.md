@@ -362,7 +362,7 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `sp.capabilities.isFlying` | `player.getAbilities().flying` | ✓ |
 | `sp.setSprinting(bool)` | `player.setSprinting(bool)` | ✓ |
 | `toCrawling()` 함수 | — (inline 만) | ✓ 헬퍼 이식 (B-40 세션 44) / ⚠️ 잔여 호출 지점 L2751/L2760/L2767 미흡수 (Extended B-40-post) |
-| `resetClimbing()` 메서드 | — (Mixin 주석만) | ✗ 미이식 (B-14) |
+| `resetClimbing()` 메서드 | `Climber.resetClimbing()` | ✓ 이식 완료 (B-14 세션 57) |
 | `resetSwimming()` 메서드 | Swimmer `updateSwimState` 물 밖 분기 (부분) | ⚠️ 부분 이식 (Extended B-10-reset-post) |
 | `standupIfPossible()` 메서드 | — | ✗ 미이식 (Extended B-N-standup — restoreFromFlying 소비자) |
 | `resetState()` | `ClientState.resetState()` | ✓ |

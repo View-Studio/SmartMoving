@@ -143,6 +143,12 @@ Orientation 판정 + ClimbGap 계산.
       재설정 구간. 의존: Phase 5 B-7/B-9/B-11 swim 재구성 완료 후 자연 흡수 가능 —
       선 Phase 5 후 남은 부분만 별도 원자화.
 
+#### B-10b-pre. `wasJumpingOutOfWater` 필드 명시 신설 (세션 88 4차 확정 감사 발견)
+- [ ] B-10b-pre. B-10b-post "의존: wasJumpingOutOfWater 이전 틱 저장 필요" 를 별도 원자로
+      분리. `SmartMovingClientState` public boolean 필드 신설 + resetState 리셋 + R-09
+      종료부 저장 (`wasJumpingOutOfWater = isJumpingOutOfWater`). B-10b-post 진행 전
+      선행 완료 필요. Phase 1 필드 선언 규칙 연장선.
+
 ### Phase 5. B-7 / B-9 / B-11 본체 — 수중 3상태 완전 재구성
 
 #### B-7. updateSwimState 진입 조건 복원
@@ -165,6 +171,19 @@ Orientation 판정 + ClimbGap 계산.
 - [ ] B-11. 원본 L513-L536 `isShallowDiveOrSwim && realMinPlayerSwimWaterDepth <
       SwimCrawlWaterBottomBorder(0.55F)` 진입 조건 + isSlow 분기 (crawl 전환 / walking).
       B-9 완료 + Phase 6 AABB 의존.
+
+#### B-7d. `isInLiquid()` 메서드 이식 (세션 88 4차 확정 감사 발견)
+- [ ] B-7d. 본체 §6.2 L219 "isInLiquid() 미이식 (B-7 서브)" 명시 분리. 원본
+      `SmartMovingSelf.isInLiquid()` 메서드 이식 — 물 + 용암 통합 판정. B-7c 본문 내
+      `(wasSwimming && isInLiquid)` 조건 활성화용. Agent WebFetch 로 원본 본문 확보 필요.
+      예상 구조: `isInWater() || (Config.isLavaLikeWaterEnabled() && isInLava())`.
+
+#### B-9h. `swimDown = false` 설정 이식 (세션 88 4차 확정 감사 발견)
+- [ ] B-9h. 본체 §7 B-5 근사 (3) "swimDown=false (원본 L244) 미이식 — B-9 메인 분류 재작성
+      시 재검토" 를 Phase 5 명시 원자로 승격. 원본 L244 `swimDown` 지역 변수 초기값 false
+      설정 후 특정 조건 (isSlow + diveDown 등) 에서 갱신되는 경로 이식. `isFakeShallowWaterSneaking`
+      경로와 연계 가능. B-9 재작성 본문 중 어느 위치에 들어가는지는 Agent WebFetch 로 원본
+      확보 후 결정.
 
 ### Phase 6. AABB 정밀화 — §7 근사 8건 일괄 해소
 
@@ -192,7 +211,12 @@ Orientation 판정 + ClimbGap 계산.
       minY, 0)` 이동량 복원.
 - [ ] B-42-B36. ClientState B-36 분기 (a) 이동량 복원.
 - [ ] B-42-B39. ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤 전환 본문 활성.
-- [ ] B-42-B18. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 (Mixin 필요).
+- [ ] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 — AABB/판정
+      본문 (Mixin 결과 소비). B-42-B18b 완료 후 활성.
+- [ ] B-42-B18b. `MixinPlayer.horizontalCollision` setter 노출 Mixin 신설 (세션 88 4차
+      확정 감사 발견 — 기존 B-42-B18 에 "Mixin 필요" 만 명시되고 Mixin 원자 자체 미분리).
+      1.21.1 `player.horizontalCollision` 은 public 필드이나 Entity 소스 인젉션 위치 확인
+      후 MixinExtras `@Accessor` / `@Mutable` 로 setter 노출. B-42-B18a 본문 활성화 전제.
 
 ### Phase 7. §16 신규 발견 해소
 
@@ -206,6 +230,14 @@ Orientation 판정 + ClimbGap 계산.
 #### B-49. grabButton.StopPressed 이식
 - [ ] B-49. 원본 `grabButton.StopPressed` 사용 지점 전수 grep 후 필요 시 `grabKeyStopPressed`
       필드 이식 (prev vs cur 비교 방식).
+
+#### B-49b. 이동 엣지 prev 필드 전수 이식 (세션 88 4차 확정 감사 발견)
+- [ ] B-49b. 본체 §6.8 L336 "vanilla input 엣지 비제공 — 현재 prevPressRight/Back 일부
+      이식 확인" 항목 Extended 원자 승격. 원본 `Options.moveForward/Backward/Left/Right`
+      의 `StartPressed` / `StopPressed` 전수 이식. `prevPressForward` / `prevPressBack` /
+      `prevPressLeft` / `prevPressRight` 필드 신설 (기존 일부 중복 확인) + 매 틱 저장 +
+      엣지 판정 헬퍼. 사용 지점: handleClimbing 방향 전환 / 수영 방향 입력 / 벽점프 등.
+      grep 사용 지점 전수 확인 후 각 호출처 엣지 판정으로 치환.
 
 ### Phase 8. Simple / Smart Base Climb 전체 이식
 
@@ -243,6 +275,14 @@ Orientation 판정 + ClimbGap 계산.
       평가. 대규모 이식 불가 시 §7 근사 등록 (원본 의도: sprint 해제 후 walk/run 전환 시
       관성 유지).
 
+#### B-51. `Config.isLevitateSmallEnabled()` + `isSmall` 게이트 이식 (세션 88 4차 확정 감사 발견)
+- [ ] B-51. 본체 §6.7 L314 "Config.isLevitateSmallEnabled() ✗ 미이식" 항목 Extended 원자
+      승격. `Config.isLevitateSmallEnabled()` 헬퍼 + 관련 `isSmall` 게이트 전수 이식 —
+      원본 `isSmall` 판정 (작은 플레이어 모드) 과 `levitateSmall` 옵션 조합이 부양
+      (levitate) / 자동 점프 / 중력 적용에 영향. 의존: Config 필드 grep 확인 → 부재 시
+      SmartMovingConfig 에 필드 + 헬퍼 동시 신설. Agent WebFetch 로 원본 사용 지점 전수
+      확인 권고.
+
 ---
 
 ## 4. 의존 순서 + 실행 권고
@@ -263,9 +303,10 @@ Phase 8 (Simple/Smart)           ← 독립 가능
 Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ```
 
-**추정 원자 수**: 약 36 신규 원자 + 일부 재이식 (Phase 9 신설 +3, 3차 감사 +3
-→ B-10-reset-post / B-N-standup / B-40-post).
-**추정 세션 수**: 28-45 세션.
+**추정 원자 수**: 약 43 신규 원자 + 일부 재이식 (Phase 9 신설 +3, 3차 감사 +3
+→ B-10-reset-post / B-N-standup / B-40-post, 4차 확정 감사 +7 → B-7d / B-9h / B-10b-pre
+/ B-42-B18a / B-42-B18b / B-49b / B-51).
+**추정 세션 수**: 33-50 세션.
 **Agent WebFetch 필요**: 대부분 원자 (원본 본문 리서치 미확보 대역 많음).
 
 ---
@@ -296,6 +337,23 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 - **Options `_runOnSprintRelease` / `_walkOnSprintRelease`** — grep 확인 1.21.1 미이식 →
   Phase 9 B-48b-dep 로 추가.
 - Phase 9 "SmartStatistics + 후속 엣지 케이스" 신설 (B-50 / B-48b-dep / B-48b-fallback).
+
+**전수 감사 4차 (Agent 기반 기계적 교차 대조 — 확정 누락 6건 추가 발견)**:
+- 사용자 지적: 세 번 감사로도 누락이 계속 나옴 → 감사 방법 근본 재설계.
+- 방법: general-purpose 에이전트에 (a) 본체 파일 전수 read (b) Extended §3 원자 전수
+  read (c) 교차 대조로 "extended 에 대응 원자 없는 항목" 확정 리스트 요구.
+- 확정 누락 6건 (전부 Extended 에 추가):
+  1. **B-7d** — `isInLiquid()` 메서드 이식 (Phase 5 신설).
+  2. **B-9h** — `swimDown = false` 설정 이식 (Phase 5 신설) — §7 B-5 근사 (3) 승격.
+  3. **B-10b-pre** — `wasJumpingOutOfWater` 필드 명시 분리 (Phase 4 신설).
+  4. **B-42-B18a / B-42-B18b** — 기존 B-42-B18 을 AABB 본문 + Mixin setter 두 서브로 분리.
+  5. **B-49b** — 이동 엣지 prev 필드 전수 이식 (Phase 7 신설) — §6.8 L336 승격.
+  6. **B-51** — `Config.isLevitateSmallEnabled()` + isSmall 게이트 이식 (Phase 9 신설)
+     — §6.7 L314 승격.
+- 구식 표기 (Extended 대상 아님 — 본체 정리만 필요):
+  * §6.9 `resetClimbing()` "✗ 미이식 (B-14)" — 실제 B-14 세션 57 완료.
+  * §6.7 Config 필드 미이식 표기 (`_sprintFactor` / `_sprintExhaustion*` / `_sprintDuringItemUsage`
+    / `_flyCloseToGround` / `_diveControlVertical`) — 전부 이미 이식 완료.
 
 **전수 감사 3차 (처음부터 끝까지 순차 읽기 — 누락 3건 추가 발견)**:
 - **`standupIfPossible` 메서드 전체 미이식** — 세션 53 B-24 로그 L2493-L2494
