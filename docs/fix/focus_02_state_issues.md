@@ -393,12 +393,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `hasLiquidCeiling` 근사 (이미 적용, 정밀도 손실 있음)
 - 반-블록 단위 수직 탐색 → BlockState 단위
 - vanilla `isSwimming()` 과 SM `isSwimming_sm` 병존 (접미사 회피) — 혼동 방지용
-- **B-5 근사** (세션 63): `SmartMovingSwimmer.handleSwimming` 내
-  `isFakeShallowWaterSneaking` 설정 경로 원본 L226-L246 대비 3건 근사:
-  (1) `couldStandUp` 수심 측정 — 원본 `minPlayerSwimWaterDepth <= 1.5` (AABB 내 최소 수심
-  정밀 스캔) → 1.21.1 `dippingDepth <= 1.5F` (player.getFluidHeight 단일 값)
+- **B-5 근사** (세션 63, 세션 121 갱신): `SmartMovingSwimmer.handleSwimming` +
+  `updateSwimState` 내 `isFakeShallowWaterSneaking`/`isShallowDiveOrSwim` 설정 경로.
+  ~~(1) `couldStandUp` 수심 측정 — 원본 `minPlayerSwimWaterDepth <= 1.5` AABB 근사~~
+  → **세션 121 B-42-B5 해소 완료** (`SwimBorderValues` 소비로 `playerSwimWaterBorder >= 0
+  && minPlayerSwimWaterDepth <= 1.5` 원본 공식 복원, 2 지점).
   (2) `getClimbingOrientations` — 원본 대각 포함 8방향 → 1.21.1 `Direction.Type.HORIZONTAL`
-  4방향만
+  4방향만 (별도 원자 후보, B-42 범위 외)
   (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
   동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
 - **B-16 근사** (세션 68, 세션 69 갱신): `SmartMovingClientState.tickEssential` 내

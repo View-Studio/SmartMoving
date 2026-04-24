@@ -195,11 +195,16 @@ public final class SmartMovingSwimmer {
         }
 
         // B-10a-post (세션 109): 원본 L507 `isShallowDiveOrSwim = couldStandUp && (isDiving ||
-        // isSwimming);` 이식. `couldStandUp` = B-5 (세션 63) 근사 `dippingDepth >= 0F &&
-        // dippingDepth <= 1.5F` (원본 AABB `minPlayerSwimWaterDepth` → fluidHeight 단일값).
-        // 소비처: B-36 분기 (a) 얕은 물 swim/dive → walking 전환 활성화 (이전 공식 미이식으로
-        // 항상 false 였음). B-11 Phase 5 (얕은 물 특수 분기) 에서도 진입 게이트로 소비.
-        boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
+        // isSwimming);` 이식. `couldStandUp` = 원본 L276 공식.
+        // B-42-B5 해소 (세션 121): 기존 `dippingDepth >= 0F && dippingDepth <= 1.5F` 근사를
+        // `SwimBorderValues` 로 원본 공식 복원 — `playerSwimWaterBorder >= 0 &&
+        // minPlayerSwimWaterDepth <= 1.5` (AABB 정밀 파생값).
+        // 소비처: B-36 분기 (a) 얕은 물 swim/dive → walking 전환 활성화. B-11 Phase 5
+        // (얕은 물 특수 분기) 에서도 진입 게이트로 소비.
+        SmartMovingClientState.SwimBorderValues swimVals =
+                SmartMovingClientState.computeSwimBorderValues(player);
+        boolean couldStandUp = swimVals.playerSwimWaterBorder >= 0
+                            && swimVals.minPlayerSwimWaterDepth <= 1.5;
         sm.isShallowDiveOrSwim = couldStandUp && (sm.isDiving || sm.isSwimming_sm);
     }
 
@@ -273,19 +278,18 @@ public final class SmartMovingSwimmer {
         //   }
         //   if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false; isFakeShallowWaterSneaking=true; }
         //
-        // B-5 (세션 63): 근사 이식 — 원본과 차이 3건 (§7 근사 이식 지점 기록):
-        //   1) couldStandUp 수심 측정:
-        //      원본 `playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5`
-        //        — AABB 내 최소 수심 정밀 스캔
-        //      1.21.1 `dippingDepth >= 0F && dippingDepth <= 1.5F`
-        //        — player.getFluidHeight(WATER) 단일 값 (플레이어 발 기준)
-        //   2) getClimbingOrientations 방향 집합:
-        //      원본 대각 포함 8방향 (`true, true` 파라미터)
-        //      1.21.1 Direction.Type.HORIZONTAL 4방향만 (대각 생략)
-        //   3) swimDown=false (원본 L244) 은 미이식 — 1.21.1 swim 수직 속도 로직은
-        //      swimDown 에 의존하지 않아 동작상 차이 없음. B-9 메인 분류 재작성 시 재검토.
+        // B-5 (세션 63) → **B-42-B5 해소 (세션 121)**: 근사 (1) couldStandUp 수심 측정
+        //   원본 L276 `playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5` 복원.
+        //   `SwimBorderValues` (B-42d) 를 사용한 AABB 정밀 파생값.
+        // 잔존 근사 2건 (§7 B-5 갱신 — 이들은 B-42 범위 외):
+        //   2) getClimbingOrientations 방향 집합 — 원본 8방향, 1.21.1 4방향 (별도 원자)
+        //   3) swimDown=false (원본 L244) 미이식 — 동작 영향 없음 (1.21.1 swim 수직 속도는
+        //      swimDown 무관). B-9 메인 분류 재작성 시 재검토.
         //   isTunnelAhead → 아래 private 헬퍼.
-        boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
+        SmartMovingClientState.SwimBorderValues swimVals =
+                SmartMovingClientState.computeSwimBorderValues(player);
+        boolean couldStandUp = swimVals.playerSwimWaterBorder >= 0
+                            && swimVals.minPlayerSwimWaterDepth <= 1.5;
         boolean wantShallowSwim = couldStandUp && (wasSwimming || wasDiving);
         if (wantShallowSwim) {
             int px = (int) Math.floor(player.getX());

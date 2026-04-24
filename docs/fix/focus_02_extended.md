@@ -392,8 +392,10 @@ Orientation 판정 + ClimbGap 계산.
       소비는 승격 원자 (B-42-B5 / B-42-B35 / B-42-B36) 에서.
 
 #### B-42 적용 (§7 근사 승격)
-- [ ] B-42-B5. Swimmer B-5 `couldStandUp` → `playerSwimWaterBorder >= 0 &&
-      minPlayerSwimWaterDepth <= 1.5` 원본 복원.
+- [x] B-42-B5. Swimmer B-5 `couldStandUp` → `playerSwimWaterBorder >= 0 &&
+      minPlayerSwimWaterDepth <= 1.5` 원본 복원. **세션 121 완료** (2 지점: L202
+      `isShallowDiveOrSwim` 게이트 + L288 `wantShallowSwim` 게이트 모두 `SwimBorderValues`
+      소비로 교체). §7 B-5 근사 (1) 해소 기록.
 - [ ] B-42-B16. ClientState B-16 `blocked` 의미 재검토 (GUI 입력 차단) — AABB 무관하나 §7
       등록됨. `allowUserInput` 대체 로직 검토.
 - [ ] B-42-B20. Climber Standard Base Climb `isOnLadderOrVine && isCollidedHorizontally`
@@ -508,6 +510,59 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 121 — 2026-04-25 — B-42-B5 `couldStandUp` 근사 해소 (Swimmer 2 지점)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 승격 8건 첫 원자.
+
+**진행한 작업**:
+1. **현재 근사 지점 식별** (Swimmer.java grep):
+   * L202 (updateSwimState 내, B-10a-post 세션 109) — `couldStandUp` 로
+     `isShallowDiveOrSwim` 계산.
+   * L288 (handleSwimming 내, B-5 세션 63) — `couldStandUp` 로 `wantShallowSwim` 계산.
+   * 두 지점 모두 `sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F` 단일값 근사.
+2. **원본 공식 확인** (`SmartMovingSelf.java` L276 로컬 grep):
+   ```
+   boolean couldStandUp = playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5;
+   ```
+3. **원본 L507 재확인** — `isShallowDiveOrSwim = couldStandUp && (isDiving || isSwimming)`
+   의 `couldStandUp` 도 L276 지역 변수 동일 사용. 1.21.1 분리 구조 (updateSwimState +
+   handleSwimming) 에서는 각 지점마다 `SwimBorderValues` 재계산.
+4. **두 지점 동시 수정**:
+   * L202 → `ClientState.SwimBorderValues swimVals = computeSwimBorderValues(player);
+     boolean couldStandUp = swimVals.playerSwimWaterBorder >= 0 &&
+     swimVals.minPlayerSwimWaterDepth <= 1.5;`
+   * L288 → 동일 패턴으로 치환.
+5. **§7 B-5 근사 (1) 해소 기록** — `focus_02_state_issues.md` 의 B-5 근사 블록에서
+   근사 (1) 에 취소선 + "세션 121 B-42-B5 해소 완료". 근사 (2) getClimbingOrientations
+   8→4방향 / (3) swimDown=false 는 B-42 범위 외로 잔존.
+6. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 121 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L276 (couldStandUp 지역 변수) + L507
+  (isShallowDiveOrSwim 소비) 로컬 read ✓
+- [근거] 1.21.1 Swimmer.java L202/L288 두 근사 지점 grep 확인 ✓
+- [대응] 원본 `playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5` →
+  `SwimBorderValues` (B-42d) 소비로 원본 파생값 1:1 복원 ✓
+- [분기] AND 2-항 그대로 보존 ✓
+- [상수] `0` / `1.5` 원본 동일 ✓
+- [타이밍] 계산 시점 각 메서드 내 기존 위치 유지 (L202/L288) ✓
+- [근사] B-5 근사 (1) 해소 → §7 B-5 블록에서 해소 기록. (2)/(3) 잔존 표기 명확화 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 이식 (B-10a-post / isFakeShallowWaterSneaking / isTunnelAhead) 영향 없음 —
+  `couldStandUp` 계산식만 정밀도 상승 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42-B35** (ClientState `crawlStandUpBottom` 정밀 계산 복원) 또는
+**B-42-B36** (ClientState B-36 분기 (a) 이동량 복원). 둘 다 `getMaxPlayerSolidBetween`
+소비 — B-42a 사용. B-42-B16 은 AABB 무관 (GUI 입력 차단) 이라 별도 취급.
+
+**진행률** (세션 121 종료 시점):
+- Extended 완료: **35 원자** (B-19 22 + Phase 4 8 + Phase 6 **5** = 35)
+- Extended 총 원자 ~61
+- **Extended 진행률: 35/61 ≈ 57%**
+- **포커스 #2 전체: (54+35)/115 ≈ 77%**
+- **Phase 6 승격 1/8 — B-42-B5 완료** (B-5 근사 1/3 해소)
 
 ### 세션 120 — 2026-04-25 — B-42d AABB 파생값 struct-like 헬퍼 (`SwimBorderValues`)
 
