@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 C 단계 마무리 (세션 87 — C-1/C-2/C-3 완료 / 잔여 C-4/C-5) |
-| 현재 단계 | A 완료 + B Phase 1/2 핵심 완료 + C-1/C-2/C-3 완료. **B Phase 2 잔여 4 원자 별도 포커스 분리** (B-7 → focus_15 / B-9+B-11 → focus_16 / B-19 → focus_17 / B-42 → focus_14). ⏳ C-4 인게임 재검증 (사용자 몫) / C-5 포커스 #3 전환 |
+| 상태 | 🟠 **Extended 진행 중** (세션 88 — 엄격 완료 결정 / Phase 3~8 범위 복원) |
+| 현재 단계 | A/B Phase 1/2 핵심 54 원자 + C-1/C-2/C-3 완료. **세션 88 사용자 지시로 엄격 완료 방침 확정** — 세션 85 의 "별도 포커스 분리" 계획 취소. Phase 3~8 (B-19 도미노 해소 / B-10 공식 완성 / B-7/B-9/B-11 / AABB 정밀화 / B-48/B-49 / Simple·Smart Base Climb) 모두 포커스 #2 범위로 복원. **후속 작업은 [`focus_02_extended.md`](focus_02_extended.md) 로 분리**. C-4/C-5 는 Phase 3~8 완료 후. |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -4140,6 +4140,60 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **C-4** 는 사용자 인게임 테스트 결과 대기 (세션 86 회귀 감사 통과 + clean build 성공 기반).
 - focus_14/15/16/17 신규 파일 생성은 포커스 #3 진입 후 필요 시 진행.
 
+### 세션 88 — 2026-04-24 — 엄격 완료 결정 + Extended 파일 분리
+
+**사용자 지시**: "무조건적인 엄격 완료야. 포커스 파일이 길어질거 같으면 포커스2익스텐디드
+파일을 만들어도됨."
+
+**방침 전환 근거**:
+- 세션 85 "별도 포커스 분리" (B-7/B-9/B-11/B-19 + §7 AABB 근사 8건 + B-10 부분 이식 등) 는
+  사실상 범위 축소였음.
+- **B-19 미이식의 도미노 효과** 확인: `isNeighborClimbing` / `hasClimbGap` /
+  `hasClimbCrawlGap` 이 항상 false → 세션 47/48/68/69/72/73/77/81/83 에서 이식한
+  B-17a/b1/b2 (isCrawlClimbing) + B-18/B-18-pre/B-18b (isClimbCrawling) + B-16c 자동 등반
+  4-OR 공식이 **모두 항상 false** 유지 → 포커스 #2 "13 상태 플래그 값 자체의 정확성"
+  핵심 목적 사실상 미달성.
+- B-10a 공식 미이식 → `isShallowDiveOrSwim` 항상 false → B-36 분기 (a) 무력화.
+
+**결정**:
+1. 세션 85 분리 계획 **전체 취소** (focus_14/15/16/17 신규 파일 생성 취소).
+2. Phase 3~8 (B-19 도미노 해소 / B-10 공식 완성 / B-7/B-9/B-11 / AABB 정밀화 / B-48/B-49 /
+   Simple·Smart Base Climb) 전부 포커스 #2 범위로 복원.
+3. 본체 focus_02_state_issues.md 이미 4832 줄로 과대 → **`focus_02_extended.md` 신규 생성**
+   으로 경량화. 본체는 Phase 3~8 참조 링크만, Extended 가 상세 관리.
+4. C-4/C-5 는 Phase 3~8 완료 후로 연기.
+
+**진행한 작업** (메타 결정 + 문서 구조 재편):
+- `focus_02_extended.md` 신규 생성 (목적 / 본체 관계 / Phase 3~8 원자 약 30개 목록 / 의존
+  순서 / 작업 기록 / 최종 C 단계).
+- 본체 §1 상태 변경 — "Extended 진행 중 / Phase 3~8 범위 복원".
+- 본체 §17 에 세션 85 분리 계획 취소 + Extended 참조 기록. focus_14/15/16/17 분리 명시
+  취소.
+- `playtest_fixes.md` 의 focus_14 분리 메모 업데이트 (Extended 흡수).
+- 코드 변경 없음 — 메타 결정 세션.
+
+**완료 전 검증 체크리스트 (세션 88)**:
+- [근거] 사용자 지시 명확 ("무조건적인 엄격 완료") ✓
+- [근거] B-19 도미노 효과 분석 — B-17/B-18 공식이 isNeighborClimbing=false 로 무력화되는
+  구조 확인 ✓
+- [대응] 본체 경량화 + Extended 분리 (4832 → 분할 관리) ✓
+- [분기] 없음 (메타 결정)
+- [상수] 없음
+- [타이밍] C-3 완료 후, C-4/C-5 연기 결정 ✓
+- [근사] 없음 — 엄격 완료 방침으로 §7 근사 8건 모두 Phase 6 에서 해소 예정
+- [신규] Phase 3~8 원자 약 30개 §Extended §3 등록. focus_14/15/16/17 별도 파일 생성 계획
+  전체 취소 ✓
+- [회귀] 없음 (코드 변경 없음)
+- [빌드] 코드 변경 없음
+
+**Phase 진행 상황 갱신**:
+- B Phase 1/2 핵심 54 원자 완료 (포커스 #2 본체)
+- B Phase 3~8 신규 범위 진입 (Extended)
+- C 단계 3/5 완료 (C-1/C-2/C-3) / C-4/C-5 연기
+
+**다음 세션**: Phase 3 B-19a 시작 — Agent WebFetch 로 원본 SmartMovingSelf.java L906-L1020
+Orientation 판정 본문 확보 후 Climber 에 이식.
+
 ---
 
 ## 16. 신규 발견
@@ -4806,22 +4860,14 @@ Phase 5 (C 단계):
 ## 17. 잔여 / 후속
 
 - 상태 디버그용 HUD 오버레이(F3 + Tab 같은) 추가는 별도 포커스 후보
-- **남은 4 원자 별도 포커스 분리** (세션 85 결정):
-  * **B-7** (updateSwimState 진입 조건) — `isLiquidClimbing` / `isInLiquid()` /
-    `Config.isLavaLikeWaterEnabled()` / `handleLavaMovement()` 의존 모두 미이식 → Free
-    climbing liquid (용암 등반) 전체 이식 필요. 포커스 #2 "상태 플래그 정확성" 범위 밖.
-    **`focus_15_liquid_climbing.md`** 로 분리.
-  * **B-9** (메인 분류 3-갈래 재작성) — `SmartMovingSwimmer.handleSwimming` 대규모 재구성
-    (L303-L414 offset 테이블 11-단계 + 10-단계 + motionYDiff 등). AABB 정밀 근사 의존.
-    `focus_14_aabb_precision.md` + **`focus_16_swim_classification.md`** 로 분리.
-  * **B-11** (얕은 물 특수 분기) — B-9 범위 (handleSwimming 내부). `focus_16` 범위.
-  * **B-19** (hasClimbGap/hasClimbCrawlGap/isNeighborClimbing 갱신) — Free Climbing
-    Orientation 4방향/8방향 판정 대규모 이식. `focus_14` AABB 정밀 또는
-    **`focus_17_climb_orientation.md`** 분리.
-  * 이 4 원자는 포커스 #2 핵심 목적 "13 상태 플래그 값 자체의 정확성" 에는 **부차적 영향**
-    (주요 소비처 #1/#3/#4 에 직접적 영향 작음). 세션 84 B-33 매 틱 공식 완료로 핵심 목적
-    달성. 별도 포커스로 분리하여 후속 처리.
-- **B-42 → `focus_14_aabb_precision.md` 분리** (세션 79): 1.21.1 `canStandUp(player)` /
+- **~~남은 4 원자 별도 포커스 분리~~ (세션 85 결정) — 세션 88 엄격 완료 결정으로 취소**.
+  * 사용자 지적: B-19 미이식 도미노 효과로 B-17/B-18 공식 항상 false 유지 → 포커스 #2
+    "상태 플래그 정확성" 목적 사실상 미달성.
+  * Phase 3~8 전 범위를 포커스 #2 내에서 엄격 완료 진행.
+  * **후속 작업 전체는 [`focus_02_extended.md`](focus_02_extended.md) 에서 관리.**
+  * 기존 분리 계획 (focus_14/15/16/17) 모두 취소 — Extended 가 대체.
+- **~~B-42 → `focus_14_aabb_precision.md` 분리~~ (세션 79) — 세션 88 취소**: Extended Phase 6
+  (AABB 정밀화) 으로 흡수. 1.21.1 `canStandUp(player)` /
   `isPlayerInSolidBetween` / `crawlStandUpBottom` 근사가 여러 원자에서 사용 중 (B-17b1 /
   B-35 / B-36 / B-39 등). 원본 `getMaxPlayerSolidBetween / getMinPlayerSolidBetween /
   getMinPlayerLiquidBetween` 정밀 AABB 스캔으로 일괄 개선할 수 있으나, 1.21.1 AABB API

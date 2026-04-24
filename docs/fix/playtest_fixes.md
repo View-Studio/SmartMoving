@@ -24,9 +24,11 @@
 > 잉여 정리. 회귀 0건. Easy 1:1 체감 ~90% (서버 허기 동기화 3디테일은
 > `focus_11_server_hunger_sync.md` 후속).
 
-> **포커스 #2 진행 중 (세션 79)**: AABB 정밀 근사 개선은 `focus_14_aabb_precision.md` 로 분리.
-> canStandUp/isPlayerInSolidBetween/crawlStandUpBottom 등 여러 원자 (B-5/B-16/B-20/B-26/B-35/
-> B-36 등) 에서 사용 중인 근사를 일괄 해소할 후속 포커스.
+> **포커스 #2 진행 중 (세션 88 엄격 완료 결정)**: 세션 79/85 의 별도 포커스 분리 계획
+> (focus_14/15/16/17) 전체 취소. Phase 3~8 (B-19 도미노 / B-10 공식 / B-7/B-9/B-11 /
+> AABB 정밀 / B-48/B-49 / Simple·Smart Base Climb) 모두 포커스 #2 범위로 복원.
+> 본체 focus_02_state_issues.md 경량화 목적으로 `focus_02_extended.md` 생성 —
+> Phase 3~8 상세 관리. 사용자 지시 "무조건적인 엄격 완료" 방침.
 
 ---
 
