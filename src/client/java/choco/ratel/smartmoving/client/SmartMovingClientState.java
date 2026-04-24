@@ -232,6 +232,22 @@ public final class SmartMovingClientState {
     public boolean wantClimb;
 
     /**
+     * 원본 SmartMovingSelf L2467-L2477 `wouldWantClimb` 4-OR + 4-AND 억제 조건.
+     * B-16c (세션 69) 4-OR 완전 이식됨 (지역 변수 `wouldWantClimb16`). B-36-pre (세션 77):
+     * 필드 승격 — B-36 grab.StartPressed 3분기 (원본 L2838-L2861) 의 분기 (a) 에서 참조.
+     * 사용처: wantClimb 전구체 + B-36 walking 전환 분기 + 원본 wouldWantClimb 소비 전반.
+     */
+    public boolean wouldWantClimb;
+
+    /**
+     * 원본 SmartMovingSelf L2419-L2430 `wouldWantCrawl` = 4-OR 조건 (isCrawling 유지 또는
+     * grab.StartPressed + sneak). 1.21.1 L855-L861 지역 변수 `wouldWantCrawl_` 이식 완료.
+     * B-36-pre (세션 77): 필드 승격 — B-36 grab.StartPressed 3분기 의 분기 (b)/(c) 에서 참조.
+     * 사용처: wantCrawl 전구체 + B-36 수영/다이빙 전환 분기 + 얕은 물 크롤 분기.
+     */
+    public boolean wouldWantCrawl;
+
+    /**
      * 원본 SmartMovingSelf L2491-L2495 `wantClimbUp`:
      *   (wantClimb && moveForward > 0F)
      *   || (isVineAnyClimbing && jumpButton.Pressed
@@ -852,13 +868,16 @@ public final class SmartMovingClientState {
             // wouldWantCrawl (원본 L2419-L2430): isCrawling 유지 경로 + 신규 진입 경로.
             // wantCrawl = isCrawlingEnabled && wouldWantCrawl (원본 L2431-L2432).
             boolean crawlingEnabled_  = cfg0.crawl && cfg0.enabled;
-            boolean wouldWantCrawl_ =
+            // B-36-pre (세션 77): 지역 `wouldWantCrawl_` → `this.wouldWantCrawl` 필드 승격.
+            // B-36 grab.StartPressed 3분기 (원본 L2838-L2861) 에서 필드 참조 예정.
+            wouldWantCrawl =
                     !player.getAbilities().flying &&
                     (
                         (isCrawling && (inputContinueCrawl || contextContinueCrawl))
                         ||
                         (grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround())
                     );
+            boolean wouldWantCrawl_ = wouldWantCrawl;  // 하위 호환용 지역 별칭
             // 원본 진입 경로 추가 가드(!flying/!swim/!dive/!dipping/!climbing/!crawlClimbing/!ceilingClimbing/
             //   !sliding/!headJumping): 1.21.1 에서는 canCrawl(원본 L1805)과 중복. 여기선 상태 전환을
             //   IMPL-01 에 맡기고 pre-compute 는 원본 wouldWantCrawl 그대로 유지.
@@ -967,7 +986,8 @@ public final class SmartMovingClientState {
                 //    || (Config.isFreeClimbAutoVineEnabled && isFacedToSolidVine(isClimbCrawling)))
                 //   && (!isSliding || grab+forward) && !isHeadJumping && !wantCrawlNotClimb
                 //   && !disabled
-                boolean wouldWantClimb16 =
+                // B-36-pre (세션 77): 지역 `wouldWantClimb16` → `this.wouldWantClimb` 필드 승격.
+                wouldWantClimb =
                         (grabPressed0
                                 || (isClimbHolding && sneakPressedRaw)
                                 || (cfg0.isFreeClimbAutoLadderEnabled()
@@ -979,7 +999,7 @@ public final class SmartMovingClientState {
                         && !wantCrawlNotClimb
                         && !_disabled3a;
                 // B-17b2-pre (세션 72): `wantClimb16` 지역 → public 필드 승격.
-                wantClimb = cfg0.freeClimb && cfg0.enabled && wouldWantClimb16;
+                wantClimb = cfg0.freeClimb && cfg0.enabled && wouldWantClimb;
 
                 // 원본 L2721-L2732 3-OR:
                 boolean wantClimbHolding =
@@ -1589,6 +1609,8 @@ public final class SmartMovingClientState {
         wantClimb               = false;
         wantClimbUp             = false;
         wantClimbDown           = false;
+        wouldWantClimb          = false;
+        wouldWantCrawl          = false;
         isGroundSprinting       = false;
         collidedHorizontallyTickCount = 0;
         restoreFromFlying       = false;

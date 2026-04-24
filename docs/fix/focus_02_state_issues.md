@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 76 — B Phase 2 계속 / B-20) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 46 원자 완료 / ⏳ **B Phase 2 잔여 11 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-36/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 77 — B Phase 2 계속 / B-36-pre) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 47 원자 완료 / ⏳ **B Phase 2 잔여 11 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-36/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -945,6 +945,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (b) isDipping + wouldWantCrawl + depth>=BottomBorder + depth>=MediumBorder → 수영/다이빙 전환
       (c) isDipping + wouldWantCrawl + depth>=BottomBorder + depth<MediumBorder → 얕은 물 크롤
       의존: B-10a `isShallowDiveOrSwim` / B-10c `isStillSwimmingJump` + `wouldWantClimb` 선행.
+- [x] **B-36-pre** ✅ **세션 77 완료** — B-36 본 원자 선행 의존 필드 2개 승격:
+      `wouldWantClimb` / `wouldWantCrawl` ClientState public boolean 신설. B-16c 블록 지역
+      `wouldWantClimb16` → `this.wouldWantClimb` 필드 할당. pre-compute 블록 지역
+      `wouldWantCrawl_` → `this.wouldWantCrawl` 필드 할당 (`_` 별칭 유지). resetState 리셋
+      2건 추가. 원본 L2838-L2861 본문은 리서치에 없음 — B-36 본체 이식 시 Agent WebFetch 필요.
 
 #### B-37. handleClimbing wall 오르기 crawl 진입 이식 (A-5 발견)
 - [x] B-37. ✅ **세션 62 완료** — 원본 L985-L986 이식. `SmartMovingClimber.handleClimbing`
@@ -3511,6 +3516,45 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-36** (grab.StartPressed 3분기) — wouldWantClimb 필드 승격 필요.
 - **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사 필요.
 - **B-44b** (wasCrawling 저장 시점 이동) — B-33 함께 조정 예정이나 단독 문서 정리 가능.
+
+### 세션 77 — 2026-04-24 — B Phase 2 B-36-pre (wouldWantClimb/Crawl 필드 승격)
+
+**진행한 작업**:
+- B-36 본 원자 (grab.StartPressed 3분기 이식) 선행 서브 원자. 의존 필드 2개 승격:
+  * `wouldWantClimb` public boolean 신설 — 원본 L2467-L2477 4-OR + 억제 조건. B-16c 세션 69
+    에서 지역 `wouldWantClimb16` 로 이미 이식 → 이번에 필드 승격 + `this.wouldWantClimb`
+    할당으로 전환.
+  * `wouldWantCrawl` public boolean 신설 — 원본 L2419-L2430 4-OR. pre-compute 블록 L855-L861
+    지역 `wouldWantCrawl_` → `this.wouldWantCrawl` 필드 할당. `_` 별칭 하위 호환 유지.
+- resetState 리셋 2건 추가.
+- 주석에 원본 라인 + B-36 본체 이식 대기 명시.
+- 잔여 원자 카운트 증가 없음 (B-36 본체는 여전히 미완료). 필드 승격만으로 47 원자.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+- **B-36 본체 대기**: 원본 L2838-L2861 본문이 리서치에 없어 Agent WebFetch 필요. 3분기
+  조건 (a/b/c) + SwimCrawlWater 경계 상수 (BottomBorder/MediumBorder) 추가 확보 후 다음
+  세션에서 진행.
+
+**완료 전 검증 체크리스트 (세션 77)**:
+- [근거] 원본 L2467-L2477 (wouldWantClimb 4-OR) Agent 세션 68 에서 확보 ✓
+- [근거] 원본 L2419-L2430 (wouldWantCrawl 4-OR) 리서치 L1793-L1802 확인 ✓
+- [근거] R-14.3 tickEssential 크롤 판정 블록 + R-12.7 wouldWantClimb 호출 맥락 확정 ✓
+- [대응] 기존 지역 변수 계산식 그대로 유지, 필드 할당만 추가 ✓
+- [분기] 없음 (승격 작업)
+- [상수] 없음
+- [타이밍] 기존 계산 위치 유지 (pre-compute 블록 L855 + B-16c 블록 L964) ✓
+- [근사] 없음 — 필드 승격 작업
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 기존 지역 변수 참조점 (wantClimb 계산
+  L942 의 `wouldWantClimb16`) 을 필드 참조로 전환 — 의미 동일. 다른 호출처 없어 영향 최소.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**Phase 2 진행 상황**: 47 원자 완료 (B-36-pre 서브 추가) / 잔여 11 원자
+
+**다음 작업 권고**:
+- **B-36 본체** — Agent WebFetch 로 L2838-L2861 + SwimCrawlWater 상수 확보 후 3분기 이식.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+- **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사 필요.
+- **B-42** — "별도 포커스 후보" 공식 분리 문서 작업.
 
 ---
 
