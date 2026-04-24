@@ -459,6 +459,26 @@ public class Orientation {
     /** 원본 `local_halfOffset` — `initializeLocal` 내부 중간값 (B-19a2b). */
     protected static int local_halfOffset;
 
+    /**
+     * 원본 L2722-L2724 `_handClimbingHoldGap` — Config 값 기반 static final threshold.
+     * `handsClimbing`/`feetClimbing` 에서 `jh_offset` 비교 기준 (B-19a3).
+     *
+     *   Math.min(0.25F, 0.06F * Math.max(upSpeedFactor, downSpeedFactor))
+     *
+     * Config 기본값 1.0F/1.0F 에서 = 0.06F.
+     */
+    private static final float _handClimbingHoldGap = Math.min(0.25F,
+            0.06F * Math.max(
+                    SmartMovingConfig.Config.freeClimbingUpSpeedFactor,
+                    SmartMovingConfig.Config.freeClimbingDownSpeedFactor));
+
+    /**
+     * 원본 L2726-L2727 `_climbGapTemp` / `_climbGapOuterTemp` — static ClimbGap 인스턴스.
+     * `handsClimbing`/`feetClimbing` (B-19a3) + `seekClimbGap` (B-19a4) 에서 재사용.
+     */
+    private static final ClimbGap _climbGapTemp = new ClimbGap();
+    private static final ClimbGap _climbGapOuterTemp = new ClimbGap();
+
     // ── 블록 식별 헬퍼 (원본 L1188-L1214) ──────────────────────────────────
 
     /**
@@ -2805,5 +2825,172 @@ public class Orientation {
             out_climbGap.direction = this.toBlockDirection();
         }
         return gap;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a3 (세션 107) — handsClimbing() + feetClimbing() 판정
+    // 원본: Orientation.java L329-L395 (handsClimbing) + L398-L475 (feetClimbing).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L329-L395 `handsClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, out_climbGap)`.
+     *
+     * 손 레벨 ladder 상태 판정. `initializeOffset(3D, ...)` 후 4 halfOffset (middle/base/
+     * sub/subSub) 별 `isLadderSubstitute` 호출 결과로 HandsClimbing + ClimbGap 결정.
+     *
+     *   middle: gap > 0 → jh_offset 기반 Up 또는 None
+     *   base: gap > 0 → jh_offset 기반 BottomHold 또는 Up
+     *   sub (SkipGaps 설정 후): gap > 0 && !(isCrawling && gap > 1) → 4 갈래
+     *     (FastUp / TopHold / Up / Sink) — isClimbCrawling / grabType / jh_offset 조합
+     *   subSub: gap > 0 && !isCrawling → 3 갈래 (TopHold / FastUp / Sink)
+     */
+    protected HandsClimbing handsClimbing(boolean isClimbCrawling, boolean isCrawlClimbing,
+                                          boolean isCrawling, ClimbGap out_climbGap) {
+        out_climbGap.reset();
+        _climbGapTemp.reset();
+
+        initializeOffset(3D, isClimbCrawling, isCrawlClimbing, isCrawling);
+
+        HandsClimbing result = HandsClimbing.NONE;
+        int gap;
+
+        ClimbGap[] outArr = { out_climbGap };
+
+        if ((gap = isLadderSubstitute(middle, _climbGapTemp)) > 0) {
+            if (jh_offset > 1D - _handClimbingHoldGap)
+                result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
+            else
+                result = result.max(HandsClimbing.NONE, outArr, _climbGapTemp);
+        }
+
+        if ((gap = isLadderSubstitute(base, _climbGapTemp)) > 0) {
+            if (jh_offset < _handClimbingHoldGap)
+                result = result.max(HandsClimbing.BOTTOM_HOLD, outArr, _climbGapTemp);
+            else
+                result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
+        }
+
+        _climbGapTemp.skipGaps = isClimbCrawling || isCrawlClimbing;
+
+        if ((gap = isLadderSubstitute(sub, _climbGapTemp)) > 0
+                && !(isCrawling && gap > 1)) {
+            if (!isClimbCrawling && gap > 2) {
+                result = result.max(HandsClimbing.FAST_UP, outArr, _climbGapTemp);
+            } else if (isClimbCrawling && gap > 1) {
+                result = result.max(HandsClimbing.FAST_UP, outArr, _climbGapTemp);
+            } else {
+                if (jh_offset < _handClimbingHoldGap) {
+                    if (grabType == AroundGrab)
+                        result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
+                    else
+                        result = result.max(HandsClimbing.TOP_HOLD, outArr, _climbGapTemp);
+                } else {
+                    if (grabType == AroundGrab)
+                        result = result.max(HandsClimbing.TOP_HOLD, outArr, _climbGapTemp);
+                    else
+                        result = result.max(HandsClimbing.SINK, outArr, _climbGapTemp);
+                }
+            }
+        }
+
+        if ((gap = isLadderSubstitute(subSub, _climbGapTemp)) > 0 && !isCrawling) {
+            if ((gap > 2 && !isCrawlClimbing)
+                    || grabType == AroundGrab
+                    || (gap > 1 && isClimbCrawling)) {
+                if (jh_offset < _handClimbingHoldGap && !isClimbCrawling)
+                    result = result.max(HandsClimbing.TOP_HOLD, outArr, _climbGapTemp);
+                else if (isClimbCrawling)
+                    result = result.max(HandsClimbing.FAST_UP, outArr, _climbGapTemp);
+                else
+                    result = result.max(HandsClimbing.SINK, outArr, _climbGapTemp);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 원본 L398-L475 `feetClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, out_climbGap)`.
+     *
+     * 발 레벨 ladder 상태 판정. `initializeOffset(0D, ...)` 후 4 halfOffset (top/middle/
+     * base/sub) 별 `isLadderSubstitute` 호출 결과로 FeetClimbing + ClimbGap 결정.
+     *
+     *   top: gap > 0 → None 선택 (placeholder — ClimbGap 만 업데이트)
+     *   middle (SkipGaps 설정 후): gap > 0 && !isCrawling → 4 갈래
+     *     * gap > 3 && !isClimbCrawling: FastUp 또는 None (isCrawlClimbing 여부)
+     *     * (isClimbCrawling || isCrawlClimbing) && gap > 1: BaseWithHands/FastUp
+     *     * gap > 2: SlowUpWithHoldWithoutHands / None
+     *     * else: TopWithHands
+     *   base: gap > 0 → jh_offset / gap / isCrawl 조합 5 갈래
+     *   sub: gap > 0 → None
+     *   최종: isCrawlClimbing || isCrawling → BaseWithHands 강제 승격
+     */
+    protected FeetClimbing feetClimbing(boolean isClimbCrawling, boolean isCrawlClimbing,
+                                        boolean isCrawling, ClimbGap out_climbGap) {
+        out_climbGap.reset();
+        _climbGapTemp.reset();
+
+        initializeOffset(0D, isClimbCrawling, isCrawlClimbing, isCrawling);
+        FeetClimbing result = FeetClimbing.NONE;
+        int gap;
+
+        ClimbGap[] outArr = { out_climbGap };
+
+        if ((gap = isLadderSubstitute(top, _climbGapTemp)) > 0)
+            result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
+
+        _climbGapTemp.skipGaps = isClimbCrawling || isCrawlClimbing;
+
+        if ((gap = isLadderSubstitute(middle, _climbGapTemp)) > 0 && !isCrawling) {
+            if (gap > 3 && !isClimbCrawling) {
+                if (!isCrawlClimbing)
+                    result = result.max(FeetClimbing.FAST_UP, outArr, _climbGapTemp);
+                else
+                    result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
+            } else if ((isClimbCrawling || isCrawlClimbing) && gap > 1) {
+                if (isCrawlClimbing)
+                    result = result.max(FeetClimbing.BASE_WITH_HANDS, outArr, _climbGapTemp);
+                else
+                    result = result.max(FeetClimbing.FAST_UP, outArr, _climbGapTemp);
+            } else if (gap > 2) {
+                if (!isClimbCrawling)
+                    result = result.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS,
+                            outArr, _climbGapTemp);
+                else
+                    result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
+            } else {
+                result = result.max(FeetClimbing.TOP_WITH_HANDS, outArr, _climbGapTemp);
+            }
+        }
+
+        if ((gap = isLadderSubstitute(base, _climbGapTemp)) > 0) {
+            if (gap > 3 && !isCrawling && !isCrawlClimbing) {
+                result = result.max(FeetClimbing.FAST_UP, outArr, _climbGapTemp);
+            } else if (gap > 2 && !isCrawling) {
+                if (!isClimbCrawling) {
+                    if (jh_offset < _handClimbingHoldGap)
+                        result = result.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS,
+                                outArr, _climbGapTemp);
+                    else
+                        result = result.max(FeetClimbing.SLOW_UP_WITH_SINK_WITHOUT_HANDS,
+                                outArr, _climbGapTemp);
+                } else {
+                    result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
+                }
+            } else {
+                if (jh_offset < 1D - _handClimbingHoldGap)
+                    result = result.max(FeetClimbing.BASE_WITH_HANDS, outArr, _climbGapTemp);
+                else
+                    result = result.max(FeetClimbing.BASE_HOLD, outArr, _climbGapTemp);
+            }
+        }
+
+        if (isLadderSubstitute(sub, _climbGapTemp) > 0)
+            result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
+
+        if (isCrawlClimbing || isCrawling)
+            result = result.max(FeetClimbing.BASE_WITH_HANDS, outArr, _climbGapTemp);
+
+        return result;
     }
 }

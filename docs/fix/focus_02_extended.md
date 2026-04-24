@@ -178,14 +178,22 @@ Orientation 판정 + ClimbGap 계산.
             §7 근사 1건 (ClimbGap.Meta 필드 생략 — BlockState 내재 표면 매핑).
             **B-19a2 (isLadderSubstitute 전체 8 서브) 완료**.
 
-- [ ] **B-19a3. `handsClimbing()` / `feetClimbing()` 판정 메서드 이식**
-      (원본 L329-L475)
-      * `handsClimbing`: 4개 gap (middle/base/sub/subSub) 판정 → HandsClimbing 결과 + gap
-        threshold 별 분기 (FastUp/Up/TopHold/BottomHold/Sink)
-      * `feetClimbing`: 4개 gap (top/middle/base/sub) + isCrawlClimbing/isClimbCrawling
-        조건부 분기
-      * `HandsClimbing.max` / `FeetClimbing.max` 메서드 확인 (1.21.1 에 이미 있는지 grep)
-      * 의존: B-19a2 `isLadderSubstitute`.
+- [x] **B-19a3. `handsClimbing()` / `feetClimbing()` 판정 메서드 이식** ✅ **세션 107 완료**
+      (원본 L329-L395 + L398-L475)
+      * `handsClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, out_climbGap)` —
+        `initializeOffset(3D, ...)` + 4 halfOffset (middle/base/sub/subSub) gap 판정.
+        각 gap 결과로 HandsClimbing (NONE/UP/BOTTOM_HOLD/TOP_HOLD/SINK/FAST_UP) +
+        ClimbGap 집계. `_climbGapTemp.skipGaps = isClimbCrawling || isCrawlClimbing`.
+      * `feetClimbing(isClimbCrawling, isCrawlClimbing, isCrawling, out_climbGap)` —
+        `initializeOffset(0D, ...)` + 4 halfOffset (top/middle/base/sub) gap 판정.
+        최종 `isCrawlClimbing || isCrawling` → BASE_WITH_HANDS 강제 승격.
+      * 의존: B-19a2e isLadderSubstitute, B-19a2b initializeOffset, B-19a0 상수
+        (top/middle/base/sub/subSub + NoGrab/HalfGrab/AroundGrab) 전수 충족.
+      * 필드 추가 3: `_handClimbingHoldGap` (static final float) + `_climbGapTemp` /
+        `_climbGapOuterTemp` (static final ClimbGap 인스턴스).
+      * `HandsClimbing.max` / `FeetClimbing.max` 는 1.21.1 에 `ClimbGap[]` 배열 래핑 시그니처로
+        이미 이식됨 — 호출부에서 `ClimbGap[] outArr = { out_climbGap }` 배열 래핑 후 전달.
+      * 근사 없음 — HandsClimbing/FeetClimbing enum + ordinal 순서 비교 1:1.
 
 - [ ] **B-19a4. `Orientation.seekClimbGap` 메서드 이식 + Climber.handleClimbing 연결**
       (원본 L207-L224 + Self.java L937-L961)
@@ -460,6 +468,81 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 107 — 2026-04-24 — B-19a3 handsClimbing() + feetClimbing() 판정 — **B-19a3 완료**
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L329-L395 + L398-L475 전수 read** — 이식 범위 재확인 (세션 89 부분 read 보완).
+2. **필드 3 추가** (Orientation 클래스):
+   * `_handClimbingHoldGap` static final float — Config 기반 threshold
+     `Math.min(0.25F, 0.06F * Math.max(upSpeedFactor, downSpeedFactor))`.
+     Config 기본값 (1.0F/1.0F) 에서 = 0.06F.
+   * `_climbGapTemp` / `_climbGapOuterTemp` static final ClimbGap 인스턴스 2개 —
+     `handsClimbing`/`feetClimbing`/`seekClimbGap` (B-19a4) 에서 재사용.
+3. **`handsClimbing()` 이식** (원본 L329-L395):
+   * `initializeOffset(3D, ...)` (B-19a2b) 호출
+   * `HandsClimbing result = NONE`
+   * 4 halfOffset 별 `isLadderSubstitute` (B-19a2e) 호출:
+     - middle: gap > 0 → jh_offset 비교 → UP 또는 NONE
+     - base: gap > 0 → jh_offset 비교 → BOTTOM_HOLD 또는 UP
+     - sub (skipGaps 설정 후): gap > 0 && !(isCrawling && gap > 1) → 4 갈래
+       (FAST_UP (2가지) / grabType 분기 (UP/TOP_HOLD/TOP_HOLD/SINK))
+     - subSub: gap > 0 && !isCrawling → 3 갈래 (TOP_HOLD/FAST_UP/SINK)
+   * 각 max 호출 시 `ClimbGap[] outArr = { out_climbGap }` 배열 래핑 (1.21.1 max
+     시그니처가 `ClimbGap[]` 로 이식됨)
+4. **`feetClimbing()` 이식** (원본 L398-L475):
+   * `initializeOffset(0D, ...)` + FeetClimbing result = NONE
+   * 4 halfOffset (top/middle/base/sub) 별 gap 판정:
+     - top: gap > 0 → NONE (placeholder — ClimbGap 만 업데이트)
+     - middle (skipGaps 후): gap > 0 && !isCrawling → 4 갈래
+       (FAST_UP / BASE_WITH_HANDS / SLOW_UP_WITH_HOLD_WITHOUT_HANDS / TOP_WITH_HANDS)
+     - base: gap > 0 → 5 갈래 (gap > 3 FAST_UP / gap > 2 SLOW_UP 2종 / base 2 갈래
+       BASE_WITH_HANDS/BASE_HOLD)
+     - sub: gap > 0 → NONE
+   * 최종 `isCrawlClimbing || isCrawling` → BASE_WITH_HANDS 강제 승격
+5. **enum 매핑**:
+   * 원본 `HandsClimbing.None/Up/FastUp/TopHold/BottomHold/Sink` → 1.21.1
+     `NONE/UP/FAST_UP/TOP_HOLD/BOTTOM_HOLD/SINK`
+   * 원본 `FeetClimbing.None/BaseHold/BaseWithHands/TopWithHands/
+     SlowUpWithHoldWithoutHands/SlowUpWithSinkWithoutHands/FastUp` → 1.21.1 동일 upper case
+6. `_climbGapTemp.SkipGaps` → `_climbGapTemp.skipGaps` (1.21.1 ClimbGap 필드 camelCase).
+
+**완료 전 검증 체크리스트 (세션 107 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L329-L475 전수 read ✓
+- [근거] 의존 전수 충족 — B-19a2e isLadderSubstitute + B-19a2b initializeOffset +
+  B-19a0 상수 (top/middle/base/sub/subSub/NoGrab/HalfGrab/AroundGrab) +
+  `HandsClimbing.max` / `FeetClimbing.max` (기존 이식) ✓
+- [대응] 2 메서드 원본 ↔ 1.21.1 side-by-side. `handsClimbing` 4 halfOffset x 4/5 갈래
+  내부 분기 + `feetClimbing` 동일 + 최종 crawl 승격 전수 ✓
+- [분기] `handsClimbing` middle/base 각 2갈래 + sub 5갈래 + subSub 3갈래 + grabType 분기
+  전수. `feetClimbing` top 1갈래 + middle 4갈래 + base 5갈래 + sub 1갈래 + 최종 승격.
+  모든 `if-else` 중첩 depth 3+ 보존 ✓
+- [상수] `3D` (handsClimbing offset) / `0D` (feetClimbing offset) / `1D - _handClimbingHoldGap`
+  threshold / gap 임계값 (> 0 / > 1 / > 2 / > 3) 원본 동일 ✓
+- [타이밍] out_climbGap.reset() → _climbGapTemp.reset() → initializeOffset → halfOffset
+  별 isLadderSubstitute 호출 순서 원본 1:1. `_climbGapTemp.skipGaps` 설정 시점 (sub 직전,
+  middle 직전) 원본 동일 ✓
+- [근사] 없음 — HandsClimbing/FeetClimbing enum + ClimbGap[] 배열 래핑은 1.21.1 표면 매핑 ✓
+- [신규] `_handClimbingHoldGap` / `_climbGapTemp` / `_climbGapOuterTemp` 필드 3개 신설
+  (원본 L2722-L2727 대응) ✓
+- [회귀] 기존 코드 미사용. B-19a4 `seekClimbGap` 이 handsClimbing/feetClimbing 호출 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-19a4 (마지막)** — `seekClimbGap` 메서드 이식 (원본 L207-L224) +
+`Climber.handleClimbing` 연결 (원본 L937-L961 `sm.isNeighborClimbing` /
+`sm.hasNeighborClimbGap` / `sm.hasNeighborClimbCrawlGap` / `sm.hasClimbGap` /
+`sm.hasClimbCrawlGap` 대입 이식). **B-19 도미노 해소의 소비자 연결 마지막 단계**. 의존
+전수 충족. 예상 1 세션.
+
+**진행률** (세션 107 종료 시점):
+- Extended 완료: **18 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / a2a4 / a2b / a2c / a2d / a2e / **a3**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 18/61 ≈ 30%**
+- **포커스 #2 전체: (54+18)/115 ≈ 63%**
+- **B-19a 마일스톤**: a0/a1/a2/a3 완료 — **a4 (Climber 연결) 1개만 남음**.
 
 ### 세션 106 — 2026-04-24 — B-19a2e `isLadderSubstitute` 본체 — **B-19a2 전체 완료**
 
