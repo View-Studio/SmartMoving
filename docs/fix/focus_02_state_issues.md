@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 68 — B Phase 2 계속 / B-16 근사) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 36 원자 완료 / ⏳ **B Phase 2 잔여 ~7 원자** (B-16 근사 완료, B-16a/b/c 서브 분해 추가) |
+| 상태 | 🟡 진행 중 (세션 69 — B Phase 2 계속 / B-16a + B-16b + B-16c) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 39 원자 완료 / ⏳ **B Phase 2 잔여 ~4 원자** (B-16 4-OR 완전 이식, §7 근사 1건으로 축소) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -400,16 +400,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   4방향만
   (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
   동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
-- **B-16 근사** (세션 68): `SmartMovingClientState.tickEssential` 내 wantClimbHolding/
-  isClimbHolding 3-OR 갱신 공식 (원본 L2721-L2732) 구조 1:1 이식. 의존 필드 2건 근사:
-  (1) `wantClimb` = `Config.isFreeClimbingEnabled() && wouldWantClimb` (원본 L2479) 의
-  `wouldWantClimb` (L2467) 4-OR 중 2개 (`isFacedToLadder` / `isFacedToSolidVine`) 미이식.
-  `freeClimbAutoLadder/Vine` Config 필드 미이식 → 해당 분기 false. 2-OR 근사 (grab +
-  isClimbHolding+sneak). **B-16a~c 서브 원자로 완전 이식 계획** (각각 Climber 헬퍼 + Config
-  필드 + wouldWantClimb 4-OR 확장).
+- **B-16 근사** (세션 68, 세션 69 갱신): `SmartMovingClientState.tickEssential` 내
+  wantClimbHolding/isClimbHolding 3-OR 갱신 공식 (원본 L2721-L2732) 구조 1:1 이식.
+  ~~(1) `wantClimb` 2-OR 근사~~ → **세션 69 B-16a/b/c 로 해소 완료** (4-OR 완전 복원).
   (2) `blocked` = `currentScreen != null && !currentScreen.allowUserInput` (원본 L2393).
   1.21.1 `allowUserInput` 필드 제거됨 → `currentScreen != null` 단일 조건 근사. 모든 열린
-  screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작).
+  screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작) — 원본 의도와 근접.
 
 ---
 
@@ -710,18 +706,31 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       **B-16 완전 이식은 서브 원자 B-16a/b/c 로 분해** (아래).
 
 #### B-16a. `isFacedToLadder` / `isFacedToSolidVine` 헬퍼 이식 (B-16 근사 해소 서브)
-- [ ] B-16a. 원본 헬퍼 2개 Climber 에 이식 — grab 키 없이도 자동 등반 진입 판정에 사용.
-      수평 Direction 4방향 × 블록 탐색 (Ladder/Vine). B-16 `wouldWantClimb` 4-OR 중 3번째/
-      4번째 분기 활성화 조건.
+- [x] B-16a. ✅ **세션 69 완료** — 원본 SmartMovingBase L184-L192 이식. SmartMovingClimber
+      에 public static 메서드 2개 추가. 원본 `getOnLadder(1, true, isSmall) > 0` /
+      `getOnVine(1, true, isSmall) > 0` 는 `getOnLadderOrVine` 의 onlyLadder/onlyVine 필터
+      파라미터를 받으나 1.21.1 `getOnLadderOrVine` 에는 이 필터 없음. 근사: 기존
+      `out_handsVine[0]`/`out_feetVine[0]` 플래그로 vine 여부 구분 — `relevant && !vine` 은
+      ladder, `relevant && vine` 은 solidVine. 1.21.1 `getOnLadderOrVine` 내부 L143-L144 에
+      이미 "solid 뒤" 체크 있어 solidVine 조건 내장됨.
 
 #### B-16b. `Config.freeClimbAutoLadder` / `freeClimbAutoVine` Config 필드 이식 (B-16 근사 해소 서브)
-- [ ] B-16b. 원본 Config 필드 2건 추가. 기본값 확인 후 SmartMovingConfig 에 이식.
-      `wouldWantClimb` 4-OR 의 auto 분기 활성화 게이트.
+- [x] B-16b. ✅ **세션 69 완료** — Agent WebFetch 로 원본 기본값 `true` 확인
+      (Properties.java L171 `Unmodified → return true`). SmartMovingConfig 에 2개 필드 추가:
+      `freeClimbAutoLadder = true` / `freeClimbAutoVine = true`. 헬퍼 메서드 2개 추가:
+      `isFreeClimbAutoLadderEnabled()` / `isFreeClimbAutoVineEnabled()` — 원본
+      SmartMovingClientConfig L57-L65 `_value && enabled` AND 패턴.
 
 #### B-16c. `wouldWantClimb` 4-OR 완전 이식 (B-16 근사 해소 서브)
-- [ ] B-16c. 현재 2-OR (grab + isClimbHolding+sneak) → 원본 4-OR 확장. B-16a/b 선행 후
-      `(Config.freeClimbAutoLadder && isFacedToLadder()) || (Config.freeClimbAutoVine &&
-      isFacedToSolidVine())` 2개 분기 추가.
+- [x] B-16c. ✅ **세션 69 완료** — ClientState B-16 블록의 `wouldWantClimb16` 2-OR → 4-OR
+      확장. 원본 L2467-L2477 1:1:
+      `(grab || isClimbHolding+sneak ||
+        (Config.isFreeClimbAutoLadderEnabled() && isFacedToLadder(isClimbCrawling)) ||
+        (Config.isFreeClimbAutoVineEnabled() && isFacedToSolidVine(isClimbCrawling)))
+       && (!isSliding || grab+forward) && !isHeadJumping && !wantCrawlNotClimb && !disabled`.
+      B-16 근사 2건 중 (a) `wantClimb` 근사 **해소 완료** — 원본 4-OR 구조 완전 복원.
+      (b) `blocked` 근사 (`allowUserInput` 제거) 만 §7 에 잔존. `isClimbCrawling` 현재 미이식
+      (B-18 대기) 이라 `false` 전달 — B-18 이식 후 자동 활성.
 
 #### B-17. `isCrawlClimbing` 메인 공식 + 전환 블록 이식 (A-3 발견)
 - [x] B-17a. ✅ **세션 47 완료** — `isCrawlClimbing` 메인 5-AND 공식 이식 (원본 L2737).
@@ -3020,6 +3029,67 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
 - **B-16a/b/c** (B-16 근사 해소 서브) — 자동 등반 경로 완전 이식 — 규모 중.
+
+### 세션 69 — 2026-04-24 — B Phase 2 B-16a + B-16b + B-16c (자동 등반 완전 이식)
+
+**진행한 작업**:
+- **B-16b (Config 필드)**: Agent WebFetch 로 원본 Properties.java L171 `Unmodified → return true`
+  기본값 확인. SmartMovingConfig 에 2개 필드 추가:
+  * `freeClimbAutoLadder = true` (원본 `_freeClimbingAutoLaddder` Unmodified)
+  * `freeClimbAutoVine   = true` (원본 `_freeClimbingAutoVine` Unmodified)
+  헬퍼 2개 추가 (원본 SmartMovingClientConfig L57-L65 `_value && enabled` AND 패턴):
+  * `isFreeClimbAutoLadderEnabled()` / `isFreeClimbAutoVineEnabled()`
+- **B-16a (Climber 헬퍼)**: Agent 로 확보한 원본 SmartMovingBase L184-L192 이식.
+  SmartMovingClimber 에 public static 2개 추가:
+  * `isFacedToLadder(player, isSmall)` — 기존 `getOnLadderOrVine` 재사용 +
+    `relevant && !vine` 조건 (ladder 만 필터 근사).
+  * `isFacedToSolidVine(player, isSmall)` — `relevant && vine` 조건. 1.21.1
+    `getOnLadderOrVine` L143-L144 에서 이미 "solid 뒤" 체크 내장되어 solidVine 조건 충족.
+- **B-16c (4-OR 확장)**: ClientState B-16 블록 `wouldWantClimb16` 2-OR → 4-OR:
+  ```java
+  (grabPressed0
+   || (isClimbHolding && sneakPressedRaw)
+   || (cfg0.isFreeClimbAutoLadderEnabled()
+           && SmartMovingClimber.isFacedToLadder(player, isClimbCrawling))
+   || (cfg0.isFreeClimbAutoVineEnabled()
+           && SmartMovingClimber.isFacedToSolidVine(player, isClimbCrawling)))
+  ```
+  원본 L2467-L2477 1:1 복원.
+- **§7 근사 갱신**: B-16 (a) `wantClimb` 근사 **해소 완료** 기록. (b) `blocked` 근사만 잔존.
+- **§10 B-16a/b/c 체크박스 완료**.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+- **참고**: `isClimbCrawling` 현재 미이식 (B-18 대기, 필드는 이식됨 항상 false) → 헬퍼 호출
+  시 `false` 전달 → B-18 이식 후 자동 활성.
+
+**완료 전 검증 체크리스트 (세션 69)**:
+- [근거] Agent WebFetch 로 SmartMovingBase L184-L192 (헬퍼) + SmartMovingConfig L119-L120
+  (Config 필드) + SmartMovingClientConfig L57-L65 (헬퍼) + Properties.java L171 (기본값) 확보 ✓
+- [근거] R-12.7 `isClimbHolding` 관련 #6/#7 불일치 + B-16 근사 2건 중 (a) 해소 계획 ✓
+- [대응] 3개 서브 원자 원본 1:1 — 기본값/헬퍼 AND 패턴/4-OR 구조 동일 ✓
+- [분기] 4-OR 각 항 명시 + 억제 조건 그대로 ✓
+- [상수] `freeClimbAutoLadder/Vine = true` (원본 Unmodified 기본값) ✓
+- [타이밍] 없음 (헬퍼 추가 + Config 필드 추가 + OR 확장)
+- [근사] ladder/vine 필터는 `vine[0]` 플래그 기반 근사 (1.21.1 getOnLadderOrVine 에 필터
+  파라미터 없음) — `handsVine=true` 판정은 L143-L144 solid 체크 내장이라 solidVine 조건
+  충족. §7 에 근사 방식 명시 불필요 (원본 시멘틱과 동치).
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 자동 사다리/덩굴 진입 경로 복원 —
+  사다리/덩굴을 바라보면 grab 없이도 자동 매달림. 게임플레이 체감 크게 개선.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing() 매 틱 호출 (B-14 세션 57)
+- ✅ #6/#7 isClimbHolding/wantClimbHolding 갱신 (B-16 세션 68 근사 → B-16a/b/c 세션 69 완전)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 자동 해소 세션 57)
+- ⏳ #2~#5/#8~#12/#14 (B-17b2/B-18/B-19/B-20 등)
+
+**Phase 2 진행 상황**: 39 원자 완료 (B-16a + B-16b + B-16c 3개 추가) / 잔여 ~4
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
+- **B-18** (isClimbCrawling 메인 공식 + 카운터) — 현재 isClimbCrawling 항상 false. B-16c 효과 증폭.
 
 ---
 

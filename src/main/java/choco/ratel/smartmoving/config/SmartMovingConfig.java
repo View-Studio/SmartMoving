@@ -62,6 +62,18 @@ public class SmartMovingConfig {
     public boolean simpleClimb = false;
     /** 원본: _baseClimb = "smart" — 인접 블록 substitute 판정으로 자동 클라이밍 */
     public boolean smartClimb = false;
+    /**
+     * 원본 SmartMovingConfig L119 `_freeClimbingAutoLaddder` Unmodified — 기본값 `true`.
+     * "사다리를 향할 때 grab 키 없이도 자동 클라이밍 진입". `wouldWantClimb` 4-OR 의 3번째 분기
+     * `(isFreeClimbAutoLadderEnabled && isFacedToLadder)` 활성화 게이트. B-16b (세션 69).
+     */
+    public boolean freeClimbAutoLadder = true;
+    /**
+     * 원본 SmartMovingConfig L120 `_freeClimbingAutoVine` Unmodified — 기본값 `true`.
+     * "solid vine 을 향할 때 grab 키 없이도 자동 클라이밍 진입". `wouldWantClimb` 4-OR 의 4번째
+     * 분기 `(isFreeClimbAutoVineEnabled && isFacedToSolidVine)` 활성화 게이트. B-16b (세션 69).
+     */
+    public boolean freeClimbAutoVine = true;
     public float freeClimbingUpSpeedFactor   = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float freeClimbingDownSpeedFactor = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float ceilingClimbingSpeedFactor = 0.2F;
@@ -601,6 +613,26 @@ public class SmartMovingConfig {
      */
     public boolean isDivingEnabled() {
         return dive && enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L57-L60 `isFreeClimbAutoLaddderEnabled() =
+     *   _freeClimbingAutoLaddder.value && enabled`.
+     * 사용처: `wouldWantClimb` 4-OR 의 3번째 분기 (원본 L2471) 자동 사다리 진입 게이트.
+     * B-16b (세션 69).
+     */
+    public boolean isFreeClimbAutoLadderEnabled() {
+        return freeClimbAutoLadder && enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L62-L65 `isFreeClimbAutoVineEnabled() =
+     *   _freeClimbingAutoVine.value && enabled`.
+     * 사용처: `wouldWantClimb` 4-OR 의 4번째 분기 (원본 L2472) 자동 솔리드 덩굴 진입 게이트.
+     * B-16b (세션 69).
+     */
+    public boolean isFreeClimbAutoVineEnabled() {
+        return freeClimbAutoVine && enabled;
     }
 
     /**

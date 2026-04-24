@@ -52,6 +52,58 @@ public final class SmartMovingClimber {
 
     private SmartMovingClimber() {}
 
+    // ── B-16a: isFacedToLadder / isFacedToSolidVine (세션 69) ─────────────
+
+    /**
+     * 원본 SmartMovingBase L184-L186 `isFacedToLadder(boolean isSmall)`:
+     *   return getOnLadder(1, true, isSmall) > 0;
+     *   where getOnLadder(maxResult, faceOnly=true, isSmall) =
+     *     getOnLadderOrVine(maxResult, faceOnly=true, onlyLadder=true, onlyVine=false, isSmall)
+     *
+     * 1.21.1 `getOnLadderOrVine` 은 ladder/vine 필터 파라미터가 없어 둘 다 감지하나
+     * `out_handsVine[0]` / `out_feetVine[0]` 플래그로 vine 여부 구분 가능 → **ladder 만 선택**
+     * (vine 제외) 하는 근사 이식. `faceOnly=true` 로 플레이어 정면 4방향 중 바라보는 방향만 탐색.
+     *
+     * 사용처: `wouldWantClimb` 4-OR 의 3번째 분기 (원본 L2471) — 자동 사다리 진입.
+     * B-16a (세션 69).
+     */
+    public static boolean isFacedToLadder(ClientPlayerEntity player, boolean isSmall) {
+        World world = player.getWorld();
+        HandsClimbing[] h = {HandsClimbing.NONE};
+        FeetClimbing[]  f = {FeetClimbing.NONE};
+        ClimbGap[] hg = {new ClimbGap()};
+        ClimbGap[] fg = {new ClimbGap()};
+        boolean[]  hv = {false};
+        boolean[]  fv = {false};
+        getOnLadderOrVine(player, world, isSmall, true, h, f, hg, fg, hv, fv);
+        // 근사: ladder 전용 필터 불가능 → relevant 이면서 vine 아닌 경우만 ladder.
+        return (h[0].isRelevant() && !hv[0]) || (f[0].isRelevant() && !fv[0]);
+    }
+
+    /**
+     * 원본 SmartMovingBase L189-L192 `isFacedToSolidVine(boolean isSmall)`:
+     *   return getOnVine(1, true, isSmall) > 0;
+     *   where getOnVine(maxResult, faceOnly=true, isSmall) =
+     *     getOnLadderOrVine(maxResult, faceOnly=true, onlyLadder=false, onlyVine=true, isSmall)
+     *
+     * 1.21.1 `getOnLadderOrVine` L143-L144 에서 이미 "solid 블록 뒤 vine" 만 검출 → solidVine
+     * 조건 내장. `out_handsVine/out_feetVine=true` = solid vine 감지됨.
+     *
+     * 사용처: `wouldWantClimb` 4-OR 의 4번째 분기 (원본 L2472) — 자동 솔리드 덩굴 진입.
+     * B-16a (세션 69).
+     */
+    public static boolean isFacedToSolidVine(ClientPlayerEntity player, boolean isSmall) {
+        World world = player.getWorld();
+        HandsClimbing[] h = {HandsClimbing.NONE};
+        FeetClimbing[]  f = {FeetClimbing.NONE};
+        ClimbGap[] hg = {new ClimbGap()};
+        ClimbGap[] fg = {new ClimbGap()};
+        boolean[]  hv = {false};
+        boolean[]  fv = {false};
+        getOnLadderOrVine(player, world, isSmall, true, h, f, hg, fg, hv, fv);
+        return (h[0].isRelevant() && hv[0]) || (f[0].isRelevant() && fv[0]);
+    }
+
     // ── 1-7: getOnLadderOrVine ───────────────────────────────────────────
 
     /**
