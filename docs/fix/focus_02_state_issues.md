@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 56 — B Phase 2 계속 / B-43) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 23 원자 완료 / ⏳ **B Phase 2 잔여 ~17 원자** |
+| 상태 | 🟡 진행 중 (세션 57 — B Phase 2 계속 / B-14 + B-21) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 24 원자 완료 / ⏳ **B Phase 2 잔여 ~16 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -618,11 +618,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       원본 L418 `(isCrawling || isSliding)` 반영. 현재 `wasCrawling` 만 체크.
 
 #### B-14. `resetClimbing()` 메서드 신설 + handleClimbing 진입 시 호출 (A-3 발견)
-- [ ] B-14. 원본 L1474-L1486 `resetClimbing()` 이식 — `isClimbing` / `isHandsVineClimbing` /
-      `isFeetVineClimbing` / `isVineOnlyClimbing` / `isVineAnyClimbing` / `isClimbingStill` /
-      `isNeighborClimbing` / `actualHandsClimbType` / `actualFeetClimbType` /
-      `isCeilingClimbing` 10 필드 리셋. `SmartMovingClimber.handleClimbing` 진입 시 호출
-      (원본 L816). 이식된 필드만 먼저 리셋, 미이식 필드는 B-15 이후.
+- [x] B-14. ✅ **세션 57 완료** — 원본 L1474-L1486 `resetClimbing()` 이식.
+      **ClientState**: `resetClimbing()` public 메서드 신설 — 10 필드 리셋
+      (`isClimbing` / `isHandsVineClimbing` / `isFeetVineClimbing` / `isVineOnlyClimbing` /
+      `isVineAnyClimbing` / `isClimbingStill` / `isNeighborClimbing` /
+      `actualHandsClimbType = HandsClimbing.NO_GRAB` / `actualFeetClimbType = FeetClimbing.NO_STEP` /
+      `isCeilingClimbing`). **Climber.handleClimbing**: L238 진입부
+      (SmartMovingConfig cfg = ... 직후, exhaustion 체크 앞) 에 `sm.resetClimbing()` 호출 추가.
+      원본 L816 첫 문장 위치 1:1. `HandsClimbing`/`FeetClimbing` import 2건 추가.
+      **B-21 (isCeilingClimbing 해제 엣지) 자동 해소.** B-28 은 원본 L985 조건부
+      (wantClimbUp + handsClimbing.IsRelevant) 라 별도 원자 유지 (B-19 의존).
 
 #### B-15. 미이식 등반 필드 9건 ClientState 이식 (A-3 발견)
 - [x] B-15a. ✅ **세션 40 완료** — `isNeighborClimbing` 필드 추가 + resetState 리셋
@@ -670,7 +675,8 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (vanilla ladder 물리 위임). 1.21.1 은 Free 만 이식되어 있어 옵션 분기 전체 미이식.
 
 #### B-21. `isCeilingClimbing` 해제 엣지 이식 (A-3 발견)
-- [ ] B-21. 원본 L1485 resetClimbing 에서 false 설정. B-14 완료 후 자동 해결.
+- [x] B-21. ✅ **세션 57 완료 (B-14 로 자동 해소)** — 원본 L1485 resetClimbing 이 매 틱
+      `isCeilingClimbing = false` 리셋. B-14 의 resetClimbing() 이식으로 자동 해소.
 
 #### B-22. 미이식 필드 4건 이식 (A-4 발견)
 - [x] B-22a. ✅ **세션 38 완료** — `wasHeadJumping` 필드 추가 + resetState 리셋.
@@ -2352,6 +2358,53 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-14** (resetClimbing 신설) — 등반 필드 리셋 헬퍼. B-21/B-28 해소.
 - **B-16** (isClimbHolding/wantClimbHolding 3-OR 공식) — B-18 선행 블록.
 - **B-10d** (isLevitating 공식) — 간단한 4조건 AND — wasLevitating 완전 활성화.
+
+### 세션 57 — 2026-04-24 — B Phase 2 B-14 + B-21 (resetClimbing 이식)
+
+**진행한 작업**:
+- ClientState `resetClimbing()` public 메서드 신설 (toCrawling 바로 뒤 배치). 원본
+  SmartMovingSelf L1474-L1486 `private void resetClimbing()` 1:1 이식 — 10 필드 리셋:
+  * `isClimbing = false; isHandsVineClimbing = false; isFeetVineClimbing = false;`
+  * `isVineOnlyClimbing = false; isVineAnyClimbing = false; isClimbingStill = false;`
+  * `isNeighborClimbing = false; isCeilingClimbing = false;`
+  * `actualHandsClimbType = HandsClimbing.NO_GRAB;` (int 0)
+  * `actualFeetClimbType  = FeetClimbing.NO_STEP;`  (int 0)
+- SmartMovingClimber.handleClimbing L238 진입부 (`SmartMovingConfig cfg = ...` 직후,
+  exhaustion 체크 앞) 에 `sm.resetClimbing();` 호출 추가. 원본 L816 첫 문장 위치 1:1.
+  Standard/Simple/Smart/Free Base Climb 공통 리셋.
+- ClientState import 에 `choco.ratel.smartmoving.climbing.HandsClimbing` + `FeetClimbing` 2건
+  추가 (NO_GRAB/NO_STEP 상수 참조 위해).
+- **B-21 자동 해소**: 원본 L1485 `isCeilingClimbing = false` (resetClimbing 내부) 가
+  resetClimbing() 이식으로 자동 수행됨. 별도 해제 엣지 불필요.
+- **B-28 은 별도 유지**: 원본 L985 `isSliding = false` 는 `wantClimbUp && handsClimbing
+  .IsRelevant()` 조건부 (resetClimbing 내부 아님). B-19 Free Climb 분기 의존 — 별도 원자.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공 (1회 import 누락 수정 후).
+
+**완료 전 검증 체크리스트 (세션 57)**:
+- [근거] 원본 L1474-L1486 resetClimbing() 원문 확보 (research/.../SmartMovingSelf.md L993-L1008) ✓
+- [근거] R-12.3 handleClimbing 구조 + R-12.10 #1/#13 resetClimbing 미이식 확정 ✓
+- [대응] 10 필드 리셋 원본 1:1 — 필드명/값/순서 모두 동일 ✓
+- [분기] 없음 (단순 대입 10건)
+- [상수] `HandsClimbing.NO_GRAB = 0` / `FeetClimbing.NO_STEP = 0` 상수 B-15f 이전 이식 확인 ✓
+- [타이밍] Climber.handleClimbing 진입 직후 호출 — 원본 L816 위치 1:1 ✓
+- [근사] 없음 — 1:1 이식. 원본 enum `HandsClimbing.NoGrab` → 1.21.1 int `NO_GRAB` 표면 매핑만.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 둘 다 ✓. 등반 10 필드가 매 틱 무조건 리셋 →
+  B-15 세션 40 에서 이식한 필드들이 이전 틱 쓰레기 값 남기던 문제 해소.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing() 매 틱 호출 (B-14 세션 57)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 자동 해소 세션 57)
+- ⏳ #2~#12/#14 (B-16/B-17b2/B-18/B-19/B-20/B-28 등)
+
+**Phase 2 진행 상황**: 24 원자 완료 (B-14 + B-21) / 잔여 ~16
+
+**다음 작업 권고**:
+- **B-16** (wantClimbHolding/isClimbHolding 3-OR 공식) — 원본 L2721-L2732. B-18 선행.
+- **B-26** (isSliding 직접 진입 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처.
+- **B-38** (handleCeilingClimbing 진입 isCrawling=false) — 한 줄 추가 단순.
+- **B-34** (capabilities.flying 해제 점프) — tryJump 단순 호출.
 
 ---
 

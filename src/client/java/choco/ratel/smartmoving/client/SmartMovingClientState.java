@@ -1,5 +1,7 @@
 package choco.ratel.smartmoving.client;
 
+import choco.ratel.smartmoving.climbing.FeetClimbing;
+import choco.ratel.smartmoving.climbing.HandsClimbing;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
@@ -1474,6 +1476,41 @@ public final class SmartMovingClientState {
         if (cfg.isCrawlToggleEnabled()) crawlToggled = true;
         ignoreNextStopSneakButtonPressed = true;
         return true;
+    }
+
+    /**
+     * 원본 SmartMovingSelf L1474-L1486 `private void resetClimbing()`:
+     *   isClimbing = false;
+     *   isHandsVineClimbing = false;
+     *   isFeetVineClimbing = false;
+     *   isVineOnlyClimbing = false;
+     *   isVineAnyClimbing = false;
+     *   isClimbingStill = false;
+     *   isNeighborClimbing = false;
+     *   actualHandsClimbType = HandsClimbing.NoGrab;
+     *   actualFeetClimbType = FeetClimbing.NoStep;
+     *   isCeilingClimbing = false;
+     *
+     * 호출 지점 (원본): L816 handleClimbing() 진입 직후 매 틱 호출 (Free Climb 외에
+     * Standard/Simple/Smart Base Climb 공통). 1.21.1 에서는 SmartMovingClimber.handleClimbing
+     * 진입부에서 호출. 원본 10 필드 모두 이식 완료 (B-15 세션 40).
+     *
+     * B-21 (isCeilingClimbing 해제 엣지) 는 이 리셋으로 자동 해소.
+     * B-28 (handleClimbing 진입 isSliding=false) 는 원본 L985 에서 `wantClimbUp +
+     * handsClimbing.IsRelevant()` 조건부 — 별도 원자 (B-19 Free Climb 분기 의존).
+     * B-14 (세션 57).
+     */
+    public void resetClimbing() {
+        isClimbing           = false;
+        isHandsVineClimbing  = false;
+        isFeetVineClimbing   = false;
+        isVineOnlyClimbing   = false;
+        isVineAnyClimbing    = false;
+        isClimbingStill      = false;
+        isNeighborClimbing   = false;
+        actualHandsClimbType = HandsClimbing.NO_GRAB;
+        actualFeetClimbType  = FeetClimbing.NO_STEP;
+        isCeilingClimbing    = false;
     }
 
     /**

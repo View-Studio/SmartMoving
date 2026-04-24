@@ -236,6 +236,12 @@ public final class SmartMovingClimber {
     public static void handleClimbing(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
+        // B-14 (세션 57): 원본 L816 `resetClimbing()` 매 틱 리셋 이식.
+        // Standard/Simple/Smart/Free Base Climb 공통 — handleClimbing 진입 직후 무조건
+        // 10 등반 필드 false/0 리셋. 이후 분기에서 실제 값 재계산.
+        // B-21 (isCeilingClimbing 해제 엣지) 자동 해소.
+        sm.resetClimbing();
+
         // C-33: SM 독자 exhaustion 체크
         // 원본: exhaustionAllowsClimbing = !enabled || (exhaustion<=stop && (wasClimbing||exhaustion<=start))
         if (cfg.climbExhaustion) {
