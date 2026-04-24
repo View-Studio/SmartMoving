@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 77 — B Phase 2 계속 / B-36-pre) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 47 원자 완료 / ⏳ **B Phase 2 잔여 11 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-36/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 78 — B Phase 2 계속 / B-36) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 48 원자 완료 / ⏳ **B Phase 2 잔여 10 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-39/B-42/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -424,6 +424,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   처리하므로 실용 등가. `setOnlyShouldClimbSpeed` → `setShouldClimbSpeed` 교체로 isClimbing
   잉여 설정 해소 (포커스 #2 상태 플래그 정확성 개선). Simple/Smart Base Climb (L825-L894)
   전체 미이식은 별도 포커스 후보.
+- **B-36 근사** (세션 78): `ClientState.tickEssential` B-35 뒤 + R-09 앞에 grab.StartPressed
+  수영/크롤 3분기 (원본 L2839-L2862) 이식. 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0)
+  - minY` 이동량 — AABB 정밀 스캔 미이식 → `0` 근사 (발 아래 고체 가정) 로 `player.move`
+  호출 생략, `heightOffset = 0F` 리셋만 수행. 분기 (b)/(c) 는 1:1. B-10a isShallowDiveOrSwim
+  공식 미이식으로 분기 (a) 자체도 항상 false — 근사 영향 제한.
 
 ---
 
@@ -940,11 +945,19 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       MovementType/Vec3d import (세션 73).
 
 #### B-36. grab.StartPressed 수영/크롤 3분기 이식 (A-5 발견)
-- [ ] B-36. 원본 L2838-L2861 이식 — grab 엣지 3분기:
-      (a) isShallowDiveOrSwim + wouldWantClimb → walking 전환
-      (b) isDipping + wouldWantCrawl + depth>=BottomBorder + depth>=MediumBorder → 수영/다이빙 전환
-      (c) isDipping + wouldWantCrawl + depth>=BottomBorder + depth<MediumBorder → 얕은 물 크롤
-      의존: B-10a `isShallowDiveOrSwim` / B-10c `isStillSwimmingJump` + `wouldWantClimb` 선행.
+- [x] B-36. ✅ **세션 78 완료 (근사 이식)** — Agent WebFetch 로 원본 L2839-L2862 + 상수 4개
+      확보 (MediumBorder=0.6F / BottomBorder=0.55F). ClientState tickEssential B-35 분기 B
+      직후 + R-09 블록 앞에 원본 중괄호 없는 체이닝 구조를 중괄호로 명시화하여 이식:
+      (a) `isShallowDiveOrSwim && wouldWantClimb`: `heightOffset=0F` + `_jumpPressed3a →
+          isStillSwimmingJump=true`. `move(0, getMaxPlayerSolidBetween(...)-minY, 0)` 생략
+          (§7 B-36 근사 — AABB 정밀 스캔 미이식).
+      (b) `isDipping && wouldWantCrawl && depth>=0.55F && depth>=0.6F`: `heightOffset=-1F`
+          + `player.move(0, -1.6F+dippingDepth, 0)` + `isCrawling=false` 1:1.
+      (c) `isDipping && wouldWantCrawl && depth>=0.55F && depth<0.6F`: `heightOffset=-1F`
+          + `player.move(0, -1D, 0)` + `wasCrawling=toCrawling()` 1:1.
+      의존 전수 충족: B-36-pre wouldWantClimb/wouldWantCrawl (세션 77), B-10c
+      isStillSwimmingJump 필드, B-40 toCrawling(), B-46 grabJustPressed. B-10a
+      isShallowDiveOrSwim 공식 미이식 → (a) 분기 항상 비활성 (필드 false).
 - [x] **B-36-pre** ✅ **세션 77 완료** — B-36 본 원자 선행 의존 필드 2개 승격:
       `wouldWantClimb` / `wouldWantCrawl` ClientState public boolean 신설. B-16c 블록 지역
       `wouldWantClimb16` → `this.wouldWantClimb` 필드 할당. pre-compute 블록 지역
@@ -3555,6 +3568,73 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
 - **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사 필요.
 - **B-42** — "별도 포커스 후보" 공식 분리 문서 작업.
+
+### 세션 78 — 2026-04-24 — B Phase 2 B-36 본체 (grab.StartPressed 3분기)
+
+**진행한 작업**:
+- Agent WebFetch 로 원본 L2835-L2875 본문 + SmartMovingContext L35-L52 상수 4개 확보:
+  * 원본 L2839-L2862 구조 = `if / else if { if / else }` 중괄호 없는 체이닝.
+  * `SwimCrawlWaterMediumBorder = 0.6F` / `SwimCrawlWaterBottomBorder = 0.55F` 값 확정.
+- ClientState tickEssential B-35 분기 B 직후 (L1421) + R-09 블록 앞에 3분기 이식 (중괄호
+  명시화):
+  ```java
+  if (grabJustPressed) {
+      if (isShallowDiveOrSwim && wouldWantClimb) {
+          // (a) 얕은 물 swim/dive → walking
+          heightOffset = 0F;
+          if (_jumpPressed3a) isStillSwimmingJump = true;
+      } else if (isDipping && wouldWantCrawl && dippingDepth >= 0.55F) {
+          if (dippingDepth >= 0.6F) {
+              // (b) dipping → swim/dive
+              heightOffset = -1F;
+              player.move(SELF, new Vec3d(0, -1.6F + dippingDepth, 0));
+              isCrawling = false;
+          } else {
+              // (c) dipping → 얕은 물 crawl
+              heightOffset = -1F;
+              player.move(SELF, new Vec3d(0, -1D, 0));
+              wasCrawling = toCrawling();
+          }
+      }
+  }
+  ```
+- §7 **B-36 근사 등록**: 분기 (a) `getMaxPlayerSolidBetween(minY, maxY, 0) - minY` 이동량
+  — AABB 정밀 스캔 미이식 → `0` 근사, player.move 생략. B-10a isShallowDiveOrSwim 공식
+  미이식으로 분기 (a) 자체 항상 비활성 (필드 false).
+- 의존 전수 충족: B-36-pre (wouldWantClimb/wouldWantCrawl 세션 77) / B-10c isStillSwimmingJump
+  필드 / B-40 toCrawling() / B-46 grabJustPressed.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 78)**:
+- [근거] Agent WebFetch 로 원본 L2835-L2875 본문 확보 ✓
+- [근거] SmartMovingContext.java L35-L52 상수 4개 값 확인 ✓
+- [근거] R-14.10 #11 L2838-L2861 grab.StartPressed 3분기 [누락] §16 세션 35 ✓
+- [대응] 3분기 중첩 구조 중괄호 명시화 + 조건/본문 원본 1:1 (분기 (a) 이동량 제외) ✓
+- [분기] (a) / (b) dipping+MediumBorder 이상 / (c) dipping+MediumBorder 미만 3갈래 ✓
+- [상수] `0.55F` / `0.6F` / `-1.6F` / `-1D` 원본 동일 ✓
+- [타이밍] B-35 뒤 + R-09 앞 — 원본 L2839 가 L2822 (B-35) 뒤 L2864 (R-09 전) 와 동일 순서 ✓
+- [근사] 분기 (a) 이동량 근사 + §7 B-36 등록 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. grab 엣지 입력 시 물속 상태 전환 경로 복원.
+  (a) 분기는 B-10a isShallowDiveOrSwim 공식 이식 후 자동 활성 (현재 항상 false). (b)/(c)
+  분기는 dipping + wouldWantCrawl + depth 조건 만족 시 즉시 발동 가능.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #4 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #7 wall 오르기 crawl 진입 (B-37 세션 62)
+- ✅ #8 handleCeilingClimbing isCrawling=false (B-38 세션 58)
+- ✅ #10/#11 전환 후처리 (B-35 세션 74) + grab.StartPressed 3분기 (B-36 세션 78)
+- ✅ #12 wantCrawlNotClimb (B-41 세션 70)
+- ⏳ #1~#3/#5/#6/#9/#13~#15
+
+**Phase 2 진행 상황**: 48 원자 완료 / 잔여 10 원자
+
+**다음 작업 권고**:
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존.
+- **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사 필요.
+- **B-42** — "별도 포커스 후보" 공식 분리 문서 작업.
+- **B-44b** (wasCrawling 저장 시점 이동) — B-33 함께 조정 예정이나 단독 문서 정리 가능.
 
 ---
 

@@ -1420,6 +1420,42 @@ public final class SmartMovingClientState {
                 if (initializeCrawling) toCrawling();
             }
 
+            // B-36 (세션 78): 원본 L2839-L2862 `grab.StartPressed` 수영/크롤 전환 3분기 이식.
+            // 원본 구조 (중괄호 없는 체이닝 → 1.21.1 에서 중괄호 명시):
+            //   if (grabButton.StartPressed)
+            //     if (isShallowDiveOrSwim && wouldWantClimb) { (a) 얕은 물 swim/dive → walking }
+            //     else if (isDipping && wouldWantCrawl && dippingDepth >= 0.55F)
+            //       if (dippingDepth >= 0.6F) { (b) dipping → swimming/diving }
+            //       else { (c) dipping → 얕은 물 crawl }
+            // 상수 (원본 SmartMovingContext L43-L44): MediumBorder=0.6F / BottomBorder=0.55F.
+            // 의존: B-10a isShallowDiveOrSwim 필드 (공식 미이식 → 항상 false → (a) 비활성),
+            //       B-36-pre wouldWantClimb/wouldWantCrawl 필드 (세션 77), B-10c isStillSwimmingJump
+            //       필드, B-40 toCrawling(), B-46 grabJustPressed.
+            // ※ 근사 이식 (§7 B-36 근사): 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0)
+            //   - minY` 이동량 — AABB 정밀 스캔 미이식 → `0` 근사 (발 아래 고체 가정) →
+            //   `player.move` 생략 + `heightOffset = 0F` 만 수행.
+            if (grabJustPressed) {
+                if (isShallowDiveOrSwim && wouldWantClimb) {
+                    // (a) 얕은 물 swim/dive → walking 전환 (원본 L2841-L2847)
+                    heightOffset = 0F;  // resetHeightOffset 근사
+                    // player.move(0, getMaxPlayerSolidBetween(...) - minY, 0) 생략 (§7 B-36 근사)
+                    if (_jumpPressed3a) isStillSwimmingJump = true;
+                } else if (isDipping && wouldWantCrawl && dippingDepth >= 0.55F) {
+                    if (dippingDepth >= 0.6F) {
+                        // (b) dipping → swimming/diving 전환 (원본 L2850-L2855)
+                        heightOffset = -1F;
+                        player.move(MovementType.SELF,
+                                new Vec3d(0, -1.6F + dippingDepth, 0));
+                        isCrawling = false;
+                    } else {
+                        // (c) dipping → 얕은 물 crawl 전환 (원본 L2856-L2862)
+                        heightOffset = -1F;
+                        player.move(MovementType.SELF, new Vec3d(0, -1D, 0));
+                        wasCrawling = toCrawling();
+                    }
+                }
+            }
+
             // ── 원본 R-09 스닉/크롤 토글 블록 (SmartMovingSelf L2966-L3045) 1:1 이식 ────
             // isSlow/isCrawling/isClimbCrawling 이 이 시점에 확정되어 있어야 함 (위에서 계산됨).
             // wasSneaking/wasCrawling/wasClimbCrawling 는 else 블록 진입부에서 저장됨.
