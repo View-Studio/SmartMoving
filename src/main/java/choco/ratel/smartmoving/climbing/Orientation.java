@@ -1900,4 +1900,103 @@ public class Orientation {
             && orientation.hasVineOrientation(world, i, local_offset + j_offset, k)
             && orientation.getHorizontalBorderGap() >= 0.65F;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2a3 (세션 101) — half-solid 판정 (isLowerHalfFrontFullEmpty +
+    //                       isUpperHalfFrontAnySolid + isUpperHalfFrontFullSolid)
+    // 원본: Orientation.java L2065-L2115 + L2117-L2125 + L2127-L2153.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L2065-L2115 `isLowerHalfFrontFullEmpty(int i, int j_offset, int k)` — 해당 위치의
+     * lower half (Y~Y+0.5) 가 이 Orientation 방향 전방에서 비어있는지.
+     *
+     * 원본 분기 순서 (empty OR 누적, LadderKit 만 empty=false 복귀):
+     *   (1) `isFullEmpty(block)` — 블록 전체 빈 공간
+     *   (2) [§7 근사 생략] RedPower wire
+     *   (3) [§7 근사 생략] BetterThanWolves anchor (metadata==0)
+     *   (4) `isStairCompact && isTopStairCompactFront` — top stair front (아래 빔)
+     *   (5) `isHalfBlock && SlabType == TOP` (원본 `isHalfBlockTopMetaData`)
+     *   (6) wallBlock + !headedToFrontWall — wall 통과 가능
+     *   (7) door + !rotate(180).isDoorFrontBlocked — door 열림
+     *   (8) [§7 근사 생략] ASRope + !rotate(180).isASGrapplingHookFront
+     *   (9) [§7 근사 생략] LadderKit + rotate(180).hasLadderOrientation → empty=false 복귀
+     *
+     * **§7 근사** (B-19a2a3-approx-1): RedPower + BetterThanWolves + ASRope + LadderKit 4
+     * mod 분기 생략. vanilla ladder 는 `isFullEmpty` 에서 non-empty 처리됨.
+     */
+    protected boolean isLowerHalfFrontFullEmpty(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        boolean empty = isFullEmpty(i, j_offset, k);
+
+        // 근사 이식 — 원본과 차이: RedPower wire 분기 (원본 L2070-L2078) 생략
+        // 근사 이식 — 원본과 차이: BetterThanWolves anchor 분기 (원본 L2080-L2086) 생략
+
+        if (!empty && isStairCompact(state) && isTopStairCompactFront(state))
+            empty = true;
+
+        if (!empty && isTopHalfBlock(state))
+            empty = true;
+
+        if (!empty && isWallBlock(state)
+                && !headedToFrontWall(i, j_offset, k, state))
+            empty = true;
+
+        if (!empty && isDoor(state)
+                && !rotate(180).isDoorFrontBlocked(i, j_offset, k))
+            empty = true;
+
+        // 근사 이식 — 원본과 차이: ASRope 분기 (원본 L2104-L2108) 생략
+        // 근사 이식 — 원본과 차이: LadderKit 분기 (원본 L2110-L2112) 생략 —
+        // vanilla ladder 는 `isLadderOrVine` 에 포함되어 `isFullEmpty` 에서 non-empty 처리됨.
+
+        return empty;
+    }
+
+    /**
+     * 원본 L2117-L2125 `isUpperHalfFrontAnySolid(int i, int j_offset, int k)` —
+     * upper half 가 solid 이나, wall block 이고 이 Orientation 방향으로 연결 안 된 경우
+     * (headedToFrontWall false) solid=false 로 감쇠.
+     */
+    protected boolean isUpperHalfFrontAnySolid(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        boolean solid = isUpperHalfFrontFullSolid(i, j_offset, k);
+        if (solid && isWallBlock(state)
+                && !headedToFrontWall(i, j_offset, k, state))
+            solid = false;
+        return solid;
+    }
+
+    /**
+     * 원본 L2127-L2153 `isUpperHalfFrontFullSolid(int i, int j_offset, int k)` —
+     * `isSolid(material)` 기본 + 얇은/관통 블록 예외.
+     *
+     *   (1) null → false
+     *   (2) `isSolid` 기본
+     *   (3) standing_sign / wall_sign / pressurePlate / trapDoor → solid=false
+     *   (4) [§7 근사 생략] ASGrapplingHook → solid=false
+     *   (5) openFenceGate → solid=false
+     *   (6) [§7 근사 생략] Carpenters `_blockCarpentersLadder` → solid=false
+     *
+     * **§7 근사** (B-19a2a3-approx-2): ASGrapplingHook / Carpenters mod 1.21.1 미이식 생략.
+     */
+    protected static boolean isUpperHalfFrontFullSolid(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        if (state == null) return false;
+
+        BlockPos pos = new BlockPos(i, local_offset + j_offset, k);
+        boolean solid = isSolid(state, world, pos);
+
+        if (solid) {
+            Block block = state.getBlock();
+            if (block instanceof AbstractSignBlock) solid = false;   // standing_sign + wall_sign 통합
+            else if (block instanceof WallSignBlock) solid = false;  // 중복 안전
+            else if (block instanceof PressurePlateBlock) solid = false;
+            else if (isTrapDoor(state)) solid = false;
+            // 근사 이식 — 원본과 차이: ASGrapplingHook 분기 (원본 L2143-L2145) 생략
+            else if (isOpenFenceGate(state)) solid = false;
+            // 근사 이식 — 원본과 차이: Carpenters _blockCarpentersLadder 분기 (원본 L2149-L2151) 생략
+        }
+        return solid;
+    }
 }

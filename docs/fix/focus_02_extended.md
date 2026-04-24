@@ -153,8 +153,9 @@ Orientation 판정 + ClimbGap 계산.
       - [x] **B-19a2a2** (세션 100 완료): vine 보조 — `baseVineClimbing` 2 오버로드 +
             `remoteVineClimbing` 2 오버로드. 근사 없음 (hasVineOrientation + isVine +
             getHorizontalBorderGap 의존 전수 충족).
-      - [ ] **B-19a2a3**: half-solid 판정 — `isLowerHalfFrontFullEmpty` +
-            `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`.
+      - [x] **B-19a2a3** (세션 101 완료): half-solid 판정 — `isLowerHalfFrontFullEmpty` +
+            `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`. §7 근사 2건 (RedPower /
+            BetterThanWolves / ASRope / LadderKit 생략 + ASGrapplingHook / Carpenters 생략).
       - [ ] **B-19a2a4**: 잔여 보조 — `isOnMiddleLadderFront` + `isHeadedToRope` (mod 근사
             false) + `getTriple` 등.
       - [ ] **B-19a2b**: grab 상태 세팅 — `setHalfGrabType` 3 오버로드 +
@@ -448,6 +449,60 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 101 — 2026-04-24 — B-19a2a3 half-solid 판정 (isLowerHalfFrontFullEmpty + isUpperHalfFrontAnySolid + isUpperHalfFrontFullSolid)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2065-L2153 read** — 3 메서드 + 의존 확인.
+2. **3 메서드 이식**:
+   * `isLowerHalfFrontFullEmpty(i, j_offset, k)` (원본 L2065-L2115):
+     6 vanilla 분기 OR + 4 mod 근사 생략. isFullEmpty / stair top front / slab TOP /
+     wall 관통 / door 열림 (vanilla) + RedPower / BetterThanWolves / ASRope / LadderKit
+     (근사 생략).
+   * `isUpperHalfFrontAnySolid(i, j_offset, k)` (원본 L2117-L2125):
+     `isUpperHalfFrontFullSolid` 기본 + wall 블록 + !headedToFrontWall 시 solid=false 감쇠.
+   * `isUpperHalfFrontFullSolid(i, j_offset, k)` static (원본 L2127-L2153):
+     `isSolid` 기본 + 5 vanilla 제외 (sign/wall_sign/pressurePlate/trapDoor/openFenceGate)
+     + 2 mod 근사 (ASGrapplingHook / Carpenters).
+3. **의존 전수 충족**:
+   * B-19a1a: isFullEmpty (좌표 오버로드) / isSolid / getBlock / world
+   * B-19a1b: isTrapDoor
+   * B-19a1c1: isStairCompact / isTopStairCompactFront / isTopHalfBlock /
+     isWallBlock / isDoor / isOpenFenceGate / AbstractSignBlock / WallSignBlock /
+     PressurePlateBlock
+   * B-19a1c3a: isDoorFrontBlocked
+   * B-19a1c3c: headedToFrontWall
+   * B-19a0: rotate
+4. **본체 §7 B-19a2a3 근사 2건 등록**.
+
+**완료 전 검증 체크리스트 (세션 101 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L2065-L2153 전수 read ✓
+- [근거] 의존 메서드 (세션 90-100 이식 전수) 충족 ✓
+- [대응] 3 메서드 원본 ↔ 1.21.1 side-by-side. `isLowerHalfFrontFullEmpty` 6 vanilla 분기 +
+  4 mod 근사 / `isUpperHalfFrontAnySolid` 2 갈래 / `isUpperHalfFrontFullSolid` 5 vanilla
+  제외 + 2 mod 근사 ✓
+- [분기] `isLowerHalfFrontFullEmpty` 9 분기 (vanilla 6 + mod 3 + LadderKit 복귀 1)
+  전수 식별. `isUpperHalfFrontFullSolid` 7 분기 (base + 5 vanilla 제외 + 2 mod) ✓
+- [상수] 없음 (class/property 기반 식별) ✓
+- [타이밍] 순수 BlockState 조회 — 호출 타이밍 무관 ✓
+- [근사] **§7 B-19a2a3 근사 2건 등록 완료**. 각 생략 지점에 "근사 이식 — 원본과 차이: X"
+  주석 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용. B-19a2c/d (hasHalfHold/hasBottomHold) 가 이 헬퍼를 소비 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a2a4** — 잔여 보조 (`isOnMiddleLadderFront` + `isHeadedToRope`
+mod 근사 false + `getTriple` 등). 원본 L1386+ 와 추가 위치 grep 필요. `isOnMiddleLadderFront`
+위치도 확인 요.
+
+**진행률** (세션 101 종료 시점):
+- Extended 완료: **12 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / **a2a3**)
+- Extended 총 원자 ~61 (세션 99 재분해 후)
+- **Extended 진행률: 12/61 ≈ 20%**
+- **포커스 #2 전체: (54+12)/115 ≈ 57%**
 
 ### 세션 100 — 2026-04-24 — B-19a2a2 vine 보조 (baseVineClimbing + remoteVineClimbing 2 오버로드씩)
 

@@ -440,6 +440,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a2a3 근사 2건** (세션 101): `Orientation` half-solid 판정 (`isLowerHalfFrontFullEmpty`,
+  `isUpperHalfFrontAnySolid`, `isUpperHalfFrontFullSolid`) 이식 시 mod 호환 분기 생략:
+  (1) `isLowerHalfFrontFullEmpty` — RedPower wire + BetterThanWolves anchor + ASRope +
+  LadderKit 4 mod 분기 생략. vanilla ladder 는 `isFullEmpty` 에서 non-empty 처리로 LadderKit
+  분기 없어도 기본 동작 보존.
+  (2) `isUpperHalfFrontFullSolid` — ASGrapplingHook + Carpenters `_blockCarpentersLadder`
+  분기 생략. vanilla 제외 처리 (AbstractSignBlock / WallSignBlock / PressurePlateBlock /
+  TrapdoorBlock / FenceGateBlock.OPEN) 는 1:1 이식.
 - **B-19a1c4 근사 3건** (세션 98): `Orientation` accessibility 최종 서브 (`isFullAccessible`,
   `isFullExtentAccessible`, `isJustLowerHalfExtentAccessible`, `isUpperHalfFrontEmpty`,
   `getWallBlockId`) 이식 시 mod 호환 분기 생략:
