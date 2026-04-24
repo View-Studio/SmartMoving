@@ -440,6 +440,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1b 근사 2건** (세션 92): `Orientation` front/back/rope/trapdoor 헬퍼 이식 시
+  모드 호환성 관련 원본 분기 생략:
+  (1) `hasLadderOrientation` / `getKnownLadderOrientation` — 원본 `_ladderKitLadderTypes`
+  (LadderKit 모드) + `carpentersBlockData` (Carpenters 모드) 분기 생략. vanilla ladder
+  `LadderBlock.FACING` Direction 직접 비교만 이식. metadata & 0x7 매핑 (5→NZ/4→PZ/2→ZP/3→ZN)
+  은 Direction.EAST/WEST/NORTH/SOUTH 와 1:1 대응 — vanilla 측 로직 손실 없음.
+  (2) `isRope(j_offset)` / `isOnWallRope(j_offset)` — BetterThanWolves `fcRopeBlock` /
+  RopesPlus `blockRopeCentral` / ASRope `blockRope` 모드 블록 체크. 해당 모드 1.21.1 에
+  미이식 → **전체 false 반환**. `isLadderSubstitute` (B-19a2 이식 예정) 에서 rope 경로가
+  모두 사라져 gap 판정 결과 영향 있음. vanilla ladder/vine 기반 기능은 정상 동작.
 - **B-19a1a 근사 4건** (세션 91): `choco.ratel.smartmoving.climbing.Orientation` 에 기본
   블록 식별 + Material 헬퍼 이식 시 1.21.1 API 제약으로 불가피한 근사 등록:
   (1) `isLadderOrVine(state)` — 원본 `isBlockIdOfType(block, _ladderKitLadderTypes)` 추가

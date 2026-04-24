@@ -12,6 +12,7 @@ import net.minecraft.block.WallSignBlock;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 
 import java.util.HashSet;
@@ -595,5 +596,219 @@ public class Orientation {
      */
     protected static boolean isOnLadderOrVine(int j_offset) {
         return isLadderOrVine(getBaseBlockId(j_offset)) || isVine(grabBlock);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1b (세션 92) — front/back/rope/trapdoor 인스턴스 헬퍼
+    // 원본: Orientation.java L1160-L1180 (Behind), L1217-L1238 (Front/Back instance),
+    //       L1274-L1359 (orientation 역매핑), L1361-L1384 (Remote/TrapDoor orientation),
+    //       L1443-L1485 (Rope), L1513-L1541 (TrapDoor front)
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Ladder orientation 역매핑 (원본 L1274-L1359) ────────────────────────
+
+    /**
+     * 원본 L1325-L1359 `hasLadderOrientation(int i, int j_offset, int k)` — 이 Orientation
+     * 에서 (i, j_offset, k) 위치의 ladder 가 **이 방향으로 접근 가능한지** 판정.
+     *
+     * 원본 매핑 (vanilla 1.7.10 ladder `metadata & 0x7`):
+     *   5 → NZ (EAST facing → 서쪽 접근)
+     *   4 → PZ (WEST facing → 동쪽 접근)
+     *   2 → ZP (NORTH facing → 남쪽 접근)
+     *   3 → ZN (SOUTH facing → 북쪽 접근)
+     *
+     * 1.21.1 매핑: `state.get(LadderBlock.FACING)` Direction 직접 비교. facing 방향의
+     * 반대쪽 = 플레이어 탐색 방향.
+     *
+     * **§7 근사** (B-19a1b-approx-1): 원본 `_ladderKitLadderTypes` 분기 + `carpentersBlockData`
+     * 분기 생략 (LadderKit / Carpenters 모드 미이식).
+     */
+    private boolean hasLadderOrientation(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        if (!isLadder(state)) return false;
+        Direction facing = state.get(LadderBlock.FACING);
+        if (this == NZ) return facing == Direction.EAST;
+        if (this == PZ) return facing == Direction.WEST;
+        if (this == ZP) return facing == Direction.NORTH;
+        if (this == ZN) return facing == Direction.SOUTH;
+        return false;
+    }
+
+    /**
+     * 원본 L1311-L1323 `hasVineOrientation(World world, int i, int j, int k)` — (i, j, k)
+     * 위치의 vine 이 이 Orientation 방향으로 붙어있는지.
+     *
+     * 원본 매핑 (vanilla 1.7.10 vine `metadata` 비트):
+     *   bit 0 (0x1) = SOUTH → ZP
+     *   bit 1 (0x2) = WEST  → NZ
+     *   bit 2 (0x4) = NORTH → ZN
+     *   bit 3 (0x8) = EAST  → PZ
+     *
+     * 1.21.1 매핑: `VineBlock.NORTH/SOUTH/EAST/WEST` BooleanProperty 직접 조회.
+     *
+     * **인스턴스 메서드** + `world` 파라미터 (static state 의존 없음) — static context
+     * 밖에서도 호출 가능.
+     */
+    public boolean hasVineOrientation(World world, int i, int j, int k) {
+        BlockState state = world.getBlockState(new BlockPos(i, j, k));
+        if (!isVine(state)) return false;
+        if (this == NZ) return state.get(VineBlock.WEST);
+        if (this == PZ) return state.get(VineBlock.EAST);
+        if (this == ZP) return state.get(VineBlock.SOUTH);
+        if (this == ZN) return state.get(VineBlock.NORTH);
+        return false;
+    }
+
+    /**
+     * 원본 L1274-L1309 `getKnownLadderOrientation(World world, int i, int j, int k)` —
+     * (i, j, k) 의 ladder facing 방향을 Orientation 으로 역매핑.
+     *
+     * 원본 `metadata & 0x7` 매핑은 `hasLadderOrientation` 과 동일. 1.21.1 `LadderBlock.FACING`
+     * 직접 사용.
+     *
+     * **§7 근사** (B-19a1b-approx-1): `_ladderKitLadderTypes` (`metadata & 0x3`) 분기 생략.
+     * 순수 vanilla ladder 만 역매핑.
+     */
+    public static Orientation getKnownLadderOrientation(World world, int i, int j, int k) {
+        BlockState state = world.getBlockState(new BlockPos(i, j, k));
+        if (!isLadder(state)) return null;
+        Direction facing = state.get(LadderBlock.FACING);
+        switch (facing) {
+            case EAST:  return NZ;
+            case WEST:  return PZ;
+            case NORTH: return ZP;
+            case SOUTH: return ZN;
+            default:    return null;
+        }
+    }
+
+    // ── Ladder/Vine front/back + Behind (원본 L1160-L1180, L1217-L1238) ────
+
+    /** 원본 L1217-L1220 — base 위치 ladder 가 이 방향으로 정면인지. */
+    protected boolean isOnLadderFront(int j_offset) {
+        return hasLadderOrientation(base_i, j_offset, base_k);
+    }
+
+    /**
+     * 원본 L1222-L1226 — remote 위치 ladder 가 이 방향의 **반대** 방향 (rotate(180)) 기준
+     * 정면인지. 즉 "반대편에서 잡을 수 있는 ladder" 판정.
+     */
+    protected boolean isOnLadderBack(int j_offset) {
+        return rotate(180).hasLadderOrientation(remote_i, j_offset, remote_k);
+    }
+
+    /** 원본 L1228-L1232 — base 위치 vine 이 이 방향으로 붙어있는지. */
+    protected boolean isOnVineFront(int j_offset) {
+        return hasVineOrientation(world, base_i, local_offset + j_offset, base_k);
+    }
+
+    /** 원본 L1234-L1238 — remote 위치 vine 이 반대 방향에서 붙어있는지. */
+    protected boolean isOnVineBack(int j_offset) {
+        return rotate(180).hasVineOrientation(world, remote_i, local_offset + j_offset, remote_k);
+    }
+
+    /** 원본 L1160-L1170 — remote 위치에 ladder 가 있는지 (뒤쪽 ladder 탐색용). */
+    protected static boolean isBehindLadder(int j_offset) {
+        BlockState state = getRemoteBlockId(j_offset);
+        if (isLadder(state)) return true;
+        if (isVine(state))   return false;
+        if (isClimbable(world, remote_i, local_offset + j_offset, remote_k)) return true;
+        return false;
+    }
+
+    /** 원본 L1177-L1180 — remote 위치에 vine 이 있는지. */
+    protected static boolean isBehindVine(int j_offset) {
+        return isVine(getRemoteBlockId(j_offset));
+    }
+
+    // ── Rope / WallRope — §7 B-19a1b-approx-2 전체 false 근사 ──────────────
+
+    /**
+     * 원본 L1443-L1446 `isRope(int j_offset)` — `fcRopeBlock` (BetterThanWolves) /
+     * `blockRopeCentral` (RopesPlus) 모드 블록 체크.
+     *
+     * **§7 근사 이식** (B-19a1b-approx-2): 해당 모드 1.21.1 에 미이식 → 전체 false.
+     */
+    protected static boolean isRope(int j_offset) {
+        // 근사 이식 — 원본과 차이: BetterThanWolves/RopesPlus 모드 블록 미이식
+        return false;
+    }
+
+    /**
+     * 원본 L1470-L1475 `isOnWallRope(int j_offset)` — `blockRope` (ASRope) 벽타기 로프 블록.
+     *
+     * **§7 근사 이식** (B-19a1b-approx-2): ASRope 모드 1.21.1 에 미이식 → 전체 false.
+     */
+    protected static boolean isOnWallRope(int j_offset) {
+        // 근사 이식 — 원본과 차이: ASRope 모드 블록 미이식
+        return false;
+    }
+
+    // ── TrapDoor (원본 L1367-L1384, L1513-L1541) ───────────────────────────
+
+    /**
+     * 원본 L1513-L1517 `isOnOpenTrapDoor(int j_offset)` — base 위치에 열린 trap door 존재.
+     */
+    protected static boolean isOnOpenTrapDoor(int j_offset) {
+        BlockState state = getBaseBlockId(j_offset);
+        return isTrapDoor(state) && !isClosedTrapDoor(state);
+    }
+
+    /**
+     * 원본 L1519-L1541 `isTrapDoorFront(int trapDoorMetadata)` — trap door facing 이 이
+     * Orientation 방향과 매치하는지.
+     *
+     * 원본 metadata 매핑 (vanilla 1.7.10 `metadata & 3`):
+     *   0 = SOUTH, 1 = NORTH, 2 = EAST, 3 = WEST
+     *
+     * orthogonal: 단일 방향 매치. diagonal: 2개 중 어느 하나 매치.
+     *
+     * 1.21.1 매핑: `TrapdoorBlock.FACING` Direction 직접 비교. 원본은 int metadata 받으나
+     * 1.21.1 은 BlockState 객체 내장이라 BlockState 파라미터로 수정 (표면 매핑).
+     */
+    private boolean isTrapDoorFront(BlockState state) {
+        if (!isTrapDoor(state)) return false;
+        Direction facing = state.get(TrapdoorBlock.FACING);
+        if (this == NZ) return facing == Direction.WEST;
+        if (this == PZ) return facing == Direction.EAST;
+        if (this == ZP) return facing == Direction.SOUTH;
+        if (this == ZN) return facing == Direction.NORTH;
+        if (this == PN) return facing == Direction.EAST || facing == Direction.NORTH;
+        if (this == PP) return facing == Direction.EAST || facing == Direction.SOUTH;
+        if (this == NN) return facing == Direction.WEST || facing == Direction.NORTH;
+        if (this == NP) return facing == Direction.WEST || facing == Direction.SOUTH;
+        return false;
+    }
+
+    /**
+     * 원본 L1366-L1384 `getOpenTrapDoorOrientation(World world, int i, int j, int k)` —
+     * 열린 trap door 의 facing 방향을 Orientation 으로 역매핑.
+     *
+     * 원본 매핑:
+     *   0 (SOUTH) → ZP, 1 (NORTH) → ZN, 2 (EAST) → PZ, 3 (WEST) → NZ
+     */
+    public static Orientation getOpenTrapDoorOrientation(World world, int i, int j, int k) {
+        BlockState state = world.getBlockState(new BlockPos(i, j, k));
+        if (!isTrapDoor(state) || isClosedTrapDoor(state)) return null;
+        Direction facing = state.get(TrapdoorBlock.FACING);
+        switch (facing) {
+            case SOUTH: return ZP;
+            case NORTH: return ZN;
+            case EAST:  return PZ;
+            case WEST:  return NZ;
+            default:    return null;
+        }
+    }
+
+    /**
+     * 원본 L1361-L1364 `isRemoteSolid(World world, int i, int j, int k)` — (i+_i, j, k+_k)
+     * 위치 블록이 solid 인지 (이 방향 인접 블록).
+     *
+     * Material API 제거 근사 (B-19a1a-approx-3 연동 — `isSolidBlock`).
+     */
+    public boolean isRemoteSolid(World world, int i, int j, int k) {
+        BlockPos pos = new BlockPos(i + _i, j, k + _k);
+        BlockState state = world.getBlockState(pos);
+        return isSolid(state, world, pos);
     }
 }

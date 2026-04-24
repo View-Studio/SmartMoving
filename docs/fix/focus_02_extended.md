@@ -100,10 +100,12 @@ Orientation 판정 + ClimbGap 계산.
             2 (`isSolid`/`isFullEmpty`) + World 접근 3 (`getBlock`/`getBaseBlockId`/
             `getRemoteBlockId`) + 기본 3 ladder/vine 체크 (`isOnLadder`/`isOnVine`/
             `isOnLadderOrVine`). §7 근사 4-5 등록.
-      - [ ] **B-19a1b**: front/back/rope/trapdoor 인스턴스 헬퍼 — `isOnLadderFront` /
-            `isOnLadderBack` / `isOnVineFront` / `isOnVineBack` / `hasLadderOrientation` /
-            `hasVineOrientation` / `isRope` / `isOnWallRope` / `isOnOpenTrapDoor` /
-            `isTrapDoorFront` 등.
+      - [x] **B-19a1b** (세션 92 완료): front/back/rope/trapdoor 인스턴스 헬퍼 — ladder
+            orientation 역매핑 3 (`hasLadderOrientation`/`hasVineOrientation`/
+            `getKnownLadderOrientation`) + front/back/behind 6 (`isOnLadderFront`/`Back` /
+            `isOnVineFront`/`Back` / `isBehindLadder`/`Vine`) + rope 2 (전체 false 근사) +
+            trap door 4 (`isOnOpenTrapDoor`/`isTrapDoorFront`/`getOpenTrapDoorOrientation`/
+            `isRemoteSolid`). §7 B-19a1b 근사 2건 등록 (LadderKit/Carpenters 모드 + rope 3종).
       - [ ] **B-19a1c**: accessibility 판정 — `isBaseAccessible` 2 오버로드 / `isFullAccessible` /
             `isFullExtentAccessible` / `isJustLowerHalfExtentAccessible` /
             `isUpperHalfFrontEmpty`.
@@ -396,6 +398,65 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 92 — 2026-04-24 — B-19a1b `Orientation` front/back/rope/trapdoor 헬퍼 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지 (세션 90 프롬프트 재사용).
+
+**진행한 작업**:
+1. **원본 확보 추가 read** — `.tmp_research/Orientation.java.md` L1160-L1180 + L1217-L1238
+   + L1274-L1309 + L1311-L1359 + L1361-L1384 + L1443-L1485 + L1513-L1541 대역.
+2. **핵심 인사이트** — ladder/vine/trapdoor metadata 원본 매핑을 1.21.1 Direction property
+   로 1:1 변환:
+   * ladder `metadata & 0x7`: 5→NZ / 4→PZ / 2→ZP / 3→ZN = LadderBlock.FACING
+     EAST/WEST/NORTH/SOUTH ↔ Orientation 반대측 접근 방향
+   * vine metadata 비트: 0x1→ZP / 0x2→NZ / 0x4→ZN / 0x8→PZ = VineBlock.SOUTH/WEST/NORTH/EAST
+   * trapdoor `metadata & 3`: 0→ZP / 1→ZN / 2→PZ / 3→NZ = TrapdoorBlock.FACING
+     SOUTH/NORTH/EAST/WEST
+3. **Direction import 추가**.
+4. **14 메서드 이식** (원본 1:1, 근사 표기):
+   * `hasLadderOrientation(i, j_offset, k)` (instance) — LadderBlock.FACING 4 분기
+   * `hasVineOrientation(world, i, j, k)` (instance, world 파라미터) — VineBlock 비트 4 분기
+   * `getKnownLadderOrientation(world, i, j, k)` (static) — Direction → Orientation 역매핑
+   * `isOnLadderFront` / `isOnLadderBack` / `isOnVineFront` / `isOnVineBack` (instance) —
+     base/remote + rotate(180) 조합
+   * `isBehindLadder` / `isBehindVine` (static) — remote 위치 ladder/vine 체크
+   * `isRope(j_offset)` / `isOnWallRope(j_offset)` — **전체 false 근사** (§7 B-19a1b-approx-2)
+   * `isOnOpenTrapDoor(j_offset)` — base trap door + !closed
+   * `isTrapDoorFront(state)` (instance) — 8 Orientation × Direction 매핑 (orthogonal 4 +
+     diagonal 4 조합 OR)
+   * `getOpenTrapDoorOrientation(world, i, j, k)` (static) — Direction → Orientation 역매핑
+   * `isRemoteSolid(world, i, j, k)` — `(i+_i, j, k+_k)` 위치 solid 체크
+5. **본체 §7 B-19a1b 근사 2건 등록**:
+   (1) LadderKit/Carpenters 모드 분기 생략 (`_ladderKitLadderTypes`/`carpentersBlockData`)
+   (2) isRope/isOnWallRope — BetterThanWolves/RopesPlus/ASRope 모드 블록 전체 false
+
+**완료 전 검증 체크리스트 (세션 92 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1160-L1541 대역 전수 read ✓
+- [근거] vanilla 1.7.10 ladder/vine/trapdoor metadata 비트 매핑 → 1.21.1 Direction
+  property 매핑 각 상수 별 1:1 검증 (EAST.getOpposite()=WEST=NZ 등) ✓
+- [대응] 14 메서드 원본 ↔ 1.21.1 side-by-side. orthogonal 4 + diagonal 4 trap door
+  front 매핑 + orthogonal 4 ladder/vine 매핑 전수 ✓
+- [분기] `hasLadderOrientation` 4 분기 (NZ/PZ/ZP/ZN) + `hasVineOrientation` 4 분기 +
+  `isTrapDoorFront` 8 분기 (4 orthogonal + 4 diagonal) + `getKnownLadderOrientation` /
+  `getOpenTrapDoorOrientation` Direction switch 4 + `isBehindLadder` 3갈래 원본 전수 ✓
+- [상수] LadderBlock.FACING / VineBlock.NORTH/SOUTH/EAST/WEST / TrapdoorBlock.FACING/OPEN
+  property 타입 정합 (BooleanProperty / EnumProperty<Direction>) ✓
+- [타이밍] 메서드 호출 시점은 `initialize(world, ...)` 의 상태 필드 설정 이후 — B-19a2/a4
+  에서 정확한 호출 순서 구성 예정 ✓
+- [근사] **§7 B-19a1b 근사 2건 등록 완료**:
+  (1) LadderKit/Carpenters 분기 생략 — 주석 명시
+  (2) Rope 3종 (fcRopeBlock/blockRopeCentral/blockRope) 전체 false — 주석 명시
+- [신규] 없음. `isTrapDoorFront` 가 원본은 int metadata, 1.21.1 은 BlockState 파라미터로
+  표면 매핑 (메타 추출 단계 제거) — 시멘틱 동일 ✓
+- [회귀] 기존 `SmartMovingClimber.handleClimbing` 은 새 헬퍼 미사용 → compileClientJava
+  무영향. B-19a1a 상태 필드/헬퍼와 연동 — `getBaseBlockId`/`getBlock` 활용 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a1c** — accessibility 판정. `isBaseAccessible` 2 오버로드
+(L2342/L2347) + `isFullAccessible` (L2528) + `isFullExtentAccessible` (L2486) +
+`isJustLowerHalfExtentAccessible` (L2514) + `isUpperHalfFrontEmpty` (L2543). 원본 L2342-L2560
+대역 전수 read 필요. 복잡한 블록 접근성 판정 — 예상 규모: 1-2 세션.
 
 ### 세션 91 — 2026-04-24 — B-19a1a `Orientation` 상태 필드 + core 헬퍼 이식
 
