@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 59 — B Phase 2 계속 / B-34) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 26 원자 완료 / ⏳ **B Phase 2 잔여 ~14 원자** |
+| 상태 | 🟡 진행 중 (세션 60 — B Phase 2 계속 / B-6) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 27 원자 완료 / ⏳ **B Phase 2 잔여 ~13 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -568,8 +568,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       대조 → 불일치면 정정 원자 추가 (B-5a~). 1:1 이면 주석만 제거.
 
 #### B-6. Swimmer `updateSwimState` L78 — `isClimbCrawling` 누락 조건 추가 (A-2 발견)
-- [ ] B-6. 원본 L301 3-OR (`isCrawling || isClimbCrawling || isCrawlClimbing`) 에 맞게
-      Swimmer L78 조건에 `sm.isClimbCrawling` 추가.
+- [x] B-6. ✅ **세션 60 완료** — `SmartMovingSwimmer.updateSwimState` L78 조건
+      `sm.isCrawling || sm.isCrawlClimbing` (2-OR) 에 `sm.isClimbCrawling` 추가해
+      원본 L301 3-OR `isCrawling || isClimbCrawling || isCrawlClimbing` 1:1 복원.
+      isClimbCrawling 공식 이식은 B-18 범위라 현재 항상 false 유지이나 조건은 1:1 정렬.
+      주석에 원본 라인 + B-18 의존 명시.
 
 #### B-7. Swimmer `updateSwimState` 진입 조건 복원 (A-2 발견)
 - [ ] B-7. 원본 L232 진입 조건 (`!isFlying && !isLiquidClimbing && (isInWater || (wasSwimming
@@ -2498,6 +2501,46 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장.
 - **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. Free climb 분기 내부.
 - **B-39** (landMotionPost 3분기 isSlow > minY+0.5D) — 원본 L1392-L1403. ClientState 내부.
+
+### 세션 60 — 2026-04-24 — B Phase 2 B-6 (Swimmer updateSwimState 3-OR 복원)
+
+**진행한 작업**:
+- `SmartMovingSwimmer.updateSwimState` L78 조건을 원본 L301 1:1 로 복원:
+  * 기존: `if (sm.isCrawling || sm.isCrawlClimbing)` (2-OR, isClimbCrawling 누락)
+  * 정정: `if (sm.isCrawling || sm.isClimbCrawling || sm.isCrawlClimbing)` (3-OR)
+- 주석에 원본 L301 + L308-L309 handleSwimming 맥락 + B-18 의존 (isClimbCrawling 공식
+  미이식 현재 항상 false) 명시.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+- **다른 후보 평가 기록**: B-39 는 부모 분기 (3번째 else if `crawlStandUpBottom > minY`)
+  조차 미이식 + AABB 정밀 계산 필요 → 규모 중간-대. B-16 은 wantClimb/blocked 필드
+  미이식 → 의존 분해 필요. 단순 1-줄 원자 B-6 선택.
+
+**완료 전 검증 체크리스트 (세션 60)**:
+- [근거] 원본 L301/L308-L309 3-OR 강제 isDipping 공식 (R-11.4 + R-11.12) 확보 ✓
+- [근거] R-11.12 불일치 #3 "isClimbCrawling 조건 누락" 확정 §16 세션 32 ✓
+- [대응] OR 3항 원본 1:1 — 필드명/순서/논리 연산자 동일 ✓
+- [분기] 없음 (OR 조건만 추가)
+- [상수] 없음
+- [타이밍] updateSwimState 진입 직후 분기 — 원본 L301 위치 일치 ✓
+- [근사] 없음 — 1:1 정렬. isClimbCrawling 공식 미이식은 B-18 범위 (별도 이슈)
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. isClimbCrawling 이 현재 항상 false 라
+  동작상 변화 없음 (B-18 이식 후 활성). 조건 구조만 1:1 정렬.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-11 A-2 불일치 현황**:
+- ✅ #3 isClimbCrawling 조건 누락 (B-6 세션 60)
+- ⏳ #1/#2/#4~#11 (B-7/B-8/B-9/B-11/B-12/B-13 등 — 대부분 B-9 메인 분류 재작성 범위)
+
+**Phase 2 진행 상황**: 27 원자 완료 / 잔여 ~13
+
+**다음 작업 권고**:
+- **B-13** (crawl↔swim 전환 isSliding 추가) — `SmartMovingSwimmer.handleSwimming` L119/L124
+  조건에 `(isCrawling || isSliding)` 반영. 단순 1줄.
+- **B-37** (handleClimbing wall 오르기 crawl 진입) — 원본 L985-L986. B-19 Free climb 분기
+  내부 — wantClimbUp/handsClimbing.IsRelevant 의존 위치 탐색 필요.
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 
 ---
 

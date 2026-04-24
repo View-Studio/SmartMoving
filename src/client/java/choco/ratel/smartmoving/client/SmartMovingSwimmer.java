@@ -74,8 +74,10 @@ public final class SmartMovingSwimmer {
         double fluidHeight = player.getFluidHeight(FluidTags.WATER);
         sm.dippingDepth = (float)fluidHeight;
 
-        // 원본: isCrawling || isClimbCrawling || isCrawlClimbing → isDipping 강제 (handleSwimming L308-309)
-        if (sm.isCrawling || sm.isCrawlClimbing) {
+        // 원본 L301 3-OR: isCrawling || isClimbCrawling || isCrawlClimbing → isDipping 강제
+        // (handleSwimming L308-L309). B-6 (세션 60): 누락된 `sm.isClimbCrawling` 추가.
+        // isClimbCrawling 공식 이식은 B-18 범위 — 현재 항상 false 유지이나 조건은 1:1 복원.
+        if (sm.isCrawling || sm.isClimbCrawling || sm.isCrawlClimbing) {
             sm.isDipping     = true;
             sm.isSwimming_sm = false;
             sm.isDiving      = false;
