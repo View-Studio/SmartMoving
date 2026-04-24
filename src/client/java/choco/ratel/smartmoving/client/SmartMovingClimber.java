@@ -463,40 +463,78 @@ public final class SmartMovingClimber {
         // B-1 (세션 25): Mover.getCombinedSpeedFactor 단일 헬퍼로 교체.
         double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
 
-        // Simple 모드 — grab 없이 자동 클라이밍, 속도는 FeetClimbing/HandsClimbing 상태로 결정
-        // 원본: SmartMovingSelf handleClimbing() Simple Base Climb (825-843줄)
+        // **B-20b 해소 (세션 132)**: Simple Base Climb 원본 L825-L844 전면 정밀 재작성.
+        //   원본: if (isSimpleBaseClimb && isCollidedHorizontally && isOnLadderOrVine) {
+        //     feet = isClimbable(i, j, k); hands = isClimbable(i, j+1, k);
+        //     feet&&hands → Fast / feet → Fast / hands → Slow / else → 0
+        //     motionY *= combinedFactor
+        //   }
+        //   isOnLadderOrVine 은 상위 `onClimbable` 에 내포 (B-42-B20 확인). 남은 조건
+        //   `isCollidedHorizontally` 복원 + feet/hands isClimbable 정밀 판정.
         if (cfg.simpleClimb) {
-            double value;
-            if (feetClimbing.isRelevant()) {
-                value = FAST_UP_MOTION * combinedFactor;
-            } else {
-                value = SLOW_UP_MOTION * combinedFactor;
+            if (player.horizontalCollision) {
+                int i = (int) Math.floor(player.getX());
+                int j = (int) Math.floor(player.getBoundingBox().minY);
+                int k = (int) Math.floor(player.getZ());
+                boolean feet  = Orientation.isClimbable(world, i, j, k);
+                boolean hands = Orientation.isClimbable(world, i, j + 1, k);
+                double value;
+                if (feet && hands)      value = FAST_UP_MOTION;
+                else if (feet)          value = FAST_UP_MOTION;
+                else if (hands)         value = SLOW_UP_MOTION;
+                else                    value = 0.0D;
+                value *= combinedFactor;
+                setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+                player.fallDistance = 0;
             }
-            setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
-            player.fallDistance = 0;
             return;
         }
 
-        // Smart 모드 — substitute 판정으로 속도 결정
-        // 원본: SmartMovingSelf handleClimbing() Smart Base Climb (856-894줄)
+        // **B-20c 해소 (세션 132)**: Smart Base Climb 원본 L856-L894 전면 정밀 재작성.
+        //   원본: if (isSmartBaseClimb && isOnLadderOrVine && isCollidedHorizontally) {
+        //     feet = isClimbable(i, j, k); hands = isClimbable(i, j+1, k);
+        //     feet&&hands → Fast
+        //     feet only → handsSubstitute (PZ/NZ/ZP/ZN at j+1) ? Fast : Slow
+        //     hands only → feetSubstitute (ZZ/PZ/NZ/ZP/ZN at j) ? Fast : Slow
+        //     else → 0
+        //     motionY *= combinedFactor
+        //   }
+        //   handsSubstitute 는 원본 L866-L869: PZ/NZ/ZP/ZN 4방향 (ZZ 없음).
+        //   feetSubstitute 는 원본 L879-L883: ZZ/PZ/NZ/ZP/ZN 5방향.
         if (cfg.smartClimb) {
-            int px = (int) Math.floor(player.getX());
-            int py = (int) Math.floor(player.getY());
-            int pz = (int) Math.floor(player.getZ());
-            boolean handsSubstitute = hasSubstituteLadderOrVine(world, px, py + 1, pz, false);
-            boolean feetSubstitute  = hasSubstituteLadderOrVine(world, px, py,     pz, true);
-            double value;
-            if (feetClimbing.isRelevant() && handsClimbing.isUp()) {
-                value = FAST_UP_MOTION * combinedFactor;
-            } else if (feetClimbing.isRelevant()) {
-                value = handsSubstitute ? FAST_UP_MOTION * combinedFactor : SLOW_UP_MOTION * combinedFactor;
-            } else if (handsClimbing.isUp()) {
-                value = feetSubstitute ? FAST_UP_MOTION * combinedFactor : SLOW_UP_MOTION * combinedFactor;
-            } else {
-                return;
+            if (player.horizontalCollision) {
+                int i = (int) Math.floor(player.getX());
+                int j = (int) Math.floor(player.getBoundingBox().minY);
+                int k = (int) Math.floor(player.getZ());
+                boolean feet  = Orientation.isClimbable(world, i, j, k);
+                boolean hands = Orientation.isClimbable(world, i, j + 1, k);
+                double value;
+                if (feet && hands) {
+                    value = FAST_UP_MOTION;
+                } else if (feet) {
+                    // 원본 L866-L869: 4방향 (PZ/NZ/ZP/ZN) at j+1
+                    boolean handsSubstitute =
+                            Orientation.PZ.isHandsLadderSubstitute(world, i, j + 1, k)
+                         || Orientation.NZ.isHandsLadderSubstitute(world, i, j + 1, k)
+                         || Orientation.ZP.isHandsLadderSubstitute(world, i, j + 1, k)
+                         || Orientation.ZN.isHandsLadderSubstitute(world, i, j + 1, k);
+                    value = handsSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
+                } else if (hands) {
+                    // 원본 L879-L883: 5방향 (ZZ/PZ/NZ/ZP/ZN) at j
+                    boolean feetSubstitute =
+                            Orientation.ZZ.isFeetLadderSubstitute(world, i, j, k)
+                         || Orientation.PZ.isFeetLadderSubstitute(world, i, j, k)
+                         || Orientation.NZ.isFeetLadderSubstitute(world, i, j, k)
+                         || Orientation.ZP.isFeetLadderSubstitute(world, i, j, k)
+                         || Orientation.ZN.isFeetLadderSubstitute(world, i, j, k);
+                    value = feetSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
+                } else {
+                    value = 0.0D;
+                }
+                value *= combinedFactor;
+                setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+                player.fallDistance = 0;
             }
-            setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
-            player.fallDistance = 0;
             return;
         }
 

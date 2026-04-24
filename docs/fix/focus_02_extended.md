@@ -478,13 +478,18 @@ Orientation 판정 + ClimbGap 계산.
 ### Phase 8. Simple / Smart Base Climb 전체 이식
 
 #### B-20b. Simple Base Climb (원본 L825-L843)
-- [ ] B-20b. `cfg.simpleClimb` 분기 이식 — feet/hands 조합별 motionY 4갈래
-      (feet+hands: FastUpMotion / feet only: FastUpMotion / hands only: SlowUpMotion /
-      둘 다 없음: 0.0D) + combinedFactor 곱.
+- [x] B-20b. **세션 132 완료**. `cfg.simpleClimb` 분기 원본 L825-L844 1:1 재작성.
+      기존 2갈래 근사 (feetRelevant → Fast / else → Slow) → 원본 4갈래 공식 복원:
+      `isClimbable(i, j, k)` (feet) + `isClimbable(i, j+1, k)` (hands) 정밀 판정 후
+      feet+hands/feet-only → Fast / hands-only → Slow / none → 0. `horizontalCollision`
+      if-guard 복원.
 
 #### B-20c. Smart Base Climb (원본 L856-L894)
-- [ ] B-20c. `cfg.smartClimb` 분기 이식 — handsSubstitute/feetSubstitute 판정 (PZ/NZ/ZP/ZN
-      방향 isHandsLadderSubstitute/isFeetLadderSubstitute) + 조합별 motionY.
+- [x] B-20c. **세션 132 완료**. `cfg.smartClimb` 분기 원본 L856-L894 1:1 재작성. 기존
+      근사 `hasSubstituteLadderOrVine` → 원본 방향 상수 (`Orientation.PZ/NZ/ZP/ZN` 4방향
+      hands + `Orientation.ZZ/PZ/NZ/ZP/ZN` 5방향 feet) 직접 호출로 교체. feet/hands
+      `isClimbable` 정밀 판정. else → 0 (기존은 return 으로 isClimbing 유지).
+      `horizontalCollision` if-guard 복원.
 
 ### Phase 9. SmartStatistics + Options 후속 엣지 케이스
 
@@ -552,6 +557,76 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 132 — 2026-04-25 — Phase 8 완결 — B-20b (Simple Base Climb) + B-20c (Smart Base Climb)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 8 전수 이식.
+
+**진행한 작업**:
+
+**1. B-20b — Simple Base Climb** (원본 L825-L844):
+- 기존 이식: 2갈래 근사 (feetRelevant → Fast / else → Slow).
+- 원본 4갈래 정밀 공식 복원:
+  ```java
+  if (horizontalCollision) {
+      boolean feet  = isClimbable(i, j, k);
+      boolean hands = isClimbable(i, j + 1, k);
+      double value;
+      if (feet && hands) value = FAST_UP_MOTION;
+      else if (feet)     value = FAST_UP_MOTION;
+      else if (hands)    value = SLOW_UP_MOTION;
+      else               value = 0.0D;
+      value *= combinedFactor;
+      setOnlyShouldClimbSpeed(...);
+  }
+  ```
+- `Orientation.isClimbable(world, i, j, k)` (이미 이식) 직접 호출.
+- `horizontalCollision` if-guard 복원.
+
+**2. B-20c — Smart Base Climb** (원본 L856-L894):
+- 기존 이식: `hasSubstituteLadderOrVine` 근사 헬퍼 사용.
+- 원본 정밀 복원:
+  - feet && hands → Fast
+  - feet only → handsSubstitute (`Orientation.PZ/NZ/ZP/ZN.isHandsLadderSubstitute` 4방향
+    at j+1, **ZZ 없음**) ? Fast : Slow
+  - hands only → feetSubstitute (`Orientation.ZZ/PZ/NZ/ZP/ZN.isFeetLadderSubstitute` 5방향
+    at j) ? Fast : Slow
+  - else → 0 (기존은 `return` → isClimbing 유지)
+- 방향 상수 + 서브 메서드 이미 이식됨 (Orientation.java L60/63/65/67/69 + L2651/L2662).
+
+**3. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 132 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L825-L844 (Simple) + L856-L894 (Smart) 로컬 read ✓
+- [근거] 1.21.1 `Orientation.isClimbable` / `isHandsLadderSubstitute` / `isFeetLadderSubstitute`
+  + ZZ/PZ/NZ/ZP/ZN 방향 상수 이식 확인 ✓
+- [대응] 원본 `sp.isCollidedHorizontally` → `player.horizontalCollision`, `sp.worldObj` →
+  `world`, `sp.boundingBox.minY` → `player.getBoundingBox().minY`, `sp.posX/Z` →
+  `player.getX/Z()` 표면 매핑 ✓
+- [분기] Simple 4갈래 / Smart 4갈래 + feet-only 내부 (handsSubstitute 4방향 OR) +
+  hands-only 내부 (feetSubstitute 5방향 OR) 전수 ✓
+- [상수] FAST_UP_MOTION (0.2) / SLOW_UP_MOTION (0.1) 원본 동일 ✓
+- [타이밍] Standard 분기 뒤, Free 분기 전 (원본 L825, L856 순서 유지) ✓
+- [근사] 근사 없음 — 전수 1:1. 기존 근사 2건 (2갈래 Simple / hasSubstituteLadderOrVine) 해소 ✓
+- [신규] 없음 ✓
+- [회귀] `isClimbable` / `isHandsLadderSubstitute` / `isFeetLadderSubstitute` 는 기존
+  이식된 메서드로 동작 검증됨. `hasSubstituteLadderOrVine` 근사 헬퍼는 Smart 분기에서만
+  사용됐고 대체됨 — 다른 호출처 없음. else=0 결과로 isClimbing 유지가 아니라 `motionY=0`
+  으로 명시 (원본 동일). ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**🎉 Phase 8 완결** — B-20b + B-20c = 2/2.
+
+**다음 세션 권고**: **Phase 9** — B-50 (SmartStatistics / SmartRender 인프라, B-1c 근사
+해소) + B-51 (`levitateSmall` + `isSmall` 게이트). 둘 다 규모 대형 (별도 mod 전체 이식
+고려 필요). Phase 6 B-42-B26 (Jumper SlideDown) 도 Jumper factor 인프라 규모 대형 —
+Phase 9 와 함께 묶어 마지막 평가.
+
+**진행률** (세션 132 종료 시점):
+- Extended 완료: **65 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 13 + Phase 7 7 +
+  Phase 8 **2** = 65)
+- 잔여: Phase 9 (B-50, B-51) + Phase 6 B-42-B26 = 3 원자
+- **🎉 Phase 8 완결** — Phase 9 마지막 진입.
 
 ### 세션 131 — 2026-04-25 — Phase 7 완결 — B-48a/b/c + B-48b-dep + B-49/B-49b 확인
 
