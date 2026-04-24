@@ -2452,4 +2452,166 @@ public class Orientation {
 
         return setHalfGrabType(NoGrab, null);
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2d (세션 105) — hasBottomHold 본체
+    // 원본: Orientation.java L728-L935 (200+줄).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L728-L935 `hasBottomHold()` — 플레이어 하부 (y=-1) 레벨 grab 가능 판정.
+     * `hasHalfHold` 와 유사 구조이나 하부 전용 복합 중첩 분기 많음.
+     *
+     * 주요 분기 (미매치면 최종 `NoGrab`):
+     *   (1) FreeBaseClimb: 4 ladder 체크 (base-1 / base 0 / remote-1 / remote 0) → AroundGrab
+     *   (2) [§7 근사 생략] BetterThanWolves/RopesPlus rope/anchor 분기
+     *   (3) [§7 근사 생략] RedPower wire 4 sub 분기
+     *   (4) isEmpty(-1) + remoteBelow iron_bars + frontWall → HalfGrab
+     *   (5) freeFenceClimbing 3 서브:
+     *       a) remoteBelow fence + frontWall (baseBelow fence 여부로 2갈래)
+     *       b) remoteBelow cobblestone_wall + !flatWall
+     *       c) remote cobblestone_wall + !flatWall
+     *   (6) belowWallId 존재 시 중첩 분기:
+     *       a) isEmpty 양옆(0, -1) + iron_bars + baseWall(-1) → BottomGrab
+     *       b) isOnMiddleLadderFront(-1) → AroundGrab (remote, HALF)
+     *       c) headedToBaseGrabWall(-1) → BottomGrab
+     *       d) freeFenceClimbing + fence + baseWall(-1) → BottomGrab
+     *   (7) 복합 중첩 (remoteLowerHalfEmpty + isBaseAccessible(-1, true, false) + 6 AND 체크):
+     *       → BottomGrab
+     *   (8) stair compact remote + topStair+!topBack + upperHalfFrontFullSolid → BottomGrab
+     *   (9) baseBelow open trap door → BottomGrab
+     *   (10) baseBelow door top + frontBlocked + isBaseAccessible(0) → BottomGrab
+     *   (11) [§7 근사 생략] ASGrapplingHook/RopesPlus 4 sub 분기
+     *   (12)-(15) FreeBaseClimb: 4 vine (base-1 / base 0 / remote-1 / remote 0) → HalfGrab
+     *   (16) 외 → NoGrab
+     *
+     * **§7 근사** (B-19a2d-approx-1): RedPower + BetterThanWolves + ASGrapplingHook +
+     * RopesPlus + ASRope mod 분기 전부 생략. B-19a2a4 false/null 근사 및 B-19a2c 의
+     * 동일 패턴과 일관.
+     */
+    protected boolean hasBottomHold() {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        if (cfg.isFreeBaseClimb()) {
+            if (isOnLadder(-1) && isOnLadderFront(-1))
+                return setBottomGrabType(AroundGrab, getBaseBlockId(-1), false);
+
+            if (isOnLadder(0) && isOnLadderFront(0))
+                return setBottomGrabType(AroundGrab, getBaseBlockId(0), false);
+
+            if (remoteLadderClimbing(-1))
+                return setBottomGrabType(AroundGrab, getRemoteBlockId(-1), true);
+
+            if (remoteLadderClimbing(0))
+                return setBottomGrabType(AroundGrab, getRemoteBlockId(0), true);
+        }
+
+        // 근사 이식 — 원본과 차이: BetterThanWolves/RopesPlus rope+anchor 분기 (원본 L749-L759) 생략
+
+        BlockState remoteState = getRemoteBlockId(0);
+        BlockState remoteBelowState = getRemoteBlockId(-1);
+        boolean remoteLowerHalfEmpty = isLowerHalfFrontFullEmpty(remote_i, 0, remote_k);
+
+        // 근사 이식 — 원본과 차이: RedPower wire 4 sub 분기 (원본 L765-L795) 생략
+
+        if (isEmpty(base_i, -1, base_k)) {
+            if (remoteBelowState.getBlock() == Blocks.IRON_BARS
+                    && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState))
+                return setBottomGrabType(HalfGrab, remoteBelowState);
+        }
+
+        if (cfg.freeFenceClimbing) {
+            BlockState baseBelowBlockState = getBaseBlockId(-1);
+            if (isFence(remoteBelowState)
+                    && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
+                if (!isFence(baseBelowBlockState))
+                    return setBottomGrabType(HalfGrab, remoteBelowState);
+                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
+                    return setBottomGrabType(HalfGrab, remoteBelowState);
+            }
+
+            if (remoteBelowState.getBlock() == Blocks.COBBLESTONE_WALL
+                    && !headedToRemoteFlatWall(remoteBelowState, -1))
+                return setHalfGrabType(HalfGrab, remoteBelowState);
+
+            if (remoteState.getBlock() == Blocks.COBBLESTONE_WALL
+                    && !headedToRemoteFlatWall(remoteState, 0))
+                return setHalfGrabType(HalfGrab, remoteState);
+        }
+
+        BlockState belowWallBlockState = getWallBlockId(base_i, -1, base_k);
+        if (belowWallBlockState != null) {
+            if (isEmpty(base_i - _i, 0, base_k - _k)
+                    && isEmpty(base_i - _i, -1, base_k - _k)) {
+                if (belowWallBlockState.getBlock() == Blocks.IRON_BARS
+                        && headedToBaseWall(-1, belowWallBlockState))
+                    return setBottomGrabType(HalfGrab, belowWallBlockState, false);
+                if (isOnMiddleLadderFront(-1))
+                    return setHalfGrabType(AroundGrab, remoteState, false);
+
+                if (headedToBaseGrabWall(-1, belowWallBlockState))
+                    return setBottomGrabType(HalfGrab, belowWallBlockState, false);
+            }
+
+            if (cfg.freeFenceClimbing
+                    && isFence(belowWallBlockState)
+                    && headedToBaseWall(-1, belowWallBlockState))
+                return setBottomGrabType(HalfGrab, belowWallBlockState, false);
+        }
+
+        // (7) 복합 중첩 — 원본 L853-L865
+        if (remoteLowerHalfEmpty && isBaseAccessible(-1, true, false))
+            if (isUpperHalfFrontAnySolid(remote_i, -1, remote_k))
+                if (!isBottomHalfBlock(remoteBelowState))
+                    if (!isStairCompact(remoteBelowState)
+                            || !isBottomStairCompactFront(remoteBelowState))
+                        if (!isDoor(remoteBelowState) || isDoorTop(remoteBelowState))
+                            if (!isDoor(getBaseBlockId(0))
+                                    || !isDoorFrontBlocked(base_i, 0, base_k))
+                                if (cfg.freeFenceClimbing
+                                        || !isFence(remote_i, -1, remote_k))
+                                    return setBottomGrabType(HalfGrab, remoteBelowState);
+
+        // (8) 원본 L867-L874 stair compact top-front + upper half front full solid
+        if (isStairCompact(remoteState)) {
+            if (isTopStairCompact(remoteState)
+                    && !isTopStairCompactBack(remoteState)
+                    && isUpperHalfFrontFullSolid(remote_i, -1, remote_k))
+                return setBottomGrabType(HalfGrab, remoteBelowState);
+        }
+
+        BlockState baseBelowState = getBaseBlockId(-1);
+
+        // (9) baseBelow open trap door — 원본 L879-L881
+        if (isTrapDoor(baseBelowState) && !isClosedTrapDoor(baseBelowState))
+            return setBottomGrabType(HalfGrab, baseBelowState, false);
+
+        // (10) baseBelow door top + frontBlocked + baseAccessible(0) — 원본 L883-L886
+        if (isDoor(baseBelowState) && isDoorTop(baseBelowState)
+                && isDoorFrontBlocked(base_i, -1, base_k)
+                && isBaseAccessible(0))
+            return setBottomGrabType(HalfGrab, baseBelowState, false);
+
+        // 근사 이식 — 원본과 차이: ASGrapplingHook/RopesPlus 4 sub 분기 (원본 L888-L909) 생략
+
+        if (cfg.isFreeBaseClimb()) {
+            int meta = baseVineClimbing(-1);
+            if (meta != DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+
+            meta = baseVineClimbing(0);
+            if (meta != DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+
+            meta = remoteVineClimbing(-1);
+            if (meta != DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+
+            meta = remoteVineClimbing(0);
+            if (meta != DefaultMeta)
+                return setHalfGrabType(HalfGrab, Blocks.VINE.getDefaultState(), false, meta);
+        }
+
+        return setBottomGrabType(NoGrab, null);
+    }
 }

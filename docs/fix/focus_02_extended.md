@@ -168,7 +168,10 @@ Orientation 판정 + ClimbGap 계산.
       - [x] **B-19a2c** (세션 104 완료): `hasHalfHold` 본체 (L608-L726). 13 vanilla
             분기 이식 + 3 mod 분기 근사 생략 + Config 헬퍼 `isFreeBaseClimb()` 신설 +
             `freeFenceClimbing` 필드 신설. §7 근사 3건.
-      - [ ] **B-19a2d**: `hasBottomHold` 본체 (L728-L1000+) — 위 동일.
+      - [x] **B-19a2d** (세션 105 완료): `hasBottomHold` 본체 (L728-L935, 200+줄).
+            vanilla 분기 16 이식 (ladder 4 + iron_bars / freeFenceClimbing 3 / belowWall 4
+            서브 / 복합 중첩 6 AND / stair top / trap door / door frontBlocked / vine 4) +
+            mod 3 카테고리 근사 생략. §7 근사 3건 (RedPower / BTW-RopesPlus / ASRope-ASGH).
       - [ ] **B-19a2e**: `isLadderSubstitute` 본체 (L477-L606) — gap 1-5 계산 +
             `ClimbGap.canStand/mustCrawl/state/direction` 설정 핵심.
 
@@ -454,6 +457,72 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 105 — 2026-04-24 — B-19a2d `hasBottomHold` 본체 (원본 L728-L935)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L728-L935 read** — 하부 grab 판정 200+줄. 복합 중첩 분기 다수.
+2. **`hasBottomHold` 본체 이식** (vanilla 16 분기 + mod 3 근사):
+   * (1) FreeBaseClimb 4 ladder (base-1 / base 0 / remote-1 / remote 0 AroundGrab)
+   * (2) [§7 근사] BTW/RopesPlus rope+anchor 분기 생략
+   * (3) [§7 근사] RedPower wire 4 서브 생략
+   * (4) isEmpty(base-1) + remoteBelow iron_bars + frontWall → HalfGrab
+   * (5) freeFenceClimbing 3 서브 (fence remoteBelow / cobblestone remoteBelow / remote)
+   * (6) belowWallId 존재 시 4 서브 (양옆 empty + iron_bars/middleLadder/headedToBaseGrabWall /
+     freeFenceClimbing fence)
+   * (7) 복합 6-AND 중첩 (remoteLowerHalfEmpty + isBaseAccessible(-1, true, false) +
+     isUpperHalfFrontAnySolid + !isBottomHalfBlock + !(stair bottomFront) +
+     (!isDoor || isDoorTop) + (!isDoor(base) || !isDoorFrontBlocked) +
+     (freeFenceClimbing || !isFence))
+   * (8) stair top remote + !topBack + upperHalfFrontFullSolid → BottomGrab
+   * (9) baseBelow open trap door → BottomGrab
+   * (10) baseBelow door top + frontBlocked + isBaseAccessible(0) → BottomGrab
+   * (11) [§7 근사] ASGrapplingHook/RopesPlus 4 서브 분기 생략
+   * (12)-(15) FreeBaseClimb 4 vine (base-1 / base 0 / remote-1 / remote 0 HalfGrab)
+   * (16) default NoGrab
+3. **핵심 매핑** (B-19a2c 동일):
+   * `Blocks.IRON_BARS` / `Blocks.COBBLESTONE_WALL` / `Blocks.VINE.getDefaultState()`
+   * 모든 Block 파라미터 → BlockState (B-19a1a grabBlock 필드 타입 일관)
+   * `Config._freeFenceClimbing.value` → `cfg.freeFenceClimbing` (B-19a2c 이식)
+4. **본체 §7 B-19a2d 근사 3건 등록**.
+
+**완료 전 검증 체크리스트 (세션 105 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L728-L935 전수 read ✓
+- [근거] 의존 메서드 (세션 90-104 이식 전수) 충족 — isEmpty/isBaseAccessible/isFence/
+  isStairCompact/isTrapDoor/isClosedTrapDoor/isDoor/isDoorTop/isDoorFrontBlocked/
+  isBottomHalfBlock/isTopStairCompact/isTopStairCompactBack/isBottomStairCompactFront/
+  isLowerHalfFrontFullEmpty/isUpperHalfFrontAnySolid/isUpperHalfFrontFullSolid/isWallBlock/
+  headedToFrontWall/headedToRemoteFlatWall/headedToFrontSideWall/headedToBaseWall/
+  headedToBaseGrabWall/isOnMiddleLadderFront/isOnLadder/isOnLadderFront/remoteLadderClimbing/
+  baseVineClimbing/remoteVineClimbing/setHalfGrabType/setBottomGrabType ✓
+- [대응] 16 vanilla 분기 + 3 mod 근사 + default 원본 ↔ 1.21.1 side-by-side ✓
+- [분기] 복합 6-AND 중첩 (원본 L853-L865) 전수 식별 — `remoteLowerHalfEmpty` +
+  `isBaseAccessible(-1, true, false)` + `isUpperHalfFrontAnySolid` + `!isBottomHalfBlock` +
+  `!(stair + bottomFront)` + `(!isDoor || isDoorTop)` + `(!isDoor(base) ||
+  !isDoorFrontBlocked)` + `(freeFenceClimbing || !isFence)`. 원본 if 체인 중첩 7 단계
+  전수 보존 ✓
+- [상수] `NoGrab` / `HalfGrab` / `AroundGrab` / `DefaultMeta` 원본 동일. `Blocks.IRON_BARS` /
+  `Blocks.COBBLESTONE_WALL` / `Blocks.VINE` vanilla 매핑 ✓
+- [타이밍] hasBottomHold 는 isLadderSubstitute subSub 분기에서 1회 호출 (B-19a2e 에서 연결) ✓
+- [근사] **§7 B-19a2d 근사 3건 등록 완료**. 각 생략 지점 "근사 이식 — 원본과 차이: X"
+  주석 ✓
+- [신규] 없음 (B-19a2c 에서 모든 Config/블록 매핑 신설 완료) ✓
+- [회귀] 기존 코드 미사용. B-19a2e (isLadderSubstitute) 가 hasBottomHold 소비 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (9s) ✓
+
+**다음 세션 권고**: **B-19a2e** — `isLadderSubstitute` 본체 (원본 L477-L606, 130줄).
+**B-19 도미노 해소의 실체** — gap 1-5 스케일 계산 + `ClimbGap.canStand=gap>3` /
+`mustCrawl=gap>1 && gap<4` 설정 핵심. `hasHalfHold` / `hasBottomHold` (B-19a2c/d) 의 결과를
+소비. 의존 전수 충족 (B-19a1a~c + B-19a2a~d). 예상 1 세션 (큰 세션).
+
+**진행률** (세션 105 종료 시점):
+- Extended 완료: **16 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / a2a4 / a2b / a2c / **a2d**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 16/61 ≈ 26%**
+- **포커스 #2 전체: (54+16)/115 ≈ 61%**
 
 ### 세션 104 — 2026-04-24 — B-19a2c `hasHalfHold` 본체 (원본 L608-L726)
 

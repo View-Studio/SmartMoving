@@ -440,6 +440,17 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a2d 근사 3건** (세션 105): `Orientation.hasBottomHold` 본체 (200+줄) 이식 시 mod
+  분기 생략:
+  (1) BetterThanWolves/RopesPlus rope+anchor 분기 (원본 L749-L759) 생략 — B-19a2a4
+  `getRopeId`/`getAnchorId` null 근사 연동.
+  (2) RedPower wire 4 서브 분기 (원본 L765-L795) 생략 — `isRedPowerWire`/`getRpCoverSides`/
+  `isRedPowerWireFullFront`/`Top`/`Bottom`/`FullBack` 체인 전체. RedPower mod 1.21.1 미이식.
+  (3) ASGrapplingHook/RopesPlus 4 서브 분기 (원본 L888-L909) 생략 — `isASRope` +
+  `isASGrapplingHookFront` 체크 패턴 4회. B-19a2a4 false 근사 연동.
+  vanilla 분기 (ladder 4 + iron_bars / freeFenceClimbing 3 서브 / belowWall 4 서브 /
+  복합 중첩 6 AND / stair top / trap door open / door frontBlocked + baseAccessible /
+  vine 4) 100% 이식.
 - **B-19a2c 근사 3건** (세션 104): `Orientation.hasHalfHold` 본체 이식 시 mod 분기 +
   Config 헬퍼 근사:
   (1) `SmartMovingConfig.isFreeBaseClimb()` = `freeClimb` 단순 반환. 원본은
