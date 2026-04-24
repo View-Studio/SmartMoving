@@ -8,12 +8,22 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #3 — 상태 전환 조건 이상 (재현 케이스 수집 대기)
+항목 #2.5 — Jumper Factor 인프라 전수 이식 (B-42-B26 확장)
 ```
 
-**작업 문서**: [`focus_03_transition_conditions.md`](focus_03_transition_conditions.md)
+**작업 문서 (주)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
+**병행 포커스**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md) (B-42c (2) 확장 — 독립, 동시 진행 가능)
+**참조 문서 (본체)**: [`focus_02_state_issues.md`](focus_02_state_issues.md) (Extended 기록)
 
-**선행 의존**: #2 (완료) — 상태 값 확정 후 전환 조건 검증.
+**선행 의존**: #2 Extended (완료 — 세션 134). #2.5/#2.6 완료 후 #3 진입.
+
+> **포커스 #2 Extended 완료 후 잔존 "1:1 미이식" 2건**:
+> - **#2.5** Jumper Factor 인프라 (약 40+ Config 필드 + 판정 메서드 6+ + Exhaustion 시스템 +
+>   tryJump 전면 재작성) — 규모 대 (110+ 원자, 예상 10-20 세션).
+> - **#2.6** Lava Liquid Border (`getLiquidBorder` lava 분기 + modded liquid + `handleLava`
+>   SM 자체 이동) — 규모 소-중 (15 원자, 예상 2-3 세션).
+>
+> 두 포커스는 **독립적** 으로 진행 가능. 우선순위 사용자 결정.
 
 > **포커스 #6 완료 (2026-04-24, 세션 28)**: A 단계(호출처 감사) → B-1/B-2/B-3/B-4/B-6
 > (헬퍼 정비 + Land/Swim/Climb/Creative 게이트) → C-1/C-2 (동기화 정합) →
@@ -76,7 +86,9 @@
 | 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24, 세션 23) | 없음 |
 | 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ✅ 완료 (2026-04-24, 세션 28) | #5 완료 |
 | 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | ✅ 완료 (2026-04-25, 세션 134) — Extended 67/67 전수 완결 | 없음 |
-| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | 🟠 현재 포커스 (재현 케이스 대기) | #2 완료 |
+| 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | 🟠 현재 포커스 (B-42-B26 확장, ~110 원자) | #2 완료 |
+| 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟡 병행 대기 (B-42c (2) 확장, ~15 원자) | #2 완료 |
+| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 | #2 / #2.5 / #2.6 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
 
