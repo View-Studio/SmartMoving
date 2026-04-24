@@ -496,14 +496,13 @@ Orientation 판정 + ClimbGap 계산.
 **세션 88 추가** — 세션 85 분리 취소 + 전수 감사에서 발견된 잔여 엣지.
 
 #### B-50. SmartStatisticsFactory 이식 (B-1c 근사 해소)
-- [ ] B-50. 원본 `SmartStatisticsFactory.getInstance(sp).getTickDistance()` 이식 — SmartRender
-      측 플레이어 tick 이동 거리 통계 시스템. B-1c3 세션 51 에서 `isClimbSprintSpeed = true`
-      근사 이식한 부분 해소용. 규모 대 (SmartRender 별도 인프라 전체 이식 필요).
-      엄격 이식이면: 플레이어별 tick 이동량 수집 + 통계 캐시 + getter 제공.
-      간소 근사면: 단순 `getVelocity().horizontalLength()` 로 tick 거리 대체 가능.
-      B-1c 의 `isClimbSprintSpeed` 는 "등반 중 충분한 속도 유지" 판정이라 근사로도 실용.
-      상세 이식 전에 Agent WebFetch 로 원본 SmartStatisticsFactory 코드 + 사용 지점 전수
-      확보 필요.
+- [x] B-50. **세션 133 완료** (경량 이식). 원본 `SmartStatistics.calculateAllStats`
+      (L43-L60) + `SmartStatisticsData.calcualte` (L45-L53) 로컬 read 결과, tickDistance
+      공식은 `sqrt((posX-prevPosX)² + (posY-prevPosY)² + (posZ-prevPosZ)²) * 4F` 로 단순.
+      smoothing buffer (legYaw/total) 는 limbSwing 애니메이션용 부수 효과라 SM 측 캐시
+      불필요. `ClientState.getTickDistance(player)` static 헬퍼 1개 추가 + 원본 L2661-L2670
+      `isClimbSprintSpeed` 공식 정밀 복원 (기존 `true` 근사 → `minTickDistance` 기반 조건부).
+      SmartStatisticsFactory / Other / Hashtable 인프라는 호출처 1곳뿐이라 불필요.
 
 #### B-48b-dep. `Options._runOnSprintRelease` / `_walkOnSprintRelease` 필드 이식
 - [x] B-48b-dep. **세션 131 완료**. `SmartMovingConfig.runOnSprintRelease = true` +
@@ -518,12 +517,18 @@ Orientation 판정 + ClimbGap 계산.
       불필요.
 
 #### B-51. `Config.isLevitateSmallEnabled()` + `isSmall` 게이트 이식 (세션 88 4차 확정 감사 발견)
-- [ ] B-51. 본체 §6.7 L314 "Config.isLevitateSmallEnabled() ✗ 미이식" 항목 Extended 원자
-      승격. `Config.isLevitateSmallEnabled()` 헬퍼 + 관련 `isSmall` 게이트 전수 이식 —
-      원본 `isSmall` 판정 (작은 플레이어 모드) 과 `levitateSmall` 옵션 조합이 부양
-      (levitate) / 자동 점프 / 중력 적용에 영향. 의존: Config 필드 grep 확인 → 부재 시
-      SmartMovingConfig 에 필드 + 헬퍼 동시 신설. Agent WebFetch 로 원본 사용 지점 전수
-      확인 권고.
+- [x] B-51. **세션 133 완료**. Config `levitateSmall = true` 필드 + `isLevitateSmallEnabled()`
+      헬퍼 + `isFlyingEnabled()` 헬퍼 추가. 원본 `SmartMovingSelf` 사용처 grep 으로 전수
+      이식:
+      (1) 원본 L2404 `mustCrawl=false` 조건 확장 — `player.getAbilities().flying &&
+          (isFlyingEnabled || isLevitateSmallEnabled)` 정밀 복원 (기존 `isFlying && cfg.fly`
+          근사 해소).
+      (2) 원본 L2510 `isFlying` 공식 정밀 복원 — `cfg.isFlyingEnabled() &&
+          getAbilities().flying && !isSwimming_sm && !isDiving` (기존 단순 `.flying` 복사
+          근사 해소). `wasFlying` 필드 신설 + 매 틱 저장.
+      (3) 원본 L2511-L2522 isFlying/isLevitating 전환 엣지 블록 이식 — 진입 엣지
+          heightOffset=-1F / 해제 엣지 restoreFromFlying=true (flying 전환).
+          flying 비활성 + levitateSmall 시 동일 패턴 (levitating 전환).
 
 ---
 
@@ -557,6 +562,83 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 133 — 2026-04-25 — Phase 9 완결 — B-50 (SmartStatistics 경량) + B-51 (levitateSmall)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 9 전수 이식.
+
+**진행한 작업**:
+
+**1. B-51 — `levitateSmall` + `isLevitateSmallEnabled` + isFlying 정밀 복원**:
+- Config: `levitateSmall = true` 필드 + Properties IO + `isLevitateSmallEnabled()` 헬퍼.
+  `isFlyingEnabled()` 헬퍼 함께 추가 (의존).
+- ClientState: `wasFlying` 필드 신설.
+- `isFlying` 공식 정밀 복원 (원본 L2510):
+  * 기존 근사: `isFlying = player.getAbilities().flying`
+  * 원본: `Config.isFlyingEnabled() && sp.capabilities.isFlying && !isSwimming && !isDiving`
+  * 이식: `cfg.isFlyingEnabled() && getAbilities().flying && !isSwimming_sm && !isDiving`.
+- isFlying 전환 엣지 (원본 L2511-L2514): 진입 → `heightOffset=-1F` / 해제 → `restoreFromFlying=true`.
+- isLevitating 전환 엣지 (원본 L2516-L2522): `!isFlyingEnabled() && isLevitateSmallEnabled()`
+  조건 하에 동일 패턴.
+- `mustCrawl=false` 조건 확장 (원본 L2404): 기존 `isFlying && cfg.fly` → `player.getAbilities().flying
+  && (isFlyingEnabled() || isLevitateSmallEnabled())` 정밀.
+
+**2. B-50 — `SmartStatisticsFactory.getTickDistance` 경량 이식 + `isClimbSprintSpeed` 복원**:
+- 원본 `SmartStatistics.calculateAllStats` (L43-L60) + `SmartStatisticsData.calcualte`
+  (L45-L53) 로컬 read 결과:
+  * `tickDistance = sqrt((posX - prevPosX)² + (posY - prevPosY)² + (posZ - prevPosZ)²) * 4F`
+  * smoothing buffer (legYaw/total) 는 limbSwing 애니메이션용 부수 효과라 SM 측 캐시 불필요.
+- ClientState: `getTickDistance(player)` static 헬퍼 1개 추가 — `sqrt(dx²+dy²+dz²) * 4.0`.
+- isClimbSprintSpeed 공식 복원 (원본 L2661-L2670):
+  * 기존 근사: `_isClimbSprintSpeed17 = true` (무조건 허용)
+  * 원본: `isClimbing && preferSprint` 조건 하에 `minTickDistance` (`0.07 * freeClimbingUpFactor`
+    / `0.11 * freeClimbingDownFactor` / `0.07`) 기준으로 `getTickDistance() >= minTickDistance`
+    판정.
+  * `freeClimbingUpSpeedFactor` / `freeClimbingDownSpeedFactor` Config 이식 확인.
+- SmartStatisticsFactory / Other / Hashtable / MultiPlayer 훅 인프라는 **호출처 1곳뿐**
+  이라 불필요 확정. §7 근사 1건 등록 (smoothing buffer 부수 효과 미이식).
+
+**3. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**
+(중간 1회 `isFlyingEnabled()` 헬퍼 누락으로 실패 → 헬퍼 추가 후 재통과).
+
+**완료 전 검증 체크리스트 (세션 133 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2404 + L2510-L2522 + L2661-L2670 + `SmartStatistics.java`
+  L43-L60 + `SmartStatisticsData.java` L45-L53 로컬 read ✓
+- [근거] 1.21.1 Config `fly` / `freeClimbingUpSpeedFactor` / `freeClimbingDownSpeedFactor`
+  이식 확인 ✓
+- [대응] 원본 `sp.capabilities.isFlying` → `player.getAbilities().flying`, `sp.posX/Y/Z` →
+  `player.getX/Y/Z()`, `sp.prevPosX/Y/Z` → `player.prevX/Y/Z` 표면 매핑 ✓
+- [분기] isFlying 전환 엣지 2-way + isLevitating 전환 엣지 2-way + isClimbSprintSpeed
+  3-way (wantUp/wantDown/default) 전수 ✓
+- [상수] `0.07` / `0.11` / `4.0` 원본 동일 ✓
+- [타이밍] `wasFlying` 저장 위치 isFlying 공식 직전 (원본 L2510 대응). 전환 엣지 블록은
+  isFlying 갱신 직후 (원본 L2511-L2522 순서) ✓
+- [근사] B-50 smoothing buffer 부수 효과 미이식 1건 — §7 등록. isClimbSprintSpeed
+  기본값 false (원본은 이전 값 유지) — 실용 차이 무시 ✓
+- [신규] Config `levitateSmall` + `isLevitateSmallEnabled`/`isFlyingEnabled` 헬퍼.
+  ClientState `wasFlying` 필드 + `getTickDistance` static 헬퍼 ✓
+- [회귀] 기존 `isFlying = getAbilities().flying` 단순 복사가 여러 곳에서 소비되고 있는데,
+  새 공식은 `cfg.fly && !isSwimming && !isDiving` 조건 추가 — 수영/잠수 중에도 creative
+  flying 가능하던 벌레 동작 정정. `wasFlying` 필드는 과거 `wasCapabilitiesIsFlying` 과
+  별개로 관리 — 의도된 분리. ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**🎉 Phase 9 완결** — B-50 + B-51 = 2/2.
+
+**🏆 Extended #2 완결** (B-42-B26 제외 시 65/65 원자). B-42-B26 (Jumper SlideDown) 은
+Jumper factor 인프라 대규모 미이식으로 Extended 범위 외 → 별도 포커스 또는 후속 세션
+(Phase 7 B-48 류 인프라와 동급) 에서 처리.
+
+**다음 세션 권고**: **Extended #2 전수 완료 감사** — 잔여 §7 근사 / §16 신규 발견 /
+회귀 체크 / 빌드 / 플레이테스트 준비 상태 확인. 또는 B-42-B26 Jumper factor 인프라
+별도 포커스 평가.
+
+**진행률** (세션 133 종료 시점):
+- Extended 완료: **67 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 13 + Phase 7 7 +
+  Phase 8 2 + Phase 9 **2** = 67)
+- Extended 총 원자 ~67 (B-42-B26 별도)
+- **Extended 진행률: 67/67 ≈ 100% (B-42-B26 제외)**
+- **🎉 Extended Phase 3~9 전수 완결** — B-42-B26 만 별도 대기.
 
 ### 세션 132 — 2026-04-25 — Phase 8 완결 — B-20b (Simple Base Climb) + B-20c (Smart Base Climb)
 

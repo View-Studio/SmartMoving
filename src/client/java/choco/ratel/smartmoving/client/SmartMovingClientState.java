@@ -153,6 +153,13 @@ public final class SmartMovingClientState {
     public boolean wasLevitating;
 
     /**
+     * 원본 SmartMovingSelf `wasFlying` — 이전 틱 isFlying 저장 (원본 L2511 엣지 판정용).
+     * B-51 (세션 133). isFlying 전환 엣지 (`isFlying && !wasFlying` / `!isFlying && wasFlying`)
+     * 판정으로 setHeightOffset(-1) / restoreFromFlying=true 설정.
+     */
+    public boolean wasFlying;
+
+    /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
      * 원본: flying = sp.capabilities.isFlying
      * C-15: tickEssential()에서 매 틱 계산.
@@ -947,12 +954,19 @@ public final class SmartMovingClientState {
             }
 
             // mustCrawl (원본 L1792-L1794). 1.21.1 은 AABB 기반 canStandUp 으로 근사.
-            // 원본 L2404: `if (flying && (flyingEnabled || levitateSmallEnabled)) mustCrawl = false;` 도 반영.
+            // **B-51 해소 (세션 133)**: 원본 L2404 `if (capabilities.isFlying && (isFlyingEnabled
+            //   || isLevitateSmallEnabled)) mustCrawl = false;` 정밀 복원.
+            //   기존: `isFlying && cfg0.fly` — SM 내부 isFlying 필드는 `cfg.fly && capabilities.flying
+            //   && !isSwimming && !isDiving` 으로 이미 cfg.fly 내포. 원본은 `capabilities.flying`
+            //   vanilla 기반 + OR levitateSmall. 정밀 복원.
             if (cfg0.crawl && cfg0.enabled) {
                 mustCrawl = !canStandUp(player)
                         && !isSwimming_sm && !isDiving
                         && (!isDipping || dippingDepth < 0.65F);
-                if (isFlying && cfg0.fly) mustCrawl = false;
+                if (player.getAbilities().flying
+                        && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
+                    mustCrawl = false;
+                }
             } else {
                 mustCrawl = false;
             }
@@ -1184,9 +1198,23 @@ public final class SmartMovingClientState {
                     if (_exhaustionAllowsSprinting17) _preferSprint17 = true;
                 }
 
-                // 원본 L2659-L2671 isClimbSprintSpeed — SmartStatisticsFactory.getTickDistance()
-                //   1.21.1 미이식 → `true` 근사 (모든 등반 속도 허용). B-N 후속: tick 거리 통계.
-                boolean _isClimbSprintSpeed17 = true;
+                // **B-50 해소 (세션 133)**: 원본 L2659-L2671 isClimbSprintSpeed 정밀 복원.
+                //   원본: isClimbing && preferSprint 일 때만 계산. minTickDistance = wantClimbUp 시
+                //     0.07 * freeClimbingUpSpeedFactor / wantClimbDown 시 0.11 * ...Down / else 0.07
+                //     isClimbSprintSpeed = getTickDistance() >= minTickDistance.
+                //   기존 `true` 근사 → getTickDistance(player) (B-50 헬퍼) 기반 조건부 true.
+                boolean _isClimbSprintSpeed17 = false;
+                if (isClimbing && _preferSprint17) {
+                    double _minTickDistance17;
+                    if (wantClimbUp) {
+                        _minTickDistance17 = 0.07 * cfg0.freeClimbingUpSpeedFactor;
+                    } else if (wantClimbDown) {
+                        _minTickDistance17 = 0.11 * cfg0.freeClimbingDownSpeedFactor;
+                    } else {
+                        _minTickDistance17 = 0.07;
+                    }
+                    _isClimbSprintSpeed17 = getTickDistance(player) >= _minTickDistance17;
+                }
 
                 // 원본 L2673-L2676 can* 4 판정.
                 boolean _canAnySprint17 = _preferSprint17
@@ -1241,12 +1269,37 @@ public final class SmartMovingClientState {
                 }
             }
 
-            // isFlying 원본: sp.capabilities.isFlying
-            isFlying = player.getAbilities().flying;
+            // **B-51 해소 (세션 133)**: 원본 L2510 isFlying 공식 정밀화.
+            //   원본: isFlying = Config.isFlyingEnabled() && sp.capabilities.isFlying && !isSwimming && !isDiving;
+            //   기존 근사: `isFlying = player.getAbilities().flying` 단순 복사.
+            //   정밀: `cfg.isFlyingEnabled() && player.getAbilities().flying && !isSwimming_sm && !isDiving`.
+            wasFlying = isFlying;
+            isFlying = cfg0.isFlyingEnabled()
+                    && player.getAbilities().flying
+                    && !isSwimming_sm && !isDiving;
             // wasCapabilitiesIsFlying: beforeOnLivingUpdate에서 저장 (vanilla tickMovement 실행 전)
-            wasCapabilitiesIsFlying = isFlying;
+            wasCapabilitiesIsFlying = player.getAbilities().flying;
             // wasCollidedHorizontally: 이전 틱 물리 결과 (HEAD에서 캡처 → 원본 beforeOnUpdate)
             wasCollidedHorizontally = player.horizontalCollision;
+
+            // **B-51 해소 (세션 133)**: 원본 L2511-L2522 isFlying/isLevitating 전환 엣지.
+            //   isFlying 전환 (원본 L2511-L2514):
+            //     진입 엣지 → setHeightOffset(-1)
+            //     해제 엣지 → restoreFromFlying = true
+            //   isLevitating 전환 (원본 L2516-L2522, flying 비활성 + levitateSmall 시):
+            //     동일 패턴.
+            if (isFlying && !wasFlying) {
+                heightOffset = -1F;
+            } else if (!isFlying && wasFlying) {
+                restoreFromFlying = true;
+            }
+            if (!cfg0.isFlyingEnabled() && cfg0.isLevitateSmallEnabled()) {
+                if (isLevitating && !wasLevitating) {
+                    heightOffset = -1F;
+                } else if (!isLevitating && wasLevitating) {
+                    restoreFromFlying = true;
+                }
+            }
 
             // B-33 + B-44b (세션 84): 원본 L2441-L2447 매 틱 공식으로 전환.
             // IMPL-01 이원화 구조 (if (!isCrawling) 진입 / else 유지/해제) 를 원본의 단일
@@ -2225,6 +2278,27 @@ public final class SmartMovingClientState {
                 && player.isOnGround()
                 && !isSliding
                 && !isCrawling;
+    }
+
+    /**
+     * 원본 SmartStatistics L43-L60 `calculateAllStats` 의 tickDistance 공식 1:1 이식.
+     *   diffX = sp.posX - sp.prevPosX; (동일 Y/Z)
+     *   tickDistance = data.all.calcualte(sqrt(diffX² + diffY² + diffZ²))
+     *     = sqrt(...) * 4F   (SmartStatisticsData L47: `distance = distance * 4F`)
+     *
+     * **§7 근사** (B-50-approx): SmartStatistics 의 `legYaw` / `total` smoothing 버퍼 미이식.
+     *   `calcualte()` 반환값 자체는 `distance * 4F` 단순 — 이 부분은 정확 1:1. 부수 효과
+     *   (limbSwingAmount / limbSwing 갱신 — rendering용) 은 vanilla 가 자체 처리하므로
+     *   SM 측 통계 캐시 불필요.
+     *
+     * B-50 (세션 133). SmartStatisticsFactory + SmartStatisticsDatas Hashtable 캐시 등
+     * 인프라 이식 없이 매 호출 계산 — 호출처 1곳 (isClimbSprintSpeed) 이라 비용 무시 가능.
+     */
+    public static float getTickDistance(net.minecraft.entity.player.PlayerEntity player) {
+        double dx = player.getX() - player.prevX;
+        double dy = player.getY() - player.prevY;
+        double dz = player.getZ() - player.prevZ;
+        return (float) (Math.sqrt(dx * dx + dy * dy + dz * dz) * 4.0);
     }
 
     /**

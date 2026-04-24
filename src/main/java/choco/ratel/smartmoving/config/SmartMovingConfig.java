@@ -150,6 +150,14 @@ public class SmartMovingConfig {
      * B-48b-dep (세션 131).
      */
     public boolean walkOnSprintRelease = false;
+    /**
+     * 원본: _levitateSmall = Unmodified("move.levitate.small") → 기본값 true.
+     * "standard flying small size" 옵션. vanilla creative flying 이 SM flying 비활성
+     * 상태일 때 isLevitating 전환 엣지 (원본 L2516-L2522) + mustCrawl=false 조건
+     * (원본 L2404) 에서 사용.
+     * B-51 (세션 133).
+     */
+    public boolean levitateSmall = true;
 
     // ── Jumping ─────────────────────────────────────────────────
     // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
@@ -672,6 +680,24 @@ public class SmartMovingConfig {
     }
 
     /**
+     * 원본 SmartMovingClientConfig L97-L100 `isLevitateSmallEnabled() = _levitateSmall.value && enabled`.
+     * 사용처: mustCrawl=false 조건 확장 (원본 L2404) + isLevitating 전환 엣지 블록 (원본 L2516-L2522).
+     * B-51 (세션 133).
+     */
+    public boolean isLevitateSmallEnabled() {
+        return levitateSmall && enabled;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L92-L95 `isFlyingEnabled() = _fly.value && enabled`.
+     * 사용처: isFlying 공식 (원본 L2510) + isLevitating 전환 엣지 (원본 L2516) +
+     * mustCrawl=false 조건 (원본 L2404). B-51 (세션 133).
+     */
+    public boolean isFlyingEnabled() {
+        return fly && enabled;
+    }
+
+    /**
      * 원본 SmartMovingClientConfig L57-L60 `isFreeClimbAutoLaddderEnabled() =
      *   _freeClimbingAutoLaddder.value && enabled`.
      * 사용처: `wouldWantClimb` 4-OR 의 3번째 분기 (원본 L2471) 자동 사다리 진입 게이트.
@@ -918,6 +944,7 @@ public class SmartMovingConfig {
         lavaLikeWater            = getBool(p,   "move.lava.water",                lavaLikeWater);
         runOnSprintRelease       = getBool(p,   "move.sprint.key.release.run",    runOnSprintRelease);
         walkOnSprintRelease      = getBool(p,   "move.sprint.key.release.walk",   walkOnSprintRelease);
+        levitateSmall            = getBool(p,   "move.levitate.small",            levitateSmall);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
@@ -1043,6 +1070,7 @@ public class SmartMovingConfig {
         p.setProperty("move.lava.water",                 String.valueOf(lavaLikeWater));
         p.setProperty("move.sprint.key.release.run",     String.valueOf(runOnSprintRelease));
         p.setProperty("move.sprint.key.release.walk",    String.valueOf(walkOnSprintRelease));
+        p.setProperty("move.levitate.small",             String.valueOf(levitateSmall));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));
