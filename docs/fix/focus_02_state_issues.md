@@ -440,6 +440,20 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1c3b 근사 1건 + mod 분기 생략 2건** (세션 96): `Orientation.getWallFlag` 이식 시
+  1.21.1 BlockState property 기반 근사 + mod 호환 분기 생략:
+  (1) **Pane/Fence/Wall 연결 판정** — 원본 `BlockPane.canPaneConnectToBlock(neighbor)` /
+  `BlockFence.canConnectFenceTo(world, x, y, z)` / `BlockWall.canConnectWallTo(world, x, y, z)`
+  동적 호출 → 1.21.1 `ConnectingBlock.NORTH/SOUTH/EAST/WEST` BooleanProperty +
+  `WallBlock.NORTH_SHAPE` 등 `EnumProperty<WallShape>` (`!= NONE` 체크) 조회. BlockState 가
+  이미 연결 결과를 property 로 저장 — 대부분 동치. neighbor 변경 직후 같은 tick 안에서는
+  약간의 캐시 지연 가능성.
+  (2) **BetterMisc reflection 분기 생략** — 원본 `_canConnectFenceTo` reflection 호출 (mod
+  fence 지원). BetterMisc mod 1.21.1 미이식 → false.
+  (3) **Carpenters 분기 생략** — 원본 `getCarpentersBlockData(i, j_offset, k)` switch 분기.
+  Carpenters mod 1.21.1 미이식 → false.
+  각 분기는 `getWallFlag` 내 주석 명시. `isFenceGateFront` 는 근사 없이 1:1 이식
+  (FenceGateBlock.FACING Direction 매핑).
 - **B-19a1c2 근사 3건** (세션 94): `Orientation.isBaseAccessible` 이식 시 mod 호환 분기
   생략:
   (1) RedPower wire 분기 (원본 L2352-L2369) — `isRedPowerWire` / `getRpCoverSides` /

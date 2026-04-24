@@ -130,8 +130,10 @@ Orientation 판정 + ClimbGap 계산.
                         `isAccessAccessible` + `isDoorFrontBlocked` — 단순 3개 (wall-flag
                         인프라 무관). 근사 없음 — vanilla door FACING/OPEN/HALF property 로
                         원본 metadata 8 case 전수 1:1 매핑.
-                  - [ ] **B-19a1c3b**: `getWallFlag` + `getAllWallsOnNoWall` + `headedToWall` +
-                        `isFenceGateFront` + `isTopHalf` (wall-flag 인프라).
+                  - [x] **B-19a1c3b** (세션 96 완료): wall-flag 인프라 5 메서드 +
+                        `toBlockDirection` 매핑 헬퍼 + `getConnectingFlag` / `getWallShapeFlag`
+                        (BlockState property 조회). §7 근사 3건 등록 (Pane/Fence/Wall 동적
+                        계산 → property 캐시 / BetterMisc reflection / Carpenters 생략).
                   - [ ] **B-19a1c3c**: `headedToFrontWall` + `headedToRemoteFlatWall` +
                         `isRemoteAccessible` 본체 (12+ 분기).
             - [ ] **B-19a1c4**: `isFullAccessible` + `isFullExtentAccessible` +
@@ -425,6 +427,62 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 96 — 2026-04-24 — B-19a1c3b wall-flag 인프라 (getWallFlag 외)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L1727-L1738 + L1801-L1807 + L1953-L2009 read** — wall-flag 인프라 5 메서드 확인.
+2. **1.21.1 클래스 구조 파악**:
+   * `ConnectingBlock` (super) — NORTH/SOUTH/EAST/WEST BooleanProperty 선언. `PaneBlock` /
+     `FenceBlock` 공통 부모.
+   * `WallBlock` — NORTH_SHAPE/SOUTH_SHAPE/EAST_SHAPE/WEST_SHAPE EnumProperty<WallShape>.
+     `!= WallShape.NONE` 이면 연결.
+   * `FenceGateBlock.FACING` Direction + `OPEN` Boolean.
+3. **5 메서드 + 3 보조 이식**:
+   * `toBlockDirection()` (Orientation → Direction 매핑 헬퍼): NZ/PZ/ZN/ZP → WEST/EAST/NORTH/SOUTH
+   * `isFenceGateFront(state)` (원본 L1727-L1738): metadata % 4 → FenceGateBlock.FACING
+     매핑. NZ/PZ = EW 축 gate (SOUTH/NORTH facing) / ZP/ZN = NS 축 gate (WEST/EAST facing).
+     근사 없음 — 1:1.
+   * `headedToWall(base, result)` (원본 L1801-L1807): `this == base || base.rotate(±45)`.
+     근사 없음.
+   * `getAllWallsOnNoWall(state)` (원본 L2001-L2004): `instanceof PaneBlock`. 근사 없음.
+   * `isTopHalf(d)` (원본 L2006-L2009): pure math. 근사 없음.
+   * `getWallFlag(direction, i, j_offset, k, state)` (원본 L1953-L1999): 6 분기 —
+     PaneBlock → getConnectingFlag / FenceBlock → getConnectingFlag / WallBlock →
+     getWallShapeFlag / FenceGateBlock → isClosedFenceGate && isFenceGateFront / Carpenters
+     생략 / default false. **§7 근사 3건 등록**.
+   * `getConnectingFlag(state, direction)` / `getWallShapeFlag(state, direction)` — property
+     조회 헬퍼 2개 (private static).
+4. **본체 §7 B-19a1c3b 근사 3건 등록**:
+   (1) Pane/Fence/Wall 동적 canConnect* 계산 → BlockState property 캐시 조회
+   (2) BetterMisc reflection 분기 생략
+   (3) Carpenters 분기 생략
+
+**완료 전 검증 체크리스트 (세션 96 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1727-L1738 + L1801-L1807 + L1953-L2009
+  전수 read ✓
+- [근거] 1.21.1 `ConnectingBlock.NORTH/SOUTH/EAST/WEST` + `WallBlock.*_SHAPE` +
+  `WallShape.NONE` 확인 ✓
+- [대응] 5 메서드 + 3 보조 원본 ↔ 1.21.1 side-by-side. fence gate direction % 4 매핑과
+  FACING Direction 4 case 전수 ✓
+- [분기] `getWallFlag` 6 분기 (Pane/Fence/Wall/FenceGate/Carpenters/default). `isFenceGateFront`
+  4 갈래 (NZ·PZ / ZP·ZN / 나머지 false) + diagonal false. `headedToWall` 3 갈래 ✓
+- [상수] `WallShape.NONE` 비교 기준 원본 `canConnect*` 반환 true 와 등가 (1.21.1 wall 은
+  "연결 없음" = NONE, 그 외 모두 연결) ✓
+- [타이밍] 순수 BlockState 조회 — 호출 타이밍 무관 ✓
+- [근사] **§7 B-19a1c3b 근사 3건 등록 완료**. getWallFlag 내 각 분기에 "근사 이식 — 원본과
+  차이: X" 주석 ✓
+- [신규] `toBlockDirection` / `getConnectingFlag` / `getWallShapeFlag` 보조 메서드 3개 —
+  원본엔 없으나 1.21.1 property 조회 구조 편의. Extended §3 의 원자 정의 변경 없음 ✓
+- [회귀] 기존 코드 미사용 → 영향 없음. B-19a1a/b/c1/c2/c3a 의존 충족 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**다음 세션 권고**: **B-19a1c3c** — `headedToFrontWall` (L1741-L1757) +
+`headedToRemoteFlatWall` (L1941-L1951) + `isRemoteAccessible` 본체 (L2401-L2475, 12+ 분기).
+의존 모두 충족 (wall-flag 인프라 세션 96 + trap door/ladder/wallBlock/door/isFence 전부
+이식). 예상 1-2 세션 — `isRemoteAccessible` 분기량이 많음.
 
 ### 세션 95 — 2026-04-24 — B-19a1c3a `remoteLadderClimbing` + `isAccessAccessible` + `isDoorFrontBlocked`
 

@@ -4,6 +4,7 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.block.AbstractSignBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.ConnectingBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.FenceGateBlock;
@@ -19,6 +20,7 @@ import net.minecraft.block.WallSignBlock;
 import net.minecraft.block.enums.BlockHalf;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.block.enums.SlabType;
+import net.minecraft.block.enums.WallShape;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
@@ -1166,6 +1168,167 @@ public class Orientation {
         if (!_isDiagonal) return true;
         return isEmpty(remote_i, j_offset, base_k)
             && isEmpty(base_i, j_offset, remote_k);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c3b (세션 96) — wall-flag 인프라
+    // 원본: Orientation.java L1727-L1738 (isFenceGateFront), L1801-L1807 (headedToWall),
+    //       L1953-L1999 (getWallFlag), L2001-L2004 (getAllWallsOnNoWall),
+    //       L2006-L2009 (isTopHalf).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Orientation → 1.21.1 Direction 매핑 (orthogonal 4방향만). diagonal/ZZ 는 null.
+     * 내부 사용 전용. `getWallFlag` / fence gate 등 property 조회 시 필요.
+     *
+     * 기준:
+     *   NZ (-X, 서쪽 탐색) ↔ Direction.WEST
+     *   PZ (+X, 동쪽 탐색) ↔ Direction.EAST
+     *   ZN (-Z, 북쪽 탐색) ↔ Direction.NORTH
+     *   ZP (+Z, 남쪽 탐색) ↔ Direction.SOUTH
+     */
+    private Direction toBlockDirection() {
+        if (this == NZ) return Direction.WEST;
+        if (this == PZ) return Direction.EAST;
+        if (this == ZN) return Direction.NORTH;
+        if (this == ZP) return Direction.SOUTH;
+        return null;
+    }
+
+    /**
+     * 원본 L1727-L1738 `isFenceGateFront(int metaData)` — fence gate 가 이 Orientation
+     * 탐색 방향과 정렬되어 있는지.
+     *
+     * 원본 `metadata % 4`:
+     *   0 = SOUTH facing, 1 = WEST, 2 = NORTH, 3 = EAST
+     *   NZ/PZ → 0 or 2 (EW 축 gate = SOUTH/NORTH facing) — 서쪽/동쪽에서 통과 가능
+     *   ZP/ZN → 1 or 3 (NS 축 gate = WEST/EAST facing) — 남쪽/북쪽에서 통과 가능
+     *
+     * 1.21.1 매핑: `FenceGateBlock.FACING` Direction. diagonal 방향은 false (원본과 동일).
+     */
+    private boolean isFenceGateFront(BlockState state) {
+        if (!isFenceGate(state)) return false;
+        Direction facing = state.get(FenceGateBlock.FACING);
+        if (this == NZ || this == PZ)
+            return facing == Direction.SOUTH || facing == Direction.NORTH;
+        if (this == ZP || this == ZN)
+            return facing == Direction.WEST  || facing == Direction.EAST;
+        return false;
+    }
+
+    /**
+     * 원본 L1801-L1807 `headedToWall(Orientation base, boolean result)` — 이 Orientation
+     * 이 `base` 또는 ±45° 회전 결과와 같으면 `result` 반환, 아니면 false.
+     *
+     * 예: base=NZ, this=NZ/NN/NP 중 하나면 result 반환.
+     */
+    private boolean headedToWall(Orientation base, boolean result) {
+        if (this == base || this == base.rotate(45) || this == base.rotate(-45))
+            return result;
+        return false;
+    }
+
+    /**
+     * 원본 L2001-L2004 `getAllWallsOnNoWall(Block block)` — `block instanceof BlockPane`.
+     *
+     * 의미: pane 블록은 주변 연결 대상 없으면 4방향 "wall flag" 를 모두 off 로 반환하는데,
+     * 그 경우 호출자가 이를 "전방향 wall 가정" 으로 재해석한다는 표시. `headedToFrontWall`
+     * 에서 사용.
+     */
+    private static boolean getAllWallsOnNoWall(BlockState state) {
+        return state != null && state.getBlock() instanceof PaneBlock;
+    }
+
+    /**
+     * 원본 L2006-L2009 `isTopHalf(double d)` — 좌표 소수부의 2분의 1 격자 top/bottom 판정.
+     *
+     *   d = 좌표 (i 또는 k). 2배한 절대값 floor 의 odd/even 으로 top 여부 결정.
+     *   ex: d = 0.3 → 0.6 → 0 (bottom), d = 0.7 → 1.4 → 1 (top).
+     *
+     * Pure math — 1:1 이식.
+     */
+    private static boolean isTopHalf(double d) {
+        return (int)Math.abs(Math.floor(d * 2D)) % 2 == 1;
+    }
+
+    /**
+     * 원본 L1953-L1999 `getWallFlag(Orientation direction, int i, int j_offset, int k,
+     * Block block)` — 주어진 위치의 wall/pane/fence/gate 블록이 `direction` 방향으로
+     * "연결되어 있는지" 판정.
+     *
+     * 원본 분기:
+     *   (1) BlockPane → `canPaneConnectToBlock(neighbor)` 동적 계산
+     *   (2) isFenceBase (Fence/Wall) → `canConnectFenceTo/WallTo(world, x, y, z)` 동적 계산
+     *   (3) BetterMisc reflection → mod 근사 생략
+     *   (4) isFenceGate → `isClosedFenceGate && isFenceGateFront(metaData)`
+     *   (5) Carpenters → mod 근사 생략
+     *   (6) default → false
+     *
+     * **§7 근사** (B-19a1c3b-approx-1): 1.21.1 에서는 Pane/Fence 는 `ConnectingBlock.NORTH/
+     * SOUTH/EAST/WEST` BooleanProperty 를 이미 설정 저장. Wall 은 `WallBlock.NORTH_SHAPE`
+     * 등 `EnumProperty<WallShape>` — `!= WallShape.NONE` 이면 연결. 원본은 호출 시점
+     * 동적 계산, 1.21.1 은 BlockState 캐시 조회 — 대부분의 경우 동치 (neighbor 변경 후
+     * 같은 tick 안에서는 약간 차이 가능).
+     *
+     * BetterMisc reflection (`_canConnectFenceTo`) + Carpenters (`getCarpentersBlockData`)
+     * 분기 생략.
+     */
+    private boolean getWallFlag(Orientation direction, int i, int j_offset, int k, BlockState state) {
+        if (state == null) return false;
+        Direction d = direction.toBlockDirection();
+        if (d == null) return false;
+
+        Block block = state.getBlock();
+
+        // 원본 분기 (1): BlockPane — 1.21.1: ConnectingBlock NORTH/SOUTH/EAST/WEST property
+        if (block instanceof PaneBlock) {
+            // 근사 이식 — 원본과 차이: canPaneConnectToBlock 동적 → BlockState property 캐시
+            return getConnectingFlag(state, d);
+        }
+
+        // 원본 분기 (2): isFenceBase = FenceBlock || WallBlock
+        if (isFenceBase(state)) {
+            if (block instanceof FenceBlock) {
+                // 근사 이식 — 원본과 차이: canConnectFenceTo 동적 → ConnectingBlock property 캐시
+                return getConnectingFlag(state, d);
+            }
+            if (block instanceof WallBlock) {
+                // 근사 이식 — 원본과 차이: canConnectWallTo 동적 → WallBlock *_SHAPE != NONE
+                return getWallShapeFlag(state, d);
+            }
+            // 근사 이식 — 원본과 차이: BetterMisc `_canConnectFenceTo` reflection 분기 생략
+            return false;
+        }
+
+        // 원본 분기 (4): FenceGate
+        if (isFenceGate(state)) {
+            return isClosedFenceGate(state) && isFenceGateFront(state);
+        }
+
+        // 원본 분기 (5): Carpenters — 근사 이식 — 원본과 차이: _blockCarpentersLadder 분기 생략
+        return false;
+    }
+
+    /** `ConnectingBlock.NORTH/SOUTH/EAST/WEST` BooleanProperty 기반 방향 연결 조회. */
+    private static boolean getConnectingFlag(BlockState state, Direction d) {
+        switch (d) {
+            case NORTH: return state.get(ConnectingBlock.NORTH);
+            case SOUTH: return state.get(ConnectingBlock.SOUTH);
+            case EAST:  return state.get(ConnectingBlock.EAST);
+            case WEST:  return state.get(ConnectingBlock.WEST);
+            default:    return false;
+        }
+    }
+
+    /** `WallBlock.NORTH_SHAPE/SOUTH_SHAPE/EAST_SHAPE/WEST_SHAPE` WallShape 기반 연결 조회. */
+    private static boolean getWallShapeFlag(BlockState state, Direction d) {
+        switch (d) {
+            case NORTH: return state.get(WallBlock.NORTH_SHAPE) != WallShape.NONE;
+            case SOUTH: return state.get(WallBlock.SOUTH_SHAPE) != WallShape.NONE;
+            case EAST:  return state.get(WallBlock.EAST_SHAPE)  != WallShape.NONE;
+            case WEST:  return state.get(WallBlock.WEST_SHAPE)  != WallShape.NONE;
+            default:    return false;
+        }
     }
 
     /**
