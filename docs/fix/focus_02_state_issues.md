@@ -440,6 +440,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a2e 근사 1건** (세션 106): `Orientation.isLadderSubstitute` 본체 이식 시
+  `ClimbGap.Meta` 필드 생략 — 원본 `out_climbGap.Meta = grabMeta` 는 vanilla 1.7.10 의
+  `Block+int meta` 쌍 저장. 1.21.1 `BlockState` 는 metadata 를 property 로 내재 →
+  `out_climbGap.state = grabBlock` 만 저장. ClimbGap 에 meta 필드 자체가 없음 (표면 매핑).
+  gap 1-5 계산 로직은 원본 1:1 (upper half 2x3 + lower half 2x3 + 대각 상수값 전수 보존).
+  `canStand = gap > 3` / `mustCrawl = gap > 1 && gap < 4` 설정 정확 — **B-17/B-18 공식의
+  `hasClimbGap`/`hasClimbCrawlGap` 무력화 해소 근원**. L548-L550 의 `isOnWallRope(0)` 반복
+  (원본 버그 가능성) 은 1:1 보존.
 - **B-19a2d 근사 3건** (세션 105): `Orientation.hasBottomHold` 본체 (200+줄) 이식 시 mod
   분기 생략:
   (1) BetterThanWolves/RopesPlus rope+anchor 분기 (원본 L749-L759) 생략 — B-19a2a4

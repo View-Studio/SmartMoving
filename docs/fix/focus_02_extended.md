@@ -172,8 +172,11 @@ Orientation 판정 + ClimbGap 계산.
             vanilla 분기 16 이식 (ladder 4 + iron_bars / freeFenceClimbing 3 / belowWall 4
             서브 / 복합 중첩 6 AND / stair top / trap door / door frontBlocked / vine 4) +
             mod 3 카테고리 근사 생략. §7 근사 3건 (RedPower / BTW-RopesPlus / ASRope-ASGH).
-      - [ ] **B-19a2e**: `isLadderSubstitute` 본체 (L477-L606) — gap 1-5 계산 +
-            `ClimbGap.canStand/mustCrawl/state/direction` 설정 핵심.
+      - [x] **B-19a2e** (세션 106 완료): `isLadderSubstitute` 본체 (L477-L606, 130줄) +
+            Feet/Hands LadderSubstitute public 2 + 외부 API 래퍼 1 = 4 메서드.
+            **gap 1-5 계산 + ClimbGap.canStand/mustCrawl 설정 핵심 — B-19 도미노 해소 실체**.
+            §7 근사 1건 (ClimbGap.Meta 필드 생략 — BlockState 내재 표면 매핑).
+            **B-19a2 (isLadderSubstitute 전체 8 서브) 완료**.
 
 - [ ] **B-19a3. `handsClimbing()` / `feetClimbing()` 판정 메서드 이식**
       (원본 L329-L475)
@@ -457,6 +460,82 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 106 — 2026-04-24 — B-19a2e `isLadderSubstitute` 본체 — **B-19a2 전체 완료**
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L477-L606 전수 read** — isLadderSubstitute 본체 130줄. L299-L327 (Feet/Hands
+   public + 외부 API 래퍼) 도 포함.
+2. **4 메서드 이식**:
+   * `isFeetLadderSubstitute(w, bi, j, bk)` public (원본 L299-L306): middle/base 2 gap OR
+   * `isHandsLadderSubstitute(w, bi, j, bk)` public (원본 L308-L316): middle/base/sub 3 gap OR
+   * `isLadderSubstitute(worldObj, i, j, k, halfOffset)` 외부 API 래퍼 (원본 L318-L327):
+     static 상태 필드 설정 후 내부 본체 호출
+   * `isLadderSubstitute(localOffset, out_climbGap)` **본체 130줄** (원본 L477-L606):
+     - `initializeLocal(localOffset)` (B-19a2b 이식) 호출
+     - `local_half == 1` (upper): hasHalfHold() 성공 시
+       - !grabRemote (base grab): overLadder/overAccessible/overFullAccessible 조합 →
+         gap 1/5/crawl?3:5
+       - grabRemote (remote grab): isBaseAccessible(0) + isUpperHalfFrontEmpty +
+         isFullAccessible(1) + isFullExtentAccessible(2)/isJustLowerHalfExtentAccessible(2)
+         → gap 1/3/4/5
+     - `local_half == 0` (lower): hasBottomHold() 성공 시
+       - !grabRemote: 동일 패턴 → gap 1/2/4/crawl?2:4
+       - grabRemote: isFullAccessible(0) + isFullExtentAccessible(1) → gap 0/1/2/4
+     - 최종 out_climbGap 설정 (gap > 0):
+       - `state = grabBlock`
+       - `canStand = gap > 3`
+       - `mustCrawl = gap > 1 && gap < 4`
+       - `direction = this.toBlockDirection()`
+3. **1.21.1 매핑**:
+   * `out_climbGap.Block = grabBlock` → `out_climbGap.state = grabBlock` (BlockState)
+   * `out_climbGap.Meta = grabMeta` **생략** (§7 근사) — 1.21.1 ClimbGap 에 meta 필드 없음
+     (BlockState 내재 표면 매핑)
+   * `out_climbGap.Direction = this` → `out_climbGap.direction = toBlockDirection()`
+     (B-19a1c3b 헬퍼)
+4. **원본 버그 1:1 유지**: L548-L550 `overOverLadder` 에서 `isOnWallRope(0)` (0 이어야
+   1) 반복. 원본 타입 오류로 보이나 1:1 이식 방침으로 그대로 유지 (코드 주석 명시).
+5. **§7 B-19a2e 근사 1건 등록** (`ClimbGap.Meta` 생략).
+
+**완료 전 검증 체크리스트 (세션 106 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L299-L327 + L477-L606 전수 read ✓
+- [근거] 의존 메서드 전수 충족 — B-19a1a (상태 필드) + B-19a1a/b/c1-c4 (15+ 헬퍼) +
+  B-19a2a1/a2/a3/a4 (보조) + B-19a2b (setHalfGrabType/setBottomGrabType/initializeLocal/
+  initializeOffset/initialize) + B-19a2c (hasHalfHold) + B-19a2d (hasBottomHold) ✓
+- [대응] 4 메서드 원본 ↔ 1.21.1 side-by-side. 본체 130줄 원본 구조 완전 보존 (if-else 중첩
+  depth 5+) ✓
+- [분기] upper half (local_half==1): hasHalfHold 실패/성공 x !grabRemote/grabRemote x
+  overLadder/overAccessible 등 조합 전수 (gap 0/1/3/5 분기).
+  lower half (local_half==0): hasBottomHold 실패/성공 x !grabRemote/grabRemote x 동일
+  (gap 0/1/2/4 분기). if-else depth 5+ 전수 보존 ✓
+- [상수] gap 값 1-5 + crawl 분기 (crawl?3:5 / crawl?2:4) + `gap > 3` / `gap > 1 && gap < 4`
+  threshold 원본 동일 ✓
+- [타이밍] `initializeLocal` → gap 계산 → ClimbGap 설정 순서 원본 1:1 ✓
+- [근사] **§7 B-19a2e 근사 1건 등록 완료** (ClimbGap.Meta 생략) ✓
+- [신규] 원본 L548-L550 `isOnWallRope(0)` 반복 (1 대신) — 원본 버그 가능성, 1:1 유지 주석 명시 ✓
+- [회귀] 기존 코드 미사용. B-19a3 (handsClimbing/feetClimbing) 이 isLadderSubstitute 를
+  각 halfOffset (top/middle/base/sub/subSub) 별 호출 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**🎉 B-19a2 (isLadderSubstitute 전체 8 서브 — a2a1/a2a2/a2a3/a2a4/a2b/a2c/a2d/a2e) 완료**
+— **B-19 도미노 해소의 실체 완결**. `ClimbGap.canStand`/`mustCrawl` 설정 로직이 비로소 실제
+값 저장 → B-17 `hasClimbCrawlGap` / B-18 `hasClimbGap` 공식이 실제 값 기반 평가 준비 완료
+(B-19a4 Climber 연결 후 활성).
+
+**다음 세션 권고**: **B-19a3** — `handsClimbing()` / `feetClimbing()` 판정 메서드 이식 (원본
+L329-L475, 150줄). `isLadderSubstitute` (B-19a2e) 를 각 halfOffset (top/middle/base/sub/
+subSub) 별 호출하여 HandsClimbing/FeetClimbing enum 결과 + ClimbGap 결과 집계. 1 세션
+예상.
+
+**진행률** (세션 106 종료 시점):
+- Extended 완료: **17 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / a2a1 / a2a2 / a2a3 / a2a4 / a2b / a2c / a2d / **a2e**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 17/61 ≈ 28%**
+- **포커스 #2 전체: (54+17)/115 ≈ 62%**
+- **B-19a 마일스톤**: a0/a1/a2 완료 (17+ 서브). a3/a4 남음 → **B-19a 완료 임박**.
 
 ### 세션 105 — 2026-04-24 — B-19a2d `hasBottomHold` 본체 (원본 L728-L935)
 

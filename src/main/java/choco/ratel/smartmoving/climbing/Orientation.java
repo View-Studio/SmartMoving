@@ -2614,4 +2614,196 @@ public class Orientation {
 
         return setBottomGrabType(NoGrab, null);
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2e (세션 106) — isLadderSubstitute 본체 + 4 메서드 / B-19 도미노 해소 실체
+    // 원본: Orientation.java L299-L327 (public Feet/Hands + internal wrapper),
+    //       L477-L606 (isLadderSubstitute 본체 130줄 gap 1-5 계산).
+    //
+    // **핵심**: gap 계산 + `ClimbGap.canStand=gap>3` / `mustCrawl=gap>1 && gap<4` 설정 —
+    // B-17/B-18/B-16c 공식의 `hasClimbGap`/`hasClimbCrawlGap` 무력화를 해소.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L299-L306 `isFeetLadderSubstitute(World world, int bi, int j, int bk)` — 발 레벨
+     * ladder 대체 가능 여부. `(bi+_i, j, bk+_k)` 원격 위치에서 middle/base 두 offset gap 체크.
+     */
+    public boolean isFeetLadderSubstitute(World w, int bi, int j, int bk) {
+        int i = bi + _i;
+        int k = bk + _k;
+        return isLadderSubstitute(w, i, j, k, middle) > 0
+            || isLadderSubstitute(w, i, j, k, base) > 0;
+    }
+
+    /**
+     * 원본 L308-L316 `isHandsLadderSubstitute(World world, int bi, int j, int bk)` — 손 레벨
+     * ladder 대체 가능. middle/base/sub 3 offset gap 체크.
+     */
+    public boolean isHandsLadderSubstitute(World w, int bi, int j, int bk) {
+        int i = bi + _i;
+        int k = bk + _k;
+        return isLadderSubstitute(w, i, j, k, middle) > 0
+            || isLadderSubstitute(w, i, j, k, base) > 0
+            || isLadderSubstitute(w, i, j, k, sub) > 0;
+    }
+
+    /**
+     * 원본 L318-L327 `isLadderSubstitute(World worldObj, int i, int j, int k, int halfOffset)` —
+     * 외부 API 래퍼. static 상태 필드 (world/remote_i/all_j/remote_k/all_offset) 를 설정하고
+     * 내부 본체 호출.
+     */
+    private int isLadderSubstitute(World worldObj, int i, int j, int k, int halfOffset) {
+        world = worldObj;
+        remote_i = i;
+        all_j = j;
+        remote_k = k;
+        all_offset = 0;
+        return isLadderSubstitute(halfOffset, null);
+    }
+
+    /**
+     * 원본 L477-L606 `isLadderSubstitute(int local_Offset, ClimbGap out_climbGap)` — gap 계산
+     * 본체 (130줄). local_half (0/1) 로 upper/lower half 분기, 각각 hasHalfHold/hasBottomHold
+     * 로 grab 가능 확인 후 `overLadder`/`overAccessible`/`overFullAccessible` 조합으로
+     * gap 1-5 결정.
+     *
+     * 최종 `ClimbGap` 설정 (gap > 0 시):
+     *   state = grabBlock
+     *   canStand = gap > 3  ← B-17/B-18 `hasClimbGap` 의 원천
+     *   mustCrawl = gap > 1 && gap < 4  ← `hasClimbCrawlGap` 의 원천
+     *   direction = this
+     *
+     * 1.21.1 매핑:
+     *   - `out_climbGap.Block = grabBlock` → `out_climbGap.state = grabBlock` (BlockState)
+     *   - `out_climbGap.Meta = grabMeta` **생략** — 1.21.1 ClimbGap 에 meta 필드 없음
+     *     (BlockState 내재 표면 매핑).
+     */
+    protected int isLadderSubstitute(int local_Offset, ClimbGap out_climbGap) {
+        initializeLocal(local_Offset);
+
+        int gap;
+        if (local_half == 1) {
+            // upper half — hasHalfHold 로 grab 가능 여부 확인
+            if (hasHalfHold()) {
+                if (!grabRemote) {
+                    // base grab (플레이어 자신이 잡음)
+                    boolean overLadder = isOnLadderOrVine(0)
+                                      || isOnOpenTrapDoor(0)
+                                      || isRope(0)
+                                      || isOnWallRope(0);
+                    boolean overOverLadder = isOnLadderOrVine(1)
+                                          || isOnOpenTrapDoor(1)
+                                          || isRope(1)
+                                          || isOnWallRope(1);
+                    boolean overAccessible = isBaseAccessible(1, false, true);
+                    boolean overOverAccessible = isBaseAccessible(2, false, true);
+                    boolean overFullAccessible = overAccessible
+                            && isFullAccessible(1, grabRemote);
+                    boolean overOverFullAccessible = overAccessible
+                            && isFullExtentAccessible(2, grabRemote);
+
+                    if (overLadder) {
+                        if (overOverLadder)
+                            gap = 1;
+                        else if (overOverAccessible)
+                            gap = 1;
+                        else
+                            gap = 1;
+                    } else if (overAccessible) {
+                        if (overFullAccessible) {
+                            if (overOverFullAccessible)
+                                gap = 5;
+                            else
+                                gap = crawl ? 3 : 5;
+                        } else if (overOverLadder)
+                            gap = 5;
+                        else
+                            gap = 1;
+                    } else
+                        gap = 1;
+                } else if (isBaseAccessible(0)) {
+                    // remote grab (이 방향 블록을 잡음)
+                    if (isUpperHalfFrontEmpty(remote_i, 0, remote_k)) {
+                        if (isFullAccessible(1, grabRemote)) {
+                            if (isFullExtentAccessible(2, grabRemote))
+                                gap = 5;
+                            else if (isJustLowerHalfExtentAccessible(2))
+                                gap = 4;
+                            else
+                                gap = 3;
+                        } else
+                            gap = 1;
+                    } else
+                        gap = 1;
+                } else
+                    gap = 0;
+            } else
+                gap = 0;
+        } else {
+            // lower half — hasBottomHold 로 grab 가능 확인
+            if (hasBottomHold()) {
+                if (!grabRemote) {
+                    boolean overLadder = isOnLadderOrVine(0)
+                                      || isOnOpenTrapDoor(0)
+                                      || isRope(0)
+                                      || isOnWallRope(0);
+                    // 원본 L548-L550: 마지막은 `isOnWallRope(0)` (0 이지 1 아님) — 원본 버그
+                    // 가능성 있으나 **1:1 이식** 원칙 유지.
+                    boolean overOverLadder = isOnLadderOrVine(1)
+                                          || isOnOpenTrapDoor(1)
+                                          || isRope(1)
+                                          || isOnWallRope(0);
+                    boolean overAccessible = isBaseAccessible(0, false, true);
+                    boolean overOverAccessible = isBaseAccessible(1, false, true);
+                    boolean overFullAccessible = overAccessible
+                            && isFullAccessible(0, grabRemote);
+                    boolean overOverFullAccessible = overAccessible
+                            && isFullExtentAccessible(1, grabRemote);
+
+                    if (overLadder) {
+                        if (overOverLadder)
+                            gap = 1;
+                        else if (overOverAccessible)
+                            gap = 1;
+                        else
+                            gap = 1;
+                    } else if (overAccessible) {
+                        if (overFullAccessible) {
+                            if (overOverAccessible) {
+                                if (overOverFullAccessible)
+                                    gap = 4;
+                                else
+                                    gap = crawl ? 2 : 4;
+                            } else
+                                gap = 2;
+                        } else if (overOverLadder)
+                            gap = 2;
+                        else
+                            gap = 1;
+                    } else
+                        gap = 1;
+                } else if (isBaseAccessible(0)) {
+                    if (isFullAccessible(0, grabRemote)) {
+                        if (isFullExtentAccessible(1, grabRemote))
+                            gap = 4;
+                        else
+                            gap = 2;
+                    } else
+                        gap = 1;
+                } else
+                    gap = 0;
+            } else
+                gap = 0;
+        }
+
+        if (out_climbGap != null && gap > 0) {
+            out_climbGap.state = grabBlock;
+            // 근사 이식 — 원본과 차이: out_climbGap.Meta = grabMeta 생략 (1.21.1 BlockState
+            // 에 metadata 내재, ClimbGap 에 Meta 필드 없음).
+            out_climbGap.canStand  = gap > 3;
+            out_climbGap.mustCrawl = gap > 1 && gap < 4;
+            out_climbGap.direction = this.toBlockDirection();
+        }
+        return gap;
+    }
 }
