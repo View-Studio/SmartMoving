@@ -338,6 +338,24 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
   Phase 9 B-48b-dep 로 추가.
 - Phase 9 "SmartStatistics + 후속 엣지 케이스" 신설 (B-50 / B-48b-dep / B-48b-fallback).
 
+**전수 감사 5차 (처음부터 끝까지 청크 순차 읽기 — 신규 누락 0건 확인)**:
+- 사용자 지시: 본체 파일을 0번째 라인부터 토큰 한도까지 청크로 읽으며 라인 번호를 기록,
+  다음 세션은 기록된 라인부터 계속. 매 청크마다 Extended 교차 확인.
+- 실행: `.tmp_research/focus_02_audit_progress.md` 에 진행 기록. 본체 4917줄을 7 청크 (L1-500
+  / L501-1000 / L1001-1500 / L1501-2100 / L2101-2700 / L2701-3400 / L3401-4100 / L4101-4917)
+  로 분할하여 각 청크 Read 후 "미이식/⚠️/✗/[누락]/[근사]" 표현 전수 추출 + Extended 원자
+  대조.
+- **결과: 신규 누락 0건 확정**. 청크 1 에서 9건 의심 후보 올렸으나 청크 2 로 넘어가며 전부
+  해소됨:
+  * B-12 waterMovementTicks → 세션 64 완료 (본체 §6.4 표기 구식)
+  * B-10d isLevitating → 세션 71 완료 (본체 §6.4 표기 구식)
+  * B-15d/e/f (isVine*/isClimbingStill/edgeBlock) → 필드 세션 40 완료, 갱신 로직은
+    Phase 3 B-19a~d 흡수
+  * getMaxPlayerLiquidBetween → Phase 6 B-42 AABB 묶음 범위
+  * isPlayerInSolidBetween → B-17b1 세션 48 정밀 이식 완료
+  * Orientation.isClimbable/isTunnelAhead → Phase 3 B-19a 범위
+- 5차 감사는 4차 Agent 교차 대조 결과의 정확성 확인 역할. Extended 총 원자 **43개** 유지.
+
 **전수 감사 4차 (Agent 기반 기계적 교차 대조 — 확정 누락 6건 추가 발견)**:
 - 사용자 지적: 세 번 감사로도 누락이 계속 나옴 → 감사 방법 근본 재설계.
 - 방법: general-purpose 에이전트에 (a) 본체 파일 전수 read (b) Extended §3 원자 전수
