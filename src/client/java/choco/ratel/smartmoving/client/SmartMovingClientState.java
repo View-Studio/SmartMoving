@@ -455,6 +455,15 @@ public final class SmartMovingClientState {
     /** 원본 jumpButton.StopPressed — 이번 틱 점프키 엣지(새로 뗌). StartPressed는 jumpKeyStartPressed. */
     public boolean jumpKeyStopPressed;
 
+    /**
+     * 원본 `grabButton.StartPressed` — 이번 틱 grab 키 엣지(새로 눌림). vanilla
+     * `KeyBinding.wasPressed()` 는 "press 이벤트 카운터에서 1 소비" 시멘틱이라 같은 틱에
+     * 2회째 호출 시 false 반환. B-46 (세션 66) — tickEssential 초반 1회 호출 → 이 필드
+     * 저장 → 모든 소비 지점 (pre-compute / IMPL-01 / 기타) 이 필드 참조로 통일.
+     * 원본 `grabButton.StartPressed` 는 틱 내 불변 불리언이므로 시멘틱 등가.
+     */
+    public boolean grabJustPressed;
+
     // ── IMPL-03: 더블클릭 방향 점프 카운터 ──────────────────────────────
     /** A키 더블클릭 카운터. 0=비활성, >0=첫 클릭 대기, -1=발동 예약, -2=대각선 대기. */
     public int leftJumpCount;
@@ -696,6 +705,11 @@ public final class SmartMovingClientState {
         sneakKeyStopPressed  = !curSneakPressed && prevSneakKeyPressed;
         prevSneakKeyPressed = curSneakPressed;
 
+        // B-46 (세션 66): 원본 `grabButton.StartPressed` 이식.
+        // vanilla `KeyBinding.wasPressed()` 는 카운터 소비성이라 같은 틱 2회째부터 false.
+        // 여기서 1회만 호출 → `grabJustPressed` 필드에 저장 → 모든 소비 지점에서 필드 참조.
+        grabJustPressed = SmartMovingKeys.grab.wasPressed();
+
         // 원본 SmartMovingSelf triggerWallJumping — 매 틱 시작에 리셋.
         // 리서치 파일에 원본 리셋 위치 기록 없음 → 보수적으로 "매 틱 1회용 이벤트" 로 처리.
         triggerWallJumping = false;
@@ -769,7 +783,8 @@ public final class SmartMovingClientState {
             // 원본처럼 raw sneakKey + sneakToggled 사용(원본 L1801).
             boolean sneakPressedRaw = net.minecraft.client.MinecraftClient.getInstance().options.sneakKey.isPressed();
             SmartMovingConfig cfg0 = SmartMovingConfig.Config;
-            boolean grabJustPressed0 = SmartMovingKeys.grab.wasPressed();
+            // B-46 (세션 66): `SmartMovingKeys.grab.wasPressed()` 지역 호출 제거 —
+            // tickEssential 초반 1회 저장된 `grabJustPressed` 필드 참조.
             boolean grabHeld0 = SmartMovingKeys.grab.isPressed();
 
             // mustCrawl (원본 L1792-L1794). 1.21.1 은 AABB 기반 canStandUp 으로 근사.
@@ -811,7 +826,7 @@ public final class SmartMovingClientState {
                     (
                         (isCrawling && (inputContinueCrawl || contextContinueCrawl))
                         ||
-                        (grabJustPressed0 && (sneakToggled || sneakPressedRaw) && player.isOnGround())
+                        (grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround())
                     );
             // 원본 진입 경로 추가 가드(!flying/!swim/!dive/!dipping/!climbing/!crawlClimbing/!ceilingClimbing/
             //   !sliding/!headJumping): 1.21.1 에서는 canCrawl(원본 L1805)과 중복. 여기선 상태 전환을
@@ -986,7 +1001,8 @@ public final class SmartMovingClientState {
             // IMPL-01: 크롤링 진입/유지/해제 — wantCrawl/mustCrawl 필드는 isSlow 계산 앞에서 이미 확정됨.
             SmartMovingConfig cfg = SmartMovingConfig.Config;
             if (cfg.crawl) {
-                boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();
+                // B-46 (세션 66): 지역 grabJustPressed 제거 — tickEssential 초반 1회 저장된
+                // public 필드 `grabJustPressed` 참조 (L1035 `if (grabJustPressed)` 는 필드로 resolve).
                 if (!isCrawling) {
                     // B-32 (세션 44): 원본 L2434-L2439 canCrawl 5-AND 완전 복원. 잉여
                     //   (!isCrawlClimbing && !isCeilingClimbing && !isSliding && !isHeadJumping
@@ -1355,6 +1371,7 @@ public final class SmartMovingClientState {
         wasClimbCrawling = false;
         sneakKeyStartPressed = false;
         sneakKeyStopPressed = false;
+        grabJustPressed     = false;
         prevSneakKeyPressed = false;
         jumpKeyStopPressed = false;
         isSliding = false;

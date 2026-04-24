@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 65 — B Phase 2 계속 / B-1b) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 33 원자 완료 / ⏳ **B Phase 2 잔여 ~7 원자** |
+| 상태 | 🟡 진행 중 (세션 66 — B Phase 2 계속 / B-46) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 34 원자 완료 / ⏳ **B Phase 2 잔여 ~6 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -909,6 +909,20 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (3-4) L943-L944 R-09 블록 / (5) L959 wantSneak_ / (6) toCrawling() 내부 L1173 /
       (7) Jumper L110 → sm.toCrawling() 호출로 승격 (ignoreNextStopSneakButtonPressed
       자동 포함). cfg.enabled 누락 3곳 해소 (L788/L959/Jumper L112).
+
+#### B-46. `grab.wasPressed()` 다중 호출 해소 (§16 세션 65 발견)
+- [x] B-46. ✅ **세션 66 완료** — vanilla `KeyBinding.wasPressed()` 의 카운터 소비성
+      (같은 틱 2회째부터 false) 으로 인해 tickEssential 내 2곳 호출이 순서 의존적 오동작
+      가능. **해소**:
+      (1) ClientState `grabJustPressed` public boolean 필드 신설 (jumpKeyStopPressed 뒤).
+      (2) tickEssential 초반 sneakKey 엣지 계산 직후 `grabJustPressed =
+          SmartMovingKeys.grab.wasPressed();` 1회 저장.
+      (3) pre-compute 블록 L786 `boolean grabJustPressed0 = SmartMovingKeys.grab.wasPressed();`
+          제거 + L828 참조를 `grabJustPressed` 필드로 변경.
+      (4) IMPL-01 L989 `boolean grabJustPressed = SmartMovingKeys.grab.wasPressed();` 지역 변수
+          제거 — L1013 참조는 public 필드로 자연 resolve.
+      (5) resetState 리셋 추가.
+      원본 `grabButton.StartPressed` 시멘틱 (틱 내 불변 불리언) 정렬.
 
 #### B-N. A-7 이후 추가 발견에 따라 동적 추가
 
@@ -2802,6 +2816,52 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-46** (grab.wasPressed 다중 호출 해소) — §16 세션 65 발견 — 신규 원자. 1회 캐시 필드 추가.
+
+### 세션 66 — 2026-04-24 — B Phase 2 B-46 (grab.wasPressed 다중 호출 해소)
+
+**진행한 작업**:
+- §16 세션 65 에서 발견된 `KeyBinding.wasPressed()` 카운터 소비성 버그 해소.
+- ClientState `grabJustPressed` public boolean 필드 신설 (L463 jumpKeyStopPressed 뒤).
+  주석에 vanilla API 시멘틱 + B-46 해소 근거 명시.
+- tickEssential sneakKey 엣지 계산 직후 (L703) `grabJustPressed = SmartMovingKeys.grab
+  .wasPressed();` 1회 저장. 이 시점 이후 모든 소비 지점은 필드 참조.
+- pre-compute 블록 L786 지역 변수 `grabJustPressed0` 제거 + L828 참조를 `grabJustPressed`
+  로 변경.
+- IMPL-01 블록 L989 지역 변수 `grabJustPressed` 제거 — L1013 참조는 public 필드로 자연
+  resolve (Java 접근 규칙).
+- resetState 에 `grabJustPressed = false` 리셋 추가.
+- §10 에 B-46 원자 신설 + 체크박스 완료.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 66)**:
+- [근거] §16 세션 65 B-1b 발견 — `grab.wasPressed()` 다중 호출 오동작 확정 ✓
+- [근거] vanilla `KeyBinding.wasPressed()` 구현 (timesPressed 카운터 1 소비 후 true) 확인 ✓
+- [대응] 원본 `grabButton.StartPressed` 시멘틱 (틱 내 불변 불리언) 과 등가 ✓
+- [분기] 없음 (필드 저장 + 참조 치환)
+- [상수] 없음
+- [타이밍] sneakKey 엣지 계산 직후 (L703) — 모든 소비 지점 (L828 pre-compute / L1013
+  IMPL-01) 보다 앞서 저장 ✓
+- [근사] 없음 — 시멘틱 정렬. sneakKey 스타일 (prev vs cur) 대신 wasPressed() 1회 호출
+  유지한 이유: 원본 Button.update() 는 press 이벤트 기반, vanilla wasPressed() 도 이벤트
+  카운터 기반이라 시멘틱 유사. prev vs cur 는 tick 경계만 보므로 짧은 click 놓칠 수 있음.
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 다중 호출 제거로 pre-compute (wouldWantCrawl
+  grab 진입 분기) 와 IMPL-01 (crawlToggled grab 해제 분기) 둘 다 동일 틱 값 참조 —
+  원본 동작 복원.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**§16 세션 65 발견 현황**:
+- ✅ (1) grab.wasPressed 다중 호출 오동작 (B-46 세션 66)
+- ⏳ (2) sprintButton.StartPressed/StopPressed 미이식 — B-48 범위
+- ⏳ (3) grabButton.StopPressed 미이식 — 원본 사용 지점 확인 후 신설
+
+**Phase 2 진행 상황**: 34 원자 완료 / 잔여 ~6
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-48** 신설 후보 (isGroundSprinting 전환 후처리 + sprintKey 엣지) — 규모 중.
 
 ---
 
