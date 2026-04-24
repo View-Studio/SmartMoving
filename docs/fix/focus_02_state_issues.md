@@ -432,11 +432,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   이동량 복원 (B-42a 헬퍼 소비) → 원본 L2843 `move(0, groundY - minY, 0)` 정밀 복원.
   분기 (b)/(c) 는 세션 78 이미 1:1. 의존 게이트 `isShallowDiveOrSwim` 는 세션 109
   B-10a-post 공식 이식 + 세션 121 B-42-B5 해소 (couldStandUp 정밀) 로 정확 계산.
-- **B-39 근사** (세션 80): `ClientState.fromSwimmingOrDiving` 에 원본 L1392-L1403 3분기
-  구조 복원. `else` 분기 진입은 되나 본문은 no-op (주석만). `crawlStandUpBottom` AABB
-  정밀 스캔 미이식 → `≈ minY` 근사 → `minY + 0.5D` 초과 조건 항상 false → isSlow 크롤
-  전환 미발동. `move(0, crawlStandUpBottom - minY, 0)` 이동량도 0 근사 생략. 현재 동작
-  유지 + 구조 복원으로 focus_14 (AABB 정밀) 완료 시 자동 활성 경로 확보.
+- ~~**B-39 근사** (세션 80)~~ → **세션 124 B-42-B39 해소 완료**:
+  `ClientState.fromSwimmingOrDiving` 전면 AABB 정밀 재작성. 원본 L1363-L1404 1:1
+  (3분기 모두 정밀 복원). `crawlStandUpBottom = getMaxPlayerSolidBetween(minY-1, minY, 0)` /
+  `crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(maxY, maxY+1.1)` /
+  `crawlStandUpCeiling = getMinPlayerSolidBetween(maxY, maxY+1.1, 0)` B-42 헬퍼 소비.
+  분기 1 (작은 구멍) / 분기 2 (물 아래) 조건식을 `canStandUp` / `hasLiquidCeiling` 근사
+  에서 원본 `ceiling - bottom < playerHeight` 공식으로 교체. 분기 3 isSlow 크롤 전환
+  본문 + `move(0, crawlStandUpBottom - minY, 0)` 이동량 완전 활성. `hasLiquidCeiling`
+  근사 헬퍼 제거 (`fromSwimmingOrDiving` 외 호출처 없음).
 - **B-18 근사** (세션 81): `ClientState.tickEssential` B-17 뒤 + B-35 앞에 isClimbCrawling
   공식 이식. 진입 엣지의 `isCollidedHorizontally` 복원 생략 — 1.21.1 `player.horizontalCollision`
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +

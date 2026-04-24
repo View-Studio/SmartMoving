@@ -2448,59 +2448,46 @@ public final class SmartMovingClientState {
     public void fromSwimmingOrDiving(ClientPlayerEntity player, boolean wasShortInWater) {
         boolean isShortInWater = isSwimming_sm || isDiving;
         if (wasShortInWater && !isShortInWater && !player.isSleeping()) {
-            if (!canStandUp(player)) {
-                // 고체 천장 — 작은 구멍 크롤링
-                isCrawling = true;
-                isDipping = false;
-                heightOffset = -1F;
-            } else if (hasLiquidCeiling(player)) {
-                // 액체 천장 — 물 아래 크롤링 (원본 L1385-L1389)
-                isCrawling = true;
-                contextContinueCrawl = true;
-                isDipping = false;
-                heightOffset = -1F;
-            } else {
-                // B-39 (세션 80): 원본 L1392-L1403 3분기 구조 복원 (근사).
-                // 원본: else if (crawlStandUpBottom > minY) {
-                //           if (isSlow && crawlStandUpBottom > minY + 0.5D) {
-                //               isCrawling = true; isDipping = false; setHeightOffset(-1F);
-                //           }
-                //           move(0, crawlStandUpBottom - minY, 0);
-                //       }
-                // ※ 근사 이식 (§7 B-39 근사 등록):
-                //   `crawlStandUpBottom` AABB 정밀 스캔 (`getMaxPlayerSolidBetween(minY-1,
-                //   minY, ...)`) 미이식 → `crawlStandUpBottom ≈ minY` 근사 → `minY + 0.5D`
-                //   초과 조건 항상 false → isSlow 분기 미발동.
-                //   `move(0, crawlStandUpBottom - minY, 0)` 이동량도 0 근사로 생략.
-                //   현재 동작: else 분기 진입하나 no-op (기존 동작 유지).
-                //   완전 이식: focus_14_aabb_precision (§17) 에서 crawlStandUpBottom 정밀
-                //     계산 후 isSlow 크롤 전환 + 이동량 활성.
-            }
-        }
-    }
+            // **B-42-B39 해소 (세션 124)**: 원본 L1363-L1404 전면 AABB 정밀 이식.
+            // B-42a/b/c 헬퍼 소비 → crawlStandUpBottom / crawlStandUpLiquidCeiling /
+            // crawlStandUpCeiling 정확 계산.
 
-    /**
-     * bounding box 위쪽 ~1.1m 범위에 액체 블록이 있는지 검사.
-     * 원본 getMinPlayerLiquidBetween(bb.maxY, bb.maxY + 1.1) 근사.
-     */
-    private static boolean hasLiquidCeiling(ClientPlayerEntity player) {
-        Box bb = player.getBoundingBox();
-        int minX = (int) Math.floor(bb.minX);
-        int maxX = (int) Math.floor(bb.maxX);
-        int minY = (int) Math.floor(bb.maxY);
-        int maxY = (int) Math.floor(bb.maxY + 1.1D);
-        int minZ = (int) Math.floor(bb.minZ);
-        int maxZ = (int) Math.floor(bb.maxZ);
-        for (int y = minY; y <= maxY; y++) {
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    if (!player.getWorld().getFluidState(new net.minecraft.util.math.BlockPos(x, y, z)).isEmpty()) {
-                        return true;
-                    }
+            // 원본 L1369 setHeightOffset(-1F) — 1.21.1 boundingBox 미조작, 필드만 설정.
+            heightOffset = -1F;
+
+            double minY = player.getBoundingBox().minY;
+            double maxY = player.getBoundingBox().maxY;
+            double crawlStandUpBottom        = getMaxPlayerSolidBetween(player, minY - 1D, minY, 0);
+            double crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(player, maxY, maxY + 1.1D);
+            double crawlStandUpCeiling       = getMinPlayerSolidBetween(player, maxY, maxY + 1.1D, 0);
+
+            // 원본 L1375 resetHeightOffset()
+            heightOffset = 0F;
+
+            float playerHeight = player.getHeight();
+            if (crawlStandUpCeiling - crawlStandUpBottom < playerHeight) {
+                // 분기 1 (L1377-L1383): 깊은 물 → 작은 구멍 크롤
+                isCrawling   = true;
+                isDipping    = false;
+                heightOffset = -1F;
+            } else if (crawlStandUpLiquidCeiling - crawlStandUpBottom < playerHeight) {
+                // 분기 2 (L1384-L1390): 깊은 물 → 물 아래 크롤
+                isCrawling           = true;
+                contextContinueCrawl = true;
+                isDipping            = false;
+                heightOffset         = -1F;
+            } else if (crawlStandUpBottom > minY) {
+                // 분기 3 (L1392-L1403): 깊은 물 → 걷기/크롤
+                if (isSlow && crawlStandUpBottom > minY + 0.5D) {
+                    // 분기 3a: isSlow + 높은 바닥 → 크롤
+                    isCrawling   = true;
+                    isDipping    = false;
+                    heightOffset = -1F;
                 }
+                // 원본 L1402: move(0, crawlStandUpBottom - minY, 0, true)
+                player.move(MovementType.SELF, new Vec3d(0, crawlStandUpBottom - minY, 0));
             }
         }
-        return false;
     }
 
     // ── R-01: sendStatePacket() ───────────────────────────────────────

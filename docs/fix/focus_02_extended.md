@@ -408,7 +408,10 @@ Orientation 판정 + ClimbGap 계산.
 - [x] B-42-B36. ClientState B-36 분기 (a) 이동량 복원. **세션 123 완료** (분기 (a)
       내부에서 `getMaxPlayerSolidBetween(minY, maxY, 0)` 호출 + `move(0, groundY -
       minY, 0)` 정밀 복원). §7 B-36 근사 해소.
-- [ ] B-42-B39. ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤 전환 본문 활성.
+- [x] B-42-B39. ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤 전환 본문 활성.
+      **세션 124 완료** (전면 재작성 — B-42a/b/c 헬퍼로 3분기 AABB 정밀 공식 복원 +
+      분기 3 isSlow 본문 + move 이동량 활성). `hasLiquidCeiling` 근사 헬퍼 제거.
+      §7 B-39 근사 해소.
 - [ ] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 — AABB/판정
       본문 (Mixin 결과 소비). B-42-B18b 완료 후 활성.
 - [ ] B-42-B18b. `MixinPlayer.horizontalCollision` setter 노출 Mixin 신설 (세션 88 4차
@@ -513,6 +516,78 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 124 — 2026-04-25 — B-42-B39 `fromSwimmingOrDiving` 전면 AABB 정밀 재작성
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 승격 4번째 원자.
+
+**진행한 작업**:
+1. **원본 코드 확인** (`SmartMovingSelf.java` L1363-L1405 로컬 read):
+   ```
+   private void fromSwimmingOrDiving(boolean wasShortInWater)
+   {
+       boolean isShortInWater = isSwimming || isDiving;
+       if(wasShortInWater && !isShortInWater && !isp.getSleepingField())
+       {
+           setHeightOffset(-1F);
+           double crawlStandUpBottom = getMaxPlayerSolidBetween(minY - 1D, minY, 0);
+           double crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(maxY, maxY+1.1D);
+           double crawlStandUpCeiling = getMinPlayerSolidBetween(maxY, maxY+1.1D, 0);
+           resetHeightOffset();
+           if(crawlStandUpCeiling - crawlStandUpBottom < sp.height) { ... 작은 구멍 }
+           else if(crawlStandUpLiquidCeiling - crawlStandUpBottom < sp.height) { ... 물 아래 }
+           else if(crawlStandUpBottom > sp.boundingBox.minY)
+           {
+               if(isSlow && crawlStandUpBottom > sp.boundingBox.minY + 0.5D) { 크롤 }
+               move(0, crawlStandUpBottom - minY, 0, true);
+           }
+       }
+   }
+   ```
+2. **기존 1.21.1 상태** (ClientState.java L2448-L2479):
+   * 분기 1: `!canStandUp(player)` 근사
+   * 분기 2: `hasLiquidCeiling(player)` 근사 (프로젝트 자체 헬퍼)
+   * 분기 3: else 진입하나 본문 no-op (주석만)
+3. **전면 재작성**:
+   * `heightOffset = -1F` (원본 L1369) → AABB 계산 → `heightOffset = 0F` (L1375 resetHeightOffset)
+     → 3분기 판정. 원본 순서 그대로.
+   * 분기 1 (L1377-L1383): `crawlStandUpCeiling - crawlStandUpBottom < playerHeight`
+   * 분기 2 (L1384-L1390): `crawlStandUpLiquidCeiling - crawlStandUpBottom < playerHeight`
+   * 분기 3 (L1392-L1403): `crawlStandUpBottom > minY` — 내부 `isSlow + 0.5D 초과` 시
+     isCrawling=true 서브 분기 + `move(0, crawlStandUpBottom - minY, 0)` 이동량 활성.
+4. **헬퍼 정리**:
+   * `hasLiquidCeiling` 근사 헬퍼 제거 (전수 grep 으로 `fromSwimmingOrDiving` 외 호출처
+     없음 확인).
+5. **§7 B-39 근사 해소 기록** — 취소선 + "세션 124 B-42-B39 해소 완료".
+6. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 124 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L1363-L1405 (로컬 `C:\Work\minecraft\porting\
+  sm_original\SmartMoving`) read ✓
+- [근거] 1.21.1 ClientState.java 2448 기존 이식 상태 확인 ✓
+- [대응] 원본 3 AABB 헬퍼 호출 → B-42a/b/c 대응. `sp.height` → `player.getHeight()`.
+  `setHeightOffset(-1F)` → `heightOffset = -1F` 필드. `move(0, dy, 0, true)` →
+  `player.move(MovementType.SELF, new Vec3d(0, dy, 0))` ✓
+- [분기] 3분기 모두 이식 (작은 구멍 / 물 아래 / 걷기·크롤). 분기 3 내부 서브 분기 (isSlow)
+  본문 포함 ✓
+- [상수] `1D` / `1.1D` / `0` / `0.5D` / `-1F` 원본 동일 ✓
+- [타이밍] 메서드 내부 순서 원본 L1369→L1371-L1373→L1375→L1377- 전수 1:1 ✓
+- [근사] B-39 근사 해소 — §7 갱신 ✓
+- [신규] 없음 (근사 제거 작업) ✓
+- [회귀] `hasLiquidCeiling` 헬퍼 제거 — 다른 호출처 없음 (grep 확인). 기존 분기 1/2
+  동작이 더 정확해짐 (다중 블록 + 액체 경계 정밀) ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42-B26** (Jumper `tryJump(SlideDown, ...)` 속도 공식 이식). 또는
+**B-42-B18a/B18b** (horizontalCollision setter Mixin + isClimbCrawling 진입 엣지).
+B-42-B16 은 AABB 무관 (GUI 입력 차단).
+
+**진행률** (세션 124 종료 시점):
+- Extended 완료: **38 원자** (B-19 22 + Phase 4 8 + Phase 6 **8** = 38)
+- Extended 총 원자 ~61
+- **Extended 진행률: 38/61 ≈ 62%**
+- **포커스 #2 전체: (54+38)/115 ≈ 80%**
+- **Phase 6 승격 4/8 — B5/B35/B36/B39 완료** (AABB 계열 모두 해소)
 
 ### 세션 123 — 2026-04-25 — B-42-B36 B-36 분기 (a) 이동량 복원
 
