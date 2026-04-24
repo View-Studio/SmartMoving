@@ -8,10 +8,12 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #2  — 스마트무빙 상태 이상
+항목 #2 Extended — 스마트무빙 상태 이상 (Phase 3~9 엄격 완료)
 ```
 
-작업 문서: [`focus_02_state_issues.md`](focus_02_state_issues.md)
+**작업 문서 (주)**: [`focus_02_extended.md`](focus_02_extended.md)
+**참조 문서 (본체)**: [`focus_02_state_issues.md`](focus_02_state_issues.md) — A/B Phase 1/2
+핵심 54 원자 완료 기록 / §6 매핑 테이블 / §7 근사 / §14 회귀 감사 / §16 신규 발견 보존.
 
 > **포커스 #6 완료 (2026-04-24, 세션 28)**: A 단계(호출처 감사) → B-1/B-2/B-3/B-4/B-6
 > (헬퍼 정비 + Land/Swim/Climb/Creative 게이트) → C-1/C-2 (동기화 정합) →
@@ -24,32 +26,44 @@
 > 잉여 정리. 회귀 0건. Easy 1:1 체감 ~90% (서버 허기 동기화 3디테일은
 > `focus_11_server_hunger_sync.md` 후속).
 
-> **포커스 #2 진행 중 (세션 88 엄격 완료 결정)**: 세션 79/85 의 별도 포커스 분리 계획
-> (focus_14/15/16/17) 전체 취소. Phase 3~8 (B-19 도미노 / B-10 공식 / B-7/B-9/B-11 /
-> AABB 정밀 / B-48/B-49 / Simple·Smart Base Climb) 모두 포커스 #2 범위로 복원.
-> 본체 focus_02_state_issues.md 경량화 목적으로 `focus_02_extended.md` 생성 —
-> Phase 3~8 상세 관리. 사용자 지시 "무조건적인 엄격 완료" 방침.
+> **포커스 #2 본체 완료 (세션 29-87)**: A-0~A-7 감사 + B Phase 1/2 **54 원자** 완료 +
+> C-1/C-2/C-3 통과. 본체 `focus_02_state_issues.md` 에 전수 기록.
+
+> **포커스 #2 Extended 진행 중 (세션 88+ 엄격 완료 방침)**: 세션 79/85 의 별도 포커스
+> 분리 계획 (focus_14/15/16/17) 전체 취소. Phase 3~9 (B-19 도미노 / B-10·B-31c 공식 완성
+> / B-7/B-9/B-11 수중 재구성 / AABB 정밀화 / B-48/B-49 sprint 엣지 / Simple·Smart Base
+> Climb / SmartStatistics) 모두 포커스 #2 Extended 범위. Extended 에 **43 원자** 등록
+> (세션 88 1~5차 전수 감사 통과 확정). 사용자 지시 "무조건적인 엄격 완료" 방침.
 
 ---
 
-## 📋 작업 방식 — 2-문서 워크플로우
+## 📋 작업 방식 — 3-문서 워크플로우 (포커스 #2 Extended)
 
 ```
-세션 진입 시 읽을 문서 (고정 2개):
-  ① docs/fix/playtest_fixes.md  (이 문서)          — 포커스 확인 + 룰 + 템플릿
-  ② docs/fix/focus_<NN>_<name>.md  (현재 포커스)  — 원본 근거 / 작업 / 체크리스트
+세션 진입 시 읽을 문서 (고정 3개):
+  ① docs/fix/playtest_fixes.md          (이 문서)     — 포커스 확인 + 룰 + 템플릿
+  ② docs/fix/focus_02_extended.md       (주 작업)     — Phase 3~9 원자 체크리스트 + 세션 로그
+  ③ docs/fix/focus_02_state_issues.md   (본체 참조)   — §6 매핑 / §7 근사 / §14 회귀 / §16 신규
 
 작업 순서:
-  1. ① 읽고 "현재 포커스" 번호 확인
-  2. ② (해당 포커스 파일) 열어 "진행 상황" + "원자 단위 작업 목록" 확인
-  3. 다음 미완료 원자 작업 진행 → 완료 전 검증 체크리스트 통과 → [x]
-  4. 컴파일 → 커밋 → ② 의 "작업 기록" 에 세션 로그 추가
-  5. 모든 원자 작업 [x] + 회귀 방지 검증 통과 시 → ① 의 "현재 포커스" 갱신
+  1. ① 읽고 "현재 포커스" 가 Extended 진행 중인지 확인
+  2. ② Extended §3 원자 목록 + §4 의존 순서 + §5 세션 기록 확인
+  3. 다음 미완료 원자 선택 (Phase 3 B-19a 부터 최우선 — 도미노 해소)
+  4. ③ 본체 §6/§7/§16 에서 관련 원본 매핑 + 기존 근사 + 발견 사항 확인
+  5. 원본 근거 부족 시 Agent WebFetch 로 `SmartMovingSelf.java` / `SmartMovingBase.java`
+     보완 (§15 템플릿 사용)
+  6. 원자 구현 → 완료 전 검증 체크리스트 통과 → Extended §3 체크박스 [x]
+  7. `./gradlew compileJava compileClientJava --rerun-tasks` 성공 → 커밋
+  8. Extended §5 에 세션 로그 추가 (원본 라인 + 의존 + 근사 등록 명시)
+  9. 모든 Phase 3~9 원자 [x] + §6 최종 C 단계 통과 시 → ① 현재 포커스 → #3 전환
 
 절대 규칙:
-  - 다른 포커스는 현재 포커스 완료 전까지 손대지 않는다
-  - 원본 근거(리서치 파일 코드)가 없으면 그 자리에서 Agent WebFetch 로 보완
-  - 수정 중 발견한 신규 이슈는 ② 의 "신규 발견" 에 기록하고 현재 작업 계속
+  - 다른 포커스는 Extended 완료 전까지 손대지 않는다
+  - 원본 근거(리서치 파일 / 원본 Java 코드)가 없으면 그 자리에서 Agent WebFetch
+  - 근사 이식은 §7 에 반드시 등록 + 주석 "근사 이식 — 원본과 차이: X" 필수
+  - 수정 중 발견한 신규 이슈는 본체 focus_02_state_issues.md §16 에 기록
+  - Extended 원자 추가/변경 시 §3 본문 + §5 세션 로그에 근거 명시
+  - 세션 88 엄격 완료 방침 — 근사 · 간소 · 대체 매핑 금지
 ```
 
 ---
@@ -60,7 +74,7 @@
 |------|------|------|----------|------|----------|
 | 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24, 세션 23) | 없음 |
 | 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ✅ 완료 (2026-04-24, 세션 28) | #5 완료 |
-| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02](focus_02_state_issues.md) | 🟡 진행 중 (재현 케이스 수집) | 없음 |
+| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | 🟠 Extended 진행 중 (Phase 3~9 엄격 완료, 43 원자) | 없음 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 (재현 케이스) | #2 (상태 값 확정 후 전환 조건 검증) |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
