@@ -450,11 +450,17 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   에서 원본 `ceiling - bottom < playerHeight` 공식으로 교체. 분기 3 isSlow 크롤 전환
   본문 + `move(0, crawlStandUpBottom - minY, 0)` 이동량 완전 활성. `hasLiquidCeiling`
   근사 헬퍼 제거 (`fromSwimmingOrDiving` 외 호출처 없음).
-- **B-18 근사** (세션 81): `ClientState.tickEssential` B-17 뒤 + B-35 앞에 isClimbCrawling
-  공식 이식. 진입 엣지의 `isCollidedHorizontally` 복원 생략 — 1.21.1 `player.horizontalCollision`
-  필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
-  resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
-  주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- ~~**B-18 근사** (세션 81)~~ → **세션 126 B-42-B18a/B18b 해소 완료**:
+  `ClientState.tickEssential` B-17 뒤 + B-35 앞 isClimbCrawling 공식 완전 이식.
+  (1) **진입 엣지** `isCollidedHorizontally` 복원 완전 이식 — vanilla
+  `Entity.horizontalCollision` 은 `public boolean` (final 아님) 이라 **Mixin 신설 불필요**.
+  `boolean wasColH = player.horizontalCollision;` → `player.move(SELF, new Vec3d(0,
+  0.05, 0));` → `player.horizontalCollision = wasColH;` 1:1 복원.
+  (2) **해제 엣지** 본문 완전 이식 — `getMaxPlayerSolidBetween(minY-1, minY, 0)` (B-42a
+  헬퍼) → `gapUnderneight = minY - 바닥` 계산 → `[0, 1)` 범위면 `toCrawling() +
+  move(0, -gap, 0)`, 아니면 `resetHeightOffset`. `mustCrawl/sneak/crawlToggled` 조건
+  아니면 `resetHeightOffset` 만.
+  → **B-42-B18b Mixin 신설 원자 자체 불필요 확정**. Phase 6 최종 근사 해소.
 - **B-N-standup 근사 4건** (세션 115): `standupIfPossible` 메서드 이식 시 1.21.1 API 제약
   + AABB 정밀 헬퍼 미이식으로 인한 다수 근사:
   (1) `resetHeightOffset` — 원본 `sp.boundingBox.minY += heightOffset; sp.height -=

@@ -1458,36 +1458,23 @@ public final class SmartMovingClientState {
                 }
             }
 
-            // B-18 (세션 81): 원본 L2786-L2820 `isClimbCrawling` 메인 공식 + climbIntoCount
-            // 카운터 + 진입 엣지 이식. B-17 (isCrawlClimbing) 블록 뒤 + B-35 앞 배치 — 원본
-            // L2786 순서 복원.
-            // 원본:
-            //   boolean wasClimbCrawling = isClimbCrawling;
-            //   boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
-            //   boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
-            //   if (climbIntoCount > 1) climbIntoCount--;
-            //   else if (isClimbCrawling && !needClimbCrawling && count==0) climbIntoCount = 6;
-            //   isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1);
-            //   if (isClimbCrawling && !wasClimbCrawling) {
-            //       setHeightOffset(-1F);
-            //       boolean wasColH = isCollidedHorizontally;
-            //       move(0, 0.05, 0, true);
-            //       isCollidedHorizontally = wasColH;  // 충돌 상태 복원
-            //   }
-            //   else if (!isClimbCrawling && wasClimbCrawling) { climbIntoCount = 0; ... }
-            // ※ 의존 전수 충족: hasClimbCrawlGap 필드 (B-15 세션 40) / hasClimbGap (B-15b) /
+            // B-18 (세션 81) → **B-42-B18a/B18b 해소 (세션 126)**: 원본 L2786-L2820
+            // `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 + 진입/해제 엣지 정밀 이식.
+            // B-17 (isCrawlClimbing) 블록 뒤 + B-35 앞 배치 — 원본 L2786 순서 복원.
+            //
+            // **B-42-B18b (Mixin setter) 해소 불필요 확정**: vanilla `Entity.horizontalCollision`
+            //   은 `public boolean` (final 아님) — MixinExtras `@Accessor` 없이도 직접
+            //   할당 가능. 별도 Mixin 신설 불필요 → 원자 단순 해소.
+            // **B-42-B18a 해소**:
+            //   (1) 진입 엣지 `wasColH` 저장/복원 — `boolean wasColH = player.horizontalCollision;`
+            //       → `player.move(...)` → `player.horizontalCollision = wasColH;` 1:1 복원.
+            //   (2) 해제 엣지 `gapUnderneight` AABB 정밀 복원 — B-42a `getMaxPlayerSolidBetween`
+            //       소비. 원본 `gap >= 0D && gap < 1D` 조건 + `move(0, -gap, 0)` 이동량 활성.
+            // ※ 의존 전수 충족: hasClimbCrawlGap (B-15 세션 40) / hasClimbGap (B-15b) /
             //   isClimbHolding (B-16) / wantClimbHolding (B-18-pre 세션 81) / wantClimbUp
             //   (B-17b2-pre 세션 72) / climbIntoCount 필드 (기존).
-            // ※ isCollidedHorizontally 복원은 1.21.1 에서 `player.horizontalCollision` 필드
-            //   final 아님 — 복원 가능. 단 setter 직접 없음 → reflection 또는 mixin 필요.
-            //   근사: `player.horizontalCollision` 복원 생략 (§7 B-18 근사 등록).
-            // ※ 해제 엣지 (else if (!isClimbCrawling && wasClimbCrawling)) 본문은 리서치
-            //   요약만 — 현재 `climbIntoCount = 0` 리셋만 이식. 나머지 크롤 전환/resetHeightOffset
-            //   은 추후 Agent WebFetch 후 별도 서브 원자 (B-18b) 로 분해.
             {
-                // B-44c (세션 82): 공식 직전 저장 (원본 L2786 대응). tickEssential 초반
-                //   일괄 저장에서 이동 완료. 지역 변수 제거 → public 필드 `wasClimbCrawling`
-                //   으로 통합 (동일 값).
+                // B-44c (세션 82): 공식 직전 저장 (원본 L2786 대응).
                 wasClimbCrawling = isClimbCrawling;
                 boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
                 boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
@@ -1502,32 +1489,32 @@ public final class SmartMovingClientState {
                         && ((needClimbCrawling && climbIntoCount == 0) || climbIntoCount > 1);
 
                 if (isClimbCrawling && !wasClimbCrawling) {
-                    // 진입 엣지 (원본 L2812-L2817)
+                    // 진입 엣지 (원본 L2797-L2803) — B-42-B18a 해소 완전 이식.
                     heightOffset = -1F;
-                    // isCollidedHorizontally 복원은 근사로 생략 (§7 B-18).
+                    // 원본 L2800: `boolean wasCollidedHorizontally = sp.isCollidedHorizontally;`
+                    boolean wasColH = player.horizontalCollision;
+                    // 원본 L2801: move(0, 0.05, 0) — solid 머리 위에 서있을 때 crawl 진입 방지
                     player.move(MovementType.SELF, new Vec3d(0, 0.05, 0));
+                    // 원본 L2802: sp.isCollidedHorizontally = wasCollidedHorizontally;
+                    //   (water 밖으로 crawl 탈출 버그 방지)
+                    player.horizontalCollision = wasColH;
                 } else if (!isClimbCrawling && wasClimbCrawling) {
-                    // B-18b (세션 83): 해제 엣지 완전 본문 이식 (원본 L2804-L2820).
-                    // Agent WebFetch 로 해제 엣지 상세 확보 후 이식. 원본:
-                    //   climbIntoCount = 0;
-                    //   if (mustCrawl || sneakButton.Pressed || crawlToggled) {
-                    //       double gap = minY - getMaxPlayerSolidBetween(minY-1, minY, 0);
-                    //       if (gap >= 0 && gap < 1) {
-                    //           wasCrawling = toCrawling();
-                    //           move(0, -gap, 0, true);
-                    //       } else resetHeightOffset();
-                    //   } else resetHeightOffset();
-                    // ※ 근사 이식 (§7 B-18 근사 확장): `getMaxPlayerSolidBetween` 정밀 AABB
-                    //   스캔 미이식 → `gap ≈ 0` 근사 (발 아래 고체 붙어있음 가정) →
-                    //   `gap >= 0 && gap < 1` 항상 true → mustCrawl/sneak 분기 시 크롤 전환.
-                    //   `move(0, -gap, 0)` 이동량은 0 근사 (no-op). heightOffset 유지.
+                    // 해제 엣지 (원본 L2804-L2820) — B-42-B18a 해소 완전 이식 (AABB 정밀).
                     climbIntoCount = 0;
                     if (mustCrawl || sneakPressedRaw || crawlToggled) {
-                        // gap ≈ 0 근사 → 항상 `[0, 1)` 범위 → 크롤 전환 + move no-op.
-                        wasCrawling = toCrawling();
-                        // player.move(SELF, new Vec3d(0, -gap, 0)) 이동량 0 근사로 생략.
+                        // 원본 L2809: getMaxPlayerSolidBetween(minY - 1D, minY, 0)
+                        double minY18 = player.getBoundingBox().minY;
+                        double gapUnderneight = minY18
+                                - getMaxPlayerSolidBetween(player, minY18 - 1D, minY18, 0);
+                        if (gapUnderneight >= 0D && gapUnderneight < 1D) {
+                            // 원본 L2812-L2813: 크롤 전환 + move(0, -gap, 0)
+                            wasCrawling = toCrawling();
+                            player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
+                        } else {
+                            heightOffset = 0F;  // 원본 L2816 resetHeightOffset
+                        }
                     } else {
-                        heightOffset = 0F;  // resetHeightOffset 근사
+                        heightOffset = 0F;  // 원본 L2819 resetHeightOffset
                     }
                 }
             }

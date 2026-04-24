@@ -419,12 +419,15 @@ Orientation 판정 + ClimbGap 계산.
       **세션 124 완료** (전면 재작성 — B-42a/b/c 헬퍼로 3분기 AABB 정밀 공식 복원 +
       분기 3 isSlow 본문 + move 이동량 활성). `hasLiquidCeiling` 근사 헬퍼 제거.
       §7 B-39 근사 해소.
-- [ ] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 — AABB/판정
-      본문 (Mixin 결과 소비). B-42-B18b 완료 후 활성.
-- [ ] B-42-B18b. `MixinPlayer.horizontalCollision` setter 노출 Mixin 신설 (세션 88 4차
-      확정 감사 발견 — 기존 B-42-B18 에 "Mixin 필요" 만 명시되고 Mixin 원자 자체 미분리).
-      1.21.1 `player.horizontalCollision` 은 public 필드이나 Entity 소스 인젉션 위치 확인
-      후 MixinExtras `@Accessor` / `@Mutable` 로 setter 노출. B-42-B18a 본문 활성화 전제.
+- [x] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 + 해제 엣지
+      AABB 정밀 본문. **세션 126 완료**. 진입 엣지 `wasColH` 저장/복원 1:1. 해제 엣지
+      `getMaxPlayerSolidBetween(minY-1, minY, 0)` (B-42a 소비) → `gap ∈ [0, 1)` 분기 +
+      `move(0, -gap, 0)` 이동량 활성 + `resetHeightOffset` else 분기. §7 B-18 근사
+      해소.
+- [x] B-42-B18b. `MixinPlayer.horizontalCollision` setter 노출 Mixin 신설. **세션 126
+      불필요 확정** — vanilla `Entity.horizontalCollision` 은 `public boolean` (final
+      아님) 이라 Mixin 없이 직접 `player.horizontalCollision = wasColH` 할당 가능.
+      빌드 검증으로 확인. Mixin 신설 원자 자체 해소.
 
 ### Phase 7. §16 신규 발견 해소
 
@@ -523,6 +526,96 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 126 — 2026-04-25 — B-42-B18a/B18b 해소 (Phase 6 마지막 승격 2 원자)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 완결 목표.
+
+**진행한 작업**:
+
+**1. B-42-B18b Mixin 필요성 재평가**:
+- 기존 Extended §3 정의: "MixinPlayer.horizontalCollision setter 노출 Mixin 신설 —
+  MixinExtras `@Accessor` / `@Mutable`".
+- 로컬 grep + 컴파일 실험으로 확인: vanilla `Entity.horizontalCollision` 은
+  `public boolean` 선언 (final 아님). **Mixin 없이 직접 할당 가능**.
+- 기존 주석 L1482 "1.21.1 `player.horizontalCollision` 필드 final 아님 — 복원 가능.
+  단 setter 직접 없음" 은 과거 분석 오류.
+- **B-42-B18b 원자 자체 불필요 확정** — Mixin 신설 작업 없음.
+
+**2. B-42-B18a 진입 엣지 `wasColH` 복원**:
+- 원본 SmartMovingSelf L2800-L2802:
+  ```java
+  boolean wasCollidedHorizontally = sp.isCollidedHorizontally;
+  move(0, 0.05, 0, true);
+  sp.isCollidedHorizontally = wasCollidedHorizontally;
+  ```
+- 1.21.1 이식:
+  ```java
+  boolean wasColH = player.horizontalCollision;
+  player.move(MovementType.SELF, new Vec3d(0, 0.05, 0));
+  player.horizontalCollision = wasColH;
+  ```
+
+**3. B-42-B18a 해제 엣지 완전 본문 이식** (원본 L2804-L2820):
+- 원본:
+  ```java
+  climbIntoCount = 0;
+  if (mustCrawl || sneakButton.Pressed || crawlToggled) {
+      double gap = minY - getMaxPlayerSolidBetween(minY - 1D, minY, 0);
+      if (gap >= 0D && gap < 1D) {
+          wasCrawling = toCrawling();
+          move(0, -gap, 0, true);
+      } else resetHeightOffset();
+  } else resetHeightOffset();
+  ```
+- 1.21.1 이식 (B-42a `getMaxPlayerSolidBetween` 소비):
+  ```java
+  climbIntoCount = 0;
+  if (mustCrawl || sneakPressedRaw || crawlToggled) {
+      double minY18 = player.getBoundingBox().minY;
+      double gapUnderneight = minY18
+              - getMaxPlayerSolidBetween(player, minY18 - 1D, minY18, 0);
+      if (gapUnderneight >= 0D && gapUnderneight < 1D) {
+          wasCrawling = toCrawling();
+          player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
+      } else { heightOffset = 0F; }
+  } else { heightOffset = 0F; }
+  ```
+
+**4. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+`player.horizontalCollision = wasColH` 쓰기가 public 필드 접근으로 정상 컴파일 — B-18b
+Mixin 불필요 실증.
+
+**5. §7 B-18 근사 해소 기록** — 두 엣지 모두 정밀 복원 완료.
+
+**완료 전 검증 체크리스트 (세션 126 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2786-L2820 (로컬) read ✓
+- [근거] vanilla `Entity.horizontalCollision` public boolean 선언 — grep + 컴파일 성공으로
+  실증 ✓
+- [대응] 진입 엣지 wasColH/move/restore 3줄 원본 1:1. 해제 엣지 gap AABB + 분기 원본 1:1 ✓
+- [분기] 진입/해제 엣지 + `mustCrawl||sneak||crawlToggled` 3-OR + gap 범위 분기
+  (`[0,1)` / else) 전수 ✓
+- [상수] `0.05` / `1D` / `-1D` / `0D` 원본 동일 ✓
+- [타이밍] isClimbCrawling 메인 공식 블록 내 기존 위치 유지 ✓
+- [근사] B-18 근사 해소 (Mixin 불필요 + AABB 정밀) — §7 갱신 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 isClimbCrawling 메인 공식 (hasClimbCrawlGap/hasClimbGap/isClimbHolding/
+  wantClimbHolding/wantClimbUp 의존) 건들지 않음 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **🎉 Phase 6 완결 — Phase 5 진입** (B-7a/b/c/d + B-9a~h + B-11).
+Phase 5 는 B-42 헬퍼 소비 (AABB 정밀) 가능. 진입 지점은 B-7a (swimCrawlWaterBorder
+/totalSwimWaterBorder 의 ClientState 승격 또는 handleSwimming 반환 구조 정비).
+Phase 6 B-42-B26 는 Phase 7 인프라 원자와 묶음 처리.
+
+**진행률** (세션 126 종료 시점):
+- Extended 완료: **43 원자** (B-19 22 + Phase 4 8 + Phase 6 **13** = 43)
+  (B-42a/b/c/d 헬퍼 4 + 승격 해소 7: B5/B16/B20/B35/B36/B39/B18a + B-18b Mixin 불필요
+  + B-26 범위 확정)
+- Extended 총 원자 ~61
+- **Extended 진행률: 43/61 ≈ 70%**
+- **포커스 #2 전체: (54+43)/115 ≈ 84%**
+- **🎉 Phase 6 완결** (B-26 은 Phase 7 연계 보류)
 
 ### 세션 125 — 2026-04-25 — B-42-B16 해소 불가 확정 + B-42-B20 조건 판정 복원 + B-42-B26 범위 확정
 
