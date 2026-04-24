@@ -272,6 +272,25 @@ public final class SmartMovingClientState {
      */
     public boolean wantClimbDown;
 
+    /**
+     * 원본 SmartMovingSelf L132 `isLiquidClimbing` 지역 변수 필드 승격.
+     *   isLiquidClimbing = Config.isFreeClimbingEnabled() && sp.fallDistance <= 3.0
+     *                   && wantClimbUp && sp.isCollidedHorizontally && !isDiving;
+     *
+     * 원본은 `updateEntityActionState` 내부에서 계산되어 `handleSwimming` /
+     * `handleLava` 에 파라미터로 전달. 1.21.1 은 updateSwimState + handleSwimming
+     * 두 정적 메서드로 분리되어 지역 변수 공유 불가 → **public 필드로 승격**.
+     *
+     * 소비처:
+     *   - `Swimmer.updateSwimState` 진입 조건 (원본 L232 `!isFlying && !isLiquidClimbing
+     *     && (...)` 중 `!isLiquidClimbing` 항 — B-7c 에서 복원).
+     *   - `handleLava` 진입 조건 (원본 L580, B-7 범위 외).
+     *
+     * 갱신 시점: MixinLivingEntityClient.sm_beforeTravel 의 updateSwimState 호출 직전.
+     * B-7a (세션 127).
+     */
+    public boolean isLiquidClimbing;
+
     /** 클라이밍 중 크롤 공간 전환 상태 (손이 낮은 천장 아래로 들어갈 때). */
     public boolean isClimbCrawling;
 
@@ -2026,6 +2045,28 @@ public final class SmartMovingClientState {
             }
         }
         return yMax;
+    }
+
+    /**
+     * 원본 SmartMovingBase L411-L416 `isInLiquid()` 이식.
+     *
+     * 플레이어 AABB 세로 구간 [minY, maxY] 내 액체 존재 여부. water + lava (lavaLikeWater
+     * 활성 시) 모두 포함. `isInWater()` 는 vanilla 필드 기반이라 전환 엣지에 누락 가능 →
+     * SM 은 AABB 스캔으로 정확 판정.
+     *
+     * 원본:
+     *   getMaxPlayerLiquidBetween(minY, maxY) != minY       // 상단 액체 경계 > minY
+     *   || getMinPlayerLiquidBetween(minY, maxY) != maxY    // 하단 액체 경계 < maxY
+     *
+     * 소비처: Swimmer.updateSwimState 진입 조건 `wasSwimming && isInLiquid()` (원본 L232).
+     * B-7c 에서 복원.
+     *
+     * B-7d (세션 127).
+     */
+    public static boolean isInLiquid(ClientPlayerEntity player) {
+        Box pb = player.getBoundingBox();
+        return getMaxPlayerLiquidBetween(player, pb.minY, pb.maxY) != pb.minY
+            || getMinPlayerLiquidBetween(player, pb.minY, pb.maxY) != pb.maxY;
     }
 
     /**

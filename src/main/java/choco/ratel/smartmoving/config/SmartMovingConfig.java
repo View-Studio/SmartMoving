@@ -124,6 +124,18 @@ public class SmartMovingConfig {
      * true → 잠수 중 스니크 시 하강. SmartMovingSelf wouldWantSneak 및 diveDown 계산에 사용.
      */
     public boolean diveDownOnSneak = true;
+    /**
+     * 원본: _lavaLikeWater = Creative("move.lava.water") → Survival 기본 false / Creative 기본 true.
+     * 1.21.1 단순 boolean 필드 이식 (Survival 기본 false). true 시 lava 에서 수영/잠수 가능.
+     *
+     * 소비처:
+     *   - `Swimmer.updateSwimState` 진입 조건 (원본 L232 `Config.isLavaLikeWaterEnabled() &&
+     *     sp.handleLavaMovement()`) — B-7c 에서 복원.
+     *   - `ClientState.getLiquidBorder` lava 분기 (원본 SmartMovingBase L140/L144) — 현재 0F
+     *     근사 (§7 B-42c 근사 (2)). 이 필드 활성 후 lava border 계산 복원 가능 (B-7b 후속).
+     * B-7b (세션 127).
+     */
+    public boolean lavaLikeWater = false;
 
     // ── Jumping ─────────────────────────────────────────────────
     // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
@@ -636,6 +648,16 @@ public class SmartMovingConfig {
     }
 
     /**
+     * 원본 SmartMovingClientConfig L87-L90 `isLavaLikeWaterEnabled() = _lavaLikeWater.value && enabled`.
+     * 사용처: Swimmer.updateSwimState 진입 조건 (원본 L232 `Config.isLavaLikeWaterEnabled()
+     * && sp.handleLavaMovement()`). B-7c 에서 복원. Lava 를 물처럼 수영/잠수 가능한지.
+     * B-7b (세션 127).
+     */
+    public boolean isLavaLikeWaterEnabled() {
+        return lavaLikeWater && enabled;
+    }
+
+    /**
      * 원본 SmartMovingClientConfig L57-L60 `isFreeClimbAutoLaddderEnabled() =
      *   _freeClimbingAutoLaddder.value && enabled`.
      * 사용처: `wouldWantClimb` 4-OR 의 3번째 분기 (원본 L2471) 자동 사다리 진입 게이트.
@@ -879,6 +901,7 @@ public class SmartMovingConfig {
         diveSpeedFactor          = getFloat(p,  "move.dive.speed.factor",         diveSpeedFactor);
         swimDownOnSneak          = getBool(p,   "move.swim.down.sneak",           swimDownOnSneak);
         diveDownOnSneak          = getBool(p,   "move.dive.down.sneak",           diveDownOnSneak);
+        lavaLikeWater            = getBool(p,   "move.lava.water",                lavaLikeWater);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
@@ -1001,6 +1024,7 @@ public class SmartMovingConfig {
         p.setProperty("move.dive.speed.factor",          String.valueOf(diveSpeedFactor));
         p.setProperty("move.swim.down.sneak",            String.valueOf(swimDownOnSneak));
         p.setProperty("move.dive.down.sneak",            String.valueOf(diveDownOnSneak));
+        p.setProperty("move.lava.water",                 String.valueOf(lavaLikeWater));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));

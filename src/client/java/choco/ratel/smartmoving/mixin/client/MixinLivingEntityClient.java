@@ -78,6 +78,16 @@ public abstract class MixinLivingEntityClient {
         boolean wasDiving   = sm.isDiving;
         boolean wasShortInWater = wasSwimming || wasDiving;
 
+        // B-7a (세션 127): 원본 SmartMovingSelf L132 `isLiquidClimbing` 지역 변수 승격.
+        //   isLiquidClimbing = Config.isFreeClimbingEnabled() && sp.fallDistance <= 3.0
+        //                   && wantClimbUp && sp.isCollidedHorizontally && !isDiving;
+        // updateSwimState L232 진입 조건 `!isLiquidClimbing` 항 활성화용 (B-7c 에서 복원).
+        sm.isLiquidClimbing = (cfg.freeClimb && cfg.enabled)
+                            && player.fallDistance <= 3.0
+                            && sm.wantClimbUp
+                            && player.horizontalCollision
+                            && !sm.isDiving;
+
         // [8-1] 매 틱 수영 상태 3분류 갱신
         SmartMovingSwimmer.updateSwimState(player, sm);
 

@@ -95,14 +95,29 @@ public final class SmartMovingSwimmer {
         // 이식 시 이 이전 틱 값 참조.
         sm.wasJumpingOutOfWater = sm.isJumpingOutOfWater;
 
-        if (!player.isTouchingWater()) {
+        // **B-7c 해소 (세션 127)**: 원본 L232 진입 조건 정밀 복원.
+        //   boolean handleSwimming = !isFlying && !isLiquidClimbing
+        //                         && (isInWater() || (wasSwimming && isInLiquid())
+        //                             || (lavaLikeWater && handleLavaMovement()));
+        // - isFlying (SM 비행) / isLiquidClimbing (B-7a 세션 127) 게이트 추가
+        // - wasSwimming 은 updateSwimState 진입 시점에 아직 갱신되지 않은 sm.isSwimming_sm
+        //   (MixinLivingEntityClient L77 `boolean wasSwimming = sm.isSwimming_sm;` 스냅샷과 등가)
+        // - isInLiquid (B-7d 세션 127) — AABB 액체 판정 (vanilla isTouchingWater 보다 정밀)
+        // - player.isInLava() → 원본 handleLavaMovement() 대응 (vanilla 액체 교차 판정)
+        SmartMovingConfig cfg7c = SmartMovingConfig.Config;
+        boolean handleSwim = !sm.isFlying
+                && !sm.isLiquidClimbing
+                && (player.isTouchingWater()
+                    || (sm.isSwimming_sm && SmartMovingClientState.isInLiquid(player))
+                    || (cfg7c.isLavaLikeWaterEnabled() && player.isInLava()));
+        if (!handleSwim) {
             // B-10-reset-post (세션 114): 원본 L1488-L1498 `resetSwimming()` 메서드 호출.
-            // updateSwimState 진입 `!isInWater` 분기 (원본 L242/L253) 대응 — 물 밖 전환 시
+            // updateSwimState 진입 `!handleSwim` 분기 (원본 L242/L253) 대응 — 물 밖 전환 시
             // 8 수중 관련 필드 일괄 리셋 (이전 개별 할당에서 isLevitating / isFakeShallowWaterSneaking
             // / isJumpingOutOfWater 3 필드 누락 해소).
             resetSwimming(sm);
             // B-10c-post (세션 112): 원본 L550 `isStillSwimmingJump = false` — useStandard
-            // 경로 별도 리셋. 원본 resetSwimming 자체에는 없으나 1.21.1 `!isTouchingWater`
+            // 경로 별도 리셋. 원본 resetSwimming 자체에는 없으나 1.21.1 `!handleSwim`
             // 경로가 useStandard 대응이라 여기서 함께 리셋.
             sm.isStillSwimmingJump = false;
             // 1.21.1 추가 — waterMovementTicks 리셋 (원본 resetSwimming 에 없음. B-12 정정

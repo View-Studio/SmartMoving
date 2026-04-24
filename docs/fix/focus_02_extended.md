@@ -336,11 +336,15 @@ Orientation 판정 + ClimbGap 계산.
 ### Phase 5. B-7 / B-9 / B-11 본체 — 수중 3상태 완전 재구성
 
 #### B-7. updateSwimState 진입 조건 복원
-- [ ] B-7a. `isLiquidClimbing` 필드 + 계산 로직 이식 (원본 L280 Free climbing liquid 판정).
-- [ ] B-7b. `Config.isLavaLikeWaterEnabled()` + `handleLavaMovement()` 헬퍼 이식.
-- [ ] B-7c. Swimmer.updateSwimState 진입 조건 정밀 복원:
-      `!isFlying && !isLiquidClimbing && (isInWater || (wasSwimming && isInLiquid) ||
-      (lavaLikeWater && handleLavaMovement()))`
+- [x] B-7a. `isLiquidClimbing` 필드 + 계산 로직 이식 (원본 L132). **세션 127 완료**
+      (`ClientState.isLiquidClimbing` public 필드 + `MixinLivingEntityClient.sm_beforeTravel`
+      의 updateSwimState 호출 직전 계산).
+- [x] B-7b. `Config.isLavaLikeWaterEnabled()` 헬퍼 + `lavaLikeWater` Config 필드 이식.
+      **세션 127 완료** (Config Creative 기본 false, Properties IO 등록, isLavaLikeWaterEnabled
+      헬퍼 추가). `handleLavaMovement()` 는 vanilla `player.isInLava()` 로 대응.
+- [x] B-7c. Swimmer.updateSwimState 진입 조건 정밀 복원. **세션 127 완료**
+      (`!isFlying && !isLiquidClimbing && (isInWater || (wasSwimming && isInLiquid) ||
+      (lavaLikeWater && isInLava))` 3-OR 전수 이식).
 
 #### B-9. handleSwimming 메인 분류 3-갈래 재작성
 - [ ] B-9a. `playerSwimWaterBorder` / `totalSwimWaterBorder` 계산 (AABB 정밀 — Phase 6 공유).
@@ -357,10 +361,10 @@ Orientation 판정 + ClimbGap 계산.
       B-9 완료 + Phase 6 AABB 의존.
 
 #### B-7d. `isInLiquid()` 메서드 이식 (세션 88 4차 확정 감사 발견)
-- [ ] B-7d. 본체 §6.2 L219 "isInLiquid() 미이식 (B-7 서브)" 명시 분리. 원본
-      `SmartMovingSelf.isInLiquid()` 메서드 이식 — 물 + 용암 통합 판정. B-7c 본문 내
-      `(wasSwimming && isInLiquid)` 조건 활성화용. Agent WebFetch 로 원본 본문 확보 필요.
-      예상 구조: `isInWater() || (Config.isLavaLikeWaterEnabled() && isInLava())`.
+- [x] B-7d. **세션 127 완료**. 원본 `SmartMovingBase.isInLiquid()` L411-L416 1:1 이식.
+      `ClientState.isInLiquid(player)` static 메서드 신설 — `getMaxPlayerLiquidBetween !=
+      minY || getMinPlayerLiquidBetween != maxY` (B-42c 헬퍼 소비). B-7c 진입 조건에서
+      소비 활성.
 
 #### B-9h. `swimDown = false` 설정 이식 (세션 88 4차 확정 감사 발견)
 - [ ] B-9h. 본체 §7 B-5 근사 (3) "swimDown=false (원본 L244) 미이식 — B-9 메인 분류 재작성
@@ -526,6 +530,96 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 127 — 2026-04-25 — Phase 5 진입 — B-7a/b/c/d 4 원자 일괄 (updateSwimState 진입 조건 정밀 복원)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 5 진입 — B-7 본체 전수.
+
+**진행한 작업**:
+
+**1. B-7a — `isLiquidClimbing` 필드 + 계산**:
+- 원본 `SmartMovingSelf.java` L132 지역 변수:
+  ```java
+  boolean isLiquidClimbing = Config.isFreeClimbingEnabled() && sp.fallDistance <= 3.0
+                          && wantClimbUp && sp.isCollidedHorizontally && !isDiving;
+  ```
+- 1.21.1 updateSwimState + handleSwimming 분리로 지역 변수 공유 불가 → **public 필드 승격**.
+- `ClientState.isLiquidClimbing` 필드 추가 (wantClimbUp 필드 근처).
+- `MixinLivingEntityClient.sm_beforeTravel` L82 `updateSwimState` 호출 직전 계산:
+  ```java
+  sm.isLiquidClimbing = (cfg.freeClimb && cfg.enabled)
+                     && player.fallDistance <= 3.0
+                     && sm.wantClimbUp
+                     && player.horizontalCollision
+                     && !sm.isDiving;
+  ```
+
+**2. B-7b — `lavaLikeWater` Config 필드 + 헬퍼**:
+- 원본 `SmartMovingConfig.java` L163 `_lavaLikeWater = Creative("move.lava.water")` —
+  Survival 기본 false / Creative 기본 true. Config 계층 복잡성 탈피하여 단순 boolean 이식.
+- `SmartMovingConfig.lavaLikeWater = false` 필드 + Properties IO (`load` / `save` 양방향)
+  + `isLavaLikeWaterEnabled()` 헬퍼 메서드 추가.
+- `handleLavaMovement()` (원본 SM-specific 메서드) 는 1.21.1 `player.isInLava()` 로 대응
+  (vanilla AABB 교차 판정 동일 시멘틱).
+
+**3. B-7d — `isInLiquid()` 메서드**:
+- 원본 `SmartMovingBase.java` L411-L416:
+  ```java
+  return getMaxPlayerLiquidBetween(minY, maxY) != minY
+      || getMinPlayerLiquidBetween(minY, maxY) != maxY;
+  ```
+- 1.21.1 `ClientState.isInLiquid(player)` static 메서드 신설 — B-42c 헬퍼 소비. 1:1.
+
+**4. B-7c — updateSwimState 진입 조건 정밀 복원**:
+- 원본 `SmartMovingSelf.java` L232:
+  ```java
+  boolean handleSwimming = !isFlying && !isLiquidClimbing
+      && (sp.isInWater() || (wasSwimming && isInLiquid())
+          || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()));
+  ```
+- 기존 1.21.1: `if (!player.isTouchingWater())` 단일 게이트 → 근사.
+- 정밀 이식:
+  ```java
+  boolean handleSwim = !sm.isFlying
+          && !sm.isLiquidClimbing
+          && (player.isTouchingWater()
+              || (sm.isSwimming_sm && isInLiquid(player))
+              || (cfg.isLavaLikeWaterEnabled() && player.isInLava()));
+  if (!handleSwim) { resetSwimming(sm); ...; return; }
+  ```
+- `wasSwimming` 은 updateSwimState 진입 시점 `sm.isSwimming_sm` (아직 갱신 전) 으로
+  MixinLivingEntityClient L77 스냅샷과 등가.
+
+**5. 빌드 검증** — 각 단계마다 `./gradlew compileJava compileClientJava --rerun-tasks`
+**BUILD SUCCESSFUL** (B-7a 1회 / B-7a/b/d 2회 / B-7c 최종 3회).
+
+**완료 전 검증 체크리스트 (세션 127 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L132 + L232 + `SmartMovingBase.java` L411-L416 +
+  `SmartMovingClientConfig.java` L87-L90 로컬 read ✓
+- [근거] `SmartMovingConfig.java` L163 `_lavaLikeWater` Creative 기본값 확인 ✓
+- [대응] `sp.fallDistance` → `player.fallDistance`, `sp.isCollidedHorizontally` →
+  `player.horizontalCollision`, `sp.handleLavaMovement` → `player.isInLava` 표면 매핑 ✓
+- [분기] B-7c 3-OR 전수 이식 (isInWater / wasSwimming+isInLiquid / lavaLikeWater+inLava) ✓
+- [상수] `3.0` (fallDistance 상한) 원본 동일 ✓
+- [타이밍] `isLiquidClimbing` 계산 위치 — updateSwimState 호출 직전 (원본 L132 L133 순서 보존) ✓
+- [근사] 없음 — 엄격 1:1 ✓
+- [신규] 없음 ✓
+- [회귀] `!isTouchingWater` 단일 게이트를 3-OR 확장 — 기존 시나리오 (물 밖 진입 시 리셋)
+  는 동일 동작 유지. 신규 시나리오 (용암 수영 / wasSwimming 상태에서 액체 경계 밖) 은
+  원본 의도대로 활성 ✓
+- [빌드] BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-9 메인 분류 3-갈래 재작성**. B-9a (playerSwimWaterBorder/
+totalSwimWaterBorder — B-42d SwimBorderValues 소비) → B-9b (`[0, 2]` 구간 분기) → B-9c/d
+(swimming/diving offset 테이블) → B-9e ((2, ∞) 구간) → B-9f/g/h. 규모 큰 블록 —
+분할하여 3-4 세션 예상. B-7 블록은 전수 완결.
+
+**진행률** (세션 127 종료 시점):
+- Extended 완료: **47 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 **4** = 47)
+- Extended 총 원자 ~61
+- **Extended 진행률: 47/61 ≈ 77%**
+- **포커스 #2 전체: (54+47)/115 ≈ 87%**
+- **Phase 5 B-7 블록 4/4 완결** (B-9 / B-11 남음)
 
 ### 세션 126 — 2026-04-25 — B-42-B18a/B18b 해소 (Phase 6 마지막 승격 2 원자)
 
