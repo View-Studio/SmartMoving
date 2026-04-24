@@ -474,6 +474,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   블록 (wall/fence/chain) 은 enclosing box 가 과대 추정되어 maxY 가 약간 높게 측정될
   수 있음 (실용 등가 — crawlStandUpBottom/climbGap 판정에 영향 없음). **B-42 계열의
   기반 헬퍼** — B-42b~d + 승격 8건이 이를 참조.
+- **B-42b 근사 1건** (세션 118): `ClientState.getMinPlayerSolidBetween(player, yMin,
+  yMax, horizontalTolerance)` 이식 — B-42a 와 대칭 (maxY 집계 → minY 집계). 원본
+  `SmartMovingBase` L398-L409 박스 순회. `result = yMax` 초기값 / `Math.min(result,
+  box.minY)` / `Math.max(result, yMin)` clamp. 동일한 VoxelShape→Box 단일 enclosing
+  box 근사 — multi-shape 블록에서 minY 가 약간 낮게 측정될 수 있음 (crawlStandUpCeiling/
+  minPlayerSwimWaterCeiling/actuallySolidHeight 판정 약간 보수적, 실용 등가). 호출처:
+  원본 SmartMovingSelf L266 `minPlayerSwimWaterCeiling` / L1151 `actuallySolidHeight` /
+  L1373·L2400 `crawlStandUpCeiling`. **B-42b 는 crawl standup ceiling 판정의 기반**.
 - **B-10b-pre 근사 1건** (세션 110): `wasJumpingOutOfWater` — 원본은 SmartMovingSelf
   L105 의 **updateEntityActionState 내부 지역 snapshot** (`boolean wasJumpingOutOfWater =
   isJumpingOutOfWater;`). 이후 handleSwimming L229 에 파라미터로 전달되어 L487 공식

@@ -1884,6 +1884,57 @@ public final class SmartMovingClientState {
         return Math.min(result, yMax);
     }
 
+    /**
+     * 원본 L229-L231 `getPlayerSolidBetween` + L398-L409 `getMinPlayerSolidBetween` 통합 이식.
+     *
+     * 플레이어 AABB (X/Z 범위 ± horizontalTolerance) 내 [yMin, yMax] Y 구간의
+     * 최저 고체 블록 `box.minY` 반환. 콜리전 없으면 `yMax`. B-42a 대칭.
+     *
+     * 원본 L398-L409:
+     *   result = yMax
+     *   for box in solids:
+     *       if isCollided(box, yMin, yMax, horizontalTolerance):
+     *           result = min(result, box.minY)
+     *   return max(result, yMin)
+     *
+     * 호출처 (원본 SmartMovingSelf):
+     *   - L266 `minPlayerSwimWaterCeiling` (swim ceiling 판정)
+     *   - L1151 `actuallySolidHeight` (jump clearance)
+     *   - L1373 / L2400 `crawlStandUpCeiling` (일어설 때 머리 위 천장)
+     *
+     * **§7 근사** (B-42a 와 동일): VoxelShape → Box 단일 외접 box. multi-shape 블록은
+     * 외접 box 가 실제보다 범위가 넓어 minY 가 약간 낮게 잡힘 가능성 — crawlStandUpCeiling
+     * 판정에서는 약간 더 보수적으로 작동 (실용 등가).
+     *
+     * B-42b (세션 118) — Phase 6 두 번째 원자.
+     */
+    public static double getMinPlayerSolidBetween(ClientPlayerEntity player,
+                                                   double yMin, double yMax,
+                                                   double horizontalTolerance) {
+        Box pb = player.getBoundingBox();
+        Box checkBox = new Box(
+                pb.minX - horizontalTolerance, yMin, pb.minZ - horizontalTolerance,
+                pb.maxX + horizontalTolerance, yMax, pb.maxZ + horizontalTolerance);
+
+        double result = yMax;
+        for (net.minecraft.util.shape.VoxelShape shape
+                : player.getWorld().getBlockCollisions(player, checkBox)) {
+            if (shape.isEmpty()) continue;
+            // 근사 이식 — 원본과 차이: VoxelShape.getBoundingBox() 단일 box (multi-shape 외접)
+            Box box = shape.getBoundingBox();
+            // 원본 L299-L306 `isCollided(box, yMin, yMax, horizontalTolerance)` 인라인 이식
+            if (box.maxX >= pb.minX - horizontalTolerance
+                    && box.minX <= pb.maxX + horizontalTolerance
+                    && box.maxY >= yMin
+                    && box.minY <= yMax
+                    && box.maxZ >= pb.minZ - horizontalTolerance
+                    && box.minZ <= pb.maxZ + horizontalTolerance) {
+                result = Math.min(result, box.minY);
+            }
+        }
+        return Math.max(result, yMin);
+    }
+
     // ── B Phase 1 B-22c (세션 42) — 원본 SmartMovingSelf 메서드 2개 이식 ──────────
 
     /**
