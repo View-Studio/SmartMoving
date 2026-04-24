@@ -24,6 +24,10 @@
 > 잉여 정리. 회귀 0건. Easy 1:1 체감 ~90% (서버 허기 동기화 3디테일은
 > `focus_11_server_hunger_sync.md` 후속).
 
+> **포커스 #2 진행 중 (세션 79)**: AABB 정밀 근사 개선은 `focus_14_aabb_precision.md` 로 분리.
+> canStandUp/isPlayerInSolidBetween/crawlStandUpBottom 등 여러 원자 (B-5/B-16/B-20/B-26/B-35/
+> B-36 등) 에서 사용 중인 근사를 일괄 해소할 후속 포커스.
+
 ---
 
 ## 📋 작업 방식 — 2-문서 워크플로우

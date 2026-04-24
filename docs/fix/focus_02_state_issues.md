@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 78 — B Phase 2 계속 / B-36) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 48 원자 완료 / ⏳ **B Phase 2 잔여 10 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-39/B-42/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 79 — B Phase 2 계속 / B-42 분리) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 49 원자 완료 / ⏳ **B Phase 2 잔여 9 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-39/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -1003,9 +1003,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (세션 38) / B-31a wasCrawling (세션 41) / B-46 grabJustPressed (세션 66) 모두 완료.
 
 #### B-42. `mustCrawl` AABB 정밀 개선 (A-5 발견 — 근사 이식 기록)
-- [ ] B-42. 1.21.1 `canStandUp(player)` 메서드 근사 → 원본 `getMaxPlayerSolidBetween /
-      getMinPlayerSolidBetween` 정밀 AABB 근사. 1.21.1 AABB API 제약으로 §7 근사 유지
-      가능 — 별도 포커스 후보 (focus_??? 분리).
+- [x] B-42. ✅ **세션 79 완료 (별도 포커스 분리)** — AABB 정밀 근사 개선은 포커스 #2 범위
+      외로 결정. `focus_14_aabb_precision.md` 로 분리 (§17 기록). §7 에 현재 근사 지점 전수
+      등록됨 (B-5/B-16 blocked/B-20/B-26/B-35/B-36 등 — 모두 AABB 정밀 스캔 미이식에서 파생).
+      후속 포커스에서 일괄 해소 예정. **단 B-42 자체는 "현재 근사 유지" 결정으로 해소** —
+      추가 코드 변경 없음.
 
 #### B-43. R-09 블록 종료부 저장 2건 이식 (A-6 발견)
 - [x] B-43. ✅ **세션 56 완료** — 원본 L3043-L3044 이식. ClientState R-09 블록 종료부
@@ -3636,6 +3638,39 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-42** — "별도 포커스 후보" 공식 분리 문서 작업.
 - **B-44b** (wasCrawling 저장 시점 이동) — B-33 함께 조정 예정이나 단독 문서 정리 가능.
 
+### 세션 79 — 2026-04-24 — B Phase 2 B-42 (별도 포커스 분리)
+
+**진행한 작업**:
+- B-42 AABB 정밀 근사 개선을 포커스 #2 범위 외로 결정 — `focus_14_aabb_precision.md` 로
+  분리 (파일 실제 생성은 후속 작업 시점, 현재는 참조만 등록).
+- focus_02 §17 잔여/후속 섹션에 분리 근거 + §7 근사 지점 전수 참조 등록 (B-5/B-16 blocked/
+  B-20/B-26/B-35/B-36 등 — 모두 AABB 정밀 스캔 미이식에서 파생).
+- focus_02 §10 B-42 체크박스 [x] 해소. "현재 근사 유지" 결정으로 추가 코드 변경 없음.
+- playtest_fixes.md 에 포커스 #2 진행 중 메모 추가 (focus_11/12/13 분리 패턴 동일).
+- Simple/Smart Base Climb (B-20 세션 76 의 Standard 모드 외 부분) 도 후속 포커스 후보로
+  §17 에 명시.
+- 빌드 검증 불필요 (코드 변경 없음).
+
+**완료 전 검증 체크리스트 (세션 79)**:
+- [근거] §7 에 B-5/B-16/B-20/B-26/B-35/B-36 근사 지점 전수 등록 확인 ✓
+- [근거] focus_11/12/13 후속 포커스 분리 패턴 (playtest_fixes.md 참조) 재사용 ✓
+- [대응] §10 체크박스 해소 + §17 분리 근거 기록 + playtest_fixes.md 참조 추가 ✓
+- [분기] 없음 (문서만)
+- [상수] 없음
+- [타이밍] 없음 (코드 변경 없음)
+- [근사] **B-42 자체가 "현재 근사 유지" 결정 원자** — §7 전수 등록으로 추적성 확보 ✓
+- [신규] 없음 (기존 근사 지점들을 한곳에 정리)
+- [회귀] 없음 (문서만)
+- [빌드] 코드 변경 없음
+
+**Phase 2 진행 상황**: 49 원자 완료 / 잔여 9 원자
+
+**다음 작업 권고**:
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
+- **B-39** (landMotionPost 3분기 isSlow) — crawlStandUpBottom 근사로 실효성 낮음.
+- **B-44b** (wasCrawling 저장 시점 이동) — B-33 동시 조정 필요.
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing/isInLiquid/isLavaLikeWaterEnabled 의존.
+
 ---
 
 ## 16. 신규 발견
@@ -4302,3 +4337,12 @@ Phase 5 (C 단계):
 ## 17. 잔여 / 후속
 
 - 상태 디버그용 HUD 오버레이(F3 + Tab 같은) 추가는 별도 포커스 후보
+- **B-42 → `focus_14_aabb_precision.md` 분리** (세션 79): 1.21.1 `canStandUp(player)` /
+  `isPlayerInSolidBetween` / `crawlStandUpBottom` 근사가 여러 원자에서 사용 중 (B-17b1 /
+  B-35 / B-36 / B-39 등). 원본 `getMaxPlayerSolidBetween / getMinPlayerSolidBetween /
+  getMinPlayerLiquidBetween` 정밀 AABB 스캔으로 일괄 개선할 수 있으나, 1.21.1 AABB API
+  제약으로 설계 재검토 필요 — 포커스 #2 범위 외 작업. §7 에 현재 근사 지점 전수 등록 (B-5/
+  B-16/B-20/B-26/B-35/B-36 등). 후속 포커스에서 AABB 정밀도 개선 시 이들 근사가 일괄
+  해소될 수 있음.
+- Simple/Smart Base Climb (원본 L825-L894) 전체 미이식 — B-20 세션 76 에서 Standard 만
+  일부 해소. 옵션 모드 전체 이식은 Climber 구조 변경 큼 — 후속 포커스 후보.
