@@ -224,6 +224,13 @@ public final class SmartMovingClientState {
     public boolean isClimbHolding;
 
     /**
+     * 원본 SmartMovingSelf L2721-L2732 `wantClimbHolding` 3-OR. B-16 세션 68 에서 지역 변수로
+     * 이식 → B-18-pre 세션 81: B-18 본체 `canClimbCrawling = wantClimbHolding && wantClimbUp`
+     * 에서 참조 필요 → public 필드 승격.
+     */
+    public boolean wantClimbHolding;
+
+    /**
      * 원본 SmartMovingSelf L2479 `wantClimb = Config.isFreeClimbingEnabled() && wouldWantClimb`.
      * 등반 의도 (지역 변수에서 필드 승격). B-16c 세션 69 에서 `wouldWantClimb` 4-OR 완전 이식.
      * B-17b2-pre 세션 72: 지역 `wantClimb16` → public 필드 승격 (B-17b2 `else if (wasCrawlClimbing)`
@@ -1002,7 +1009,8 @@ public final class SmartMovingClientState {
                 wantClimb = cfg0.freeClimb && cfg0.enabled && wouldWantClimb;
 
                 // 원본 L2721-L2732 3-OR:
-                boolean wantClimbHolding =
+                // B-18-pre (세션 81): 지역 `wantClimbHolding` → `this.wantClimbHolding` 필드 승격.
+                wantClimbHolding =
                         (isClimbHolding && sneakPressedRaw)
                         || (isClimbing && blocked)
                         || (wantClimb && !isSwimming_sm && !isDiving && !isCrawling
@@ -1397,6 +1405,59 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // B-18 (세션 81): 원본 L2786-L2820 `isClimbCrawling` 메인 공식 + climbIntoCount
+            // 카운터 + 진입 엣지 이식. B-17 (isCrawlClimbing) 블록 뒤 + B-35 앞 배치 — 원본
+            // L2786 순서 복원.
+            // 원본:
+            //   boolean wasClimbCrawling = isClimbCrawling;
+            //   boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
+            //   boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
+            //   if (climbIntoCount > 1) climbIntoCount--;
+            //   else if (isClimbCrawling && !needClimbCrawling && count==0) climbIntoCount = 6;
+            //   isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1);
+            //   if (isClimbCrawling && !wasClimbCrawling) {
+            //       setHeightOffset(-1F);
+            //       boolean wasColH = isCollidedHorizontally;
+            //       move(0, 0.05, 0, true);
+            //       isCollidedHorizontally = wasColH;  // 충돌 상태 복원
+            //   }
+            //   else if (!isClimbCrawling && wasClimbCrawling) { climbIntoCount = 0; ... }
+            // ※ 의존 전수 충족: hasClimbCrawlGap 필드 (B-15 세션 40) / hasClimbGap (B-15b) /
+            //   isClimbHolding (B-16) / wantClimbHolding (B-18-pre 세션 81) / wantClimbUp
+            //   (B-17b2-pre 세션 72) / climbIntoCount 필드 (기존).
+            // ※ isCollidedHorizontally 복원은 1.21.1 에서 `player.horizontalCollision` 필드
+            //   final 아님 — 복원 가능. 단 setter 직접 없음 → reflection 또는 mixin 필요.
+            //   근사: `player.horizontalCollision` 복원 생략 (§7 B-18 근사 등록).
+            // ※ 해제 엣지 (else if (!isClimbCrawling && wasClimbCrawling)) 본문은 리서치
+            //   요약만 — 현재 `climbIntoCount = 0` 리셋만 이식. 나머지 크롤 전환/resetHeightOffset
+            //   은 추후 Agent WebFetch 후 별도 서브 원자 (B-18b) 로 분해.
+            {
+                boolean wasClimbCrawling = isClimbCrawling;
+                boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
+                boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
+
+                if (climbIntoCount > 1) {
+                    climbIntoCount--;
+                } else if (isClimbCrawling && !needClimbCrawling && climbIntoCount == 0) {
+                    climbIntoCount = 6;
+                }
+
+                isClimbCrawling = canClimbCrawling
+                        && ((needClimbCrawling && climbIntoCount == 0) || climbIntoCount > 1);
+
+                if (isClimbCrawling && !wasClimbCrawling) {
+                    // 진입 엣지 (원본 L2812-L2817)
+                    heightOffset = -1F;
+                    // isCollidedHorizontally 복원은 근사로 생략 (§7 B-18).
+                    player.move(MovementType.SELF, new Vec3d(0, 0.05, 0));
+                } else if (!isClimbCrawling && wasClimbCrawling) {
+                    // 해제 엣지 (원본 L2819-L2820 요약) — 일부 이식.
+                    climbIntoCount = 0;
+                    // TODO (B-18b): mustCrawl/sneak 상황별 크롤 전환 + resetHeightOffset
+                    //   본문 미확보 — Agent WebFetch 후 별도 서브 원자.
+                }
+            }
+
             // B-35 (세션 74): 원본 L2822-L2836 wasCrawling↔isCrawling 전환 후처리 이식 (근사).
             // 원본 의미: 크롤 해제 (서기 전환) 또는 크롤 진입 시 heightOffset 및 위치 보정.
             // ※ 근사 이식 (§7 B-35 근사 등록):
@@ -1647,6 +1708,7 @@ public final class SmartMovingClientState {
         wantClimbDown           = false;
         wouldWantClimb          = false;
         wouldWantCrawl          = false;
+        wantClimbHolding        = false;
         isGroundSprinting       = false;
         collidedHorizontallyTickCount = 0;
         restoreFromFlying       = false;

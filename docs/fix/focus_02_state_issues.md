@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 80 — B Phase 2 계속 / B-39 근사) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 50 원자 완료 / ⏳ **B Phase 2 잔여 8 원자** (B-7/B-9/B-11/B-18/B-19/B-33/B-44b/B-44c) |
+| 상태 | 🟡 진행 중 (세션 81 — B Phase 2 계속 / B-18-pre + B-18) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 51 원자 완료 / ⏳ **B Phase 2 잔여 7 원자** (B-7/B-9/B-11/B-19/B-33/B-44b/B-44c) |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -434,6 +434,11 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   정밀 스캔 미이식 → `≈ minY` 근사 → `minY + 0.5D` 초과 조건 항상 false → isSlow 크롤
   전환 미발동. `move(0, crawlStandUpBottom - minY, 0)` 이동량도 0 근사 생략. 현재 동작
   유지 + 구조 복원으로 focus_14 (AABB 정밀) 완료 시 자동 활성 경로 확보.
+- **B-18 근사** (세션 81): `ClientState.tickEssential` B-17 뒤 + B-35 앞에 isClimbCrawling
+  공식 이식. 진입 엣지의 `isCollidedHorizontally` 복원 생략 — 1.21.1 `player.horizontalCollision`
+  필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
+  resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
+  주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
 
 ---
 
@@ -794,13 +799,22 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       (vineClimb + jump + crawl/slide 충돌 조건)` 1:1.
 
 #### B-18. `isClimbCrawling` 메인 공식 + climbIntoCount 카운터 이식 (A-3 발견)
-- [ ] B-18. 원본 L2786-L2820 이식:
-      - `needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding)` (B-15b/B-16 선행)
-      - `canClimbCrawling = wantClimbHolding && wantClimbUp`
-      - climbIntoCount 카운터: `>1`감소 / `isClimbCrawling&&!needClimbCrawling&&count==0`→`6` 재장전
-      - `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1)`
-      - 진입 엣지 (setHeightOffset(-1) + move(0,0.05,0))
-      - 해제 엣지 (mustCrawl/sneak 상황별 crawl 전환 + resetHeightOffset)
+- [x] **B-18-pre** ✅ **세션 81 완료** — wantClimbHolding public 필드 승격. B-16 블록 지역
+      `boolean wantClimbHolding` → `this.wantClimbHolding` 필드 할당. resetState 리셋 추가.
+- [x] B-18. ✅ **세션 81 완료 (부분, 해제 엣지 본문 제외)** — 원본 L2786-L2820 이식:
+      ClientState tickEssential B-17 블록 뒤 + B-35 앞에 배치.
+      * `needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding)` 1:1 ✓
+      * `canClimbCrawling = wantClimbHolding && wantClimbUp` 1:1 ✓
+      * climbIntoCount 카운터: `>1 감소` / `==0 && needClimbCrawling 없음` → `6` 재장전 ✓
+      * `isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1)` ✓
+      * 진입 엣지 (원본 L2812-L2817): `heightOffset=-1F + move(0, 0.05, 0)` ✓.
+        `isCollidedHorizontally` 복원은 §7 B-18 근사 등록 (1.21.1 player.horizontalCollision
+        setter 없음 → mixin 필요 — 별도).
+      * 해제 엣지 (원본 L2819-L2820): `climbIntoCount = 0` 만 이식. 나머지 본문 (mustCrawl/
+        sneak 상황별 crawl 전환 + resetHeightOffset) 은 리서치 요약만 — Agent WebFetch 후
+        별도 서브 원자 **B-18b** (TODO 주석). 의존 전수 충족: hasClimbCrawlGap 필드 (기존) /
+        hasClimbGap (B-15b) / isClimbHolding (B-16) / wantClimbHolding (B-18-pre) /
+        wantClimbUp (B-17b2-pre) / climbIntoCount 필드.
 
 #### B-19. `hasClimbCrawlGap` / `hasClimbGap` / `isNeighborClimbing` 갱신 로직 이식 (A-3 발견)
 - [ ] B-19. 원본 handleClimbing Free Climbing 분기 (L896-L1108) 내부 Orientation 판정
@@ -3712,6 +3726,70 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-44b** (wasCrawling 저장 시점 이동) — B-33 동시 조정 필요 (단독 무의미).
 - **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
 - **B-11** (얕은 물 특수 분기) — B-9 메인 분류 재작성 범위.
+
+### 세션 81 — 2026-04-24 — B Phase 2 B-18-pre + B-18 (isClimbCrawling 공식 + 카운터)
+
+**진행한 작업**:
+- **B-18-pre**: ClientState `wantClimbHolding` public 필드 신설 (isClimbHolding 근처).
+  B-16 블록 지역 `boolean wantClimbHolding` → `this.wantClimbHolding` 필드 할당 전환.
+  resetState 리셋 추가.
+- **B-18 본체**: ClientState tickEssential B-17 블록 뒤 + B-35 앞 (원본 L2786 순서) 에
+  원본 L2786-L2820 본체 이식:
+  ```java
+  boolean wasClimbCrawling = isClimbCrawling;
+  boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
+  boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
+  if (climbIntoCount > 1) climbIntoCount--;
+  else if (isClimbCrawling && !needClimbCrawling && count==0) climbIntoCount = 6;
+  isClimbCrawling = canClimbCrawling && ((needClimbCrawling && count==0) || count>1);
+  if (isClimbCrawling && !wasClimbCrawling) {
+      heightOffset = -1F;
+      player.move(SELF, new Vec3d(0, 0.05, 0));
+  } else if (!isClimbCrawling && wasClimbCrawling) {
+      climbIntoCount = 0;
+      // TODO (B-18b): mustCrawl/sneak 상황별 crawl 전환 + resetHeightOffset
+  }
+  ```
+- §7 **B-18 근사 등록**: 진입 엣지 `isCollidedHorizontally` 복원 생략 (1.21.1
+  player.horizontalCollision setter 없음 → mixin 필요, 별도). 해제 엣지 본문은 리서치
+  요약만 → `climbIntoCount = 0` 만 이식, 나머지는 TODO + 서브 원자 B-18b (Agent WebFetch
+  필요).
+- 의존 전수 충족: hasClimbCrawlGap (기존 L272) / hasClimbGap (B-15b 세션 40) / isClimbHolding
+  (B-16 세션 68) / wantClimbHolding (B-18-pre 세션 81) / wantClimbUp (B-17b2-pre 세션 72) /
+  climbIntoCount (기존 L275).
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 81)**:
+- [근거] 원본 L2786-L2820 research/.../SmartMovingSelf.md L3497-L3524 (R-12.6) 확보 ✓
+- [근거] R-12.10 #2 `isClimbCrawling 메인 공식 [누락]` §16 세션 33 ✓
+- [대응] 본문 + 카운터 + 진입 엣지 원본 1:1 (isCollidedHorizontally 복원 근사 + 해제 엣지
+  부분만) ✓
+- [분기] 카운터 3-분기 + isClimbCrawling 메인 + 진입/해제 엣지 2갈래 ✓
+- [상수] `6` 카운터 재장전 / `0.05D` 이동 / `-1F` 높이 원본 동일 ✓
+- [타이밍] B-17 뒤 + B-35 앞 — 원본 L2786 순서 복원 ✓
+- [근사] §7 B-18 근사 등록 (isCollidedHorizontally 복원 + 해제 엣지 본문) ✓
+- [신규] B-18b 서브 원자 필요 (해제 엣지 Agent WebFetch) §10 내 TODO 기록 ✓
+- [회귀] compileJava + compileClientJava 모두 ✓. isClimbCrawling 이 이전 항상 false →
+  `wantClimbHolding && wantClimbUp && (needClimbCrawling || count>1)` 조건 기반 갱신 활성.
+  B-16c (wantClimb 4-OR) + B-17b2-pre (wantClimbUp) + B-18-pre (wantClimbHolding) 연쇄로
+  실제 동작 가능.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-12 A-3 불일치 현황**:
+- ✅ #1 resetClimbing (B-14 세션 57)
+- ✅ #2 isClimbCrawling 메인 공식 (B-18 세션 81, 부분)
+- ✅ #3 isCrawlClimbing 메인 공식 + 전환 (B-17a/b1/b2)
+- ✅ #6/#7 isClimbHolding/wantClimbHolding (B-16 세션 68/69 + B-18-pre 세션 81)
+- ✅ #13 isCeilingClimbing 해제 엣지 (B-21 세션 57)
+- ⏳ #4/#5/#8~#12/#14 (B-19 Orientation 판정 등)
+
+**Phase 2 진행 상황**: 51 원자 완료 (B-18-pre + B-18 부분) / 잔여 7 원자
+
+**다음 작업 권고**:
+- **B-18b** (해제 엣지 본문) — Agent WebFetch 로 L2819-L2820 상세 확보 후 이식.
+- **B-44c** (wasClimbCrawling 저장 시점 조정) — B-18 완료로 단독 실행 가능 검토.
+- **B-44b** (wasCrawling 저장 시점) — B-33 동시 조정 필요.
+- **B-7** (updateSwimState 진입 조건) — isLiquidClimbing 등 의존 확인 필요.
 
 ---
 
