@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 69 — B Phase 2 계속 / B-16a + B-16b + B-16c) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 39 원자 완료 / ⏳ **B Phase 2 잔여 ~4 원자** (B-16 4-OR 완전 이식, §7 근사 1건으로 축소) |
+| 상태 | 🟡 진행 중 (세션 70 — B Phase 2 계속 / B-41) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 40 원자 완료 / ⏳ **B Phase 2 잔여 ~3 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -922,8 +922,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       호출 지점 다른 5곳 (L2566/L2760/L2767/L2812/L2835/L2860) 은 B-35/B-36 이식 시 추가.
 
 #### B-41. `wantCrawlNotClimb` 갱신 블록 이식 (A-5 발견)
-- [ ] B-41. 원본 L2452-L2461 이식 — grab.StartPressed + !wasCrawling 등 4-AND 조건.
-      의존: B-31b 필드 선행.
+- [x] B-41. ✅ **세션 70 완료** — 원본 L2451-L2463 이식. ClientState tickEssential IMPL-01
+      + B-34 뒤 + B-25 IMPL-02 앞에 배치:
+      `wantCrawlNotClimb = (wantCrawlNotClimb || (grabJustPressed && !wasCrawling))
+                        && grab.isPressed() && moveForward > 0F
+                        && isCrawling && horizontalCollision;`
+      의미: 크롤 중 전진+grab+수평 충돌 시 "등반 아닌 크롤 선호" 플래그. B-16c 이식된
+      `wouldWantClimb` 의 `!wantCrawlNotClimb` 억제 조건 활성화. 의존: B-31b 필드 이식
+      (세션 38) / B-31a wasCrawling (세션 41) / B-46 grabJustPressed (세션 66) 모두 완료.
 
 #### B-42. `mustCrawl` AABB 정밀 개선 (A-5 발견 — 근사 이식 기록)
 - [ ] B-42. 1.21.1 `canStandUp(player)` 메서드 근사 → 원본 `getMaxPlayerSolidBetween /
@@ -3090,6 +3096,60 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
 - **B-18** (isClimbCrawling 메인 공식 + 카운터) — 현재 isClimbCrawling 항상 false. B-16c 효과 증폭.
+
+### 세션 70 — 2026-04-24 — B Phase 2 B-41 (wantCrawlNotClimb 갱신 공식)
+
+**진행한 작업**:
+- ClientState tickEssential IMPL-01 종료 + B-34 (flying 점프) 뒤, B-25 IMPL-02 앞에
+  원본 L2451-L2463 이식. 단일 4-AND 복합 표현식:
+  ```java
+  wantCrawlNotClimb =
+          (wantCrawlNotClimb || (grabJustPressed && !wasCrawling))
+          && SmartMovingKeys.grab.isPressed()
+          && player.input.movementForward > 0F
+          && isCrawling
+          && player.horizontalCollision;
+  ```
+- 의존 전수 이식 확인:
+  * `wantCrawlNotClimb` 이전 값 — B-31b 세션 38 필드 이식 ✓
+  * `grabJustPressed` — B-46 세션 66 필드 이식 ✓
+  * `wasCrawling` — B-31a 세션 41 필드 이식 ✓
+  * `grab.isPressed()` / `movementForward` / `isCrawling` / `horizontalCollision` — vanilla API ✓
+- 주석에 원본 라인 + 의미 (크롤 중 등반 억제 플래그) + B-16c 의 `!wantCrawlNotClimb`
+  억제 조건 연동 명시.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공.
+
+**완료 전 검증 체크리스트 (세션 70)**:
+- [근거] 원본 L2451-L2463 Agent WebFetch (세션 68) 로 확보 ✓
+- [근거] R-14.10 #12 `wantCrawlNotClimb 필드+갱신 [누락]` §16 세션 35 ✓
+- [대응] 4-AND + OR-조합 조건 원본 1:1 ✓
+- [분기] OR 2-gate (이전값 또는 grabStart + !wasCrawling) + 4-AND 명시 ✓
+- [상수] 없음
+- [타이밍] IMPL-01 종료 + B-34 뒤 — 원본 L2441 isCrawling 공식 이후 L2451 위치와 의미
+  등가 (isCrawling 최종값 확정 시점). `wasCrawling` 은 L761 이전 틱 저장 — 원본 L2441
+  `wasCrawling=isCrawling` 전 시점과 동일 값. 1.21.1 IMPL-01 진입/해제 이원화 구조
+  하에서 결과적 동치 ✓
+- [근사] 없음 — 1:1 이식
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. wantCrawlNotClimb 가 이제 실제 조건 기반
+  갱신 — B-16c `wouldWantClimb` 억제 조건 활성화. 크롤 중 전진+grab+수평 충돌 상황에서
+  등반 자동 진입 차단 (원본 의도).
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**R-14 A-5 불일치 현황**:
+- ✅ #4 L2449-L2450 capabilities.flying 해제 점프 (B-34 세션 59)
+- ✅ #7 L986 wall 오르기 crawl 진입 (B-37 세션 62)
+- ✅ #8 L1170 handleCeilingClimbing 진입 isCrawling=false (B-38 세션 58)
+- ✅ #12 wantCrawlNotClimb 필드+갱신 (B-31b 세션 38 + B-41 세션 70)
+- ⏳ #1~#3/#5/#6/#9~#11/#13~#15
+
+**Phase 2 진행 상황**: 40 원자 완료 / 잔여 ~3
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-20** (Standard/Simple Base Climb) — Config 분기 미이식 — 규모 중.
+- **B-18** (isClimbCrawling 공식 + 카운터) — 대규모 의존 (hasClimbCrawlGap/climbIntoCount).
 
 ---
 

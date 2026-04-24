@@ -1089,6 +1089,23 @@ public final class SmartMovingClientState {
                 SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, 0F);
             }
 
+            // B-41 (세션 70): 원본 L2451-L2463 `wantCrawlNotClimb` 갱신 공식 이식.
+            //   wantCrawlNotClimb = (wantCrawlNotClimb ||
+            //                        (grabButton.StartPressed && !wasCrawling))
+            //                    && grabButton.Pressed && moveForward > 0F
+            //                    && isCrawling && isCollidedHorizontally;
+            // 의미: 크롤 중 전진 입력 + grab + 수평 충돌 상황에서 "등반 아닌 크롤 선호" 플래그
+            // 설정. climb 진입 억제 (wouldWantClimb 의 `!wantCrawlNotClimb` 억제 조건으로 사용).
+            // 필드는 B-31b 세션 38 이식 완료. grabJustPressed (B-46 세션 66) 사용.
+            // wasCrawling 은 L761 이전 틱 저장값. 위치: IMPL-01 종료 + B-34 뒤.
+            wantCrawlNotClimb =
+                    (wantCrawlNotClimb
+                            || (grabJustPressed && !wasCrawling))
+                    && SmartMovingKeys.grab.isPressed()
+                    && player.input.movementForward > 0F
+                    && isCrawling
+                    && player.horizontalCollision;
+
             // B-25 (세션 55): IMPL-02 직접 진입 6-AND 조건 완전 복원 (원본 L2553-L2561).
             //   기존 `isSneaking && isSprinting && onGround && !isClimbing && !isHeadJumping`
             //   간소 매핑 제거 → 원본 공식:
