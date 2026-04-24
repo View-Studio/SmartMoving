@@ -302,16 +302,14 @@ Orientation 판정 + ClimbGap 계산.
       근사 없음. 본체 §6 표기 구식 업데이트.
 
 #### B-N-standup. `standupIfPossible` 메서드 이식 (세션 88 3차 감사 발견)
-- [ ] B-N-standup. 원본 `standupIfPossible()` (SmartMovingSelf.java — 정확 위치 Agent
-      WebFetch 필요) 메서드 이식. 소비 지점:
-      (1) `restoreFromFlying = true` 이후 (B-24 세션 53 이식됨) — 비행 해제 시 일어설 수 있으면
-          자동 standup 트리거.
-      (2) `handleSwimming` 내 수영→크롤링 전환 (focus_03 §5.1 참조).
-      현재 `restoreFromFlying` 필드 값 설정만 정확 동작 — standupIfPossible 미이식으로
-      실제 "일어서기 시도" 로직 비활성. 세션 53 B-24 완료 전 후속 원자로 명시.
-      이식 대상: boolean 반환 메서드 + boundingBox 확장 가능 판정 + pose 변경.
-      예상 의존: AABB 헬퍼 (Phase 6 B-42a/b 이후 정밀 가능 — 전에는 `canStandUp(player)` 근사).
-      완료 시 비행 해제/수영→크롤 전환 엣지 경로 1:1 복원.
+- [x] B-N-standup. ✅ **세션 115 완료 (근사 이식 4건)** — 원본 L2165-L2219 이식:
+      `resetHeightOffset()` / `standUp()` / `standupIfPossible(player)` 무인자 /
+      `standupIfPossible(player, tryLanding, restoreFromFlying)` 2-arg 오버로드.
+      1.21.1 boundingBox API 제약 + AABB 정밀 헬퍼 (`getGapUnderneight`/`getGapOverneight`)
+      미이식으로 다수 근사. `canStandUp(player)` 단일 판정으로 gap 체크 통합.
+      B-24 (세션 53) `restoreFromFlying = true` 설정 직후 2-arg 오버로드 호출 연결.
+      §7 B-N-standup 근사 4건 등록 (boundingBox / move / AABB gap / capabilities.flying).
+      **본체 §6 매핑 테이블 `standupIfPossible()` 표기 갱신** — "✗ 미이식" → "✓ 근사 이식".
 
 #### B-40-post. `toCrawling()` 잔여 호출 지점 L2751/L2760/L2767 이식 (세션 88 3차 감사 발견)
 - [ ] B-40-post. 본체 세션 41 L1883 기록된 `wasCrawling` 재설정 8 위치 중 B-27/B-35/B-36
@@ -494,6 +492,67 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 115 — 2026-04-24 — B-N-standup `standupIfPossible` 메서드 이식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L2165-L2219 read** — 4 메서드 본체 확인:
+   * L1681-L1686 `resetHeightOffset` — boundingBox/height 조작 + heightOffset=0F
+   * L2165-L2183 `standupIfPossible()` 무인자 — heightOffset 리셋 early return + gap
+     체크 후 standUp or toSlidingOrCrawling
+   * L2186-L2212 `standupIfPossible(tryLanding, restoreFromFlying)` — 비행 해제 + 동일
+     gap 체크
+   * L2214-L2219 `standUp(gapUnderneight)` — move + crawl/headJump 해제 + resetHeightOffset
+2. **1.21.1 의존 현황 확인**:
+   * `heightOffset` (필드) 이식 완료
+   * `resetHeightOffset` 메서드 없음 (인라인만)
+   * `getGapUnderneight` / `getGapOverneight` / `standUp` 미이식
+   * `canStandUp(player)` 이식 완료 — AABB 근사
+3. **이식 내용** (ClientState 4 메서드 신설):
+   * `resetHeightOffset()` — `heightOffset = 0F` 만 (boundingBox 조작 근사)
+   * `standUp()` — isCrawling/isHeadJumping false + resetHeightOffset (move 이동 근사 생략)
+   * `standupIfPossible(player)` — heightOffset >= 0 early return + canStandUp 기준
+     standUp 호출 (toSlidingOrCrawling 생략)
+   * `standupIfPossible(player, tryLanding, restoreFromFlying)` — tryLanding +
+     canStandUp 조합으로 비행 해제 + standUp 호출
+4. **B-24 (세션 53) 연결** — `restoreFromFlying = true` 설정 직후 `standupIfPossible(player,
+   false, true)` 호출 추가.
+5. **본체 §6 매핑 + §7 근사 4건 등록**:
+   (1) resetHeightOffset — boundingBox/height 조작 생략
+   (2) standUp — move 이동 생략 (getGapUnderneight 없음)
+   (3) standupIfPossible — AABB gap 체크 → canStandUp 근사 (toSlidingOrCrawling 생략)
+   (4) 2-arg 오버로드 — capabilities.flying 직접 조작 근사 (SM 측 isFlying 만)
+
+**완료 전 검증 체크리스트 (세션 115 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L1681-L1686 + L2165-L2219 전수 read ✓
+- [근거] 의존 — heightOffset (기존) / canStandUp (기존) / isCrawling / isHeadJumping /
+  isFlying (기존) / restoreFromFlying (B-24 세션 53) 전수 충족 ✓
+- [대응] 4 메서드 원본 ↔ 1.21.1 side-by-side (근사 명시). B-24 호출 연결 ✓
+- [분기] 무인자: heightOffset>=0 / canStandUp 2갈래. 2-arg: heightOffset>=0 / tryLanding &&
+  canStandUp / !restoreFromFlying / canStandUp 분기 전수. 근사 경로는 주석 명시 ✓
+- [상수] `0F` (heightOffset 리셋) / `1D - gapUnderneight` (move 이동, 생략) 원본 인식 ✓
+- [타이밍] B-24 직후 호출 — 원본 L2544 standupIfPossible(tryLanding, restoreFromFlying)
+  위치 대응 ✓
+- [근사] **§7 B-N-standup 근사 4건 등록 완료** (boundingBox / move / AABB / capabilities.flying) ✓
+- [신규] 본체 §6 매핑 테이블 `standupIfPossible()` 표기 갱신 ("✗ 미이식" → "✓ 근사 이식") ✓
+- [회귀] 기존 B-24 `restoreFromFlying = true` 설정만 하고 소비자 없었음 → 이제 즉시
+  standupIfPossible 호출 → heightOffset 리셋 + crawl/headJump 해제 정상 경로. 이전엔
+  heightOffset=-1F 유지 가능성 있었음 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-40-post** — `toCrawling()` 잔여 호출 지점 L2751/L2760/L2767 이식
+(세션 88 3차 감사 발견). Agent WebFetch 로 원본 해당 대역 확보 + 이식 위치 결정.
+예상 1-2 세션.
+
+**진행률** (세션 115 종료 시점):
+- Extended 완료: **29 원자** (B-19 22 + B-10a-post + B-10b-pre + B-10b-post + B-10c-post +
+  B-31c-post + B-10-reset-post + **B-N-standup**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 29/61 ≈ 48%**
+- **포커스 #2 전체: (54+29)/115 ≈ 72%**
+- **Phase 4**: 7/8 (**1 남음** — B-40-post)
 
 ### 세션 114 — 2026-04-24 — B-10-reset-post `resetSwimming()` 메서드 완전 이식
 

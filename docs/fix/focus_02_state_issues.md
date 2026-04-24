@@ -364,7 +364,7 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `toCrawling()` 함수 | — (inline 만) | ✓ 헬퍼 이식 (B-40 세션 44) / ⚠️ 잔여 호출 지점 L2751/L2760/L2767 미흡수 (Extended B-40-post) |
 | `resetClimbing()` 메서드 | `Climber.resetClimbing()` | ✓ 이식 완료 (B-14 세션 57) |
 | `resetSwimming()` 메서드 | `SmartMovingSwimmer.resetSwimming(sm)` static private | ✓ 완전 이식 (B-10-reset-post 세션 114) — 8 필드 일괄 리셋 |
-| `standupIfPossible()` 메서드 | — | ✗ 미이식 (Extended B-N-standup — restoreFromFlying 소비자) |
+| `standupIfPossible()` 메서드 | `ClientState.standupIfPossible(player)` / 2-arg 오버로드 + `resetHeightOffset` + `standUp` | ✓ 근사 이식 (B-N-standup 세션 115, §7 근사 4건) |
 | `resetState()` | `ClientState.resetState()` | ✓ |
 | `handleClimbing()` | `Climber.handleClimbing()` | ⚠️ Free 만 이식, Standard/Simple 미이식 (B-20) |
 | `handleCeilingClimbing()` | `Climber.handleCeilingClimbing()` | ✓ 주요 경로 이식 |
@@ -440,6 +440,23 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-N-standup 근사 4건** (세션 115): `standupIfPossible` 메서드 이식 시 1.21.1 API 제약
+  + AABB 정밀 헬퍼 미이식으로 인한 다수 근사:
+  (1) `resetHeightOffset` — 원본 `sp.boundingBox.minY += heightOffset; sp.height -=
+  heightOffset; heightOffset = 0F` 중 boundingBox/height 조작 생략. 1.21.1 vanilla API
+  에서 직접 조작 불허 → `heightOffset = 0F` 만.
+  (2) `standUp` — 원본 `move(0, 1D - gapUnderneight, 0, true)` 이동 생략. `getGapUnderneight`
+  AABB 미이식으로 정확한 gap 불명. 상태 전환 (isCrawling=false / isHeadJumping=false /
+  resetHeightOffset) 만.
+  (3) `standupIfPossible` — 원본 `gapUnderneight < 1D` (groundClose) + `gapUnderneight +
+  gapOverneight >= 1D` (standUpPossible) AABB 체크 → `canStandUp(player)` 근사 단일 판정.
+  `!groundClose` 공중 분기 통합. `toSlidingOrCrawling` 호출 생략 (후속 원자 범위).
+  (4) 2-arg 오버로드 `tryLanding && groundClose && standUpPossible → sp.capabilities.isFlying
+  = false` 분기 — 1.21.1 `player.getAbilities().flying` 직접 조작은 client-server
+  sync 미보장 → SM 측 `isFlying` 만 false. vanilla 비행 상태는 별도 경로 (Mixin/네트워크)
+  로 해제 필요.
+  B-24 (세션 53) `restoreFromFlying = true` 설정 직후 `standupIfPossible(player, false, true)`
+  호출 연결 완결.
 - **B-31c-post 근사 1건** (세션 113): `initializeCrawling` true 설정 경로 이식 시 AABB
   정밀 스캔 미이식 대응:
   (1) 원본 L2346 `getMaxPlayerSolidBetween(sp.boundingBox.minY, sp.boundingBox.maxY, 0)

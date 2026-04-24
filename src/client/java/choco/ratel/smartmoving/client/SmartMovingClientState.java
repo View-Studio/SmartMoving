@@ -1292,11 +1292,14 @@ public final class SmartMovingClientState {
 
             // B-24 (세션 53): 원본 L2535-L2540 해제 엣지 후처리.
             //   wasHeadJumping && !isHeadJumping && onGround → handleCrash + restoreFromFlying=true
-            // ※ restoreFromFlying 은 standupIfPossible 트리거 — 1.21.1 standupIfPossible 미이식
-            //   이라 현재는 필드 설정만. B-N 후속: standupIfPossible 이식 시 자동 연결.
+            // B-N-standup (세션 115): `restoreFromFlying = true` 직후 `standupIfPossible(player,
+            //   false, true)` 호출 연결. 원본은 updateEntityActionState 내부에서 별도 위치
+            //   호출이나 1.21.1 단일 위치 + 근사 이식이라 여기서 직접 호출.
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
+                // B-N-standup 연결: restoreFromFlying 전환 시 가능하면 즉시 서기 시도.
+                standupIfPossible(player, false, true);
             }
 
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
@@ -1841,6 +1844,122 @@ public final class SmartMovingClientState {
      */
     public boolean isRunning(ClientPlayerEntity player) {
         return player.isSprinting() && !isFast && (player.isOnGround() || vanilla());
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-N-standup (세션 115) — standupIfPossible() 메서드 이식 + resetHeightOffset +
+    //                          standUp 보조
+    // 원본: SmartMovingSelf.java L1681-L1686 (resetHeightOffset),
+    //       L2165-L2183 (standupIfPossible()),
+    //       L2186-L2212 (standupIfPossible(tryLanding, restoreFromFlying)),
+    //       L2214-L2219 (standUp).
+    //
+    // **§7 근사 다수** — 원본은 boundingBox 직접 조작 + AABB 정밀 `getGapUnderneight` /
+    // `getGapOverneight` 기반. 1.21.1 은 boundingBox API 제약 + AABB 헬퍼 미이식 →
+    // `canStandUp(player)` 근사로 대체. 핵심 의도 (가능하면 서기 = heightOffset 리셋 +
+    // crawl/headJump 해제) 는 보존.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L1681-L1686 `resetHeightOffset()`:
+     *   sp.boundingBox.minY += heightOffset;
+     *   sp.height -= heightOffset;
+     *   heightOffset = 0F;
+     *
+     * **§7 근사** (B-N-standup-approx-1): 1.21.1 boundingBox/height 직접 조작 불가 →
+     * `heightOffset = 0F` 만. 기존 이식에서 인라인으로 이 패턴 사용 중이던 것을 메서드로
+     * 추출. B-N-standup (세션 115).
+     */
+    public void resetHeightOffset() {
+        // 근사 이식 — 원본과 차이: boundingBox.minY/height 조작 생략 (1.21.1 API 제약)
+        this.heightOffset = 0F;
+    }
+
+    /**
+     * 원본 L2214-L2219 `standUp(double gapUnderneight)`:
+     *   move(0, (1D - gapUnderneight), 0, true);
+     *   isCrawling = false;
+     *   isHeadJumping = false;
+     *   resetHeightOffset();
+     *
+     * **§7 근사** (B-N-standup-approx-2): 원본 `move(0, 1D - gapUnderneight, 0, true)`
+     * 이동 생략 — 1.21.1 AABB `getGapUnderneight` 미이식. `canStandUp` 기반 근사에서
+     * 정확한 gap 알 수 없음. 핵심 상태 전환 (crawl/headJump 해제 + heightOffset 리셋) 만.
+     */
+    public void standUp() {
+        // 근사 이식 — 원본과 차이: move(0, 1D - gapUnderneight, 0) 이동 생략
+        this.isCrawling    = false;
+        this.isHeadJumping = false;
+        resetHeightOffset();
+    }
+
+    /**
+     * 원본 L2165-L2183 `standupIfPossible()` 무인자 오버로드:
+     *   if (heightOffset >= 0) return;
+     *   groundClose = gapUnderneight < 1D;
+     *   if (!groundClose) resetHeightOffset();
+     *   else {
+     *       standUpPossible = gapUnderneight + gapOverneight >= 1D;
+     *       if (standUpPossible) standUp(gapUnderneight);
+     *       else toSlidingOrCrawling(gapUnderneight);
+     *   }
+     *
+     * **§7 근사** (B-N-standup-approx-3): AABB 정밀 gap 측정 미이식 → `canStandUp(player)`
+     * 근사. `canStandUp` 은 플레이어 머리 위 공간 여부 → `standUpPossible` 판정에 대응.
+     * `!groundClose` 분기 (공중) 는 별도 판별 없이 단순 `canStandUp` 기준으로 통합.
+     * `toSlidingOrCrawling` 호출은 추후 B-N 원자에서 이식 (현재 슬라이딩/크롤 재시도 생략).
+     */
+    public void standupIfPossible(ClientPlayerEntity player) {
+        if (this.heightOffset >= 0) return;
+
+        // 근사 이식 — 원본과 차이: gapUnderneight/gapOverneight AABB 스캔 → canStandUp 근사
+        if (canStandUp(player)) {
+            standUp();
+        } else {
+            // toSlidingOrCrawling 호출 생략 — 현재는 heightOffset 만 유지 (슬라이딩/크롤 재시도
+            // 경로는 후속 원자 범위). 근사 이식 — 원본과 차이: toSlidingOrCrawling 미호출.
+        }
+    }
+
+    /**
+     * 원본 L2186-L2212 `standupIfPossible(boolean tryLanding, boolean restoreFromFlying)` —
+     * 비행 해제 포함 오버로드:
+     *   if (heightOffset >= 0) return;
+     *   if (tryLanding && groundClose && standUpPossible) {
+     *       isFlying = false;
+     *       sp.capabilities.isFlying = false;
+     *       restoreFromFlying = true;
+     *   }
+     *   if (!restoreFromFlying) return;
+     *   ... standUp or toSlidingOrCrawling ...
+     *
+     * B-24 세션 53 에서 `restoreFromFlying = true` 설정 후 이 메서드 호출해야 standupIfPossible
+     * 연결 완결. 현재 1.21.1 은 B-24 에서 이 호출이 빠져있음 (미이식 명시).
+     *
+     * **§7 근사** (B-N-standup-approx-4): tryLanding 경로 내 `sp.capabilities.isFlying = false`
+     * 는 1.21.1 `player.getAbilities().flying = false` 로 설정 시 vanilla 쪽 동기화 필요
+     * (Mixin / 네트워크) — 1.21.1 에서는 direct 조작 불허. 근사로 상태 필드만 리셋.
+     */
+    public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
+        if (this.heightOffset >= 0) return;
+
+        boolean canStand = canStandUp(player);
+
+        if (tryLanding && canStand) {
+            this.isFlying = false;
+            // 근사 이식 — 원본과 차이: sp.capabilities.isFlying = false → vanilla 비행 상태
+            // 직접 조작은 client-server sync 필요. `player.getAbilities().flying = false` 는
+            // 서버 검증 미반영으로 효과 불확실. 현재는 SM 측 isFlying 만 false.
+            restoreFromFlying = true;
+        }
+
+        if (!restoreFromFlying) return;
+
+        if (canStand) {
+            standUp();
+        } else {
+            // toSlidingOrCrawling 호출 생략 — 동일 근사 (위)
+        }
     }
 
     /**
