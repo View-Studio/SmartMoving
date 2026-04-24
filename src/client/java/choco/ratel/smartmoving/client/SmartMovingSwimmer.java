@@ -360,24 +360,72 @@ public final class SmartMovingSwimmer {
         boolean diveUp   = jumping;
         boolean diveDown = player.isSneaking() && sm.isDiving;
 
+        // **B-9b 해소 (세션 129)**: 원본 L306 `moveSwim` + A/B 경로 판정 이식.
+        //   moveSwim = pitch < 0 && forward > 0 || pitch > 0 && forward < 0
+        //   (pitch 와 forward 부호 반대 — 위 보며 후진 또는 아래 보며 전진 = 입수 자세)
+        //   isPathA = diveUp || moveSwim || wantShallowSwim
+        //     A 경로: 능동적 수영 (< 1.4 dipping, < 1.9 swimming, else diving)
+        //     B 경로: 수동적 떠있기 (< 1.5 dipping, else diving — swimming 없음)
+        boolean moveSwim = (player.getPitch() < 0F && moveForward > 0F)
+                        || (player.getPitch() > 0F && moveForward < 0F);
+        boolean isPathA = diveUp || moveSwim || wantShallowSwim;
+
+        // **B-9b 상태 재분류 (세션 129)**: A/B 경로에 따라 isDipping/isSwimming_sm/isDiving
+        //   을 updateSwimState 의 A 경로 기본 분류에서 재조정. [0, 2] 구간에서만 재조정
+        //   (updateSwimState 는 A 경로 threshold 1.4/1.9 기본. B 경로는 1.5 + swimming 없음).
+        //   isCrawling||isClimbCrawling||isCrawlClimbing 강제 dipping (원본 L301) 은
+        //   updateSwimState L135 에서 이미 처리됨 — 여기선 수정 금지.
+        double playerSwimWaterBorder9b = swimVals.playerSwimWaterBorder;
+        if (!sm.isCrawling && !sm.isClimbCrawling && !sm.isCrawlClimbing
+                && playerSwimWaterBorder9b >= 0 && playerSwimWaterBorder9b <= 2) {
+            double offset9b = playerSwimWaterBorder9b + 0.1625D;
+            if (isPathA) {
+                // A 경로 (원본 L307-L358): 1.4 / 1.9 threshold
+                sm.isDipping     = offset9b < 1.4D;
+                sm.isSwimming_sm = offset9b >= 1.4D && offset9b < 1.9D;
+                sm.isDiving      = offset9b >= 1.9D;
+            } else {
+                // B 경로 (원본 L360-L398): 1.5 threshold, swimming 없음
+                sm.isDipping     = offset9b < 1.5D;
+                sm.isSwimming_sm = false;
+                sm.isDiving      = offset9b >= 1.5D;
+            }
+            // Config 게이트 재적용 (원본 L436-L441)
+            if (!cfg.isSwimmingEnabled()) {
+                sm.isSwimming_sm = false;
+                sm.isDipping     = false;
+            }
+            if (!cfg.isDivingEnabled()) {
+                sm.isDiving = false;
+            }
+        }
+
         // **B-9a 해소 (세션 128)**: handleSwimming 내부 offset 계산도 AABB 정밀화.
         //   `dippingDepth` 가 이미 `playerSwimWaterBorder` 시멘틱이므로 직접 사용.
         //   원본 L305: `offset = playerSwimWaterBorder + 0.1625D`
         if (sm.isDipping) {
-            // 수면 경계 — 약간 아래로 당기는 힘 + 수평 이동
-            // 원본: offset < 1.0 → motionYDiff = -0.02D, else → -0.01D
+            // **B-9c dipping 분기 (세션 129)**: 원본 L309-L316 (A) / L362-L369 (B).
+            //   A 경로: offset < 1.0 → -0.02D, else → -0.01D
+            //   B 경로: 양 branch 모두 -0.02D (원본 L365-L368 — 중복이지만 원본 그대로)
             Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
             motionX += fly.x;
             motionZ += fly.z;
             motionX *= DAMPING_DIPPING_XZ;
             double dippingOffset = sm.dippingDepth + 0.1625D;
-            double dippingYDiff = dippingOffset < 1.0D ? -0.02D : -0.01D;
+            double dippingYDiff;
+            if (isPathA) {
+                dippingYDiff = dippingOffset < 1.0D ? -0.02D : -0.01D;
+            } else {
+                dippingYDiff = -0.02D;
+            }
             motionY = (motionY + dippingYDiff) * DAMPING_DIPPING_Y;
             motionZ *= DAMPING_DIPPING_XZ;
 
         } else if (sm.isSwimming_sm) {
-            // 수면 수영 — offset 구간에 따라 수직력 세분화
-            // 원본: SmartMovingSelf.handleSwimming() 13단계 테이블 (229-576줄)
+            // **B-9c 해소 (세션 129)**: 원본 L317-L348 A 경로 swimming 11단계 테이블 복원.
+            //   B 경로는 isSwimming_sm=false 로 재분류되므로 이 분기 진입 없음.
+            //   원본: offset < 1.5 → -0.02, < 1.6 → -0.01, ..., else → 0.02 (11단계)
+            //   기존 13단계는 A 11단계 근사 — 원본 공식 1:1 (swimDown 분기는 B-9h 범위, 생략).
             double offset = sm.dippingDepth + 0.1625D;
             double motionYDiff;
             if      (offset < 1.5D)   motionYDiff = -0.02D;
@@ -405,13 +453,37 @@ public final class SmartMovingSwimmer {
             sm.heightOffset = -1F;
 
         } else { // isDiving
-            // 완전 잠수 — diveUp/diveDown 수직 제어
-            // 원본: diveDown = 0.01 - 0.1 * speedFactor (SmartMovingSelf 229-576줄)
+            // **B-9d 해소 (세션 129)**: 원본 L349-L358 (A 경로 diving [1.9, 2])
+            //   + L370-L397 (B 경로 diving 10단계 [1.5, 2]) 복원.
+            //   A 경로: diveUp / diveDown / default = moveSwim ? 0.04 : 0.02
+            //   B 경로: diveDown / offset 10단계 (< 1.8 -0.02 ~ else 0.01)
+            //   (2, ∞) 구간 (B-9e 범위, 후속) — 현재 [1.9, 2] 만 정밀, 그 이상은 근사 유지.
             double motionYDiff = 0D;
-            if (diveUp) {
-                motionYDiff = 0.05D * speedFactor;
-            } else if (diveDown) {
-                motionYDiff = 0.01D - 0.1D * speedFactor;
+            double offset9d = sm.dippingDepth + 0.1625D;
+            if (isPathA) {
+                // A 경로 diving (원본 L349-L358)
+                if (diveUp) {
+                    motionYDiff = 0.05D * (sm.isFast ? cfg.sprintFactor : 1F);
+                } else if (diveDown) {
+                    motionYDiff = 0.01D - 0.1D * speedFactor;
+                } else {
+                    motionYDiff = moveSwim ? 0.04D : 0.02D;
+                }
+            } else {
+                // B 경로 diving (원본 L370-L397) — offset 10단계
+                if (diveDown) {
+                    motionYDiff = 0.01D - 0.1D * speedFactor;
+                } else if (offset9d < 1.8D)  motionYDiff = -0.02D;
+                else if (offset9d < 1.82D) motionYDiff = -0.01D;
+                else if (offset9d < 1.84D) motionYDiff = -0.005D;
+                else if (offset9d < 1.86D) motionYDiff = -0.0025D;
+                else if (offset9d < 1.864D) motionYDiff = -0.00125D;
+                else if (offset9d < 1.868D) motionYDiff = 0D;
+                else if (offset9d < 1.872D) motionYDiff = 0.00125D;
+                else if (offset9d < 1.876D) motionYDiff = 0.0025D;
+                else if (offset9d < 1.88D)  motionYDiff = 0.005D;
+                else if (offset9d < 1.9D)   motionYDiff = 0.01D;
+                else                        motionYDiff = 0.01D;
             }
 
             // 원본 SmartMovingSelf.md L476:

@@ -351,9 +351,15 @@ Orientation 판정 + ClimbGap 계산.
       **세션 128 완료** (`SwimBorderValues` 소비 → `dippingDepth` 시멘틱을
       `playerSwimWaterBorder` 로 교체, updateSwimState + handleSwimming 두 곳의 offset
       공식 정밀화). 원본 L305/L416 1:1.
-- [ ] B-9b. `[0, 2]` 구간 A/B 서브 분기 (`diveUp || moveSwim || wantShallowSwim`).
-- [ ] B-9c. A 경로 11-단계 swimming offset 테이블 (1.4-1.9).
-- [ ] B-9d. B 경로 10-단계 diving offset 테이블 (1.5-1.9).
+- [x] B-9b. `[0, 2]` 구간 A/B 서브 분기 (`diveUp || moveSwim || wantShallowSwim`).
+      **세션 129 완료** (`moveSwim = pitch<0 && forward>0 || pitch>0 && forward<0` 계산 +
+      `isPathA` boolean + handleSwimming 내부 상태 재분류 A/B 경로별 threshold).
+- [x] B-9c. A 경로 11-단계 swimming offset 테이블 (1.4-1.9). **세션 129 완료** (원본
+      L317-L348 11단계 1:1 — 기존 13단계 근사 → 원본 공식 복원, swimDown 분기 생략은
+      B-9h 범위).
+- [x] B-9d. B 경로 10-단계 diving offset 테이블 (1.5-1.9). **세션 129 완료** (원본
+      L370-L397 10단계 1:1 + A 경로 diving (L349-L358) 분기도 함께 이식). isDiving 분기에
+      isPathA 기반 A/B 경로 처리.
 - [ ] B-9e. `(2, ∞)` 구간 diving + diveUp/diveDown/moveSwim + isFast 분기.
 - [ ] B-9f. `(-∞, 0)` handleSwimmingRejected.
 - [ ] B-9g. `motionYDiff` 전체 적용 로직.
@@ -533,6 +539,72 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 129 — 2026-04-25 — B-9b/c/d — A/B 경로 분기 + swimming/diving offset 테이블 복원
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. B-9 메인 분류 재작성 2단계.
+
+**진행한 작업**:
+
+**1. B-9b — `moveSwim` + A/B 경로 판정 + 상태 재분류**:
+- 원본 L306: `moveSwim = sp.rotationPitch < 0F && moveForward > 0F || sp.rotationPitch > 0F && moveForward < 0F`
+  (pitch 와 forward 부호 반대 — 위 보며 후진 / 아래 보며 전진 = 입수 자세).
+- 원본 L307: `isPathA = diveUp || moveSwim || wantShallowSwim`.
+- 1.21.1 이식: handleSwimming 내 지역 변수 추가.
+- **상태 재분류** (원본 L308-L398 의 분기 조건):
+  * A 경로 (L309-L358): offset < 1.4 dipping / < 1.9 swimming / ≥ 1.9 diving
+  * B 경로 (L360-L398): offset < 1.5 dipping / ≥ 1.5 diving (swimming 없음)
+  * [0, 2] 구간에서만 재분류 (isCrawling 강제 dipping 은 updateSwimState L135 유지).
+  * Config 게이트 (`!swim → isSwimming/isDipping=false`, `!dive → isDiving=false`) 재적용.
+
+**2. B-9c — A 경로 swimming 11단계 motionYDiff 복원**:
+- 원본 L317-L348 swimming 분기 — swimDown 분기 (B-9h 범위) 제외 11단계 그대로.
+- 기존 13단계 근사 → 원본 11단계로 재정렬. threshold 값 (1.5, 1.6, 1.62, 1.64, 1.66,
+  1.664, 1.668, 1.672, 1.676, 1.68, 1.7, 1.8) 전수 1:1.
+- B 경로는 isSwimming_sm=false 로 재분류되므로 이 분기 진입 안 함.
+
+**3. B-9d — B 경로 diving 10단계 + A 경로 diving 복원**:
+- 원본 L349-L358 (A 경로 diving `[1.9, 2]`) + L370-L397 (B 경로 diving `[1.5, 2]` 10단계)
+  통합 이식.
+- A 경로 diving: `diveUp → 0.05 * (isFast ? sprintFactor : 1F)` / `diveDown → 0.01 -
+  0.1 * speedFactor` / `default → moveSwim ? 0.04 : 0.02`.
+- B 경로 diving 10단계: `diveDown → 0.01 - 0.1 * speedFactor` / `offset < 1.8 → -0.02`
+  / `< 1.82 → -0.01` / ... / `< 1.9 → 0.01` / `else → 0.01`.
+- `isDiving` 분기에 `isPathA` 기반 분기 추가.
+
+**4. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 129 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L301-L398 전체 블록 로컬 read ✓
+- [근거] `cfg.sprintFactor` / `sm.isFast` / `player.getPitch()` 이식 확인 ✓
+- [대응] 원본 `sp.rotationPitch` → `player.getPitch()`, `isFast ? sprintFactor : 1F` →
+  `sm.isFast ? cfg.sprintFactor : 1F` 표면 매핑 ✓
+- [분기] A 경로 3-way (dipping/swimming/diving) + B 경로 2-way (dipping/diving) +
+  A diving 3-way + B diving 10단계 + dipping 2-way (A/B 경로별) 전수 ✓
+- [상수] offset threshold 1.4 / 1.5 / 1.9 + swimming 11단계 + diving 10단계 상수 모두
+  원본 동일 ✓
+- [타이밍] A/B 분기 계산 위치 handleSwimming 내 기존 motion 계산 직전 (원본 L306 순서) ✓
+- [근사] 이 원자들은 근사 해소 — 남은 근사: (2, ∞) 구간 (B-9e), (<0) 구간 (B-9f),
+  swimDown 변수 (B-9h). 후속 세션. ✓
+- [신규] 없음 ✓
+- [회귀] 기존 soft water 동작 (A 경로 11단계 이미 근사 이식) 은 동일 시나리오에서
+  더 정확한 값. B 경로 (isDipping=true + diveUp 없음 + moveSwim 없음) 시 기존에는
+  A 경로 적용되던 것이 이제 B 경로 적용 — 정확도 상승. `isSwimming_sm` 은 B 경로에선
+  false → B 경로 swimming 분기 진입 방지 (원본 동일 시멘틱). ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-9e** ((2, ∞) 구간 diving — `diveUp + isFast + playerSwimWaterBorder
+< 2.5 + isAirBlock` 조건 분기) + **B-9f** ((<0) 구간 handleSwimmingRejected) + **B-9g**
+(motionYDiff 통합 적용) + **B-9h** (swimDown 변수) + **B-11** (얕은 물 특수 분기). Phase 5
+마무리까지 2-3 세션 더.
+
+**진행률** (세션 129 종료 시점):
+- Extended 완료: **51 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 **8** = 51)
+  (B-7 4/4 + B-9 3/8: a/b/c/d + B-9e/f/g/h + B-11 남음)
+- Extended 총 원자 ~61
+- **Extended 진행률: 51/61 ≈ 84%**
+- **포커스 #2 전체: (54+51)/115 ≈ 91%**
+- **Phase 5 B-9 3/8 완료** (A/B 경로 + swimming 11단계 + diving 10단계)
 
 ### 세션 128 — 2026-04-25 — B-9a `dippingDepth` 시멘틱 교체 (playerSwimWaterBorder AABB 정밀)
 
