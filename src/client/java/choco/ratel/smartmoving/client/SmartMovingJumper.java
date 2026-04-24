@@ -36,7 +36,8 @@ public final class SmartMovingJumper {
     public static final int UP = 0, CHARGE_UP = 1, HEAD_UP = 2,
             WALL_UP = 3, CLIMB_UP = 4, CLIMB_BACK = 5, CLIMB_BACK_HEAD = 6,
             LEFT = 7, RIGHT = 8, BACK = 9, WALL_HEAD = 10,
-            WALL_UP_SLIDE = 11, WALL_HEAD_SLIDE = 12;
+            WALL_UP_SLIDE = 11, WALL_HEAD_SLIDE = 12,
+            SLIDE_DOWN = 13;   // B-42-B26 (세션 134) — 슬라이딩 진입 시 수평 속도 증폭
 
     // ── [10-3] getJumpMoving ─────────────────────────────────────────────────
 
@@ -232,6 +233,72 @@ public final class SmartMovingJumper {
         sm.headJumpCharge = 0F;
         sm.blockJumpTillButtonRelease = true;
         sm.jumpPending = false;
+    }
+
+    // ── [10-2b] trySlideDownJump ─────────────────────────────────────────────
+
+    /**
+     * 원본 SmartMovingSelf L2557 `tryJump(Config.SlideDown, false, wasRunning, null)` 경량 이식.
+     *
+     * **B-42-B26 해소 (세션 134)**: 슬라이딩 진입 시 수평 속도 증폭 효과.
+     *
+     * 원본 tryJump SlideDown 경로 추적 결과 핵심 효과:
+     *   1. `Config.isJumpingEnabled(speed, SlideDown) = _slide.value` 활성 체크
+     *   2. `horizontalJumpFactor = jumpHorizontalFactor * speed별 factor * potionJumpFactor`
+     *      → up=false 변환: `horizontalJumpFactor = sqrt(h² + v²)`
+     *   3. `horizontalMotion > 0` 이면 수평 속도 스케일 (`|motionX| * factor`)
+     *   4. `isJumping = true; isAirBorne = true`
+     *   수직 속도 미변경 (up=false, noVertical 효과).
+     *
+     * **§7 근사** (B-42-B26-approx, 세션 134): Jumper factor 인프라 (speed별 horizontalFactor/
+     * verticalFactor + `_jumpHorizontalFactor`/`_jumpVerticalFactor` base + exhaustion 시스템
+     * 전체) 미이식 → 모든 factor 를 **기본값 1F** 로 근사. 원본 PositiveFactor 기본값 1F
+     * 이므로 미수정 Config 에서는 1:1 동치. 사용자 Config 수정 시 speed 별 factor 조정은
+     * 반영 안 됨 (별도 포커스 — Jumper factor 인프라 이식).
+     * potion JUMP_BOOST 효과는 원본 L2029 `jumpFactor = 1 + (amp+1)*0.2F` 그대로 반영.
+     */
+    public static void trySlideDownJump(ClientPlayerEntity player, SmartMovingClientState sm,
+                                         boolean wasRunning) {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        // 원본 L2015 `Config.isJumpingEnabled(speed, SlideDown) = _slide.value`
+        if (!cfg.slide || !cfg.enabled) return;
+
+        Vec3d vel = player.getVelocity();
+        double motionX = vel.x;
+        double motionZ = vel.z;
+
+        // 원본 L2029: jumpFactor = potion.jump 있으면 1 + (amp+1)*0.2F
+        float jumpFactor = 1F;
+        StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
+        if (jumpBoost != null) {
+            jumpFactor = 1F + (jumpBoost.getAmplifier() + 1) * 0.2F;
+        }
+        // 원본 L2030-L2031: getJumpHorizontalFactor/getJumpVerticalFactor — 근사 기본 1F.
+        float horizontalJumpFactor = 1F * jumpFactor;
+        float verticalJumpFactor   = 1F * jumpFactor;
+
+        // 원본 L2034-L2038: !up 변환 — horizontalJumpFactor = sqrt(h² + v²)
+        horizontalJumpFactor = (float) Math.sqrt(
+                horizontalJumpFactor * horizontalJumpFactor
+                        + verticalJumpFactor * verticalJumpFactor);
+
+        // 원본 L2097-L2110: horizontalMotion > 0 이면 수평 속도 스케일.
+        // maxHorizontalMotion 제한 (getMaxHorizontalMotion * combinedSpeedFactor) 은 factor
+        //   인프라 의존 — §7 근사 (제한 생략).
+        double horizontalMotion = Math.sqrt(motionX * motionX + motionZ * motionZ);
+        if (horizontalMotion > 0) {
+            double absoluteMotionX = Math.abs(motionX) * horizontalJumpFactor;
+            double absoluteMotionZ = Math.abs(motionZ) * horizontalJumpFactor;
+            motionX = Math.signum(motionX) * absoluteMotionX;
+            motionZ = Math.signum(motionZ) * absoluteMotionZ;
+        }
+
+        // 수직 속도 유지 (원본 up=false, noVertical 효과 — L2113 `if(up && !noVertical)` 건너뜀).
+        player.setVelocity(motionX, vel.y, motionZ);
+
+        // 원본 L2131-L2132: isAirBorne = true; isJumping = true;
+        //   vanilla Entity 에 isAirBorne 필드 없음 (1.21.1 은 velocityDirty + fallDistance 자동 관리).
+        sm.isJumping = true;
     }
 
     // ── [10-1] handleJumping ─────────────────────────────────────────────────

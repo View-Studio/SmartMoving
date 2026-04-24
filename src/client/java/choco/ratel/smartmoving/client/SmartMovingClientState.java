@@ -934,15 +934,15 @@ public final class SmartMovingClientState {
             // 원본은 지역 변수 `initializeCrawling = false` 매 틱 초기화 (뒤에서 B-35 등이 참조).
             // 1.21.1 은 필드 승격 (B-31c 세션 38) → 매 틱 진입 시 리셋.
             //
-            // **§7 근사 B-31c-post**: 원본 `getMaxPlayerSolidBetween(minY, maxY, 0) > minY`
-            // (머리 위 고체 블록 존재) AABB 정밀 스캔 미이식 → `!canStandUp(player)` 근사.
-            // B-42 Phase 6 완료 시 정밀 복원 경로.
+            // **B-31c-post 해소 (세션 134)**: 원본 L2346 `getMaxPlayerSolidBetween(minY, maxY, 0)
+            //   > minY` (머리 위 AABB 내 고체 존재) 정밀 복원. B-42a 헬퍼 소비로 기존
+            //   `!canStandUp` 근사 해소.
             this.initializeCrawling = false;
             if (!this.initialized
                     && !(player.getWorld().isClient() && this.multiPlayerInitialized != 0)
                     && !player.hasVehicle()) {
-                // 근사 이식 — 원본과 차이: getMaxPlayerSolidBetween AABB → canStandUp
-                if (!canStandUp(player)) {
+                Box bb31c = player.getBoundingBox();
+                if (getMaxPlayerSolidBetween(player, bb31c.minY, bb31c.maxY, 0) > bb31c.minY) {
                     this.initializeCrawling = true;
                     this.toCrawling();
                 }
@@ -1375,13 +1375,12 @@ public final class SmartMovingClientState {
             // 필드 세팅 (원본 L2558-L2560): isSliding=true + isHeadJumping=false + isAerodynamic=false.
             // ※ wasRunning 저장 (원본 L3043) — B-43 (세션 56) 이식 완료. R-09 블록 종료부에서
             //   `wasRunning = isRunning(player)` 저장 중 → 이 분기 정상 활성.
-            // B-26 (세션 75): 원본 L2555-L2557 부수 동작 이식 (근사).
+            // B-26 (세션 75) → **B-42-B26 해소 (세션 134)**: 원본 L2555-L2557 전수 이식.
             //   원본: setHeightOffset(-1) + move(0, -1D, 0) + tryJump(Config.SlideDown, false,
             //         wasRunning, null).
-            //   ※ 근사 이식 (§7 B-26 근사 등록):
-            //   tryJump(SlideDown) 호출 생략 — Jumper.SLIDE_DOWN 상수 + 전용 속도 공식 미이식.
-            //   isFromRunning=wasRunning 파라미터 영향도 생략. 효과: 슬라이딩 진입 시 SlideDown
-            //   전용 하강 점프 모션 누락 — gameplay 영향 제한 (주로 이펙트/추진).
+            //   SlideDown tryJump 경량 이식 — `SmartMovingJumper.trySlideDownJump` 로 수평
+            //   속도 증폭 + isJumping=true 설정. factor 인프라 (§7 B-42-B26-approx) 는
+            //   기본 1F 가정.
             if (!isSliding && cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
                     && (isGroundSprinting
@@ -1391,7 +1390,8 @@ public final class SmartMovingClientState {
                     && !isDipping) {
                 heightOffset = -1F;                                     // 원본 L2555
                 player.move(MovementType.SELF, new Vec3d(0, -1D, 0));   // 원본 L2556
-                // tryJump(Config.SlideDown, false, wasRunning, null) 생략 (§7 B-26 근사)
+                // B-42-B26 해소: 원본 L2557 tryJump(SlideDown, false, wasRunning, null) 이식
+                SmartMovingJumper.trySlideDownJump(player, this, wasRunning);
                 isSliding = true;                                        // 원본 L2558
                 isHeadJumping = false;                                   // 원본 L2559
                 isAerodynamic = false;                                   // 원본 L2560

@@ -8,12 +8,12 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #2 Extended — 스마트무빙 상태 이상 (Phase 3~9 엄격 완료)
+항목 #3 — 상태 전환 조건 이상 (재현 케이스 수집 대기)
 ```
 
-**작업 문서 (주)**: [`focus_02_extended.md`](focus_02_extended.md)
-**참조 문서 (본체)**: [`focus_02_state_issues.md`](focus_02_state_issues.md) — A/B Phase 1/2
-핵심 54 원자 완료 기록 / §6 매핑 테이블 / §7 근사 / §14 회귀 감사 / §16 신규 발견 보존.
+**작업 문서**: [`focus_03_transition_conditions.md`](focus_03_transition_conditions.md)
+
+**선행 의존**: #2 (완료) — 상태 값 확정 후 전환 조건 검증.
 
 > **포커스 #6 완료 (2026-04-24, 세션 28)**: A 단계(호출처 감사) → B-1/B-2/B-3/B-4/B-6
 > (헬퍼 정비 + Land/Swim/Climb/Creative 게이트) → C-1/C-2 (동기화 정합) →
@@ -29,11 +29,12 @@
 > **포커스 #2 본체 완료 (세션 29-87)**: A-0~A-7 감사 + B Phase 1/2 **54 원자** 완료 +
 > C-1/C-2/C-3 통과. 본체 `focus_02_state_issues.md` 에 전수 기록.
 
-> **포커스 #2 Extended 진행 중 (세션 88+ 엄격 완료 방침)**: 세션 79/85 의 별도 포커스
-> 분리 계획 (focus_14/15/16/17) 전체 취소. Phase 3~9 (B-19 도미노 / B-10·B-31c 공식 완성
-> / B-7/B-9/B-11 수중 재구성 / AABB 정밀화 / B-48/B-49 sprint 엣지 / Simple·Smart Base
-> Climb / SmartStatistics) 모두 포커스 #2 Extended 범위. Extended 에 **43 원자** 등록
-> (세션 88 1~5차 전수 감사 통과 확정). 사용자 지시 "무조건적인 엄격 완료" 방침.
+> **포커스 #2 Extended 완료 (2026-04-25, 세션 134)**: Phase 3~9 + 서브 원자 **67/67
+> 전수 완결** (100%). B-19 도미노 22 + Phase 4 (8) + Phase 6 (13) + Phase 5 (13) +
+> Phase 7 (7) + Phase 8 (2) + Phase 9 (2) = 67 원자. §7 잔존 근사는 mod 미이식 + vanilla
+> API 제약 + factor 인프라 계열 (해소 불가 또는 별도 포커스). B-42-B26 Jumper SlideDown
+> 경량 이식 완료 (factor 기본 1F 근사). 회귀 0건, 빌드 검증 세션별 전수 통과. 사용자
+> 인게임 재검증 대기 (C-4) — 이상 발견 시 재개, 정상이면 #3 본격 진입.
 
 ---
 
@@ -74,8 +75,8 @@
 |------|------|------|----------|------|----------|
 | 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24, 세션 23) | 없음 |
 | 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ✅ 완료 (2026-04-24, 세션 28) | #5 완료 |
-| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | 🟠 Extended 진행 중 (Phase 3~9 엄격 완료, 43 원자) | 없음 |
-| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 (재현 케이스) | #2 (상태 값 확정 후 전환 조건 검증) |
+| 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | ✅ 완료 (2026-04-25, 세션 134) — Extended 67/67 전수 완결 | 없음 |
+| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | 🟠 현재 포커스 (재현 케이스 대기) | #2 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
 

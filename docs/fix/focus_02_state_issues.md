@@ -422,12 +422,16 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `getMaxPlayerSolidBetween(minY - 1D, minY, crawlOverEdge ? 0 : -0.05)` (B-42a 헬퍼
   소비) → `move(0, crawlStandUpBottom - minY, 0)` 이동량 완전 이식. 공중 크롤 해제 시
   정확도 확보. 분기 B (진입 엣지) `heightOffset=-1F + move(0,-1D,0)` 는 세션 74 이미 1:1.
-- **B-26 근사** (세션 75): `ClientState.tickEssential` B-25 IMPL-02 슬라이딩 직접 진입
-  블록에 원본 L2555-L2557 부수 동작 이식. `heightOffset = -1F` + `player.move(SELF, new Vec3d(0,
-  -1D, 0))` 1:1 이식. **`tryJump(Config.SlideDown, false, wasRunning, null)` 호출 생략** —
-  `Jumper.SLIDE_DOWN` 상수 + 전용 속도 공식 (원본 tryJump 내부 SlideDown 분기) 미이식.
-  `isFromRunning` 파라미터 영향 생략. 효과: 슬라이딩 진입 시 SlideDown 전용 하강 점프
-  추진 모션 누락 — 주로 시각/이펙트 영향, 핵심 상태 플래그에는 영향 없음.
+- ~~**B-26 근사** (세션 75)~~ → **세션 134 B-42-B26 해소 완료 (경량)**:
+  `ClientState.tickEssential` B-25 IMPL-02 슬라이딩 직접 진입 블록 원본 L2555-L2557 전수
+  이식. `heightOffset=-1F` + `move(0,-1D,0)` + `Jumper.trySlideDownJump(player, sm,
+  wasRunning)` 호출. `Jumper.SLIDE_DOWN` 상수 추가 + `trySlideDownJump` 전용 메서드 신설
+  (원본 tryJump SlideDown 경로 추출 — 수평 속도 증폭 + isJumping=true).
+  **§7 근사 1건 잔존 (B-42-B26-approx)**: Jumper factor 인프라 (speed별 horizontalFactor/
+  verticalFactor + `_jumpHorizontalFactor`/`_jumpVerticalFactor` base + exhaustion 시스템
+  전체) 미이식 → 모든 factor **기본값 1F** 근사. 원본 PositiveFactor 기본 1F 이므로
+  미수정 Config 에서는 1:1 동치. 사용자 Config 수정 시 speed 별 factor 반영 안 됨
+  (별도 포커스 — Jumper factor 인프라 전수 이식).
 - ~~**B-20 근사** (세션 76)~~ → **세션 125 B-42-B20 해소 완료**:
   `SmartMovingClimber.handleClimbing` Standard Base Climb 분기 (원본 L820-L823) 정밀
   복원. `isOnLadderOrVine` 조건은 1.21.1 `handleClimbing` 호출 상위 `MixinLivingEntity`
@@ -478,13 +482,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   로 해제 필요.
   B-24 (세션 53) `restoreFromFlying = true` 설정 직후 `standupIfPossible(player, false, true)`
   호출 연결 완결.
-- **B-31c-post 근사 1건** (세션 113): `initializeCrawling` true 설정 경로 이식 시 AABB
-  정밀 스캔 미이식 대응:
-  (1) 원본 L2346 `getMaxPlayerSolidBetween(sp.boundingBox.minY, sp.boundingBox.maxY, 0)
-  > sp.boundingBox.minY` (플레이어 AABB 내 수직 범위 위에 고체 블록 존재 여부) → 1.21.1
-  `!canStandUp(player)` 근사. B-42 Phase 6 (AABB 정밀 헬퍼) 완료 시 정밀 복원 경로.
-  기존 B-35/B-36 근사와 동일 패턴 (§7 B-42 계열 통합 승격 대상). 외 구조 (initialized
-  가드 / hasVehicle 체크 / multiPlayerInitialized 감소) 는 원본 1:1.
+- ~~**B-31c-post 근사 1건** (세션 113)~~ → **세션 134 해소 완료**:
+  원본 L2346 `getMaxPlayerSolidBetween(minY, maxY, 0) > minY` 정밀 복원. 기존 `!canStandUp`
+  근사 → B-42a 헬퍼 직접 소비. initializeCrawling true 설정 조건이 원본 AABB 정밀 판정
+  그대로 동작.
 - **B-42a 근사 1건** (세션 117): `ClientState.getMaxPlayerSolidBetween(player, yMin,
   yMax, horizontalTolerance)` AABB 정밀 헬퍼 이식 — 원본 `SmartMovingBase` L247-L262 의
   박스 순회 기반 maxY 집계 로직을 1.21.1 `player.getWorld().getBlockCollisions(entity,

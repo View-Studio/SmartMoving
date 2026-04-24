@@ -91,7 +91,7 @@ Orientation 판정 + ClimbGap 계산.
         `freeClimbingDiagonalDirectionAngle=80F` 2 필드 + load/save 이식 (원본 L129-L130)
       * 빌드: `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (6s)
 
-- [ ] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼** (세션 91 재분해: 3 서브)
+- [x] **B-19a1. `SmartMovingContext` 이식 파트 1 — 수직 상태 헬퍼** (세션 91 재분해: 3 서브)
       세션 91 원본 확보 결과 헬퍼 전부 `Orientation.java` L2729-L2744 내부 static 필드 +
       L1148-L2625 메서드 대역에 있음. `SmartMovingContext.java` 자체는 상수/initialize 만.
       규모 크므로 서브 3개 분해:
@@ -106,7 +106,7 @@ Orientation 판정 + ClimbGap 계산.
             `isOnVineFront`/`Back` / `isBehindLadder`/`Vine`) + rope 2 (전체 false 근사) +
             trap door 4 (`isOnOpenTrapDoor`/`isTrapDoorFront`/`getOpenTrapDoorOrientation`/
             `isRemoteSolid`). §7 B-19a1b 근사 2건 등록 (LadderKit/Carpenters 모드 + rope 3종).
-      - [ ] **B-19a1c**: accessibility 판정 (세션 93 재분해: 4 서브)
+      - [x] **B-19a1c**: accessibility 판정 (세션 93 재분해: 4 서브) — 서브 4/4 완결
             세션 93 원본 L2342-L2560 + 관련 헬퍼 L2020-L2340 read 결과 `isBaseAccessible`
             이 7 분기 + `isRemoteAccessible` 12+ 분기 + stair/slab/fence/wall/door 식별 헬퍼
             10+ 의존. 한 세션 불가 → 4 서브 분해:
@@ -119,7 +119,7 @@ Orientation 판정 + ClimbGap 계산.
             - [x] **B-19a1c2** (세션 94 완료): `isEmpty` + `isBaseAccessible` 2 오버로드
                   (7 분기) + 좌표 기반 trapdoor 래퍼 3 + `isFullEmpty` 좌표 오버로드.
                   §7 근사 3건 등록 (RedPower / ASRope / Carpenters).
-            - [ ] **B-19a1c3**: isRemoteAccessible 외 (세션 95 재분해: 3 서브).
+            - [x] **B-19a1c3**: isRemoteAccessible 외 (세션 95 재분해: 3 서브) — 서브 3/3 완결
                   세션 95 원본 L1741-L2000 + L2401-L2484 read 결과 `getWallFlag` 가
                   BlockPane/Fence/Wall/FenceGate 별 canConnect* 메서드 의존 — 1.21.1 에서는
                   BlockState property 기반으로 근사 이식. `headedToFrontWall` /
@@ -143,7 +143,7 @@ Orientation 판정 + ClimbGap 계산.
                   `isUpperHalfFrontEmpty` (7 분기) + `getWallBlockId` 보조. §7 근사 3건
                   (RedPower 2곳 + LadderKit). **B-19a1c 전체 완료**.
 
-- [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
+- [x] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
       (원본 L477-L606 + L608-L726 `hasHalfHold` + L728-L1000+ `hasBottomHold`)
       **세션 99 재분해 (8 서브)** — `hasHalfHold` 120줄 + `hasBottomHold` 300+줄 +
       `setHalfGrabType` 3 오버로드 + 보조 헬퍼 10+ 로 한 세션 불가. 서브 분해:
@@ -425,11 +425,12 @@ Orientation 판정 + ClimbGap 계산.
       조건 판정 복원. **세션 125 완료** (`isOnLadderOrVine` 은 상위 호출
       `onClimbable` 에 내포 → `player.horizontalCollision` if-guard 만 추가). §7 B-20
       근사 해소.
-- [ ] B-42-B26. Jumper `tryJump(SlideDown, ...)` 속도 공식 이식 (원본 tryJump 내부 SlideDown
-      분기). **세션 125 범위 확정**: Jumper factor 인프라 (speed별 horizontalFactor/
-      verticalFactor + `_jumpHorizontalFactor` base + Config `isJumpingEnabled` 완성 등)
-      전수 이식 필요 — Phase 7/인프라 원자 규모. Phase 6 범위에서는 보류, Phase 7
-      B-48 류 인프라 원자와 묶어서 후속 처리.
+- [x] B-42-B26. Jumper `tryJump(SlideDown, ...)` 속도 공식 이식. **세션 134 완료 (경량)**
+      — `Jumper.SLIDE_DOWN` 상수 + `Jumper.trySlideDownJump(player, sm, wasRunning)` 별도
+      메서드 신설 (원본 tryJump SlideDown 경로 추출). 핵심 효과 이식: `cfg.slide` 활성 체크
+      + `horizontalJumpFactor = sqrt(h² + v²)` 변환 + 수평 속도 스케일 (`|motion| * factor`)
+      + `isJumping = true`. potion JUMP_BOOST 배율 반영. §7 B-42-B26-approx 근사 1건 등록
+      (Jumper factor 인프라 미이식 — 기본 1F 근사. 미수정 Config 에서는 1:1 동치).
 - [x] B-42-B35. ClientState `crawlStandUpBottom` 정밀 계산 + `move(0, crawlStandUpBottom -
       minY, 0)` 이동량 복원. **세션 122 완료** (분기 A 내부에서 `getMaxPlayerSolidBetween(minY-1,
       minY, crawlOverEdge ? 0 : -0.05)` 직접 호출, move 이동량 복원). §7 B-35 근사 해소.
@@ -562,6 +563,83 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 134 — 2026-04-25 — 🏆 Extended 전수 완결 — B-42-B26 (SlideDown 경량) + B-31c-post 정밀 + 부모 체크박스 정리
+
+**사용자 지시**: 익스텐디드 전 미결 사항 완결 후 다음 포커스 전환.
+
+**진행한 작업**:
+
+**1. B-42-B26 — Jumper SlideDown 경량 이식**:
+- `Jumper.SLIDE_DOWN = 13` 상수 추가.
+- `Jumper.trySlideDownJump(player, sm, wasRunning)` 별도 메서드 신설 — 원본 `tryJump()`
+  의 SlideDown 분기 경로 추출:
+  * `cfg.slide && cfg.enabled` 게이트 (원본 `isJumpingEnabled(speed, SlideDown)`)
+  * `jumpFactor = potion JUMP_BOOST 배율` (원본 L2029)
+  * `horizontalJumpFactor = sqrt(h² + v²)` (원본 L2034-L2038 up=false 변환)
+  * 수평 속도 스케일 `|motionX/Z| * factor` (원본 L2097-L2110)
+  * `setVelocity(motionX, vel.y, motionZ)` — 수직 속도 유지 (noVertical 효과)
+  * `sm.isJumping = true` (원본 L2132)
+- `ClientState.tickEssential` 슬라이딩 직접 진입 블록 (L1395) 에서 호출:
+  기존 `// tryJump(Config.SlideDown, ...) 생략` → `SmartMovingJumper.trySlideDownJump(player,
+  this, wasRunning);`
+- §7 B-42-B26-approx 근사 1건 등록 (factor 인프라 기본 1F 근사 — PositiveFactor 원본
+  기본 1F 이라 미수정 Config 에서 1:1 동치).
+
+**2. B-31c-post — `getMaxPlayerSolidBetween` 정밀 복원**:
+- `ClientState.tickEssential` L940 블록:
+  * 기존 근사: `if (!canStandUp(player)) { initializeCrawling = true; ...}`
+  * 정밀: `Box bb = player.getBoundingBox(); if (getMaxPlayerSolidBetween(player, bb.minY,
+    bb.maxY, 0) > bb.minY) {...}`
+- 원본 L2346 공식 1:1 복원. B-42a 헬퍼 소비.
+- §7 B-31c-post 근사 해소 기록.
+
+**3. 부모 체크박스 정리**:
+- B-19a1 (서브 a/b/c 완결) → [x]
+- B-19a1c (서브 1/2/3/4 완결) → [x]
+- B-19a1c3 (서브 a/b/c 완결) → [x]
+- B-19a2 (서브 a/b/c/d/e 완결) → [x]
+- B-42-B26 → [x] (본 세션 완결)
+
+**4. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 134 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2029-L2132 (tryJump 전체) + L2555-L2561 (슬라이딩
+  진입) + L2345-L2356 (initializeCrawling) + `SmartMovingClientConfig.java` L194-L226
+  (isJumpingEnabled) 로컬 read ✓
+- [근거] Jumper factor 인프라 현 상태 grep: `jumpHorizontalFactor`/`verticalFactor` 필드
+  미이식 확인 → 기본 1F 근사 결정 ✓
+- [대응] 원본 `sp.motionX/Y/Z` → `player.getVelocity()`, `sp.setVelocity`, `potion.jump` →
+  `StatusEffects.JUMP_BOOST`, `isFast` 조건 SlideDown 범위 외 (up=false 경로) ✓
+- [분기] SlideDown up=false / noVertical 효과 / horizontalMotion > 0 가드 / potion
+  선택적 분기 전수 ✓
+- [상수] `0.2F` (potion 배율) / `1F` (factor 기본) / `-0.078 + 0.498*v` verticalMotion
+  공식 (SlideDown 은 v=0 이라 영향 없음, 미이식 경로) ✓
+- [타이밍] trySlideDownJump 호출 위치 원본 L2557 (`move(0,-1D,0)` 뒤 + `isSliding=true`
+  앞) ✓
+- [근사] B-42-B26 factor 인프라 경량 근사 §7 등록. B-31c-post 근사 해소 §7 갱신 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 슬라이딩 진입 3 블록 (heightOffset / move / 상태 플래그) 영향 없음 —
+  `trySlideDownJump` 호출만 추가. vanilla jump stat (`incrementStat(JUMP)`) 은 SlideDown
+  은 up=false 라 원본에서도 호출 안 함 — 회귀 없음 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**🏆 Extended #2 Phase 3~9 + 서브 원자 전수 완결** — 67/67 원자 **100%**.
+
+**§7 잔존 근사 요약** (원자는 완결, 정밀도 제약만):
+- Mod 호환 분기 (B-19a1a~2e, 약 20건) — 1.21.1 미이식 mod 라 해소 불가.
+- B-42a/b/c VoxelShape→Box 외접 (3건) — 다중 shape 블록에서 minor 오차.
+- B-N-standup (4건) — vanilla API 제약 (boundingBox 직접 조작 불가).
+- B-16 blocked (1건) — vanilla `Screen.allowUserInput` 제거 — 해소 불가 확정.
+- B-5 swim (2건) — `getClimbingOrientations` 4방향 / swimDown 일부.
+- B-10b-pre (1건) — 필드 승격 구조 차이 (동치).
+- B-42-B26 Jumper factor (1건) — Jumper factor 인프라 미이식 (기본 1F 근사).
+- B-50 smoothing (1건) — limbSwing 부수 효과 vanilla 자동 처리.
+- B-1c 근사 — 세션 133 B-50 으로 실질 해소.
+
+**다음 단계**: `playtest_fixes.md` 포커스 전환 (C-5) + 사용자 인게임 재검증 (C-4).
+
+**진행률**: Extended **67/67 ≈ 100%** (전수 완결).
 
 ### 세션 133 — 2026-04-25 — Phase 9 완결 — B-50 (SmartStatistics 경량) + B-51 (levitateSmall)
 
@@ -3503,8 +3581,8 @@ L2342-L2399 (B-19a1c1 헬퍼 18개 대부분 직접 사용) + `isEmpty` L2537-L2
 
 ## 6. 최종 C 단계 (Phase 3~8 완료 후)
 
-- [ ] C-4. 사용자 인게임 재검증 — Phase 3~8 완료 후 전체 동작 확인.
-- [ ] C-5. `playtest_fixes.md` "현재 포커스" → `#3` 전환.
+- [ ] C-4. 사용자 인게임 재검증 — Phase 3~9 완료 후 전체 동작 확인. **대기 중 (사용자 수행)**.
+- [x] C-5. `playtest_fixes.md` "현재 포커스" → `#3` 전환. **세션 134 완료**.
 
 ---
 
