@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 64 — B Phase 2 계속 / B-12) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 32 원자 완료 / ⏳ **B Phase 2 잔여 ~8 원자** |
+| 상태 | 🟡 진행 중 (세션 65 — B Phase 2 계속 / B-1b) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 33 원자 완료 / ⏳ **B Phase 2 잔여 ~7 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -313,24 +313,32 @@ R-10 ~ R-15 리서치 섹션의 전체 매핑을 이 §6 에 통합. B 단계 �
 | `Config.isFlyingEnabled()` | `cfg.fly && cfg.enabled` | ✓ |
 | `Config.isLevitateSmallEnabled()` | — | ✗ 미이식 |
 
-### 6.8 Button ↔ KeyBinding 매핑 (B-1b)
+### 6.8 Button ↔ KeyBinding 매핑 (B-1b — 세션 65 검증)
+
+세션 65 B-1b: 실제 구현 grep 으로 전수 검증 후 상태 갱신.
 
 | 원본 `Button` | 1.21.1 대응 | 상태 |
 |---|---|---|
 | `grabButton.Pressed` | `SmartMovingKeys.grab.isPressed()` | ✓ |
-| `grabButton.StartPressed` | `SmartMovingKeys.grab.wasPressed()` (엣지 근사) | ⚠️ 엣지 검출 정합성 확인 |
-| `grabButton.StopPressed` | — | ✗ 엣지 검출 미이식 |
+| `grabButton.StartPressed` | `SmartMovingKeys.grab.wasPressed()` (vanilla KeyBinding 카운터 API) | ⚠️ **다중 호출 주의** — §16 세션 65 기록 (호출 시 카운터 1 감소, 같은 틱 2회째부터 false) |
+| `grabButton.StopPressed` | — | ✗ 엣지 검출 미이식 (원본에서 사용 시 별도 필드 필요) |
 | `sneakButton.Pressed` | `MinecraftClient.options.sneakKey.isPressed()` 또는 `player.isSneaking()` | ✓ |
-| `sneakButton.StartPressed` | `sneakKeyStartPressed` 필드 (이전 틱 비교) | ✓ |
-| `sneakButton.StopPressed` | `sneakKeyStopPressed` 필드 | ✓ |
-| `sprintButton.Pressed` | `MinecraftClient.options.sprintKey.isPressed()` | ⚠️ 확인 필요 |
-| `sprintButton.StopPressed` | — | ✗ 엣지 미이식 |
+| `sneakButton.StartPressed` | `sneakKeyStartPressed` 필드 (L449, prev vs cur 비교) | ✓ |
+| `sneakButton.StopPressed` | `sneakKeyStopPressed` 필드 (L451) | ✓ |
+| `sprintButton.Pressed` | `MinecraftClient.options.sprintKey.isPressed()` (L872 실제 사용) | ✓ |
+| `sprintButton.StartPressed` / `StopPressed` | — | ✗ 엣지 미이식 (원본 사용 지점 확인 필요 — B-48 isGroundSprinting 전환 후처리 범위 가능) |
 | `jumpButton.Pressed` | `MinecraftClient.options.jumpKey.isPressed()` | ✓ |
-| `jumpButton.StartPressed` | — | ✗ 엣지 검출 미이식 |
-| `jumpButton.StopPressed` | `jumpKeyStopPressed` 필드 | ✓ |
-| `moveForwardButton` | `player.input.movementForward > 0F` | ✓ |
-| `moveBackwardButton` | `< 0F` | ✓ |
+| `jumpButton.StartPressed` | `jumpKeyStartPressed` 필드 (L96, prev vs cur 비교) | ✓ |
+| `jumpButton.StopPressed` | `jumpKeyStopPressed` 필드 (L456) | ✓ |
+| `moveForwardButton.Pressed` | `player.input.movementForward > 0F` | ✓ |
+| `moveBackwardButton.Pressed` | `player.input.movementForward < 0F` | ✓ |
 | `moveLeftButton` / `moveRightButton` | `player.input.movementSideways` | ✓ |
+| `moveForward/Backward/Left/Right.StartPressed/StopPressed` | vanilla input 은 엣지 비제공 | ⚠️ 원본 이동 엣지 사용 시 prev 필드 비교 필요 (현재 `prevPressRight/Back` 일부 이식 확인) |
+
+**정합성 등급**:
+- ✓: 원본 1:1 이식 확정 (구현 grep 로 검증)
+- ⚠️: 이식됐으나 원본 시멘틱과 차이 (엣지 감지 정확성 등)
+- ✗: 미이식 — 필요 시 별도 원자 신설
 
 ### 6.9 메서드/클래스 매핑
 
@@ -528,11 +536,17 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
 
 #### B-1. `isFast` 공식 6갈래 OR 이식 (원자 6개 분해)
 - [x] B-1a. ✅ **세션 40 완료** — `Config._sprintEnableStanding` → `SmartMovingConfig.sprintEnableStanding = false` (원본 `SmartMovingConfig.java` L313 `Unmodified("move.sprint.enable.ground")`).
-- [ ] B-1b. Button 클래스 ↔ 1.21.1 KeyBinding 매핑 테이블 §6 에 작성:
-      `sprintButton` / `jumpButton` / `grabButton` / `sneakButton` /
-      `moveForwardButton` / `moveBackwardButton` / `moveLeftButton` / `moveRightButton` —
-      각 `.Pressed` / `.StartPressed` / `.StopPressed` 의 1.21.1 대응 (`isPressed()` /
-      `wasPressed()` / `SmartMovingKeys.*` 엣지 검출 필드). 기존 구현 grep 으로 확인.
+- [x] B-1b. ✅ **세션 65 완료** — §6.8 Button ↔ KeyBinding 매핑 테이블 전수 검증 +
+      상태 갱신. 기존 테이블 (세션 37 A-7 작성) 의 `⚠️`/`✗` 항목을 실제 구현 grep 으로
+      검증하여 정합성 등급 재확정:
+      (1) `jumpButton.StartPressed` ✗ → ✓ (L96 `jumpKeyStartPressed` 필드 존재 확인)
+      (2) `sprintButton.Pressed` ⚠️ → ✓ (L872 `sprintKey.isPressed()` 실제 사용 확인)
+      (3) `grabButton.StartPressed` `wasPressed()` 매핑의 **다중 호출 시 카운터 감소** 시멘틱
+          차이 발견 → §16 세션 65 기록 + 신규 원자 B-46 후보.
+      (4) `sprintButton.StartPressed/StopPressed`, `grabButton.StopPressed` 미이식 기록 (B-48
+          범위 또는 별도 원자).
+      정합성 등급 표기 (✓/⚠️/✗) 범례 추가. 원본 이동 엣지 (`move*Button.StartPressed` 등)
+      는 vanilla input 엣지 비제공 — prev 필드 비교 필요.
 - [x] B-1c. ✅ **세션 50-51 완료** — Config 7필드/3헬퍼 + ClientState 필드 2 +
       공식 이식. 세션 50: B-1c1 (Config 피로/스프린트). 세션 51: B-1c2/3
       (collidedHorizontallyTickCount 필드+갱신, preferSprint, isClimbSprintSpeed 근사 `true`,
@@ -2750,9 +2764,75 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
 - **B-31b/c** 공식 이식 — B-41/B-35 범위 분배.
 
+### 세션 65 — 2026-04-24 — B Phase 2 B-1b (Button ↔ KeyBinding 매핑 테이블 검증)
+
+**진행한 작업**:
+- §6.8 Button ↔ KeyBinding 매핑 테이블 전수 검증 (세션 37 A-7 에서 기본 테이블 작성됐으나
+  `⚠️`/`✗` 항목 상태 미확정 — 실제 구현 grep 으로 정합성 마감).
+- 수정 사항:
+  * `jumpButton.StartPressed` ✗ → ✓ : `jumpKeyStartPressed` 필드 L96 존재 확인.
+  * `sprintButton.Pressed` ⚠️ → ✓ : `sprintKey.isPressed()` L872 실제 사용 확인.
+  * `grabButton.StartPressed` `wasPressed()` 매핑의 **시멘틱 차이** 명시 — vanilla API 는
+    카운터 감소성 → 같은 틱 2회째부터 false. 다중 호출 주의 표기.
+  * 원본 이동 엣지 관련 행 추가 — vanilla input 엣지 비제공 ⚠️.
+  * 정합성 등급 범례 명시 (✓/⚠️/✗).
+- §16 세션 65 신규 발견 기록:
+  * (1) `grab.wasPressed()` 다중 호출 시 오동작 가능성 — 분류 [오역], 신규 원자 B-46 후보.
+  * (2) `sprintButton.StartPressed/StopPressed` 미이식 — B-48 isGroundSprinting 전환 후처리
+    범위에서 평가.
+  * (3) `grabButton.StopPressed` 미이식 — 원본 사용 지점 확인 후 원자 신설.
+- 코드 수정 없음 — 문서만 갱신.
+
+**완료 전 검증 체크리스트 (세션 65)**:
+- [근거] SmartMovingKeys.java 전체 read + SmartMovingClientState grep (엣지 필드 전수) ✓
+- [근거] §6.8 세션 37 기본 테이블 재확인 + 실제 구현 grep ✓
+- [대응] 각 Button 매핑 1.21.1 실제 이식 상태와 일치 ✓
+- [분기] 없음 (문서 작업)
+- [상수] 없음
+- [타이밍] 없음
+- [근사] `wasPressed()` 카운터 감소성 명시 (원본 StartPressed 와 시멘틱 차이) ✓
+- [신규] 3건 §16 세션 65 등록 ✓
+- [회귀] 없음 (문서만)
+- [빌드] 코드 변경 없음
+
+**Phase 2 진행 상황**: 33 원자 완료 / 잔여 ~7
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-46** (grab.wasPressed 다중 호출 해소) — §16 세션 65 발견 — 신규 원자. 1회 캐시 필드 추가.
+
 ---
 
 ## 16. 신규 발견
+
+### 세션 65 B-1b — `grab.wasPressed()` 다중 호출 + sprint 엣지 미이식 발견
+
+**B-1b §6.8 검증 중 발견**:
+
+1. **`grab.wasPressed()` 다중 호출 시 두 번째부터 false**
+   - vanilla `KeyBinding.wasPressed()` 는 "press 이벤트 카운터에서 1 꺼냄" 시멘틱
+   - 현재 ClientState 에서 같은 틱에 여러 곳 호출: L772 `grabJustPressed0`, L989
+     `grabJustPressed` (IMPL-01). 지역 변수로 1회 캐시되나 사용 범위 제한.
+   - 원본 `grabButton.StartPressed` 는 틱 내 불변 불리언 — 1.21.1 `wasPressed()` 는 소비성.
+   - 분류: [오역] — 원본 시멘틱과 차이. 수정 방안: tickEssential 초반 1회만 호출 →
+     `grabJustPressed` 필드에 저장 → 나머지 지점은 필드 참조. 또는 prev vs cur 비교로
+     엣지 필드 추가 (sneakKey 방식). **신규 원자 B-46** 후보.
+
+2. **`sprintButton.StartPressed` / `StopPressed` 미이식**
+   - vanilla `sprintKey` 는 `isPressed()` 만 사용 중 (L872). 엣지 검출 없음.
+   - 원본 사용 지점은 isGroundSprinting 전환 후처리 (L2697-L2709 / B-48 범위) 에서
+     확인 필요. 필요 시 `sprintKeyStartPressed` / `sprintKeyStopPressed` 필드 신설.
+   - 분류: [누락] — B-48 수행 시 함께 평가.
+
+3. **`grab.StopPressed` 미이식**
+   - 원본에서 `grabButton.StopPressed` 사용 여부 전수 확인 필요. 사용 지점 있으면
+     별도 엣지 필드 (`grabKeyStopPressed`) 신설.
+   - 분류: [누락] — B-N 신설 대기.
+
+**우선순위**: (1) 이 가장 영향 큼 — 현재 다중 호출 구조로 IMPL-01 grab 엣지 판정 오동작
+가능. B-18/B-33 등 핵심 공식 재작성 시 반드시 해소 필요.
 
 ### 세션 29 A-1 — `isSlow`/`isFast` 3건 불일치 확정
 
