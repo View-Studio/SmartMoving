@@ -141,6 +141,24 @@ public final class SmartMovingSwimmer {
         //   isJumpingOutOfWater 공식 (원본 L486-L487) 이식 시 이 ticks 값이 정확해야 함.
         if (sm.isSwimming_sm || sm.isDiving) {
             sm.waterMovementTicks++;
+
+            // B-10b-post (세션 111): 원본 L486-L487 공식 이식:
+            //   wantJumpOutOfWater = (moveForward != 0 || moveStrafing != 0)
+            //                     && sp.isCollidedHorizontally && diveUp && !isSlow
+            //   isJumpingOutOfWater = wantJumpOutOfWater
+            //                     && (waterMovementTicks > 10 || sp.onGround || wasJumpingOutOfWater)
+            // 수면 탈출 점프 진행 판정. handleSwimming L500 `motionY = 0.30000001192092896D`
+            // 설정의 게이트. 의존 전수 충족 (B-10d diveUp16 + B-12 ticks + B-10b-pre
+            // wasJumpingOutOfWater + vanilla horizontalCollision/isOnGround).
+            boolean wantJumpOutOfWater = (player.input.movementForward != 0F
+                                       || player.input.movementSideways != 0F)
+                    && player.horizontalCollision
+                    && diveUp16
+                    && !sm.isSlow;
+            sm.isJumpingOutOfWater = wantJumpOutOfWater
+                    && (sm.waterMovementTicks > 10
+                        || player.isOnGround()
+                        || sm.wasJumpingOutOfWater);
         } else {
             sm.waterMovementTicks = 0;
         }

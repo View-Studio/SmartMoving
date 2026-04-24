@@ -252,13 +252,14 @@ Orientation 판정 + ClimbGap 계산.
       walking 전환 활성화 + B-11 Phase 5 (얕은 물 특수 분기) 진입 게이트 활성화.
 
 #### B-10b-post. `wantJumpOutOfWater` + `isJumpingOutOfWater` 공식 이식
-- [ ] B-10b-post. 원본 L486-L488:
-      `wantJumpOutOfWater = (moveForward != 0 || moveStrafing != 0) &&
-                            isCollidedHorizontally && diveUp && !isSlow;`
-      `isJumpingOutOfWater = wantJumpOutOfWater &&
-                             (waterMovementTicks > 10 || onGround || wasJumpingOutOfWater);`
-      Swimmer.updateSwimState 에서 계산 (B-12 ticks 정정 이후 위치).
-      의존: `wasJumpingOutOfWater` 이전 틱 저장 필요 (신규 필드?).
+- [x] B-10b-post. ✅ **세션 111 완료** — 원본 L486-L487 공식 이식.
+      Swimmer.updateSwimState `if (isSwimming_sm || isDiving)` 분기 내 ticks 증분 직후에 배치:
+      * `wantJumpOutOfWater = (movementForward != 0 || movementSideways != 0) &&
+        player.horizontalCollision && diveUp16 && !sm.isSlow` (지역 변수)
+      * `sm.isJumpingOutOfWater = wantJumpOutOfWater && (waterMovementTicks > 10 ||
+        player.isOnGround() || sm.wasJumpingOutOfWater)` 필드 대입
+      근사 없음. 의존 전수 충족 (B-10b-pre wasJumpingOutOfWater + B-10d diveUp16 +
+      B-12 ticks + vanilla horizontalCollision/isOnGround).
 
 #### B-10c-post. `isStillSwimmingJump` false 리셋
 - [ ] B-10c-post. 원본 L550 `useStandard` 경로에서 `isStillSwimmingJump = false` 리셋.
@@ -479,6 +480,60 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 111 — 2026-04-24 — B-10b-post `wantJumpOutOfWater` + `isJumpingOutOfWater` 공식
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L486-L487 재확인** (수면 탈출 점프 공식):
+   * `wantJumpOutOfWater = (moveForward != 0 || moveStrafing != 0) && sp.isCollidedHorizontally
+     && diveUp && !isSlow` (지역 변수)
+   * `isJumpingOutOfWater = wantJumpOutOfWater && (waterMovementTicks > 10 || sp.onGround ||
+     wasJumpingOutOfWater)` 필드 대입
+2. **Swimmer.updateSwimState 에 이식** — `if (isSwimming_sm || isDiving)` 분기 내 ticks
+   증분 **직후** 에 배치 (원본 L481-L487 순서 보존):
+   * `wantJumpOutOfWater` 지역 boolean
+   * `sm.isJumpingOutOfWater` 필드 할당
+3. **1.21.1 매핑**:
+   * `sp.moveForward != 0` / `moveStrafing != 0` → `player.input.movementForward != 0F` /
+     `player.input.movementSideways != 0F` (float 비교)
+   * `sp.isCollidedHorizontally` → `player.horizontalCollision`
+   * `diveUp` → `diveUp16` (B-10d 세션 71 의 지역 변수)
+   * `sp.onGround` → `player.isOnGround()`
+   * `wasJumpingOutOfWater` → `sm.wasJumpingOutOfWater` (B-10b-pre 세션 110 필드)
+   * `isSlow` → `sm.isSlow`
+   * `waterMovementTicks` → `sm.waterMovementTicks`
+
+**완료 전 검증 체크리스트 (세션 111 기준)**:
+- [근거] 원본 `.tmp_research/SmartMovingSelf.java` L486-L487 read ✓
+- [근거] 의존 전수 충족 — B-10b 필드 (세션 38) + B-10b-pre wasJumpingOutOfWater (세션
+  110) + B-10d diveUp16 (세션 71) + B-12 waterMovementTicks (세션 64) + B-2 isSlow
+  (세션 43) + vanilla input/horizontalCollision/isOnGround ✓
+- [대응] 원본 2 라인 ↔ 1.21.1 2 라인 side-by-side. `wantJumpOutOfWater` 지역 (원본 L486)
+  + `isJumpingOutOfWater` 필드 대입 (원본 L487) 순서 + AND/OR 구조 원본 1:1 ✓
+- [분기] 2 AND 체인 (wantJumpOutOfWater 4-AND + isJumpingOutOfWater 2-AND) + 내부 OR
+  (waterMovementTicks > 10 || onGround || wasJumpingOutOfWater) 전수 ✓
+- [상수] `10` (waterMovementTicks threshold) / `0F` (float 비교) / `!isSlow` 원본 동일 ✓
+- [타이밍] B-12 ticks 증분 직후 (원본 L482 → L486 순서) 배치. swim/dive 분기 내에서만
+  실행 (원본과 동치) ✓
+- [근사] 없음 — 공식 1:1 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 isJumpingOutOfWater 항상 false → 이제 실제 공식 기반. 소비처 (원본 L500
+  `motionY = 0.30000001192092896D` 설정) 는 B-9 재작성 범위. 현재는 필드만 정확히 세팅 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-10c-post** — 원본 L550 `isStillSwimmingJump = false` 리셋 이식
+(useStandard 경로 — 1.21.1 에서는 Swimmer.updateSwimState 의 물 밖 / 크롤 강제 경로에서).
+작은 작업. 예상 1 세션.
+
+**진행률** (세션 111 종료 시점):
+- Extended 완료: **25 원자** (B-19 완결 22 + B-10a-post + B-10b-pre + **B-10b-post**)
+- Extended 총 원자 ~61
+- **Extended 진행률: 25/61 ≈ 41%**
+- **포커스 #2 전체: (54+25)/115 ≈ 69%**
+- **Phase 4**: 3/8 (5 남음 — B-10c-post / B-31c-post / B-10-reset-post / B-N-standup /
+  B-40-post)
 
 ### 세션 110 — 2026-04-24 — B-10b-pre `wasJumpingOutOfWater` 필드 승격
 
