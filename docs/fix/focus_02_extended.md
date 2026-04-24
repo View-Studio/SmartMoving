@@ -405,7 +405,9 @@ Orientation 판정 + ClimbGap 계산.
 - [x] B-42-B35. ClientState `crawlStandUpBottom` 정밀 계산 + `move(0, crawlStandUpBottom -
       minY, 0)` 이동량 복원. **세션 122 완료** (분기 A 내부에서 `getMaxPlayerSolidBetween(minY-1,
       minY, crawlOverEdge ? 0 : -0.05)` 직접 호출, move 이동량 복원). §7 B-35 근사 해소.
-- [ ] B-42-B36. ClientState B-36 분기 (a) 이동량 복원.
+- [x] B-42-B36. ClientState B-36 분기 (a) 이동량 복원. **세션 123 완료** (분기 (a)
+      내부에서 `getMaxPlayerSolidBetween(minY, maxY, 0)` 호출 + `move(0, groundY -
+      minY, 0)` 정밀 복원). §7 B-36 근사 해소.
 - [ ] B-42-B39. ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤 전환 본문 활성.
 - [ ] B-42-B18a. ClientState B-18 진입 엣지 `isCollidedHorizontally` 복원 — AABB/판정
       본문 (Mixin 결과 소비). B-42-B18b 완료 후 활성.
@@ -511,6 +513,68 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 123 — 2026-04-25 — B-42-B36 B-36 분기 (a) 이동량 복원
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 승격 3번째 원자.
+
+**진행한 작업**:
+1. **현재 근사 지점 식별** (ClientState.java L1575-L1580):
+   * B-36 분기 (a): `grabJustPressed && isShallowDiveOrSwim && wouldWantClimb`
+   * 기존 근사: `heightOffset = 0F` 만, `player.move(0, groundY - minY, 0)` 생략.
+2. **원본 공식 확인** (SmartMovingSelf.java L2841-L2847):
+   ```
+   if(isShallowDiveOrSwim && wouldWantClimb) {
+       resetHeightOffset();
+       move(0, (getMaxPlayerSolidBetween(sp.boundingBox.minY, sp.boundingBox.maxY, 0)
+               - sp.boundingBox.minY), 0, true);
+       if(jumpButton.Pressed)
+           isStillSwimmingJump = true;
+   }
+   ```
+3. **분기 (a) 정밀 이식** (ClientState.java L1575-L1585):
+   ```java
+   heightOffset = 0F;
+   double minY36a = player.getBoundingBox().minY;
+   double maxY36a = player.getBoundingBox().maxY;
+   double groundY36a = getMaxPlayerSolidBetween(player, minY36a, maxY36a, 0);
+   player.move(MovementType.SELF, new Vec3d(0, groundY36a - minY36a, 0));
+   if (_jumpPressed3a) isStillSwimmingJump = true;
+   ```
+4. **의존 활성화 확인**:
+   * `isShallowDiveOrSwim` — 세션 109 B-10a-post 공식 이식 + 세션 121 B-42-B5 해소
+     (couldStandUp 정밀) 로 이제 정확히 계산됨 → 분기 (a) 진입 가능.
+   * `wouldWantClimb` — 세션 77 B-36-pre 이식 완료.
+   * `_jumpPressed3a` — B-36 세션 78 이식 (jump edge flag).
+5. **§7 B-36 근사 해소 기록** — focus_02_state_issues.md 에 취소선 + "세션 123
+   B-42-B36 해소 완료". 분기 (b)/(c) 는 원래부터 1:1.
+6. **빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 123 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L2841-L2847 분기 (a) 로컬 read ✓
+- [근거] 1.21.1 Swimmer B-10a-post + B-42-B5 로 `isShallowDiveOrSwim` 활성 확인 ✓
+- [대응] 원본 `getMaxPlayerSolidBetween(minY, maxY, 0)` → B-42a
+  `getMaxPlayerSolidBetween(player, minY, maxY, 0)` 1:1 ✓
+- [분기] 분기 (a) 조건 (grabJustPressed + isShallowDiveOrSwim + wouldWantClimb) 보존,
+  내부 move 이동량만 정밀화 ✓
+- [상수] `0` (horizontalTolerance) 원본 동일 ✓
+- [타이밍] B-36 블록 내 분기 (a) 위치 유지 ✓
+- [근사] B-36 근사 해소 — §7 갱신 ✓
+- [신규] 없음 ✓
+- [회귀] 분기 (b)/(c) 및 외부 분기 조건 영향 없음. `_jumpPressed3a`/`isStillSwimmingJump`
+  동작 유지 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42-B39** (ClientState `fromSwimmingOrDiving` 3분기 isSlow 크롤
+전환 본문 활성 — 원본 L1392-L1403 `crawlStandUpBottom` AABB 정밀 + `move(0,
+crawlStandUpBottom - minY, 0)` 복원).
+
+**진행률** (세션 123 종료 시점):
+- Extended 완료: **37 원자** (B-19 22 + Phase 4 8 + Phase 6 **7** = 37)
+- Extended 총 원자 ~61
+- **Extended 진행률: 37/61 ≈ 61%**
+- **포커스 #2 전체: (54+37)/115 ≈ 79%**
+- **Phase 6 승격 3/8 — B-42-B5/B35/B36 완료**
 
 ### 세션 122 — 2026-04-25 — B-42-B35 `crawlStandUpBottom` 정밀 이동량 복원
 

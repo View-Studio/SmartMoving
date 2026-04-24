@@ -1569,14 +1569,17 @@ public final class SmartMovingClientState {
             // 의존: B-10a isShallowDiveOrSwim 필드 (공식 미이식 → 항상 false → (a) 비활성),
             //       B-36-pre wouldWantClimb/wouldWantCrawl 필드 (세션 77), B-10c isStillSwimmingJump
             //       필드, B-40 toCrawling(), B-46 grabJustPressed.
-            // ※ 근사 이식 (§7 B-36 근사): 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0)
-            //   - minY` 이동량 — AABB 정밀 스캔 미이식 → `0` 근사 (발 아래 고체 가정) →
-            //   `player.move` 생략 + `heightOffset = 0F` 만 수행.
+            // **B-42-B36 해소 (세션 123)**: 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY,
+            //   0) - minY` 이동량 복원. B-42a 헬퍼 소비.
             if (grabJustPressed) {
                 if (isShallowDiveOrSwim && wouldWantClimb) {
                     // (a) 얕은 물 swim/dive → walking 전환 (원본 L2841-L2847)
-                    heightOffset = 0F;  // resetHeightOffset 근사
-                    // player.move(0, getMaxPlayerSolidBetween(...) - minY, 0) 생략 (§7 B-36 근사)
+                    heightOffset = 0F;  // resetHeightOffset
+                    // 원본 L2843: move(0, getMaxPlayerSolidBetween(minY, maxY, 0) - minY, 0, true)
+                    double minY36a = player.getBoundingBox().minY;
+                    double maxY36a = player.getBoundingBox().maxY;
+                    double groundY36a = getMaxPlayerSolidBetween(player, minY36a, maxY36a, 0);
+                    player.move(MovementType.SELF, new Vec3d(0, groundY36a - minY36a, 0));
                     if (_jumpPressed3a) isStillSwimmingJump = true;
                 } else if (isDipping && wouldWantCrawl && dippingDepth >= 0.55F) {
                     if (dippingDepth >= 0.6F) {

@@ -426,11 +426,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   처리하므로 실용 등가. `setOnlyShouldClimbSpeed` → `setShouldClimbSpeed` 교체로 isClimbing
   잉여 설정 해소 (포커스 #2 상태 플래그 정확성 개선). Simple/Smart Base Climb (L825-L894)
   전체 미이식은 별도 포커스 후보.
-- **B-36 근사** (세션 78): `ClientState.tickEssential` B-35 뒤 + R-09 앞에 grab.StartPressed
-  수영/크롤 3분기 (원본 L2839-L2862) 이식. 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0)
-  - minY` 이동량 — AABB 정밀 스캔 미이식 → `0` 근사 (발 아래 고체 가정) 로 `player.move`
-  호출 생략, `heightOffset = 0F` 리셋만 수행. 분기 (b)/(c) 는 1:1. B-10a isShallowDiveOrSwim
-  공식 미이식으로 분기 (a) 자체도 항상 false — 근사 영향 제한.
+- ~~**B-36 근사** (세션 78)~~ → **세션 123 B-42-B36 해소 완료**:
+  `ClientState.tickEssential` B-35 뒤 + R-09 앞에 grab.StartPressed 수영/크롤 3분기
+  (원본 L2839-L2862) 이식. 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0) - minY`
+  이동량 복원 (B-42a 헬퍼 소비) → 원본 L2843 `move(0, groundY - minY, 0)` 정밀 복원.
+  분기 (b)/(c) 는 세션 78 이미 1:1. 의존 게이트 `isShallowDiveOrSwim` 는 세션 109
+  B-10a-post 공식 이식 + 세션 121 B-42-B5 해소 (couldStandUp 정밀) 로 정확 계산.
 - **B-39 근사** (세션 80): `ClientState.fromSwimmingOrDiving` 에 원본 L1392-L1403 3분기
   구조 복원. `else` 분기 진입은 되나 본문은 no-op (주석만). `crawlStandUpBottom` AABB
   정밀 스캔 미이식 → `≈ minY` 근사 → `minY + 0.5D` 초과 조건 항상 false → isSlow 크롤
