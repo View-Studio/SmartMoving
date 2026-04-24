@@ -440,6 +440,15 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1c3c 근사 2건** (세션 97): `Orientation.isRemoteAccessible` 이식 시 mod 호환 분기
+  생략:
+  (1) RedPower wire 분기 (원본 L2404-L2422) 전체 생략 — `isRedPowerWire` / `getRpCoverSides`
+  / `isRedPowerWireAnyFront` / `isRedPowerWireAnyBack` 체인. RedPower mod 1.21.1 미이식.
+  B-19a1c2 와 같은 패턴.
+  (2) ASRope 분기 (원본 L2467-L2471) 생략 — `isASRope` + `rotate(180).isASGrapplingHookFront`
+  체크. ASRope/ASGrapplingHook mod 1.21.1 미이식. B-19a1b `isRope`/`isOnWallRope` false
+  근사와 연동. `headedToFrontWall` / `headedToRemoteFlatWall` 은 근사 없이 1:1 이식 —
+  `getWallFlag` 의 BlockState property 근사 (B-19a1c3b 연동) 에만 영향.
 - **B-19a1c3b 근사 1건 + mod 분기 생략 2건** (세션 96): `Orientation.getWallFlag` 이식 시
   1.21.1 BlockState property 기반 근사 + mod 호환 분기 생략:
   (1) **Pane/Fence/Wall 연결 판정** — 원본 `BlockPane.canPaneConnectToBlock(neighbor)` /

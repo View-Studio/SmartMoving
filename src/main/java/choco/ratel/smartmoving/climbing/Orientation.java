@@ -4,6 +4,7 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.block.AbstractSignBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ConnectingBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceBlock;
@@ -1371,5 +1372,127 @@ public class Orientation {
             return this._i < 0;
 
         return true;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c3c (세션 97) — headedToFrontWall + headedToRemoteFlatWall + isRemoteAccessible
+    // 원본: Orientation.java L1741-L1757 (headedToFrontWall),
+    //       L1941-L1951 (headedToRemoteFlatWall), L2401-L2475 (isRemoteAccessible).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L1741-L1757 `headedToFrontWall(int i, int j_offset, int k, Block block)` —
+     * (i, j_offset, k) 위치 벽/펜스 블록이 4방향 중 어느 방향으로 연결되어 있고, 이 플레이어
+     * Orientation 이 그 방향 반대쪽 (front 에서 접근) 이면 true.
+     *
+     * 논리:
+     *   1. 4 방향 wall flag 수집 (`zn`/`zp`/`nz`/`pz` — 블록이 해당 방향으로 연결)
+     *   2. `allOnNone` 블록 (pane) 이고 전부 false 면 4 방향 전부 true 처리 (고립 pane
+     *      은 4 방향 연결 가정)
+     *   3. 이 Orientation 이 NZ/PZ/ZN/ZP (및 ±45°) 중 어디면, 그 반대 방향 wall flag 반환
+     *      - NZ 탐색 시 PZ(동쪽) 연결 확인
+     *      - PZ 탐색 시 NZ(서쪽) 연결 확인
+     *      - ZN 탐색 시 ZP(남쪽) 연결 확인
+     *      - ZP 탐색 시 ZN(북쪽) 연결 확인
+     */
+    private boolean headedToFrontWall(int i, int j_offset, int k, BlockState state) {
+        boolean zn = getWallFlag(ZN, i, j_offset, k, state);
+        boolean zp = getWallFlag(ZP, i, j_offset, k, state);
+        boolean nz = getWallFlag(NZ, i, j_offset, k, state);
+        boolean pz = getWallFlag(PZ, i, j_offset, k, state);
+        boolean allOnNone = getAllWallsOnNoWall(state);
+
+        if (allOnNone && !zn && !zp && !nz && !pz)
+            zn = zp = nz = pz = true;
+
+        return headedToWall(NZ, pz)
+            || headedToWall(PZ, nz)
+            || headedToWall(ZN, zp)
+            || headedToWall(ZP, zn);
+    }
+
+    /**
+     * 원본 L1941-L1951 `headedToRemoteFlatWall(Block block, int j_offset)` — remote 위치
+     * 블록이 "평평한 벽 (flat wall)" 패턴 — 플레이어 진행 방향과 직각으로 연결되고 다른
+     * 방향으로는 연결 안 된 모양 — 인지.
+     *
+     *   !this-dir && +rotate(90) && !rotate(180) && +rotate(-90)
+     *
+     * 즉, 플레이어 탐색 방향 (this) 으로도, 반대 방향 (rotate 180) 으로도 연결 안 되고,
+     * 양 옆 (rotate ±90) 으로만 연결됨.
+     */
+    private boolean headedToRemoteFlatWall(BlockState state, int j_offset) {
+        return !getWallFlag(this,            remote_i, j_offset, remote_k, state)
+            &&  getWallFlag(this.rotate(90), remote_i, j_offset, remote_k, state)
+            && !getWallFlag(this.rotate(180),remote_i, j_offset, remote_k, state)
+            &&  getWallFlag(this.rotate(-90),remote_i, j_offset, remote_k, state);
+    }
+
+    /**
+     * 원본 L2401-L2475 `isRemoteAccessible(int j_offset)` — remote (이 Orientation 방향 인접)
+     * 위치가 플레이어 점유 가능한지. 여러 분기의 OR 누적.
+     *
+     * 분기 그룹:
+     *   (1) `isEmpty(remote_i, j_offset, remote_k)` — 빈 공간
+     *   (2) [§7 근사 생략] RedPower wire 특수 판정
+     *   (3) accessible 상태에서의 역체크 (base 위치의 trap door/door/ladder 가 막는지)
+     *       - base `isTrapDoor && isTrapDoorFront` → 막힘
+     *       - base `isDoor && isDoorFrontBlocked` → 막힘
+     *       - `remoteLadderClimbing` → 막힘
+     *   (4) remote trap door + closed → 접근 가능
+     *   (5) !accessible 상태에서의 wall/fence/door/rope 복합 분기
+     *       - remote wall block + !headedToFrontWall + !fence below
+     *       - remote 아래 fence + !headedToFrontWall (+ base 아래 wall block) + cobblestone
+     *         예외
+     *       - remote door + !rotate(180).isDoorFrontBlocked
+     *       - [§7 근사 생략] ASRope + !rotate(180).isASGrapplingHookFront
+     *
+     * **§7 근사 2건**:
+     *   - RedPower 분기 생략 (B-19a1c2-approx-1 과 동일 패턴)
+     *   - ASRope 분기 생략 (B-19a1b `isRope`/`isOnWallRope` false 와 연동)
+     */
+    protected boolean isRemoteAccessible(int j_offset) {
+        boolean accessible = isEmpty(remote_i, j_offset, remote_k);
+
+        // 근사 이식 — 원본과 차이: RedPower wire 분기 (원본 L2404-L2422) 생략
+
+        if (accessible) {
+            BlockState baseState = getBaseBlockId(j_offset);
+            if (isTrapDoor(baseState))
+                accessible = !isTrapDoorFront(baseState);
+
+            if (accessible && isDoor(baseState))
+                accessible = !isDoorFrontBlocked(base_i, j_offset, base_k);
+
+            if (remoteLadderClimbing(j_offset))
+                accessible = false;
+        }
+
+        if (!accessible && isTrapDoor(remote_i, j_offset, remote_k))
+            accessible = isClosedTrapDoor(remote_i, j_offset, remote_k);
+
+        if (!accessible) {
+            BlockState remoteState = getRemoteBlockId(j_offset);
+            if (isWallBlock(remoteState)
+                    && !headedToFrontWall(remote_i, j_offset, remote_k, remoteState)
+                    && !isFence(remote_i, j_offset - 1, remote_k))
+                accessible = true;
+
+            BlockState belowState = getRemoteBlockId(j_offset - 1);
+            if (!accessible && isFence(belowState)
+                    && (!headedToFrontWall(remote_i, j_offset - 1, remote_k, belowState)
+                        || isWallBlock(getBaseBlockId(j_offset - 1))))
+                if (belowState.getBlock() != Blocks.COBBLESTONE_WALL
+                        || headedToRemoteFlatWall(belowState, -1))
+                    accessible = true;
+
+            if (!accessible && isDoor(remoteState)
+                    && !rotate(180).isDoorFrontBlocked(remote_i, j_offset, remote_k))
+                accessible = true;
+
+            // 근사 이식 — 원본과 차이: ASRope 분기 (원본 L2467-L2471) 생략
+        }
+
+        return accessible;
     }
 }

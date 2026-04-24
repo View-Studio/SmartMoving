@@ -134,8 +134,10 @@ Orientation 판정 + ClimbGap 계산.
                         `toBlockDirection` 매핑 헬퍼 + `getConnectingFlag` / `getWallShapeFlag`
                         (BlockState property 조회). §7 근사 3건 등록 (Pane/Fence/Wall 동적
                         계산 → property 캐시 / BetterMisc reflection / Carpenters 생략).
-                  - [ ] **B-19a1c3c**: `headedToFrontWall` + `headedToRemoteFlatWall` +
-                        `isRemoteAccessible` 본체 (12+ 분기).
+                  - [x] **B-19a1c3c** (세션 97 완료): `headedToFrontWall` (4방향 wall flag
+                        집계 + allOnNone 재해석) + `headedToRemoteFlatWall` (4방향 OR/!AND
+                        패턴) + `isRemoteAccessible` 본체 (12+ 분기 OR 누적). §7 근사 2건
+                        (RedPower / ASRope).
             - [ ] **B-19a1c4**: `isFullAccessible` + `isFullExtentAccessible` +
                   `isJustLowerHalfExtentAccessible` + `isUpperHalfFrontEmpty`.
 
@@ -427,6 +429,64 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 97 — 2026-04-24 — B-19a1c3c `headedToFrontWall` + `headedToRemoteFlatWall` + `isRemoteAccessible`
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L1741-L1757 + L1941-L1951 + L2401-L2475 재확인** — 세션 94-95 에서 이미 대부분
+   read 완료. B-19a1c3 서브 마지막 (c3c).
+2. **3 메서드 이식**:
+   * `headedToFrontWall(i, j_offset, k, state)` (원본 L1741-L1757):
+     - 4방향 wall flag (ZN/ZP/NZ/PZ) 수집 → `getWallFlag` (B-19a1c3b)
+     - `allOnNone` (pane) + 전부 false → 4방향 true 승격 (고립 pane)
+     - 4방향 headedToWall (NZ/PZ/ZN/ZP 대응 반대쪽 wall flag) OR
+   * `headedToRemoteFlatWall(state, j_offset)` (원본 L1941-L1951):
+     - `!this && rotate(90) && !rotate(180) && rotate(-90)` 4방향 AND
+     - 평평한 벽 (flat wall) 패턴 — 진행 방향 연결 없고 옆 방향 연결
+   * `isRemoteAccessible(j_offset)` (원본 L2401-L2475):
+     - 12+ 분기 OR 누적 — isEmpty / trap door (front 체크) / door (frontBlocked) /
+       remoteLadderClimbing / 닫힌 remote trap door / remote wall block / remote 아래
+       fence (cobblestone_wall 예외 + headedToRemoteFlatWall) / remote door
+     - 2 mod 분기 근사 생략 (RedPower + ASRope)
+3. **핵심 매핑**:
+   * 원본 `isTrapDoor(id) && !isTrapDoorFront(getBlockMetadata(...))` → 1.21.1 `isTrapDoor(baseState)
+     && !isTrapDoorFront(baseState)` (BlockState 파라미터 직접 전달)
+   * 원본 `isClosedTrapDoor(getRemoteBlockMetadata(j_offset))` → 1.21.1 `isClosedTrapDoor(remote_i,
+     j_offset, remote_k)` (B-19a1c2 좌표 래퍼)
+   * 원본 `Block.getBlockFromName("cobblestone_wall")` → 1.21.1 `Blocks.COBBLESTONE_WALL`
+4. **본체 §7 B-19a1c3c 근사 2건 등록**:
+   (1) RedPower 분기 생략 (원본 L2404-L2422)
+   (2) ASRope 분기 생략 (원본 L2467-L2471)
+
+**완료 전 검증 체크리스트 (세션 97 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1741-L1757 + L1941-L1951 + L2401-L2475
+  전수 read ✓
+- [근거] B-19a1c3b wall-flag 인프라 + B-19a1c3a remoteLadderClimbing/isDoorFrontBlocked +
+  B-19a1b isTrapDoorFront + B-19a1c1 isWallBlock/isDoor/isFence + B-19a1c2 isEmpty/좌표
+  trapdoor 래퍼 + B-19a1a getBaseBlockId/getRemoteBlockId 전수 충족 ✓
+- [대응] 3 메서드 원본 ↔ 1.21.1 side-by-side. `headedToFrontWall` 4방향 flag + allOnNone
+  재해석 + 4방향 headedToWall OR. `isRemoteAccessible` 12+ 분기 중 vanilla 10 이식 +
+  mod 2 근사 ✓
+- [분기] `headedToFrontWall` 3갈래 (flag 수집 / allOnNone + 전부 false 승격 / 4방향 OR).
+  `headedToRemoteFlatWall` 4-AND. `isRemoteAccessible` 메인 분기 ~12 개 전수 식별
+  (accessible=isEmpty / RedPower 생략 / accessible 상태 역체크 3 / closed trap door /
+  !accessible 상태 wall/fence/door/ASRope) ✓
+- [상수] `COBBLESTONE_WALL` 예외 확인. `_blockCarpentersLadder` 없음 ✓
+- [타이밍] 순수 BlockState 조회 — 호출 타이밍 무관 ✓
+- [근사] **§7 B-19a1c3c 근사 2건 등록 완료**. RedPower + ASRope 각 분기 위치에 "근사 이식
+  — 원본과 차이: X" 주석 ✓
+- [신규] 없음. `isTrapDoorFront` 시그니처가 BlockState 파라미터 (B-19a1b) 이므로 원본
+  metadata 전달이 BlockState 전달로 자연 교체 ✓
+- [회귀] 기존 코드 미사용 → 영향 없음. 의존 메서드 전수 충족. `Blocks.COBBLESTONE_WALL`
+  참조로 Blocks import 추가 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-19a1c4** — accessibility 판정 나머지 4 메서드:
+`isFullAccessible` (L2528-L2535, grabRemote 분기) + `isFullExtentAccessible` (L2486-L2512,
+RedPower 포함) + `isJustLowerHalfExtentAccessible` (L2514-L2526) + `isUpperHalfFrontEmpty`
+(L2543-L2580+). 의존 모두 충족 — c4 완료 시 B-19a1c (accessibility 전체) 완료. 예상 1 세션.
 
 ### 세션 96 — 2026-04-24 — B-19a1c3b wall-flag 인프라 (getWallFlag 외)
 
