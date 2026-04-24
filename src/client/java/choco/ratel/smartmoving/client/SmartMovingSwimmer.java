@@ -126,8 +126,15 @@ public final class SmartMovingSwimmer {
             return;
         }
 
-        double fluidHeight = player.getFluidHeight(FluidTags.WATER);
-        sm.dippingDepth = (float)fluidHeight;
+        // **B-9a 해소 (세션 128)**: `dippingDepth` 시멘틱을 원본 `playerSwimWaterBorder`
+        //   (AABB 정밀, 0~∞ 범위) 로 교체. 기존 `fluidHeight` 근사는 블록 내 액체 높이
+        //   (0~1 범위) — 원본과 시멘틱 다름.
+        //   원본 L270: `playerSwimWaterBorder = totalSwimWaterBorder - j - j_offset`
+        //   원본 L416: `dippingDepth = (float)playerSwimWaterBorder`
+        //   B-42d `SwimBorderValues` 소비. 아래 분기 공식 + dippingDepth 필드 공유.
+        SmartMovingClientState.SwimBorderValues sbv9a =
+                SmartMovingClientState.computeSwimBorderValues(player);
+        sm.dippingDepth = (float) sbv9a.playerSwimWaterBorder;
 
         // 원본 L301 3-OR: isCrawling || isClimbCrawling || isCrawlClimbing → isDipping 강제
         // (handleSwimming L308-L309). B-6 (세션 60): 누락된 `sm.isClimbCrawling` 추가.
@@ -145,7 +152,11 @@ public final class SmartMovingSwimmer {
             return;
         }
 
-        double offset = fluidHeight + 0.1625D;
+        // **B-9a 해소 (세션 128)**: 원본 L305 `offset = playerSwimWaterBorder + 0.1625D`
+        //   공식 복원. fluidHeight 근사 → AABB 정밀 playerSwimWaterBorder.
+        //   A/B 서브 분기 + (2, ∞) 구간 + (<0) 분기는 B-9b/c/d/e/f 후속 원자에서 재구성.
+        //   현재는 A 경로 threshold (1.4 / 1.9) 만 유지.
+        double offset = sbv9a.playerSwimWaterBorder + 0.1625D;
         sm.isDipping     = offset < OFFSET_SWIMMING;
         sm.isSwimming_sm = offset >= OFFSET_SWIMMING && offset < OFFSET_DIVING;
         sm.isDiving      = offset >= OFFSET_DIVING;
@@ -349,6 +360,9 @@ public final class SmartMovingSwimmer {
         boolean diveUp   = jumping;
         boolean diveDown = player.isSneaking() && sm.isDiving;
 
+        // **B-9a 해소 (세션 128)**: handleSwimming 내부 offset 계산도 AABB 정밀화.
+        //   `dippingDepth` 가 이미 `playerSwimWaterBorder` 시멘틱이므로 직접 사용.
+        //   원본 L305: `offset = playerSwimWaterBorder + 0.1625D`
         if (sm.isDipping) {
             // 수면 경계 — 약간 아래로 당기는 힘 + 수평 이동
             // 원본: offset < 1.0 → motionYDiff = -0.02D, else → -0.01D
@@ -356,7 +370,7 @@ public final class SmartMovingSwimmer {
             motionX += fly.x;
             motionZ += fly.z;
             motionX *= DAMPING_DIPPING_XZ;
-            double dippingOffset = player.getFluidHeight(FluidTags.WATER) + 0.1625D;
+            double dippingOffset = sm.dippingDepth + 0.1625D;
             double dippingYDiff = dippingOffset < 1.0D ? -0.02D : -0.01D;
             motionY = (motionY + dippingYDiff) * DAMPING_DIPPING_Y;
             motionZ *= DAMPING_DIPPING_XZ;
@@ -364,7 +378,7 @@ public final class SmartMovingSwimmer {
         } else if (sm.isSwimming_sm) {
             // 수면 수영 — offset 구간에 따라 수직력 세분화
             // 원본: SmartMovingSelf.handleSwimming() 13단계 테이블 (229-576줄)
-            double offset = player.getFluidHeight(FluidTags.WATER) + 0.1625D;
+            double offset = sm.dippingDepth + 0.1625D;
             double motionYDiff;
             if      (offset < 1.5D)   motionYDiff = -0.02D;
             else if (offset < 1.6D)   motionYDiff = -0.01D;

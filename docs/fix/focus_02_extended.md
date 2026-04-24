@@ -347,7 +347,10 @@ Orientation 판정 + ClimbGap 계산.
       (lavaLikeWater && isInLava))` 3-OR 전수 이식).
 
 #### B-9. handleSwimming 메인 분류 3-갈래 재작성
-- [ ] B-9a. `playerSwimWaterBorder` / `totalSwimWaterBorder` 계산 (AABB 정밀 — Phase 6 공유).
+- [x] B-9a. `playerSwimWaterBorder` / `totalSwimWaterBorder` 계산 (AABB 정밀 — Phase 6 공유).
+      **세션 128 완료** (`SwimBorderValues` 소비 → `dippingDepth` 시멘틱을
+      `playerSwimWaterBorder` 로 교체, updateSwimState + handleSwimming 두 곳의 offset
+      공식 정밀화). 원본 L305/L416 1:1.
 - [ ] B-9b. `[0, 2]` 구간 A/B 서브 분기 (`diveUp || moveSwim || wantShallowSwim`).
 - [ ] B-9c. A 경로 11-단계 swimming offset 테이블 (1.4-1.9).
 - [ ] B-9d. B 경로 10-단계 diving offset 테이블 (1.5-1.9).
@@ -530,6 +533,85 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 128 — 2026-04-25 — B-9a `dippingDepth` 시멘틱 교체 (playerSwimWaterBorder AABB 정밀)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. B-9 메인 분류 재작성 첫 원자.
+
+**진행한 작업**:
+
+**1. `dippingDepth` 시멘틱 차이 식별**:
+- 원본 L416: `dippingDepth = (float)playerSwimWaterBorder` — AABB 기반 상단 액체 Y offset
+  (0~∞ 범위, 플레이어 minY 에서 수면까지 거리).
+- 1.21.1 기존: `dippingDepth = (float)player.getFluidHeight(WATER)` — 블록 내 액체 높이
+  (0~1 범위, FluidState.getHeight).
+- **시멘틱 완전 다름** — `dippingDepth > SWIM_CRAWL_TOP (0.5F)` 등 임계값 비교가 원본 의도와
+  다르게 동작. B-9a 핵심: 원본 시멘틱으로 교체.
+
+**2. `dippingDepth` 소비처 전수 grep**:
+- `ClientState` L920/L1225 `mustCrawl`/`canCrawl` 조건 `dippingDepth < 0.65F`
+- `ClientState` L1590-L1595 B-36 분기 조건 + `-1.6F + dippingDepth` 이동량
+- `ClientState` L1779 resetState 리셋 (-1F)
+- `Swimmer` L252 `isCrawling && dippingDepth > SWIM_CRAWL_TOP`
+- `Swimmer` L261-L262 `playerCrawlWaterBorder = dippingDepth` 판정
+- `Swimmer` L359/L367 offset 계산 (handleSwimming 내부)
+- 소비처는 임계값 비교/이동량 계산으로 교체하지 않아도 새 시멘틱으로 자동 정확도 개선.
+
+**3. B-9a 이식 — `SwimBorderValues` 소비**:
+- `Swimmer.updateSwimState` L129-L130:
+  ```java
+  SmartMovingClientState.SwimBorderValues sbv9a = computeSwimBorderValues(player);
+  sm.dippingDepth = (float) sbv9a.playerSwimWaterBorder;
+  ```
+- updateSwimState 분기 공식 (L155):
+  ```java
+  double offset = sbv9a.playerSwimWaterBorder + 0.1625D;
+  ```
+- `handleSwimming` 내부 offset 계산 (L355 dipping / L367 swimming):
+  ```java
+  double dippingOffset = sm.dippingDepth + 0.1625D;
+  double offset        = sm.dippingDepth + 0.1625D;
+  ```
+  → `sm.dippingDepth` 가 이제 `playerSwimWaterBorder` 시멘틱이므로 직접 사용.
+
+**4. B-9b/c/d/e/f/g/h 후속 원자 남김**:
+- A/B 서브 분기 (diveUp||moveSwim||wantShallowSwim) 분리 — B-9b
+- swimming offset 테이블 A 경로 (1.4-1.9 11-단계) — B-9c
+- swimming offset 테이블 B 경로 (1.5-1.9 10-단계) — B-9d
+- (2, ∞) 구간 diving 분기 — B-9e
+- (-∞, 0) handleSwimmingRejected — B-9f
+- motionYDiff 통합 로직 — B-9g
+- swimDown = false — B-9h
+- 이 B-9a 는 **기반 시멘틱 교체** 에 한정. A 경로 threshold (1.4/1.9) 유지.
+
+**5. 빌드 검증** — 2회 `BUILD SUCCESSFUL` (updateSwimState 1회 + handleSwimming 1회).
+
+**완료 전 검증 체크리스트 (세션 128 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L265-L270 (SwimBorderValues 계산) + L305 (offset
+  공식) + L416 (dippingDepth 갱신) 로컬 read ✓
+- [근거] 1.21.1 `dippingDepth` 전수 소비처 grep 9곳 확인 ✓
+- [대응] 원본 `dippingDepth = playerSwimWaterBorder` → 1.21.1 `sm.dippingDepth =
+  (float)sbv.playerSwimWaterBorder` 정확 매핑. offset 공식 1:1 ✓
+- [분기] A 경로 threshold (1.4/1.9) 기존 유지 — B/E 분기는 후속 원자 ✓
+- [상수] `0.1625D` / `1.4D` (OFFSET_SWIMMING) / `1.9D` (OFFSET_DIVING) / `1.0D`
+  (dippingOffset threshold) 모두 원본 동일 ✓
+- [타이밍] `dippingDepth` 갱신 위치 updateSwimState 내 기존 위치 유지 ✓
+- [근사] 이 원자 자체는 근사 해소 — dippingDepth 시멘틱 정확화 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 임계값 비교/이동량 계산이 원본 시멘틱으로 자동 정확화. 현재 동작은
+  물속 얕은 상황 (playerSwimWaterBorder ≈ fluidHeight) 에선 유사, 깊은 물에서 정확. ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-9b** (handleSwimming 의 `[0, 2]` 구간 A/B 서브 분기 — `diveUp ||
+moveSwim || wantShallowSwim` 에 따라 A/B 경로 분기 복원). `moveSwim` 은 pitch + forward
+입력 기반 — 원본 L306 공식. 이후 B-9c/d 에서 각 경로 offset 테이블 상세 복원.
+
+**진행률** (세션 128 종료 시점):
+- Extended 완료: **48 원자** (B-19 22 + Phase 4 8 + Phase 6 13 + Phase 5 **5** = 48)
+- Extended 총 원자 ~61
+- **Extended 진행률: 48/61 ≈ 79%**
+- **포커스 #2 전체: (54+48)/115 ≈ 89%**
+- **Phase 5 B-7 4/4 + B-9a 1/8 완결** (B-9b~h + B-11 남음)
 
 ### 세션 127 — 2026-04-25 — Phase 5 진입 — B-7a/b/c/d 4 원자 일괄 (updateSwimState 진입 조건 정밀 복원)
 
