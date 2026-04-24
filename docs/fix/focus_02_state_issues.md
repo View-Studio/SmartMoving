@@ -8,8 +8,8 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 (세션 62 — B Phase 2 계속 / B-37) |
-| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 29 원자 완료 / ⏳ **B Phase 2 잔여 ~11 원자** |
+| 상태 | 🟡 진행 중 (세션 63 — B Phase 2 계속 / B-5 + B-28) |
+| 현재 단계 | A 완료 + B Phase 1 완료 + Phase 2: 31 원자 완료 / ⏳ **B Phase 2 잔여 ~9 원자** |
 | 선행 의존 | 없음 (#5/#6 완료) |
 
 ---
@@ -384,6 +384,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `hasLiquidCeiling` 근사 (이미 적용, 정밀도 손실 있음)
 - 반-블록 단위 수직 탐색 → BlockState 단위
 - vanilla `isSwimming()` 과 SM `isSwimming_sm` 병존 (접미사 회피) — 혼동 방지용
+- **B-5 근사** (세션 63): `SmartMovingSwimmer.handleSwimming` 내
+  `isFakeShallowWaterSneaking` 설정 경로 원본 L226-L246 대비 3건 근사:
+  (1) `couldStandUp` 수심 측정 — 원본 `minPlayerSwimWaterDepth <= 1.5` (AABB 내 최소 수심
+  정밀 스캔) → 1.21.1 `dippingDepth <= 1.5F` (player.getFluidHeight 단일 값)
+  (2) `getClimbingOrientations` — 원본 대각 포함 8방향 → 1.21.1 `Direction.Type.HORIZONTAL`
+  4방향만
+  (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
+  동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
 
 ---
 
@@ -564,8 +572,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       동일 스코프 내 접근 가능.
 
 #### B-5. `SmartMovingSwimmer.java` L159 "1.21.1 간소화" 원본 대조 (§16 세션 30 신규)
-- [ ] B-5. `SmartMovingSwimmer.java` L159 간소화 지점 원본 `handleSwimming` 과 side-by-side
-      대조 → 불일치면 정정 원자 추가 (B-5a~). 1:1 이면 주석만 제거.
+- [x] B-5. ✅ **세션 63 완료** — 원본 L226-L246 `isFakeShallowWaterSneaking=true` 경로 대조 결과:
+      **근사 이식 3건 확정** (1:1 아님, 정정 원자도 별도 추가 않음 — B-9 재작성 범위에 흡수):
+      (1) `couldStandUp` 수심 측정 — 원본 AABB 정밀 `minPlayerSwimWaterDepth` → 1.21.1
+          `dippingDepth` (fluidHeight 단일 값)
+      (2) `getClimbingOrientations` — 원본 대각 8방향 → 1.21.1 Horizontal 4방향
+      (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 로직이 swimDown 비의존
+      Swimmer 주석을 "1.21.1 간소화" → "근사 이식 — 원본과 차이 3건" 으로 정리.
+      §7 근사 이식 지점에 B-5 근사 3건 등록. B-9 메인 분류 재작성 시 재평가.
 
 #### B-6. Swimmer `updateSwimState` L78 — `isClimbCrawling` 누락 조건 추가 (A-2 발견)
 - [x] B-6. ✅ **세션 60 완료** — `SmartMovingSwimmer.updateSwimState` L78 조건
@@ -744,8 +758,10 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
       `fallingDistanceMinimum=3F` (세션 44 이식됨) 사용.
 
 #### B-28. handleClimbing 진입 시 `isSliding=false` 이식 (A-4 발견)
-- [ ] B-28. 원본 L985 대응 — 클라이밍 진입 시 슬라이딩 해제. B-14 resetClimbing 에
-      `isSliding=false` 포함하거나 별도 원자로 SmartMovingClimber.handleClimbing 진입부 추가.
+- [x] B-28. ✅ **세션 63 완료 (B-37 로 자동 해소)** — A-4 B-28 과 A-5 B-37 은 동일 원본
+      L985-L986 (wantClimbUp 분기 내 `isSliding && handsClimbing.IsRelevant()` →
+      `isSliding=false; isCrawling=true`) 을 가리킴. 세션 62 B-37 이식으로 자동 해소.
+      §10 규칙 "근사 이식이면 '근사 이식 — 원본과 차이: X' 주석" 해당 없음 — 1:1 이식.
 
 #### B-29. `toSlidingOrCrawling` 조건 정정 (A-4 발견)
 - [x] B-29. ✅ **세션 54 완료** — `SmartMovingJumper.resetHeightOffset` L103 조건 원본 L2226
@@ -2641,6 +2657,50 @@ L995 로컬 변수 제거 + 필드 참조로 변경. tickEssential 에서 필드
 - **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
 - **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존 — 규모 중.
 - **B-31b/c** 공식 이식 (wantCrawlNotClimb / initializeCrawling) — B-41/B-35 범위 분배.
+
+### 세션 63 — 2026-04-24 — B Phase 2 B-5 + B-28 (근사 이식 정리 + 자동 해소)
+
+**진행한 작업**:
+- **B-5 대조 완료**: `SmartMovingSwimmer.handleSwimming` L159 "1.21.1 간소화" 지점 원본
+  SmartMovingSelf L226-L246 `isFakeShallowWaterSneaking=true` 설정 경로와 side-by-side 대조.
+  **근사 3건 확정** — 정정 원자 추가 않고 §7 근사 이식 지점에 등록 (B-9 재작성 시 재평가):
+  * (1) `couldStandUp` 수심 측정: 원본 AABB 정밀 `minPlayerSwimWaterDepth` → 1.21.1
+    `player.getFluidHeight(WATER)` 단일 값.
+  * (2) `getClimbingOrientations`: 원본 대각 포함 8방향 → 1.21.1 `Direction.Type.HORIZONTAL`
+    4방향만.
+  * (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존.
+  Swimmer 주석을 "1.21.1 간소화" → "근사 이식 — 원본과 차이 3건" 으로 정리 (L154-L173).
+  §7 구조적 차이/근사 이식 지점에 B-5 근사 등록.
+- **B-28 자동 해소**: A-4 R-13.9 #7 (B-28) 과 A-5 R-14.10 #7 (B-37) 은 동일 원본 L985-L986
+  을 가리킴. 세션 62 B-37 이식 (`wantClimbUp` 블록 내 `isSliding && handsClimbing.isRelevant()`
+  → `isSliding=false; isCrawling=true`) 으로 자동 해소. 별도 수정 없이 체크박스만 정리.
+- `./gradlew compileJava compileClientJava --rerun-tasks` 성공 (주석만 변경).
+
+**완료 전 검증 체크리스트 (세션 63)**:
+- [근거] B-5: 원본 L226-L246 research/.../SmartMovingSelf.md 확인 + 1.21.1 Swimmer L150-L191
+  코드 직접 read ✓
+- [근거] B-28: R-13.9 #7 (§16 세션 34) + R-14.10 #7 (§16 세션 35) 동일 원본 라인 확인 ✓
+- [대응] B-5: 근사 3건 문서화 완료 / B-28: B-37 세션 62 코드 재확인 ✓
+- [분기] 없음 (문서/주석 중심)
+- [상수] 없음
+- [타이밍] 없음 (구조 변경 없음)
+- [근사] **B-5 자체가 근사 이식 등록 작업** — §7 에 원본 차이 3건 명시 ✓
+- [신규] 없음
+- [회귀] compileJava + compileClientJava 모두 ✓. 주석 변경만이라 동작 변화 없음.
+- [빌드] ./gradlew compileJava compileClientJava --rerun-tasks ✓
+
+**A-4 R-13.9 / A-5 R-14.10 불일치 현황 갱신**:
+- ✅ R-13.9 #7 L985 handleClimbing isSliding=false (B-28 / B-37 세션 62 = 자동 해소)
+- ✅ R-14.10 #7 L986 wall 오르기 crawl 진입 (B-37 세션 62)
+- B-5 는 불일치 카운트 대상 아님 — 기존 근사 이식의 문서화 원자
+
+**Phase 2 진행 상황**: 31 원자 완료 (B-5 + B-28 추가) / 잔여 ~9
+
+**다음 작업 권고**:
+- **B-26** (isSliding 부수 동작) — Config.SlideDown + Jumper.tryJump 시그니처 확장. 규모 중간.
+- **B-16** (wantClimbHolding 3-OR) — wantClimb/blocked 필드 의존 — 규모 중-대.
+- **B-17b2** (else if(wasCrawlClimbing) 복합 전환 3분기) — wantClimbUp/Down 의존.
+- **B-12** (waterMovementTicks 증분 조건 정정) — 원본 L481-L484. 단순 조건 변경 가능성.
 
 ---
 

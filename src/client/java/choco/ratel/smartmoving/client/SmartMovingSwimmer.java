@@ -162,9 +162,17 @@ public final class SmartMovingSwimmer {
         //   }
         //   if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false; isFakeShallowWaterSneaking=true; }
         //
-        // 1.21.1 간소화:
-        //   couldStandUp = dippingDepth>=0 && dippingDepth<=1.5F (수심 기반 근사)
-        //   getClimbingOrientations → Direction.Type.HORIZONTAL 4방향(대각 생략).
+        // B-5 (세션 63): 근사 이식 — 원본과 차이 3건 (§7 근사 이식 지점 기록):
+        //   1) couldStandUp 수심 측정:
+        //      원본 `playerSwimWaterBorder >= 0 && minPlayerSwimWaterDepth <= 1.5`
+        //        — AABB 내 최소 수심 정밀 스캔
+        //      1.21.1 `dippingDepth >= 0F && dippingDepth <= 1.5F`
+        //        — player.getFluidHeight(WATER) 단일 값 (플레이어 발 기준)
+        //   2) getClimbingOrientations 방향 집합:
+        //      원본 대각 포함 8방향 (`true, true` 파라미터)
+        //      1.21.1 Direction.Type.HORIZONTAL 4방향만 (대각 생략)
+        //   3) swimDown=false (원본 L244) 은 미이식 — 1.21.1 swim 수직 속도 로직은
+        //      swimDown 에 의존하지 않아 동작상 차이 없음. B-9 메인 분류 재작성 시 재검토.
         //   isTunnelAhead → 아래 private 헬퍼.
         boolean couldStandUp = sm.dippingDepth >= 0F && sm.dippingDepth <= 1.5F;
         boolean wantShallowSwim = couldStandUp && (wasSwimming || wasDiving);
