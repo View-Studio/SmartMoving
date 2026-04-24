@@ -113,6 +113,36 @@ Orientation 판정 + ClimbGap 계산.
       현재 true 설정 경로 없어 B-35 분기 B 의 "initializeCrawling → toCrawling() 추가 호출"
       경로가 완전히 비활성. 공식 이식 후 Crawl 초기화 경로 활성화.
 
+#### B-10-reset-post. `resetSwimming()` 메서드 완전 이식 (세션 88 3차 감사 발견)
+- [ ] B-10-reset-post. 본체 §6 L366 `resetSwimming()` **부분 이식** 표기 해소.
+      원본 `resetSwimming()` (SmartMovingSelf.java L1488-L1498 추정) 전체 리셋 필드 목록
+      확보 필요 (Agent WebFetch). 현재 Swimmer.updateSwimState 물 밖 분기에서 리셋되는
+      필드는 5개 수준 — 원본은 8개 이상 가능성. 추가 리셋 대상 예상:
+      `isShallowDiveOrSwim` (B-10a), `isFakeShallowWaterSneaking`, `isJumpingOutOfWater`
+      (B-10b), `isLevitating` (B-10d), `waterMovementTicks` 초기화 등. 의존: B-10a/b/c/d
+      필드 이식 완료 (Phase 1). 완전 이식 시 물 밖 전환 엣지에서 모든 수중 관련 상태
+      정리가 원본과 1:1.
+
+#### B-N-standup. `standupIfPossible` 메서드 이식 (세션 88 3차 감사 발견)
+- [ ] B-N-standup. 원본 `standupIfPossible()` (SmartMovingSelf.java — 정확 위치 Agent
+      WebFetch 필요) 메서드 이식. 소비 지점:
+      (1) `restoreFromFlying = true` 이후 (B-24 세션 53 이식됨) — 비행 해제 시 일어설 수 있으면
+          자동 standup 트리거.
+      (2) `handleSwimming` 내 수영→크롤링 전환 (focus_03 §5.1 참조).
+      현재 `restoreFromFlying` 필드 값 설정만 정확 동작 — standupIfPossible 미이식으로
+      실제 "일어서기 시도" 로직 비활성. 세션 53 B-24 완료 전 후속 원자로 명시.
+      이식 대상: boolean 반환 메서드 + boundingBox 확장 가능 판정 + pose 변경.
+      예상 의존: AABB 헬퍼 (Phase 6 B-42a/b 이후 정밀 가능 — 전에는 `canStandUp(player)` 근사).
+      완료 시 비행 해제/수영→크롤 전환 엣지 경로 1:1 복원.
+
+#### B-40-post. `toCrawling()` 잔여 호출 지점 L2751/L2760/L2767 이식 (세션 88 3차 감사 발견)
+- [ ] B-40-post. 본체 세션 41 L1883 기록된 `wasCrawling` 재설정 8 위치 중 B-27/B-35/B-36
+      에서 각각 L2566 / L2572 / L2812 / L2835 / L2860 을 흡수했으나 **L2751 / L2760 /
+      L2767 은 미해소**. Agent WebFetch 로 원본 해당 대역 확보 후 전환 블록 특정 +
+      이식 위치 결정. 예상 영역: 수영/다이빙 → 육상 전환 또는 그 반대 경로 내부 crawl
+      재설정 구간. 의존: Phase 5 B-7/B-9/B-11 swim 재구성 완료 후 자연 흡수 가능 —
+      선 Phase 5 후 남은 부분만 별도 원자화.
+
 ### Phase 5. B-7 / B-9 / B-11 본체 — 수중 3상태 완전 재구성
 
 #### B-7. updateSwimState 진입 조건 복원
@@ -233,8 +263,9 @@ Phase 8 (Simple/Smart)           ← 독립 가능
 Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ```
 
-**추정 원자 수**: 약 33 신규 원자 + 일부 재이식 (Phase 9 신설로 3개 추가).
-**추정 세션 수**: 25-40 세션.
+**추정 원자 수**: 약 36 신규 원자 + 일부 재이식 (Phase 9 신설 +3, 3차 감사 +3
+→ B-10-reset-post / B-N-standup / B-40-post).
+**추정 세션 수**: 28-45 세션.
 **Agent WebFetch 필요**: 대부분 원자 (원본 본문 리서치 미확보 대역 많음).
 
 ---
@@ -265,6 +296,22 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 - **Options `_runOnSprintRelease` / `_walkOnSprintRelease`** — grep 확인 1.21.1 미이식 →
   Phase 9 B-48b-dep 로 추가.
 - Phase 9 "SmartStatistics + 후속 엣지 케이스" 신설 (B-50 / B-48b-dep / B-48b-fallback).
+
+**전수 감사 3차 (처음부터 끝까지 순차 읽기 — 누락 3건 추가 발견)**:
+- **`standupIfPossible` 메서드 전체 미이식** — 세션 53 B-24 로그 L2493-L2494
+  "B-N 후속 standupIfPossible 이식 시 자동 연결" 이후 어떤 Phase 에도 등록 안 됨.
+  `restoreFromFlying` 소비자 + `handleSwimming` 수영→크롤 전환 의존 (focus_03 §5.1).
+  → Phase 4 **B-N-standup** 신설.
+- **`resetSwimming()` 부분 이식** — 본체 §6 L366 "⚠️ 부분 이식" 만 표기. 완전 이식 원자
+  어느 Phase 에도 없음.
+  → Phase 4 **B-10-reset-post** 신설.
+- **`toCrawling()` 잔여 호출 지점 L2751 / L2760 / L2767** — 세션 41 L1883 기록 8 위치
+  중 B-27/B-35/B-36 에서 5 위치만 흡수. 나머지 3 위치 미해소. B-40 세션 44 로그 L1045
+  는 "B-35/B-36 이식 시 추가" 로 위임했으나 실제로 안 됨.
+  → Phase 4 **B-40-post** 신설.
+- **확인 완료 (잔여 안전)**: `collidedHorizontallyTickCount` (B-1c2 세션 51 이식), B-27
+  (세션 54 L2569-L2574 이식), B-33 (세션 84 L2441-L2442 이식), B-35 (세션 74 L2812/L2835),
+  B-36 (세션 78 L2860) 는 모두 완료 상태 재검.
 
 **참고 사항 (세션 88 확인)**:
 - `_sprintFactor` / `_sprintExhaustionStart/Stop` / `_sprintDuringItemUsage` /
