@@ -1608,4 +1608,203 @@ public class Orientation {
 
         return empty;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a2a1 (세션 99) — wall 판정 보조 (headedToFrontSideWall + headedToBaseWall
+    //                       3 오버로드 + headedToBaseGrabWall 2 오버로드)
+    // 원본: Orientation.java L1759-L1798 (headedToFrontSideWall),
+    //       L1809-L1862 (headedToBaseWall 3), L1865-L1938 (headedToBaseGrabWall 2).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L1759-L1798 `headedToFrontSideWall(int i, int j_offset, int k, Block block)` —
+     * wall/pane/fence 블록이 이 Orientation 의 **측면** 방향 (base_id/base_kd 의 half 위치
+     * 조합에 따른 오프셋 방향) 으로 연결되어 있는지.
+     *
+     * 논리: 4방향 wall flag 수집 → `base_id`/`base_kd` 의 topHalf 조합 4가지 중 하나
+     * 선택 → 4방향 `headedToWall(NZ/PZ/ZN/ZP, ...)` OR. 원본과 동일.
+     */
+    private boolean headedToFrontSideWall(int i, int j_offset, int k, BlockState state) {
+        boolean zn = getWallFlag(ZN, i, j_offset, k, state);
+        boolean zp = getWallFlag(ZP, i, j_offset, k, state);
+        boolean nz = getWallFlag(NZ, i, j_offset, k, state);
+        boolean pz = getWallFlag(PZ, i, j_offset, k, state);
+        boolean allOnNone = getAllWallsOnNoWall(state);
+
+        if (allOnNone && !zn && !zp && !nz && !pz)
+            zn = zp = nz = pz = true;
+
+        boolean iTop = isTopHalf(base_id);
+        boolean kTop = isTopHalf(base_kd);
+        if (iTop) {
+            if (kTop) {
+                return headedToWall(NZ, zp) || headedToWall(PZ, zp)
+                    || headedToWall(ZN, pz) || headedToWall(ZP, pz);
+            } else {
+                return headedToWall(NZ, zn) || headedToWall(PZ, zn)
+                    || headedToWall(ZN, pz) || headedToWall(ZP, pz);
+            }
+        } else {
+            if (kTop) {
+                return headedToWall(NZ, zp) || headedToWall(PZ, zp)
+                    || headedToWall(ZN, nz) || headedToWall(ZP, nz);
+            } else {
+                return headedToWall(NZ, zn) || headedToWall(PZ, zn)
+                    || headedToWall(ZN, nz) || headedToWall(ZP, nz);
+            }
+        }
+    }
+
+    /**
+     * 원본 L1809-L1839 `headedToBaseWall(int j_offset, Block block)` — base 위치 wall/pane
+     * 블록이 이 Orientation 의 대각/직교 패턴에 맞게 연결되어 있는지.
+     *
+     * base_id/base_kd 의 topHalf 2x2 조합에 따라 4 diagonal 중 하나 선택, 그 diagonal 과
+     * 인접 2 orthogonal 조합을 `headedToBaseWall(diagonal, left, right, ...)` 로 전달.
+     */
+    private boolean headedToBaseWall(int j_offset, BlockState state) {
+        boolean zn = getWallFlag(ZN, base_i, j_offset, base_k, state);
+        boolean zp = getWallFlag(ZP, base_i, j_offset, base_k, state);
+        boolean nz = getWallFlag(NZ, base_i, j_offset, base_k, state);
+        boolean pz = getWallFlag(PZ, base_i, j_offset, base_k, state);
+        boolean allOnNone = getAllWallsOnNoWall(state);
+
+        if (allOnNone && !zn && !zp && !nz && !pz)
+            zn = zp = nz = pz = true;
+
+        boolean leaf = zn || zp || nz || pz;
+        boolean coreOnly = !allOnNone && !leaf;
+
+        boolean iTop = isTopHalf(base_id);
+        boolean kTop = isTopHalf(base_kd);
+        if (iTop) {
+            if (kTop)  return headedToBaseWall(NN, NZ, ZN, zp, nz, pz, zn, coreOnly, leaf);
+            else       return headedToBaseWall(NP, NZ, ZP, zn, nz, pz, zp, coreOnly, leaf);
+        } else {
+            if (kTop)  return headedToBaseWall(PN, PZ, ZN, zp, pz, nz, zn, coreOnly, leaf);
+            else       return headedToBaseWall(PP, PZ, ZP, zn, pz, nz, zp, coreOnly, leaf);
+        }
+    }
+
+    /**
+     * 원본 L1841-L1855 `headedToBaseWall(Orientation diagonal, Orientation left, Orientation
+     * right, ...)` — 이 Orientation 이 diagonal/left/right 중 어느 하나와 매치하는지로
+     * 결과 분기.
+     *
+     * diagonal 이면 `leaf || coreOnly`.
+     * left 이면 `headedToBaseWall(leftFront, rightFrontOpposite, rightFront,
+     *                              leftFrontOpposite, coreOnly)`.
+     * right 이면 `headedToBaseWall(rightFront, leftFrontOpposite, leftFront,
+     *                               rightFrontOpposite, coreOnly)`.
+     */
+    private boolean headedToBaseWall(Orientation diagonal, Orientation left, Orientation right,
+                                     boolean leftFront, boolean rightFrontOpposite,
+                                     boolean rightFront, boolean leftFrontOpposite,
+                                     boolean co, boolean leaf) {
+        if (this == diagonal) return leaf || co;
+        if (this == left)
+            return headedToBaseWall(leftFront, rightFrontOpposite, rightFront,
+                    leftFrontOpposite, co);
+        if (this == right)
+            return headedToBaseWall(rightFront, leftFrontOpposite, leftFront,
+                    rightFrontOpposite, co);
+        return false;
+    }
+
+    /**
+     * 원본 L1857-L1863 `headedToBaseWall(boolean front, boolean sideOpposite, boolean side,
+     * boolean frontOpposite, boolean coreOnly)` — 5 개 flag 의 OR 조합.
+     *
+     *   front || (sideOpposite && !side) || (frontOpposite && !front && !side) || coreOnly
+     */
+    private static boolean headedToBaseWall(boolean front, boolean sideOpposite, boolean side,
+                                            boolean frontOpposite, boolean coreOnly) {
+        return front
+            || (sideOpposite && !side)
+            || (frontOpposite && !front && !side)
+            || coreOnly;
+    }
+
+    /**
+     * 원본 L1865-L1915 `headedToBaseGrabWall(int j_offset, Block block)` — grab 방향 wall
+     * 패턴 판정. base + above (j_offset+1) 위치의 wall flag 를 조합하여 결정.
+     *
+     * 논리:
+     *   1. base 위치 4방향 wall flag 수집
+     *   2. above 블록이 fullEmpty → 4방향 above 전부 false
+     *      isWallBlock → 4방향 above flag 수집
+     *      기타 → 4방향 above 전부 true
+     *   3. base_id/base_kd topHalf 2x2 조합으로 `headedToBaseGrabWall(i, k, ...)` 호출
+     *      (front/side/frontOpposite/sideOpposite 및 above 4개 파라미터 전달)
+     */
+    private boolean headedToBaseGrabWall(int j_offset, BlockState state) {
+        boolean zn = getWallFlag(ZN, base_i, j_offset, base_k, state);
+        boolean zp = getWallFlag(ZP, base_i, j_offset, base_k, state);
+        boolean nz = getWallFlag(NZ, base_i, j_offset, base_k, state);
+        boolean pz = getWallFlag(PZ, base_i, j_offset, base_k, state);
+        boolean allOnNone = getAllWallsOnNoWall(state);
+
+        if (allOnNone && !zn && !zp && !nz && !pz)
+            zn = zp = nz = pz = true;
+
+        boolean azn, azp, anz, apz;
+        BlockState aboveState = getBlock(base_i, j_offset + 1, base_k);
+        BlockPos abovePos = new BlockPos(base_i, local_offset + j_offset + 1, base_k);
+        if (isFullEmpty(aboveState, world, abovePos)) {
+            azn = azp = anz = apz = false;
+        } else if (isWallBlock(aboveState)) {
+            azn = getWallFlag(ZN, base_i, j_offset + 1, base_k, aboveState);
+            azp = getWallFlag(ZP, base_i, j_offset + 1, base_k, aboveState);
+            anz = getWallFlag(NZ, base_i, j_offset + 1, base_k, aboveState);
+            apz = getWallFlag(PZ, base_i, j_offset + 1, base_k, aboveState);
+            boolean aboveAllOnNone = getAllWallsOnNoWall(aboveState);
+
+            if (aboveAllOnNone && !azn && !azp && !anz && !apz)
+                azn = azp = anz = apz = true;
+        } else {
+            azn = azp = anz = apz = true;
+        }
+
+        boolean iTop = isTopHalf(base_id);
+        boolean kTop = isTopHalf(base_kd);
+        if (iTop) {
+            if (kTop) return headedToBaseGrabWall(-this._i, -this._k, zp, pz, nz, zn, azp, apz, anz, azn);
+            else      return headedToBaseGrabWall(-this._i,  this._k, pz, zn, zp, nz, apz, azn, azp, anz);
+        } else {
+            if (kTop) return headedToBaseGrabWall( this._i, -this._k, nz, zp, zn, pz, anz, azp, azn, apz);
+            else      return headedToBaseGrabWall( this._i,  this._k, zn, nz, pz, zp, azn, anz, apz, azp);
+        }
+    }
+
+    /**
+     * 원본 L1917-L1938 `headedToBaseGrabWall(int i, int k, ...)` — 10 boolean flag 조합으로
+     * grab wall 판정. i/k 는 플레이어 방향 부호 (± 1 / 0).
+     *
+     * 5 분기 OR:
+     *   (1) sideOpposite && !aboveSideOpposite && !front && !aboveFront && i == 1
+     *   (2) frontOpposite && !aboveFrontOpposite && !side && !aboveSide && k == 1
+     *   (3) side && !aboveSide && k >= 0
+     *   (4) front && !aboveFront && k >= 0
+     *   (5) frontOpposite && !aboveFrontOpposite && !aboveFront && i == 1 && k >= 0
+     *   (6) sideOpposite && !aboveSideOpposite && !aboveSide && k == 1 && i >= 0
+     */
+    private static boolean headedToBaseGrabWall(int i, int k,
+                                                boolean front, boolean side,
+                                                boolean frontOpposite, boolean sideOpposite,
+                                                boolean aboveFront, boolean aboveSide,
+                                                boolean aboveFrontOpposite, boolean aboveSideOpposite) {
+        if (sideOpposite && !aboveSideOpposite && !front && !aboveFront && i == 1)
+            return true;
+        if (frontOpposite && !aboveFrontOpposite && !side && !aboveSide && k == 1)
+            return true;
+        if (side && !aboveSide && k >= 0)
+            return true;
+        if (front && !aboveFront && k >= 0)
+            return true;
+        if (frontOpposite && !aboveFrontOpposite && !aboveFront && i == 1 && k >= 0)
+            return true;
+        if (sideOpposite && !aboveSideOpposite && !aboveSide && k == 1 && i >= 0)
+            return true;
+        return false;
+    }
 }

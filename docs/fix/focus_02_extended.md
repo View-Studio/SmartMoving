@@ -144,10 +144,26 @@ Orientation 판정 + ClimbGap 계산.
                   (RedPower 2곳 + LadderKit). **B-19a1c 전체 완료**.
 
 - [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
-      (원본 L477-L606 + L608-L648 `hasHalfHold` + `hasBottomHold`)
-      * `halfOffset` (middle/base/sub/subSub/top) enum 이식
-      * gap 계산 1-5 스케일 + `ClimbGap.CanStand/MustCrawl/Block/Meta/Direction` 설정 로직
-      * 의존: B-19a1 헬퍼 전수 이식.
+      (원본 L477-L606 + L608-L726 `hasHalfHold` + L728-L1000+ `hasBottomHold`)
+      **세션 99 재분해 (8 서브)** — `hasHalfHold` 120줄 + `hasBottomHold` 300+줄 +
+      `setHalfGrabType` 3 오버로드 + 보조 헬퍼 10+ 로 한 세션 불가. 서브 분해:
+      - [x] **B-19a2a1** (세션 99 완료): wall 판정 보조 — `headedToFrontSideWall` +
+            `headedToBaseWall` 3 오버로드 + `headedToBaseGrabWall` 2 오버로드. 근사 없음
+            (B-19a1c3b `getWallFlag` 근사에만 의존).
+      - [ ] **B-19a2a2**: vine 보조 — `baseVineClimbing` 2 오버로드 + `remoteVineClimbing`
+            2 오버로드.
+      - [ ] **B-19a2a3**: half-solid 판정 — `isLowerHalfFrontFullEmpty` +
+            `isUpperHalfFrontAnySolid` + `isUpperHalfFrontFullSolid`.
+      - [ ] **B-19a2a4**: 잔여 보조 — `isOnMiddleLadderFront` + `isHeadedToRope` (mod 근사
+            false) + `getTriple` 등.
+      - [ ] **B-19a2b**: grab 상태 세팅 — `setHalfGrabType` 3 오버로드 +
+            `setBottomGrabType` 3 오버로드 + `initializeLocal` + `initializeOffset` +
+            `initialize(world, i, id, jhd, k, kd)`.
+      - [ ] **B-19a2c**: `hasHalfHold` 본체 (L608-L726) — vanilla 분기 이식 + mod 분기
+            근사 생략.
+      - [ ] **B-19a2d**: `hasBottomHold` 본체 (L728-L1000+) — 위 동일.
+      - [ ] **B-19a2e**: `isLadderSubstitute` 본체 (L477-L606) — gap 1-5 계산 +
+            `ClimbGap.canStand/mustCrawl/state/direction` 설정 핵심.
 
 - [ ] **B-19a3. `handsClimbing()` / `feetClimbing()` 판정 메서드 이식**
       (원본 L329-L475)
@@ -431,6 +447,65 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 99 — 2026-04-24 — B-19a2a1 wall 판정 보조 (headedToFrontSideWall + headedToBaseWall 3 + headedToBaseGrabWall 2)
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지.
+
+**진행한 작업**:
+1. **원본 L608-L1000+ 범위 재확인** — `hasHalfHold` 120줄 + `hasBottomHold` 300+줄 +
+   `setHalfGrabType` 3 오버로드 + 보조 헬퍼 10+ (isOnMiddleLadderFront / headedToBaseWall /
+   headedToBaseGrabWall / headedToFrontSideWall / isLowerHalfFrontFullEmpty /
+   isUpperHalfFrontAnySolid / isUpperHalfFrontFullSolid / baseVineClimbing /
+   remoteVineClimbing / isHeadedToRope) 의존 확인.
+2. **Extended §3 B-19a2 서브 8개 재분해** — a2a1/a2a2/a2a3/a2a4/a2b/a2c/a2d/a2e. 세션
+   98 예상 "2-3 세션" 은 과소평가 — 실제 4-6 세션 + mod 근사 처리 필요.
+3. **B-19a2a1 이식** — wall 판정 보조 5 메서드:
+   * `headedToFrontSideWall(i, j_offset, k, state)` (원본 L1759-L1798) — 4방향 wall flag
+     + allOnNone 재해석 + base_id/base_kd topHalf 2x2 조합별 4 갈래 4방향 headedToWall OR
+   * `headedToBaseWall(j_offset, state)` (원본 L1809-L1839) — 4 diagonal 2x2 조합 → 다음
+     오버로드 호출
+   * `headedToBaseWall(diagonal, left, right, leftFront, rightFrontOpposite, rightFront,
+     leftFrontOpposite, co, leaf)` (원본 L1841-L1855) — 3 갈래 (diagonal / left / right)
+   * `headedToBaseWall(front, sideOpposite, side, frontOpposite, coreOnly)` static (원본
+     L1857-L1863) — 5 boolean 조합 OR
+   * `headedToBaseGrabWall(j_offset, state)` (원본 L1865-L1915) — base + above (j_offset+1)
+     위치 flag 수집 + above 블록 상태별 4갈래 분기 + base_id/base_kd topHalf 2x2 조합으로
+     static 헬퍼 호출
+   * `headedToBaseGrabWall(i, k, front, side, frontOpposite, sideOpposite, aboveFront,
+     aboveSide, aboveFrontOpposite, aboveSideOpposite)` static (원본 L1917-L1938) — 6-갈래
+     OR 조합
+4. **근사 없음** — B-19a1c3b `getWallFlag` 의 BlockState property 근사에만 간접 의존.
+
+**완료 전 검증 체크리스트 (세션 99 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L1759-L1798 + L1809-L1938 전수 read ✓
+- [근거] B-19a1c3b wall-flag 인프라 + B-19a1a isFullEmpty + B-19a1c1 isWallBlock + B-19a1c3b
+  isTopHalf 전수 의존 충족 ✓
+- [대응] 5 메서드 원본 ↔ 1.21.1 side-by-side. `headedToFrontSideWall` 2x2 = 4갈래 /
+  `headedToBaseWall` instance 2x2 = 4갈래 → 다음 오버로드 / `headedToBaseWall` 3갈래
+  오버로드 → static 5-flag OR / `headedToBaseGrabWall` above 3갈래 + 2x2 = 4갈래 /
+  static 6-OR 전수 ✓
+- [분기] `headedToFrontSideWall` iTop/kTop 2x2 (4 갈래) + 각 4 방향 OR /
+  `headedToBaseWall` iTop/kTop 2x2 + diagonal / left / right 3갈래 + static 5-flag OR /
+  `headedToBaseGrabWall` above 블록 상태 3갈래 (fullEmpty / wallBlock / other) + iTop/kTop
+  2x2 + static 6-flag OR. 전수 식별 ✓
+- [상수] 없음 (flag 조합 + `this._i`/`this._k` 부호 비교) ✓
+- [타이밍] 순수 flag 계산 — 호출 타이밍 무관 ✓
+- [근사] 근사 없음. 간접적으로 B-19a1c3b `getWallFlag` 의 BlockState property 근사에 의존 ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용. B-19a2c/d (hasHalfHold/hasBottomHold) 가 이 헬퍼를 소비 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (4s) ✓
+
+**다음 세션 권고**: **B-19a2a2** — vine 보조 (baseVineClimbing 2 오버로드 + remoteVineClimbing
+2 오버로드). 원본 L1087-L1145. 비교적 단순 — 1 세션에 완료 예상. `hasVineOrientation`
+(B-19a1b) + `isVine` (B-19a1a) 의존 충족.
+
+**진행률** (세션 99 종료 시점):
+- Extended 완료: **10 원자** (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c /
+  a1c4 / **a2a1**)
+- Extended 총 약 61 원자 (세션 99 B-19a2 서브 8개 재분해로 +7)
+- **Extended 진행률: 10/61 ≈ 16%**
+- **포커스 #2 전체: (54+10)/(54+61) = 64/115 ≈ 56%**
 
 ### 세션 98 — 2026-04-24 — B-19a1c4 accessibility 최종 (isFullAccessible 외) — B-19a1c 전체 완료
 
