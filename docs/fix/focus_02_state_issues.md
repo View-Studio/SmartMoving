@@ -402,12 +402,20 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   4방향만 (별도 원자 후보, B-42 범위 외)
   (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
   동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
-- **B-16 근사** (세션 68, 세션 69 갱신): `SmartMovingClientState.tickEssential` 내
-  wantClimbHolding/isClimbHolding 3-OR 갱신 공식 (원본 L2721-L2732) 구조 1:1 이식.
+- **B-16 근사** (세션 68, 세션 69 갱신, 세션 125 B-42-B16 해소 불가 확정):
+  `SmartMovingClientState.tickEssential` 내 wantClimbHolding/isClimbHolding 3-OR 갱신
+  공식 (원본 L2721-L2732) 구조 1:1 이식.
   ~~(1) `wantClimb` 2-OR 근사~~ → **세션 69 B-16a/b/c 로 해소 완료** (4-OR 완전 복원).
   (2) `blocked` = `currentScreen != null && !currentScreen.allowUserInput` (원본 L2393).
-  1.21.1 `allowUserInput` 필드 제거됨 → `currentScreen != null` 단일 조건 근사. 모든 열린
-  screen 을 입력 차단으로 간주 (게임 메뉴 열어도 매달림 유지 동작) — 원본 의도와 근접.
+  **해소 불가 — 세션 125 B-42-B16 확정**: 1.21.1 vanilla `Screen` 클래스에 `allowUserInput`
+  필드 없음. 대체 후보 검토:
+  * `Screen.shouldPause()` — 인벤토리 케이스 불일치 (원본 `allowUserInput=false` / 1.21.1
+    `shouldPause()=false`).
+  * Screen 서브타입 enumeration (ChatScreen / HandledScreen / etc) — 취약하고 모드
+    호환성 낮음.
+  * `MinecraftClient.isPaused()` — 싱글플레이어만 유효.
+  → 현재 `currentScreen != null` 단일 조건이 원본 의도 (대부분 screen 열림 시 blocked=true)
+  에 가장 근접. 근사 유지 확정.
 - ~~**B-35 근사** (세션 74)~~ → **세션 122 B-42-B35 해소 완료**:
   `ClientState.tickEssential` B-17 블록 뒤 + R-09 블록 앞에 wasCrawling↔isCrawling 전환
   후처리 (원본 L2822-L2836) 이식. 분기 A 의 `crawlStandUpBottom` 정밀 AABB 복원:
@@ -420,12 +428,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `Jumper.SLIDE_DOWN` 상수 + 전용 속도 공식 (원본 tryJump 내부 SlideDown 분기) 미이식.
   `isFromRunning` 파라미터 영향 생략. 효과: 슬라이딩 진입 시 SlideDown 전용 하강 점프
   추진 모션 누락 — 주로 시각/이펙트 영향, 핵심 상태 플래그에는 영향 없음.
-- **B-20 근사** (세션 76): `SmartMovingClimber.handleClimbing` Standard Base Climb 분기
-  (원본 L820-L823) 의 `isOnLadderOrVine && isCollidedHorizontally` 조건 판정 생략 — Standard
-  분기 진입 자체를 ladder/vine 접촉으로 간주. 실제로는 vanilla ladder 물리가 진입을 조건부로
-  처리하므로 실용 등가. `setOnlyShouldClimbSpeed` → `setShouldClimbSpeed` 교체로 isClimbing
-  잉여 설정 해소 (포커스 #2 상태 플래그 정확성 개선). Simple/Smart Base Climb (L825-L894)
-  전체 미이식은 별도 포커스 후보.
+- ~~**B-20 근사** (세션 76)~~ → **세션 125 B-42-B20 해소 완료**:
+  `SmartMovingClimber.handleClimbing` Standard Base Climb 분기 (원본 L820-L823) 정밀
+  복원. `isOnLadderOrVine` 조건은 1.21.1 `handleClimbing` 호출 상위 `MixinLivingEntity`
+  L153 `onClimbable = hands.isRelevant() || feet.isRelevant()` 에서 이미 내포 →
+  `player.horizontalCollision` 조건만 추가로 if-guard. `setShouldClimbSpeed` 호출
+  (isClimbing 잉여 설정 해소, 세션 76 정정 유지). Simple/Smart Base Climb (원본 L825-L894)
+  전체 미이식은 별도 포커스 후보 (B-42 범위 외).
 - ~~**B-36 근사** (세션 78)~~ → **세션 123 B-42-B36 해소 완료**:
   `ClientState.tickEssential` B-35 뒤 + R-09 앞에 grab.StartPressed 수영/크롤 3분기
   (원본 L2839-L2862) 이식. 분기 (a) 의 `getMaxPlayerSolidBetween(minY, maxY, 0) - minY`

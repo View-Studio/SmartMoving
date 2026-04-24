@@ -396,12 +396,19 @@ Orientation 판정 + ClimbGap 계산.
       minPlayerSwimWaterDepth <= 1.5` 원본 복원. **세션 121 완료** (2 지점: L202
       `isShallowDiveOrSwim` 게이트 + L288 `wantShallowSwim` 게이트 모두 `SwimBorderValues`
       소비로 교체). §7 B-5 근사 (1) 해소 기록.
-- [ ] B-42-B16. ClientState B-16 `blocked` 의미 재검토 (GUI 입력 차단) — AABB 무관하나 §7
-      등록됨. `allowUserInput` 대체 로직 검토.
-- [ ] B-42-B20. Climber Standard Base Climb `isOnLadderOrVine && isCollidedHorizontally`
-      조건 판정 복원.
+- [x] B-42-B16. ClientState B-16 `blocked` 의미 재검토. **세션 125 해소 불가 확정** —
+      vanilla `Screen.allowUserInput` 필드 제거됨, `shouldPause()` 등 대체 후보 전수
+      검토 결과 원본 의도 동치 불가. 현재 `currentScreen != null` 근사가 최근접. §7
+      B-16 근사 (2) "해소 불가 확정" 기록.
+- [x] B-42-B20. Climber Standard Base Climb `isOnLadderOrVine && isCollidedHorizontally`
+      조건 판정 복원. **세션 125 완료** (`isOnLadderOrVine` 은 상위 호출
+      `onClimbable` 에 내포 → `player.horizontalCollision` if-guard 만 추가). §7 B-20
+      근사 해소.
 - [ ] B-42-B26. Jumper `tryJump(SlideDown, ...)` 속도 공식 이식 (원본 tryJump 내부 SlideDown
-      분기).
+      분기). **세션 125 범위 확정**: Jumper factor 인프라 (speed별 horizontalFactor/
+      verticalFactor + `_jumpHorizontalFactor` base + Config `isJumpingEnabled` 완성 등)
+      전수 이식 필요 — Phase 7/인프라 원자 규모. Phase 6 범위에서는 보류, Phase 7
+      B-48 류 인프라 원자와 묶어서 후속 처리.
 - [x] B-42-B35. ClientState `crawlStandUpBottom` 정밀 계산 + `move(0, crawlStandUpBottom -
       minY, 0)` 이동량 복원. **세션 122 완료** (분기 A 내부에서 `getMaxPlayerSolidBetween(minY-1,
       minY, crawlOverEdge ? 0 : -0.05)` 직접 호출, move 이동량 복원). §7 B-35 근사 해소.
@@ -516,6 +523,72 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 125 — 2026-04-25 — B-42-B16 해소 불가 확정 + B-42-B20 조건 판정 복원 + B-42-B26 범위 확정
+
+**사용자 지시**: "무조건 엄격 1대1 완료" 방침 유지. Phase 6 승격 진행 — 3 원자 일괄 처리.
+
+**진행한 작업**:
+
+**1. B-42-B26 (Jumper SlideDown) 범위 분석**:
+- 원본 `tryJump(Config.SlideDown, false, wasRunning, null)` 호출 추적:
+  * `getJumpSpeed` (isStanding/isSlow/wasRunning/isFast 기반)
+  * `Config.isJumpingEnabled(speed, SlideDown) = _slide.value` — 1.21.1 `cfg.slide` 있음 ✓
+  * `Config.getJumpHorizontalFactor(speed, SlideDown)` — SlideDown 전용 분기 없음,
+    speed 별 `_sprintJumpHorizontalFactor` / `_runJumpHorizontalFactor` 등 요구.
+  * Exhaustion 시스템 (`_jumpSlideExhaustion`, `getJumpExhaustionGain`, etc.)
+  * 수평 속도 스케일 (원본 L2097-L2110) — 현재 1.21.1 `Jumper.tryJump` 에 미이식.
+- **결론**: Jumper factor 인프라 대규모 미이식 (speed별 factor 약 10개 + exhaustion 시스템
+  전체). 단일 원자 범위 초과 — Phase 7 인프라 원자와 묶음 처리 필요. Extended §3
+  B-42-B26 를 "범위 확정" 표시 + Phase 7 연계 대기.
+
+**2. B-42-B16 (ClientState `blocked`) 해소 불가 확정**:
+- 원본 L2393: `blocked = currentScreen != null && !currentScreen.allowUserInput`
+- 1.21.1 vanilla `Screen` 클래스에 `allowUserInput` 필드 **제거됨**.
+- 대체 후보 전수 검토:
+  * `Screen.shouldPause()` — **인벤토리 케이스 불일치** (원본 InventoryScreen:
+    `allowUserInput=false` → blocked=true / 1.21.1: `shouldPause()=false` → blocked=false).
+  * Screen 서브타입 enumeration (ChatScreen / HandledScreen / PauseScreen) — 취약 + 모드
+    호환성 낮음.
+  * `MinecraftClient.isPaused()` — 싱글플레이어만 유효.
+- **결론**: 1:1 이식 불가. 현재 `currentScreen != null` 단일 조건 근사가 원본 의도
+  (대부분 screen 열림 시 blocked=true) 에 최근접 → 근사 유지 확정. §7 B-16 에 "해소
+  불가 확정" 표시.
+
+**3. B-42-B20 (Standard Base Climb) 해소**:
+- 원본 L820: `if (Config.isStandardBaseClimb() && sp.isCollidedHorizontally && isOnLadderOrVine) motionY = 0.2 * factor`
+- 1.21.1 `handleClimbing` 호출 상위 (`MixinLivingEntity` L153) `onClimbable = hands.isRelevant() || feet.isRelevant()`
+  에서 `isOnLadderOrVine` 내포 확인 (로컬 grep).
+- 남은 조건 `sp.isCollidedHorizontally` → 1.21.1 `player.horizontalCollision` 필드 (public 읽기 가능).
+- Climber.java L306-L321 Standard Base Climb 분기에 `if (player.horizontalCollision) { ... }` if-guard 추가.
+- §7 B-20 근사 해소 기록.
+
+**4. 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` **BUILD SUCCESSFUL**.
+
+**완료 전 검증 체크리스트 (세션 125 기준)**:
+- [근거] 원본 `SmartMovingSelf.java` L820-L823 + Jumper factor 인프라 grep (로컬) ✓
+- [근거] 1.21.1 ClientState L1040 (B-16 근사) + Climber L306 (B-20 근사) 확인 ✓
+- [대응] B-20 `sp.isCollidedHorizontally` → `player.horizontalCollision` 표면 매핑 ✓
+- [분기] B-20: `if (player.horizontalCollision)` if-guard 복원 ✓
+- [상수] 변경 없음 ✓
+- [타이밍] B-20: Standard Base Climb 분기 진입 위치 유지 ✓
+- [근사] B-16 해소 불가 확정 (vanilla API 제약). B-20/B-26 §7 갱신 ✓
+- [신규] 없음 ✓
+- [회귀] Free/Simple/Smart Climb 분기는 이미 독립 — Standard 분기만 조건 추가. `setShouldClimbSpeed`
+  (isClimbing 잉여 설정 해소, 세션 76 정정) 유지 ✓
+- [빌드] `compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL ✓
+
+**다음 세션 권고**: **B-42-B18a/B18b** (horizontalCollision setter Mixin + isClimbCrawling
+진입 엣지 복원) — B-18a 는 B-18b Mixin 에 의존. Phase 6 남은 승격 2건. 이후 Phase 6
+완결 → Phase 5 또는 Phase 7 진입.
+
+**진행률** (세션 125 종료 시점):
+- Extended 완료: **41 원자** (B-19 22 + Phase 4 8 + Phase 6 **11** = 41)
+  (B-42-B5/B16/B20/B35/B36/B39 해소 + B-42a/b/c/d 헬퍼 + B-42-B26 범위 확정)
+- Extended 총 원자 ~61
+- **Extended 진행률: 41/61 ≈ 67%**
+- **포커스 #2 전체: (54+41)/115 ≈ 83%**
+- **Phase 6 승격 6/8 — B-42-B18a/B18b 만 남음**
 
 ### 세션 124 — 2026-04-25 — B-42-B39 `fromSwimmingOrDiving` 전면 AABB 정밀 재작성
 
