@@ -1495,4 +1495,117 @@ public class Orientation {
 
         return accessible;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // B-19a1c4 (세션 98) — isFullAccessible + isFullExtentAccessible +
+    //                      isJustLowerHalfExtentAccessible + isUpperHalfFrontEmpty
+    // 원본: Orientation.java L2486-L2535 + L2325-L2331 + L2543-L2586.
+    // **B-19a1c (accessibility 판정) 최종 서브** — 완료 시 B-19a1 완료.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 원본 L2325-L2331 `getWallBlockId(int i, int j_offset, int k)` — 좌표 위치 블록이
+     * wall block 이면 BlockState 반환, 아니면 null.
+     */
+    private static BlockState getWallBlockId(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        return isWallBlock(state) ? state : null;
+    }
+
+    /**
+     * 원본 L2528-L2535 `isFullAccessible(int j_offset, boolean grabRemote)`.
+     *
+     * grabRemote=true  → `isBaseAccessible && isRemoteAccessible && isAccessAccessible`
+     * grabRemote=false → `isEmpty(base_i, j_offset, base_k)` — 단순 base 빈 공간 체크
+     *
+     * 의존 전수 이식: B-19a1c2 isBaseAccessible/isEmpty + B-19a1c3c isRemoteAccessible +
+     * B-19a1c3a isAccessAccessible.
+     */
+    protected boolean isFullAccessible(int j_offset, boolean grabRemote) {
+        if (grabRemote)
+            return isBaseAccessible(j_offset)
+                && isRemoteAccessible(j_offset)
+                && isAccessAccessible(j_offset);
+        return isEmpty(base_i, j_offset, base_k);
+    }
+
+    /**
+     * 원본 L2486-L2512 `isFullExtentAccessible(int j_offset, boolean grabRemote)`.
+     *
+     * 원본: `isFullAccessible` 반환값에 RedPower 추가 체크 (AND 조건).
+     *
+     * **§7 근사** (B-19a1c4-approx-1): RedPower wire 분기 (원본 L2490-L2510) 전체 생략 —
+     * RedPower mod 1.21.1 미이식. 결과: `isFullAccessible` 그대로 반환.
+     */
+    protected boolean isFullExtentAccessible(int j_offset, boolean grabRemote) {
+        boolean accessible = isFullAccessible(j_offset, grabRemote);
+        // 근사 이식 — 원본과 차이: RedPower wire 분기 (원본 L2490-L2510) 생략
+        return accessible;
+    }
+
+    /**
+     * 원본 L2514-L2526 `isJustLowerHalfExtentAccessible(int j_offset)` — remote 위치가
+     * top half (slab top / stair top front) 이면 lower half 공간이 비어있음 → 접근 가능.
+     *
+     * 의존: B-19a1c1 `isTopHalfBlock` / `isStairCompact` / `isTopStairCompactFront`.
+     * 근사 없음.
+     */
+    protected boolean isJustLowerHalfExtentAccessible(int j_offset) {
+        BlockState remoteState = getRemoteBlockId(j_offset);
+        boolean accessible = false;
+        if (!accessible)
+            accessible = isTopHalfBlock(remoteState);
+        if (!accessible)
+            accessible = isStairCompact(remoteState) && isTopStairCompactFront(remoteState);
+        return accessible;
+    }
+
+    /**
+     * 원본 L2543-L2586 `isUpperHalfFrontEmpty(int i, int j_offset, int k)` — 해당 위치의
+     * upper half (Y+0.5~+1.0) 가 이 Orientation 방향 전방에서 비어있는지.
+     *
+     * 원본 분기 순서 (empty OR 누적):
+     *   (1) `isFullEmpty(block)` — 블록 전체 빈 공간
+     *   (2) `isBottomHalfBlock(block, meta)` — bottom slab (upper half 비어있음)
+     *   (3) `isStairCompact && isBottomStairCompactFront` — bottom stair front
+     *   (4) [§7 근사 생략] RedPower wire 특수 판정
+     *   (5) `isTrapDoor(block)` — trap door (open 여부 무관 upper half 비어있음)
+     *   (6) wallBlock + (!headedToFrontWall || 반대쪽도 wallBlock) — wall 패턴 관통 가능
+     *   (7) [§7 근사 생략] LadderKit + `rotate(180).hasLadderOrientation` → empty=false 복귀
+     *
+     * **§7 근사** (B-19a1c4-approx-2 / approx-3): RedPower + LadderKit 분기 생략.
+     */
+    protected boolean isUpperHalfFrontEmpty(int i, int j_offset, int k) {
+        BlockState state = getBlock(i, j_offset, k);
+        BlockPos pos = new BlockPos(i, local_offset + j_offset, k);
+        boolean empty = isFullEmpty(state, world, pos);
+
+        if (!empty) {
+            if (isBottomHalfBlock(state))
+                empty = true;
+
+            if (!empty && isStairCompact(state) && isBottomStairCompactFront(state))
+                empty = true;
+        }
+
+        // 근사 이식 — 원본과 차이: RedPower wire 분기 (원본 L2559-L2567) 생략
+
+        if (!empty && isTrapDoor(state))
+            empty = true;
+
+        if (!empty) {
+            BlockState wallState = getWallBlockId(i, j_offset, k);
+            if (wallState != null
+                    && (!headedToFrontWall(i, j_offset, k, wallState)
+                        || isWallBlock(getBlock(i - _i, j_offset, k - _k))))
+                empty = true;
+        }
+
+        // 근사 이식 — 원본과 차이: LadderKit 분기 (원본 L2581-L2583) 생략 —
+        // `isBlockIdOfType(block, _ladderKitLadderTypes) && rotate(180).hasLadderOrientation(...)`
+        // 이 true 면 empty=false 복귀. vanilla ladder 는 `isLadderOrVine` 에 포함되어
+        // `isFullEmpty` 에서 이미 non-empty 처리됨 — 기본 vanilla 동작은 보존됨.
+
+        return empty;
+    }
 }

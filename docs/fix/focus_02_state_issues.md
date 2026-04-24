@@ -440,6 +440,18 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   필드 setter 미제공 (mixin 필요). 해제 엣지 본문 (mustCrawl/sneak 상황별 crawl 전환 +
   resetHeightOffset) 은 리서치 요약만 → `climbIntoCount = 0` 리셋만 이식, 나머지는 TODO
   주석 + 서브 원자 B-18b 로 분해 대기 (Agent WebFetch 필요).
+- **B-19a1c4 근사 3건** (세션 98): `Orientation` accessibility 최종 서브 (`isFullAccessible`,
+  `isFullExtentAccessible`, `isJustLowerHalfExtentAccessible`, `isUpperHalfFrontEmpty`,
+  `getWallBlockId`) 이식 시 mod 호환 분기 생략:
+  (1) `isFullExtentAccessible` RedPower wire 분기 (원본 L2490-L2510) 전체 생략 — RedPower
+  mod 1.21.1 미이식. `isFullAccessible` 그대로 반환 (추가 AND 체크 없음).
+  (2) `isUpperHalfFrontEmpty` RedPower 분기 (원본 L2559-L2567) 생략.
+  (3) `isUpperHalfFrontEmpty` LadderKit 분기 (원본 L2581-L2583) 생략 — `isBlockIdOfType(block,
+  _ladderKitLadderTypes)` + `rotate(180).hasLadderOrientation` 이 true 면 empty=false 복귀.
+  LadderKit mod 1.21.1 미이식 → vanilla ladder 는 `isLadderOrVine` 에 포함되어 `isFullEmpty`
+  에서 이미 non-empty 처리됨 (기본 동작 보존).
+  `isFullAccessible` / `isJustLowerHalfExtentAccessible` 은 근사 없이 1:1. **B-19a1c
+  (accessibility 전체) 완료**.
 - **B-19a1c3c 근사 2건** (세션 97): `Orientation.isRemoteAccessible` 이식 시 mod 호환 분기
   생략:
   (1) RedPower wire 분기 (원본 L2404-L2422) 전체 생략 — `isRedPowerWire` / `getRpCoverSides`

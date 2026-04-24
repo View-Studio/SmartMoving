@@ -138,8 +138,10 @@ Orientation 판정 + ClimbGap 계산.
                         집계 + allOnNone 재해석) + `headedToRemoteFlatWall` (4방향 OR/!AND
                         패턴) + `isRemoteAccessible` 본체 (12+ 분기 OR 누적). §7 근사 2건
                         (RedPower / ASRope).
-            - [ ] **B-19a1c4**: `isFullAccessible` + `isFullExtentAccessible` +
-                  `isJustLowerHalfExtentAccessible` + `isUpperHalfFrontEmpty`.
+            - [x] **B-19a1c4** (세션 98 완료): `isFullAccessible` (grabRemote 2분기) +
+                  `isFullExtentAccessible` + `isJustLowerHalfExtentAccessible` +
+                  `isUpperHalfFrontEmpty` (7 분기) + `getWallBlockId` 보조. §7 근사 3건
+                  (RedPower 2곳 + LadderKit). **B-19a1c 전체 완료**.
 
 - [ ] **B-19a2. `SmartMovingContext` 이식 파트 2 — `isLadderSubstitute` 본체**
       (원본 L477-L606 + L608-L648 `hasHalfHold` + `hasBottomHold`)
@@ -429,6 +431,66 @@ Phase 9 (SmartStatistics + 엣지) ← 최후 (인프라 규모 평가 필요)
 ---
 
 ## 5. 작업 기록
+
+### 세션 98 — 2026-04-24 — B-19a1c4 accessibility 최종 (isFullAccessible 외) — B-19a1c 전체 완료
+
+**사용자 지시**: "무조건 엄격 1대1 완료" + "진행률 퍼센트도 적어줘".
+
+**진행한 작업**:
+1. **원본 L2486-L2535 + L2325-L2331 + L2543-L2586 read** — B-19a1c 최종 서브 범위 확정.
+2. **5 메서드 이식**:
+   * `getWallBlockId(i, j_offset, k)` (원본 L2325-L2331) — 보조 헬퍼, wall 블록 반환 또는
+     null.
+   * `isFullAccessible(j_offset, grabRemote)` (원본 L2528-L2535) — grabRemote 2분기 (base +
+     remote + access 3-AND / base 단독 isEmpty).
+   * `isFullExtentAccessible(j_offset, grabRemote)` (원본 L2486-L2512) — RedPower 생략 →
+     단순 `isFullAccessible` 전달.
+   * `isJustLowerHalfExtentAccessible(j_offset)` (원본 L2514-L2526) — top half block OR
+     top stair compact front. 근사 없음.
+   * `isUpperHalfFrontEmpty(i, j_offset, k)` (원본 L2543-L2586) — 7 분기 OR:
+     isFullEmpty / bottom half block / bottom stair front / trap door / wall 패턴 관통.
+     RedPower + LadderKit 근사 생략.
+3. **본체 §7 B-19a1c4 근사 3건 등록**:
+   (1) `isFullExtentAccessible` RedPower 분기 생략
+   (2) `isUpperHalfFrontEmpty` RedPower 분기 생략
+   (3) `isUpperHalfFrontEmpty` LadderKit 분기 생략
+
+**완료 전 검증 체크리스트 (세션 98 기준)**:
+- [근거] 원본 `.tmp_research/Orientation.java.md` L2325-L2331 + L2486-L2535 + L2543-L2586
+  전수 read ✓
+- [근거] B-19a1a~c3c 모든 의존 메서드 (isBaseAccessible / isRemoteAccessible /
+  isAccessAccessible / isEmpty / isFullEmpty / isTopHalfBlock / isBottomHalfBlock /
+  isStairCompact / isTopStairCompactFront / isBottomStairCompactFront / isTrapDoor /
+  isWallBlock / headedToFrontWall) 전수 충족 ✓
+- [대응] 5 메서드 원본 ↔ 1.21.1 side-by-side. `isFullAccessible` grabRemote 2분기 + 3-AND
+  누적 / `isUpperHalfFrontEmpty` 7 분기 OR 누적 (vanilla 4 이식 + mod 2 근사 + wall 패턴
+  관통 1 이식) ✓
+- [분기] `isFullAccessible` grabRemote 2갈래 / `isJustLowerHalfExtentAccessible` 2-OR /
+  `isUpperHalfFrontEmpty` 7-OR (그 중 2 mod 근사) / `isFullExtentAccessible` RedPower
+  근사 단순화. `getWallBlockId` null 반환 삼항 ✓
+- [상수] 없음 ✓
+- [타이밍] 순수 BlockState 조회 — 호출 타이밍 무관 ✓
+- [근사] **§7 B-19a1c4 근사 3건 등록 완료** ✓
+- [신규] 없음 ✓
+- [회귀] 기존 코드 미사용. B-19a1c 전체 완료 — B-19a2 `isLadderSubstitute` 가 이 헬퍼
+  들을 소비할 예정 ✓
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` SUCCESSFUL (5s) ✓
+
+**B-19a1c 전체 완료 (c1/c2/c3a/c3b/c3c/c4 = 6 서브)** — accessibility 판정 헬퍼 전수 이식.
+
+**다음 세션 권고**: **B-19a2** — `isLadderSubstitute` 본체 (원본 L477-L606) + `hasHalfHold`
+(L608-L648) + `hasBottomHold`. gap 1-5 계산 + `ClimbGap.canStand/mustCrawl/Block/Direction`
+설정 핵심. B-19a1c 의 accessibility 헬퍼 7+ 를 직접 사용. 규모 매우 큼 — 2-3 세션 분할
+예상. Agent WebFetch 로 원본 `hasHalfHold` / `hasBottomHold` / `setHalfGrabType` 등 추가
+확보 필요.
+
+**진행률** (세션 98 종료 시점):
+- 본체 포커스 #2: B Phase 1/2 54 원자 + C-1/C-2/C-3 = **완료**
+- Extended 총 원자 약 54 (세션 89/91/93/95 재분해 후)
+- Extended 완료: 9 원자 (B-19a0 / a1a / a1b / a1c1 / a1c2 / a1c3a / a1c3b / a1c3c / a1c4)
+- **Extended 진행률: 9/54 ≈ 17%**
+- **포커스 #2 전체 (본체 + Extended): (54+9) / (54+54) = 63/108 ≈ 58%**
+- Phase 3 B-19a1 (accessibility 관련): a1a/a1b/a1c 완료 → **B-19a1 완료 임박** (a2/a3/a4 남음)
 
 ### 세션 97 — 2026-04-24 — B-19a1c3c `headedToFrontWall` + `headedToRemoteFlatWall` + `isRemoteAccessible`
 
