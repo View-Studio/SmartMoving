@@ -323,8 +323,16 @@ public final class SmartMovingSwimmer {
             int py = (int) Math.floor(player.getY());
             int pz = (int) Math.floor(player.getZ());
             World world = player.getWorld();
-            for (Direction d : Direction.Type.HORIZONTAL) {
-                if (isTunnelAhead(world, px, py, pz, d)) {
+            // **B-5 (2) 해소 (세션 135)**: 원본 `getClimbingOrientations(sp, true, true)` 는
+            //   대각 포함 8방향 (L285 `true, true` 파라미터). 기존 4방향 (Direction.HORIZONTAL)
+            //   근사 → 대각 4방향 추가. Orientation 의 8 방향 상수 대응:
+            //   PZ/NZ/ZP/ZN (4 straight) + PP/PN/NP/NN (4 대각).
+            int[][] dirs8 = {
+                    { 1, 0}, {-1, 0}, {0,  1}, {0, -1},   // 4-HORIZONTAL (PZ/NZ/ZP/ZN)
+                    { 1, 1}, { 1,-1}, {-1, 1}, {-1, -1}   // 4-대각       (PP/PN/NP/NN)
+            };
+            for (int[] d : dirs8) {
+                if (isTunnelAhead(world, px, py, pz, d[0], d[1])) {
                     wantShallowSwim = false;
                     break;
                 }
@@ -662,14 +670,14 @@ public final class SmartMovingSwimmer {
      *   }
      *   return false
      *
+     * **B-5 (2) 해소 (세션 135)**: ox/oz 오프셋 파라미터 버전 — 대각 포함 8방향 지원.
+     * 기존 `Direction` 파라미터 (4방향만) → offset 직접 받아 원본 `Orientation._i/_k` 대응.
+     *
      * 1.21.1 매핑:
-     *   _i/_k → dir.getOffsetX/Z
      *   isFullEmpty(block) → collisionShape.isEmpty() (간소; 간판/압력판 예외는 생략)
      *   isSolid(material) → state.isOpaqueFullCube() 근사 (정확 대응 API 부재 시)
      */
-    private static boolean isTunnelAhead(World world, int i, int j, int k, Direction dir) {
-        int ox = dir.getOffsetX();
-        int oz = dir.getOffsetZ();
+    private static boolean isTunnelAhead(World world, int i, int j, int k, int ox, int oz) {
         BlockPos one = new BlockPos(i + ox, j + 1, k + oz);
         BlockPos two = new BlockPos(i + ox, j + 2, k + oz);
         boolean emptyAtOne = world.getBlockState(one).getCollisionShape(world, one).isEmpty();

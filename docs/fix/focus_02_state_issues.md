@@ -393,15 +393,14 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   `hasLiquidCeiling` 근사 (이미 적용, 정밀도 손실 있음)
 - 반-블록 단위 수직 탐색 → BlockState 단위
 - vanilla `isSwimming()` 과 SM `isSwimming_sm` 병존 (접미사 회피) — 혼동 방지용
-- **B-5 근사** (세션 63, 세션 121 갱신): `SmartMovingSwimmer.handleSwimming` +
-  `updateSwimState` 내 `isFakeShallowWaterSneaking`/`isShallowDiveOrSwim` 설정 경로.
-  ~~(1) `couldStandUp` 수심 측정 — 원본 `minPlayerSwimWaterDepth <= 1.5` AABB 근사~~
-  → **세션 121 B-42-B5 해소 완료** (`SwimBorderValues` 소비로 `playerSwimWaterBorder >= 0
-  && minPlayerSwimWaterDepth <= 1.5` 원본 공식 복원, 2 지점).
-  (2) `getClimbingOrientations` — 원본 대각 포함 8방향 → 1.21.1 `Direction.Type.HORIZONTAL`
-  4방향만 (별도 원자 후보, B-42 범위 외)
-  (3) `swimDown=false` (원본 L244) 미이식 — 1.21.1 swim 수직 속도 로직이 swimDown 비의존이라
-  동작상 차이 없음 (B-9 메인 분류 재작성 시 재검토)
+- ~~**B-5 근사**~~ → **세션 135 전수 해소 완료**:
+  ~~(1) `couldStandUp` 수심~~ — 세션 121 B-42-B5 해소 (SwimBorderValues 복원).
+  ~~(2) `getClimbingOrientations` 4방향 근사~~ → **세션 135 해소**: 대각 포함 8방향
+  (PZ/NZ/ZP/ZN + PP/PN/NP/NN) `int[][] dirs8` 배열 순회로 원본 `getClimbingOrientations(
+  sp, true, true)` 1:1. `isTunnelAhead` 시그니처 offset 기반 재작성.
+  ~~(3) `swimDown=false`~~ — 세션 130 B-9h 에서 `swimDown` 지역 변수 이식 + `wasSwimming
+  && wantShallowSwim && swimDown` 조건 시 false 설정 + swimming A 경로 `if (swimDown)
+  motionYDiff = -0.05 * (isFast ? sprintFactor : 1F)` 소비 완료. 원본 L244 시멘틱 복원.
 - **B-16 근사** (세션 68, 세션 69 갱신, 세션 125 B-42-B16 해소 불가 확정):
   `SmartMovingClientState.tickEssential` 내 wantClimbHolding/isClimbHolding 3-OR 갱신
   공식 (원본 L2721-L2732) 구조 1:1 이식.
@@ -487,23 +486,13 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   근사 → B-42a 헬퍼 직접 소비. initializeCrawling true 설정 조건이 원본 AABB 정밀 판정
   그대로 동작.
 - **B-42a 근사 1건** (세션 117): `ClientState.getMaxPlayerSolidBetween(player, yMin,
-  yMax, horizontalTolerance)` AABB 정밀 헬퍼 이식 — 원본 `SmartMovingBase` L247-L262 의
-  박스 순회 기반 maxY 집계 로직을 1.21.1 `player.getWorld().getBlockCollisions(entity,
-  box)` 로 대체. 차이 1건: 원본은 `Block.getCollisionBoundingBoxFromPool` 이 반환하는
-  `AxisAlignedBB` 단일 박스를 순회하므로 블록당 단일 박스였으나, 1.21.1 은
-  `VoxelShape` 로 다중 박스 가능 → **`shape.getBoundingBox()` 로 단일 enclosing box
-  근사**. 대부분의 블록 (cube/slab/stair) 은 단일 박스라 정확성 손실 없음. 다중 박스
-  블록 (wall/fence/chain) 은 enclosing box 가 과대 추정되어 maxY 가 약간 높게 측정될
-  수 있음 (실용 등가 — crawlStandUpBottom/climbGap 판정에 영향 없음). **B-42 계열의
-  기반 헬퍼** — B-42b~d + 승격 8건이 이를 참조.
-- **B-42b 근사 1건** (세션 118): `ClientState.getMinPlayerSolidBetween(player, yMin,
-  yMax, horizontalTolerance)` 이식 — B-42a 와 대칭 (maxY 집계 → minY 집계). 원본
-  `SmartMovingBase` L398-L409 박스 순회. `result = yMax` 초기값 / `Math.min(result,
-  box.minY)` / `Math.max(result, yMin)` clamp. 동일한 VoxelShape→Box 단일 enclosing
-  box 근사 — multi-shape 블록에서 minY 가 약간 낮게 측정될 수 있음 (crawlStandUpCeiling/
-  minPlayerSwimWaterCeiling/actuallySolidHeight 판정 약간 보수적, 실용 등가). 호출처:
-  원본 SmartMovingSelf L266 `minPlayerSwimWaterCeiling` / L1151 `actuallySolidHeight` /
-  L1373·L2400 `crawlStandUpCeiling`. **B-42b 는 crawl standup ceiling 판정의 기반**.
+  yMax, horizontalTolerance)` AABB 정밀 헬퍼. ~~기존 `shape.getBoundingBox()` 단일
+  외접 box 근사~~ → **세션 135 해소 완료**: `shape.getBoundingBoxes()` 전수 순회로
+  multi-shape 블록 (wall/fence/chain) 정확한 maxY 집계. 원본 L247-L262 박스 단위 순회
+  시멘틱 1:1.
+- **B-42b 근사 1건** (세션 118) — `ClientState.getMinPlayerSolidBetween`. ~~동일 외접
+  box 근사~~ → **세션 135 해소 완료**: `getBoundingBoxes()` 전수 순회 (B-42a 대칭).
+  multi-shape 블록 정확한 minY 집계.
 - **B-42c 근사 3건** (세션 119): `ClientState.getLiquidBorder(player, i, j, k)` +
   `getMaxPlayerLiquidBetween(player, yMin, yMax)` + `getMinPlayerLiquidBetween(player,
   yMin, yMax)` 액체 경계 헬퍼 이식 — 원본 `SmartMovingBase` L131-L152 (getLiquidBorder)
@@ -662,12 +651,12 @@ B 단계 Phase 1 (필드 선언 일괄) 부터 실행 권고.
   호환 체크 생략 (해당 모드 1.21.1 에 없음). vanilla sign/wall_sign/pressure_plate 예외
   처리는 `AbstractSignBlock`/`WallSignBlock`/`PressurePlateBlock` 로 1:1 이식.
   B-19a1b/c 진행 시 이 근사들이 연쇄 영향 → B-19a4 `seekClimbGap` 결과 정확도에 반영.
-- **B-1c 근사** (세션 51, 세션 88 등록): `SmartMovingClientState.tickEssential` B-1c3
-  `isClimbSprintSpeed` 판정 — 원본은 `SmartStatisticsFactory.getInstance(sp).getTickDistance()`
-  (SmartRender 측 tick 이동 거리 통계) 기반. 1.21.1 SmartStatisticsFactory 전체 미이식 →
-  `true` 근사 (모든 등반 속도 허용). 주석으로 명시됨 (ClientState 내부). **→ Extended Phase 9
-  (SmartStatistics 이식) 에서 해소 대기**. B-1d/B-1f 의 `isClimbSprinting` 의존 필드 계산에
-  영향 — 등반 스프린트가 사실상 항상 가능한 상태 (엄격 이식은 통계 수집 인프라 필요).
+- ~~**B-1c 근사** (세션 51, 세션 88 등록)~~ → **세션 133 B-50 해소 완료**:
+  `ClientState.getTickDistance(player)` static 헬퍼 + `isClimbSprintSpeed` 공식 복원.
+  원본 L2661-L2670 공식 (`minTickDistance = 0.07 * freeClimbingUpFactor` / `0.11 * Down` /
+  `0.07` + `tickDistance >= minTickDistance`) 1:1. SmartStatisticsFactory 인프라 자체는
+  미이식 (호출처 1곳뿐이라 불필요). §7 B-50-smoothing 근사 1건만 잔존 (limbSwing 부수
+  효과 — vanilla 자동 처리).
 
 ---
 

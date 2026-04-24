@@ -1984,20 +1984,27 @@ public final class SmartMovingClientState {
                 pb.minX - horizontalTolerance, yMin, pb.minZ - horizontalTolerance,
                 pb.maxX + horizontalTolerance, yMax, pb.maxZ + horizontalTolerance);
 
+        // **B-42a 근사 해소 (세션 135)**: 원본 L247-L262 박스 순회는 블록당 단일 AABB.
+        // 1.21.1 VoxelShape 는 multi-shape 가능 → `getBoundingBoxes()` 리스트 전수 순회로
+        // 정밀화. wall/fence/chain 같은 블록에서 외접 box 오차 해소.
         double result = yMin;
+        double minXLimit = pb.minX - horizontalTolerance;
+        double maxXLimit = pb.maxX + horizontalTolerance;
+        double minZLimit = pb.minZ - horizontalTolerance;
+        double maxZLimit = pb.maxZ + horizontalTolerance;
         for (net.minecraft.util.shape.VoxelShape shape
                 : player.getWorld().getBlockCollisions(player, checkBox)) {
             if (shape.isEmpty()) continue;
-            // 근사 이식 — 원본과 차이: VoxelShape.getBoundingBox() 단일 box (multi-shape 외접)
-            Box box = shape.getBoundingBox();
-            // 원본 L299-L306 `isCollided(box, yMin, yMax, horizontalTolerance)` 인라인 이식
-            if (box.maxX >= pb.minX - horizontalTolerance
-                    && box.minX <= pb.maxX + horizontalTolerance
-                    && box.maxY >= yMin
-                    && box.minY <= yMax
-                    && box.maxZ >= pb.minZ - horizontalTolerance
-                    && box.minZ <= pb.maxZ + horizontalTolerance) {
-                result = Math.max(result, box.maxY);
+            for (Box box : shape.getBoundingBoxes()) {
+                // 원본 L299-L306 `isCollided(box, yMin, yMax, horizontalTolerance)` 인라인
+                if (box.maxX >= minXLimit
+                        && box.minX <= maxXLimit
+                        && box.maxY >= yMin
+                        && box.minY <= yMax
+                        && box.maxZ >= minZLimit
+                        && box.minZ <= maxZLimit) {
+                    result = Math.max(result, box.maxY);
+                }
             }
         }
         return Math.min(result, yMax);
@@ -2035,20 +2042,24 @@ public final class SmartMovingClientState {
                 pb.minX - horizontalTolerance, yMin, pb.minZ - horizontalTolerance,
                 pb.maxX + horizontalTolerance, yMax, pb.maxZ + horizontalTolerance);
 
+        // **B-42b 근사 해소 (세션 135)**: VoxelShape.getBoundingBoxes() 전수 순회 — B-42a 대칭.
         double result = yMax;
+        double minXLimit = pb.minX - horizontalTolerance;
+        double maxXLimit = pb.maxX + horizontalTolerance;
+        double minZLimit = pb.minZ - horizontalTolerance;
+        double maxZLimit = pb.maxZ + horizontalTolerance;
         for (net.minecraft.util.shape.VoxelShape shape
                 : player.getWorld().getBlockCollisions(player, checkBox)) {
             if (shape.isEmpty()) continue;
-            // 근사 이식 — 원본과 차이: VoxelShape.getBoundingBox() 단일 box (multi-shape 외접)
-            Box box = shape.getBoundingBox();
-            // 원본 L299-L306 `isCollided(box, yMin, yMax, horizontalTolerance)` 인라인 이식
-            if (box.maxX >= pb.minX - horizontalTolerance
-                    && box.minX <= pb.maxX + horizontalTolerance
-                    && box.maxY >= yMin
-                    && box.minY <= yMax
-                    && box.maxZ >= pb.minZ - horizontalTolerance
-                    && box.minZ <= pb.maxZ + horizontalTolerance) {
-                result = Math.min(result, box.minY);
+            for (Box box : shape.getBoundingBoxes()) {
+                if (box.maxX >= minXLimit
+                        && box.minX <= maxXLimit
+                        && box.maxY >= yMin
+                        && box.minY <= yMax
+                        && box.maxZ >= minZLimit
+                        && box.minZ <= maxZLimit) {
+                    result = Math.min(result, box.minY);
+                }
             }
         }
         return Math.max(result, yMin);
