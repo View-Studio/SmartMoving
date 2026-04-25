@@ -2590,3 +2590,163 @@
 - 합계: 정합 43 / N/A 325 = 368 라인 전수 (오역/누락/잉여 0).
 
 **다음 청크**: R-5 청크 3 (RendererData/ModelCapeRenderer/ModelEarsRenderer/ModelSpecialRenderer 4 파일 ~232줄). R-5 마지막 청크.
+
+### 청크 3 (RendererData 32 + ModelCapeRenderer 90 + ModelEarsRenderer 61 + ModelSpecialRenderer 56 = 4 파일 239 라인) — R-5 마지막 청크
+
+**파트 A — RendererData.java (32 라인)** — fade 데이터 컨테이너
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | (빈 줄) | — | [N/A] | |
+| L21 | `public class RendererData` | (fade 메커니즘 부재) | [N/A] | §17 잔여 |
+| L22 | `{` | — | [N/A] | |
+| L23 | `public float offsetX;` | — | [N/A] | |
+| L24 | `public float offsetY;` | — | [N/A] | |
+| L25 | `public float offsetZ;` | — | [N/A] | |
+| L26 | `public float rotateAngleX;` | — | [N/A] | |
+| L27 | `public float rotateAngleY;` | — | [N/A] | |
+| L28 | `public float rotateAngleZ;` | — | [N/A] | |
+| L29 | `public float rotationPointX;` | — | [N/A] | |
+| L30 | `public float rotationPointY;` | — | [N/A] | |
+| L31 | `public float totalTime = Float.MIN_VALUE;` | — | [N/A] | |
+| L32 | `}` | — | [N/A] | |
+
+**파트 A 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 32 = 32 라인 전수.** fade 메커니즘 부재 (§17).
+
+**파트 B — ModelCapeRenderer.java (90 라인)** — 망토 렌더 (vanilla CapeFeatureRenderer 등가 + outer.X 클램프)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.entity.player.*;` | — | [N/A] | |
+| L22 | `import net.minecraft.util.*;` | — | [N/A] | |
+| L23 | (빈 줄) | — | [N/A] | |
+| L24 | `import org.lwjgl.opengl.GL11;` | (1.21.1: MatrixStack/RotationAxis) | [N/A] | |
+| L25 | (빈 줄) | — | [N/A] | |
+| L26 | `public class ModelCapeRenderer extends ModelSpecialRenderer` | (1.21.1: vanilla CapeFeatureRenderer 직접 사용) | [N/A] | |
+| L27 | `{` | — | [N/A] | |
+| L28-L32 | 생성자 5 라인 | (vanilla 자동) | [N/A] | |
+| L33 | (빈 줄) | — | [N/A] | |
+| L34-L40 | `beforeRender(EntityPlayer, factor)` 7 라인 | (vanilla 자동) | [N/A] | |
+| L41 | (빈 줄) | — | [N/A] | |
+| L42 | `@Override` | — | [N/A] | |
+| L43 | `public void preTransform(float factor, boolean push)` | (vanilla CapeFeatureRenderer.render 자동) | [N/A] | |
+| L44 | `{` | — | [N/A] | |
+| L45 | `super.preTransform(factor, push);` | — | [N/A] | |
+| L46 | (빈 줄) | — | [N/A] | |
+| L47 | `double d = (cape X lerp) - (player X lerp);` | vanilla CapeFeatureRenderer: `MathHelper.lerp(tickDelta, prevCapeX, capeX) - MathHelper.lerp(tickDelta, prevX, getX())` | [정합] | vanilla 동일 공식 |
+| L48 | `double d1 = (cape Y lerp) - (player Y lerp);` | vanilla 자동 | [정합] | |
+| L49 | `double d2 = (cape Z lerp) - (player Z lerp);` | vanilla 자동 | [정합] | |
+| L50 | `float f1 = renderYawOffset lerp;` | vanilla: `player.bodyYaw lerp` | [정합] | |
+| L51 | `double d3 = MathHelper.sin((f1 * π) / 180F);` | vanilla 자동 | [정합] | |
+| L52 | `double d4 = -MathHelper.cos((f1 * π) / 180F);` | vanilla 자동 | [정합] | |
+| L53 | `float f2 = (float)d1 * 10F;` | vanilla 자동 | [정합] | |
+| L54 | `if(f2 < -6F)` | vanilla MathHelper.clamp(j, -6F, 32F) | [정합] | |
+| L55 | `{` | — | [정합] | |
+| L56 | `f2 = -6F;` | — | [정합] | |
+| L57 | `}` | — | [정합] | |
+| L58 | `if(f2 > 32F)` | vanilla 자동 (clamp 상한) | [정합] | |
+| L59 | `{` | — | [정합] | |
+| L60 | `f2 = 32F;` | — | [정합] | |
+| L61 | `}` | — | [정합] | |
+| L62 | `float f3 = (float)(d * d3 + d2 * d4) * 100F;` | vanilla 자동 | [정합] | |
+| L63 | `float f4 = (float)(d * d4 - d2 * d3) * 100F;` | vanilla 자동 | [정합] | |
+| L64 | `if(f3 < 0.0F)` | vanilla `Math.max(k, 0.0F)` | [정합] | |
+| L65 | `{` | — | [정합] | |
+| L66 | `f3 = 0.0F;` | — | [정합] | |
+| L67 | `}` | — | [정합] | |
+| L68 | `float f5 = cameraYaw lerp;` | vanilla: `MathHelper.lerp(tickDelta, prevStrideDistance, strideDistance)` | [정합] | |
+| L69 | `f2 += MathHelper.sin(distanceWalkedModified lerp * 6F) * 32F * f5;` | vanilla 자동 (걷기 흔들림) | [정합] | |
+| L70 | (빈 줄) | — | [N/A] | |
+| L71 | `float localAngle = 6F + f3 / 2.0F + f2;` | vanilla: `6.0F + k / 2.0F + j` | [정합] | |
+| L72 | `float localAngleMax = Math.max(70.523F - outer.rotateAngleX * RadiantToAngle, 6F);` | (1.21.1 vanilla 미존재) | [누락] | ⚠️ outer.X 기반 망토 X 클램프 — SM 큰 기울기 시 망토 과도 펴짐 방지. R-10+ B-N 후보 |
+| L73 | `float realLocalAngle = Math.min(localAngle, localAngleMax);` | (1.21.1 미존재) | [누락] | ⚠️ outer.X 클램프 적용 |
+| L74 | (빈 줄) | — | [N/A] | |
+| L75 | `GL11.glRotatef(realLocalAngle, 1.0F, 0.0F, 0.0F);` | vanilla: `matrices.multiply(POSITIVE_X.rotationDegrees(6.0F + k/2.0F + j))` (clamp 없는 localAngle 등가) | [정합] | |
+| L76 | `GL11.glRotatef(f4 / 2.0F, 0.0F, 0.0F, 1.0F);` | vanilla: `matrices.multiply(POSITIVE_Z.rotationDegrees(m / 2.0F))` | [정합] | |
+| L77 | `GL11.glRotatef(-f4 / 2.0F, 0.0F, 1.0F, 0.0F);` | vanilla: `matrices.multiply(POSITIVE_Y.rotationDegrees(180.0F - m / 2.0F))` 통합 (-m/2 + 180 = 180 - m/2 등가) | [정합] | |
+| L78 | `GL11.glRotatef(180F, 0.0F, 1.0F, 0.0F);` | vanilla L77과 통합 | [정합] | |
+| L79 | `}` | — | [N/A] | preTransform 종료 |
+| L80 | (빈 줄) | — | [N/A] | |
+| L81 | `@Override` | — | [N/A] | |
+| L82 | `public boolean canBeRandomBoxSource()` | (영혼 파티클 — 본 포커스 외) | [N/A] | |
+| L83 | `{` | — | [N/A] | |
+| L84 | `return false;` | — | [N/A] | |
+| L85 | `}` | — | [N/A] | |
+| L86 | (빈 줄) | — | [N/A] | |
+| L87 | `private final ModelRotationRenderer outer;` | (Outer 부재) | [N/A] | |
+| L88 | `private EntityPlayer entityplayer;` | (vanilla CapeFeatureRenderer 인자 자동) | [N/A] | |
+| L89 | `private float setFactor;` | — | [N/A] | |
+| L90 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 B 통계: 정합 28 / 오역 0 / 누락 2 / 잉여 0 / N/A 60 = 90 라인 전수.**
+
+**파트 C — ModelEarsRenderer.java (61 라인)** — Ears 노드 (1.21.1 부재)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18-L23 | package + imports + 빈 줄 6 라인 | — | [N/A] | |
+| L24 | `public class ModelEarsRenderer extends ModelSpecialRenderer` | (Ears 노드 1.21.1 부재) | [N/A] | §16-2 — SR mod 전용 |
+| L25 | `{` | — | [N/A] | |
+| L26 | `private int _i = 0;` | — | [N/A] | |
+| L27 | (빈 줄) | — | [N/A] | |
+| L28-L31 | 생성자 4 라인 | — | [N/A] | |
+| L32 | (빈 줄) | — | [N/A] | |
+| L33-L36 | `beforeRender()` 4 라인 | — | [N/A] | |
+| L37 | (빈 줄) | — | [N/A] | |
+| L38-L43 | `@Override doRender(...)` 6 라인 | — | [N/A] | |
+| L44 | (빈 줄) | — | [N/A] | |
+| L45-L54 | `@Override preTransform(...)` 본체 (Ears 위치 보정 — 0.375F 좌우 + 1.333333F 스케일) | (Ears 부재) | [N/A] | |
+| L55 | (빈 줄) | — | [N/A] | |
+| L56-L60 | `canBeRandomBoxSource()` 5 라인 | — | [N/A] | |
+| L61 | `}` | — | [N/A] | |
+
+**파트 C 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 61 = 61 라인 전수.** Ears 노드 일체 1.21.1 부재.
+
+**파트 D — ModelSpecialRenderer.java (56 라인)** — 다층 모델 추상 부모
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18-L23 | package + imports + 빈 줄 6 라인 | — | [N/A] | |
+| L24 | `public class ModelSpecialRenderer extends ModelRotationRenderer` | (다층 모델 추상 부모 — 1.21.1 부재) | [N/A] | |
+| L25 | `{` | — | [N/A] | |
+| L26 | `public boolean doPopPush;` | — | [N/A] | |
+| L27 | (빈 줄) | — | [N/A] | |
+| L28-L32 | 생성자 5 라인 (`ignoreRender = true;`) | — | [N/A] | |
+| L33 | (빈 줄) | — | [N/A] | |
+| L34-L38 | `beforeRender(boolean popPush)` 5 라인 | — | [N/A] | |
+| L39 | (빈 줄) | — | [N/A] | |
+| L40-L49 | `@Override doRender(f, useParentTransformations)` 본체 (push/pop matrix 분기 — vanilla 자동) | — | [N/A] | |
+| L50 | (빈 줄) | — | [N/A] | |
+| L51-L55 | `afterRender()` 5 라인 (`ignoreRender = true; doPopPush = false;`) | — | [N/A] | |
+| L56 | `}` | — | [N/A] | |
+
+**파트 D 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 56 = 56 라인 전수.** 다층 모델 추상 부모 일체 1.21.1 부재.
+
+**R-5 청크 3 통계 (4 파일 합)**:
+- RendererData: 32 / 0 / 0 / 0 / 0 / 32
+- ModelCapeRenderer: 90 / 28 / 0 / 2 / 0 / 60
+- ModelEarsRenderer: 61 / 0 / 0 / 0 / 0 / 61
+- ModelSpecialRenderer: 56 / 0 / 0 / 0 / 0 / 56
+- **합계: 정합 28 / 오역 0 / 누락 2 / 잉여 0 / N/A 209 = 239 라인 전수**
+
+**청크 3 발견 (R-10+ B-N 후보)**:
+- B-N (ModelCapeRenderer outer.X 망토 X 클램프 [누락]): L72-L73 — `localAngleMax = max(70.523F - outer.X * RadiantToAngle, 6F)` + `realLocalAngle = min(localAngle, localAngleMax)`. 1.21.1 vanilla CapeFeatureRenderer는 이 클램프 없음. SM 11-state 분기 (Climb/Swim/Dive/Slide/Flying/HeadJump 등 큰 X 기울기 상태) 시 망토가 과도하게 펴짐 가능. 우선순위 중간 (망토 시각 차이).
+
+**R-5 전체 누적 (368 + 239 = 607 라인, 3 청크 3 세션) — R-5 완료**:
+| 청크 | 파일 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A |
+|-----|-----|-----|------|------|------|------|------|
+| 1 | ModelRotationRenderer L1-L184 | 184 | 21 | 0 | 0 | 0 | 163 |
+| 2 | ModelRotationRenderer L185-L368 | 184 | 22 | 0 | 0 | 0 | 162 |
+| 3 | RendererData + Cape + Ears + Special 4 파일 | 239 | 28 | 0 | 2 | 0 | 209 |
+| **합계** | **5 파일** | **607** | **71** | **0** | **2** | **0** | **534** |
+
+**R-5 완료**. 다음 R-단계: **R-6 (SmartRenderRender.java 227 + SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 8 파일 ~618 라인)**.

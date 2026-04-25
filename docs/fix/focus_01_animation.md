@@ -314,10 +314,11 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-4 청크 2 (L161-L320) — 세션 12 (정합 30 / 오역 0 / 누락 1 / 잉여 0 / N/A 129)
   - [x] R-4 청크 3 (L321-L469) — 세션 13 (정합 17 / 오역 0 / 누락 0 / 잉여 0 / N/A 132)
   - **R-4 누적**: 정합 62 / 오역 0 / 누락 1 / 잉여 0 / N/A 406 = 469 라인 전수
-- [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
+- [x] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄) — **세션 16 완료**
   - [x] R-5 청크 1 (ModelRotationRenderer L1-L184) — 세션 14 (정합 21 / 오역 0 / 누락 0 / 잉여 0 / N/A 163)
   - [x] R-5 청크 2 (ModelRotationRenderer L185-L368) — 세션 15 (정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 162)
-  - [ ] R-5 청크 3 (RendererData/Cape/Ears/Special 4 파일)
+  - [x] R-5 청크 3 (RendererData 32 + Cape 90 + Ears 61 + Special 56 = 239) — 세션 16 (정합 28 / 오역 0 / 누락 2 / 잉여 0 / N/A 209)
+  - **R-5 누적**: 정합 71 / 오역 0 / 누락 2 / 잉여 0 / N/A 534 = 607 라인 전수
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
@@ -983,6 +984,52 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 16 — 2026-04-26 — Phase R / R-5 청크 3 (RendererData/Cape/Ears/Special 4 파일) — **R-5 완료**
+
+**진행한 작업**:
+
+1. **R-5 청크 3 라인별 read** (4 파일):
+   - RendererData.java (32 라인) — fade 데이터 컨테이너 (9 fade fields)
+   - ModelCapeRenderer.java (90 라인) — 망토 렌더 (vanilla CapeFeatureRenderer 등가 + outer.X 클램프)
+   - ModelEarsRenderer.java (61 라인) — Ears 노드 (1.21.1 부재)
+   - ModelSpecialRenderer.java (56 라인) — 다층 모델 추상 부모
+
+2. **1.21.1 매핑 검증**: vanilla CapeFeatureRenderer.render 본체 비교 (cape lerp + bodyYaw + sin/cos + clamp + sin*walkSpeed + 4 glRotatef = matrices.multiply 4) 일관 확인.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-5 청크 3 4 파트 섹션 — 239 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 3 통계 (4 파일 합)**:
+- [정합] 28 (ModelCapeRenderer L47-L78 vanilla CapeFeatureRenderer 등가 매핑 28 라인)
+- [오역] 0
+- [누락] 2 (ModelCapeRenderer L72-L73 outer.X 망토 X 클램프)
+- [잉여] 0
+- [N/A] 209 (RendererData fade 부재 32 + Cape 비핵심 60 + Ears 일체 61 + Special 일체 56)
+- 합계: 239 라인 전수.
+
+**R-10+ B-N 후보 등재 (§16-25)**:
+- B-N (ModelCapeRenderer outer.X 망토 X 클램프 [누락]): L72-L73 — `localAngleMax = max(70.523F - outer.X * RadiantToAngle, 6F)` + `realLocalAngle = min(localAngle, localAngleMax)`. 1.21.1 vanilla CapeFeatureRenderer 자동 처리에는 이 클램프 없음. SM 11-state 분기 (Climb/Swim/Dive/Slide/Flying/HeadJump 등 큰 X 기울기 상태) 시 망토가 과도하게 펴짐 가능. 우선순위 중간.
+
+**검증 체크리스트 (세션 16 R-5 청크 3)**:
+- [근거] ✓ 4 파일 라인별 read 완료
+- [전수] ✓ 239 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 239 일치 (28+0+2+0+209)
+- [발견] ✓ §16-25 등재 + R-10+ B-N 후보 2 라인 식별
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (vanilla CapeFeatureRenderer.render 공식 일치)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-5 전체 누적 (607 라인, 5 파일 3 청크 3 세션)**:
+- 합계: 정합 71 / 오역 0 / 누락 2 / 잉여 0 / N/A 534 = 607 라인 전수 (skip 0).
+- R-10+ B-N 후보 1 그룹 식별 (§16-25 망토 X 클램프).
+- 핵심 매핑 1차 자료 확정: 6 회전순서 (ModelRotationRenderer) + xScale/yScale/zScale + offsetY 부재(§16-8) + fade 메커니즘 부재(§17) + 망토 outer.X 클램프 부재(§16-25).
+
+**R-5 완료** — ModelRotationRenderer + RendererData/Cape/Ears/Special 5 파일 607 라인 전수 라인별 1:1 매핑.
+
+**다음 R-단계**: R-6 (SmartRenderRender.java 227 + SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 8 파일 ~618 라인). SR mod 진입점 + 유틸 + 인터페이스 위주 — 거의 인프라 영역.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -1085,6 +1132,19 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 24. **[누락] cloak.pitch 기본 기울임 — SIXTYFOURTH (≈5.6°) 미이식** (R-10+ 우선순위 낮음). 원본 SmartRenderModel.java L251: `bipedCloak.rotateAngleX = Sixtyfourth;` (setRotationAngles 본체 마지막에 망토 X 살짝 기울임). 1.21.1 vanilla cloak (PlayerEntityModel.cloak)는 별도 기본 기울임 없이 그대로 사용 — 미이식. 망토 미세 시각 차이 (≈5.6°만큼 살짝 뒤로 기울임 부재). 우선순위 낮음 (UI 영향 적음, 메인 애니메이션 외).
 
     이식 방안: sm_setAngles @Inject(TAIL) 위치에서 `cloak.pitch = SIXTYFOURTH` 추가. 단 vanilla setAngles 가 cloak.pitch를 매 프레임 reset 하지 않으므로 누적 위험 검토 필요.
+
+### 세션 16 (2026-04-26) — Phase R / R-5 청크 3 (Cape/Ears/Special)
+
+25. **[누락] ModelCapeRenderer outer.X 망토 X 클램프 — `70.523° - outer.X` 미이식** (R-10+ B-N 후보, 우선순위 중간). 원본 ModelCapeRenderer.java L72-L73:
+    - L72 `float localAngleMax = Math.max(70.523F - outer.rotateAngleX * RadiantToAngle, 6F);`
+    - L73 `float realLocalAngle = Math.min(localAngle, localAngleMax);`
+
+    1.21.1 vanilla CapeFeatureRenderer.render 는 망토 X 회전(`6.0F + k/2.0F + j`)을 클램프 없이 적용. 원본은 SR 다층 모델 outer.X(전체 몸 기울기)에 따라 망토 X 회전을 70.523° 이하로 제한. SM 11-state 분기 (Climb/Swim/Dive/Slide/Flying/HeadJump 등 큰 X 기울기 상태) 시 망토가 과도하게 펴짐 가능 (vanilla 기본 망토 흔들림 공식만 적용 → 몸이 기울어 있어도 망토 X 회전은 동일 → 망토가 몸과 다른 각도로 펄럭일 가능성).
+
+    이식 방안:
+    - 자체 outer.X 등가 값(sm_setupTransforms theta)을 capture 하여 sm_setAngles 또는 별도 Mixin (CapeFeatureRenderer)에서 cloak.pitch 클램프 보정.
+    - 또는 MixinCapeFeatureRenderer @Inject로 vanilla render 호출 후 추가 보정.
+    - 우선순위 중간 — 메인 애니메이션 외이지만 망토 시각 차이 가능.
 
 ---
 
