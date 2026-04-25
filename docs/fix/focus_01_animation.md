@@ -297,6 +297,10 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 대상 31 파일 ~5,000줄. 청크 분할 8-10 세션:
 
 - [ ] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄)
+  - [x] R-1 청크 1 (L1-L200) — 세션 3 (정합 84 / 오역 3 / 누락 2 / 잉여 0 / N/A 111)
+  - [ ] R-1 청크 2 (L201-L400)
+  - [ ] R-1 청크 3 (L401-L600)
+  - [ ] R-1 청크 4 (L601-L797)
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
@@ -475,6 +479,43 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 3 — 2026-04-26 — Phase R 진입 / R-1 청크 1 (SmartMovingModel.java L1-L200)
+
+**사용자 지시 (2026-04-26)**: "에니메이션과 관련된 모든 코드를 싹 다 가져와서 그걸 전부 1대1 대응 ... 모든 라인을 라인별로 청크 분리해서 읽고 ... 리서치 + 포커스 보강 후에 작업 진행". → Phase R 진입.
+
+**진행한 작업**:
+
+1. **산출물 신규 파일 생성**: `docs/research/mapping/research_animation_line_by_line.md` (Phase R 라인별 매핑 표 전용).
+2. **R-1 청크 1 라인별 read**: 원본 `C:\Work\minecraft\porting\sm_original\SmartMoving\...\SmartMovingModel.java` L1-L200 (200 라인 전수 read).
+3. **1.21.1 매핑 검증**: `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` L99-L244 grep + Read.
+4. **매핑 표 작성**: 200 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계**:
+- [정합] 84 (ModelPart 표면 매핑 + isRopeSliding 본체 + isClimb handsClimb/feetClimb switch 3-way×2-way 전수)
+- [오역] 3 (L80 + L144 + L200 — climbing 입력값 수직 → 수평 잘못 매핑)
+- [누락] 2 (L106 + L117 — isRopeSliding 머리/팔 rotationPointY 변경 미이식)
+- [잉여] 0
+- [N/A] 111 (라이선스 + 패키지/import + 생성자 + Outer/Torso/Breast/Shoulder/Pelvic 구조 부재 + 빈 줄)
+- 합계: 200 라인 전수.
+
+**R-10+ B-N 후보 등록 (§16-10/11 참조)**:
+- B-N: climbing arm/feet 입력 [오역] — totalVerticalDistance/currentVerticalSpeed → limbSwing/limbSwingAmount 잘못 매핑 (3 라인).
+- B-N: isRopeSliding 머리/팔 rotationPointY 누락 — head +2F / arm -2F (2 라인).
+
+**검증 체크리스트 (세션 3 R-1 청크 1)**:
+- [근거] ✓ 원본 로컬 read (offset=1, limit=200 정확)
+- [전수] ✓ 청크 내 200 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 (정합/오역/누락/잉여/N/A) 합계 200 일치
+- [발견] ✓ §16-10/11 등재 + R-10+ B-N 후보 5 라인 식별
+- [통계] ✓ 청크 통계 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep (sm_animateRopeSliding L151 / sm_animateClimbing L190 / sm_setAngles L99 chain)
+- [회귀] N/A (코드 변경 없음 — 매핑 표 작성만)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-1 청크 2 (L201-L400) — climbing 본체 (handsDistanceSide·feetDistance·legAngles·armScales·vine 보정) + isCeilingClimb + isSwim 시작.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -491,6 +532,30 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 7. **호출 5 지점 정정**: 이전 진술 "4 상태 영향" → 실제 **5 호출 지점** (climbing arm vine / climbing leg vine / swimming / diving / crawling). climbing 은 vine 가드 안에서만 호출되므로 vine 모드일 때만 visual 영향.
 8. **NoScaleEnd offsetY 보정 (갑옷 흉갑 다리 전용)**: ModelPart 에 `offsetY` 필드 부재 + 갑옷 레이어는 별도 ArmorFeatureRenderer 처리. 본 포커스 #1 (메인 애니메이션) 범위 외 → §17 잔여 등재.
 9. **YXZ 헬퍼 = qY * qX * qZ** / **XZY 헬퍼 = qX * qZ * qY** (둘 다 getEulerAnglesZYX 역분해): R-17 GitHub 검증으로 GL post-multiply 역순 = MatrixStack call 역순 매칭. 라디안 그대로 사용 (도 단위 변환 없음).
+
+### 세션 3 (2026-04-26) — Phase R 진입 / R-1 청크 1 라인별 매핑
+
+10. **[오역] climbing 입력값 — totalVerticalDistance/currentVerticalSpeed → limbSwing/limbSwingAmount 잘못 매핑** (R-10+ B-N 후보). SmartMovingModel.java 원본:
+    - L80 `float totalVerticalDistance = md.totalVerticalDistance;` — 수직 누적 거리
+    - L144 `float verticalSpeed = Math.min(0.5f, currentVerticalSpeed);` — 수직 속도 클램프
+    - L200 `bipedRightArm.rotateAngleX = cos(totalVerticalDistance * handsFrequenceUpFactor + Half) * verticalSpeed * handsDistanceUpFactor + handsDistanceUpOffset;` — 수직 거리 기반 팔 위상
+
+    1.21.1 sm_animateClimbing (L191/L214):
+    - `verticalSpeed = Math.min(0.5f, limbSwingAmount)` — limbSwingAmount = entity.limbAnimator.getSpeed (수평 속도)
+    - `cos(limbSwing * 0.6662f + HALF) * verticalSpeed * handsDistUp + handsOffset` — limbSwing = entity.limbAnimator.getPos (수평 누적)
+
+    영향: 사다리/넝쿨 클라이밍 시 수직으로 오를 때 팔이 수평 거리 입력으로만 흔들려 클라이밍 동작감 손실. handsClimbType=UpGrab 일 때 handsDistUp=2f 로 큰 영향. feet 분기 L242-L244 `0.3f / verticalSpeed` 동일 부정확 전파.
+
+    이식 방안 (R-10+):
+    - 수직 입력 별도 capture — MixinLivingEntityRenderer 또는 SmartMovingClientState 에 `verticalDistance/verticalSpeed` (player.getY() 누적/델타) 보존 → sm_setAngles 호출 시점에 헬퍼 인자 추가.
+
+11. **[누락] isRopeSliding rotationPointY 변경 — 머리 +2F / 팔 -2F 미이식** (R-10+ B-N 후보). SmartMovingModel.java 원본:
+    - L106 `bipedHead.rotationPointY = 2F;` — 매달린 자세 머리 피벗 +2
+    - L117 `bipedRightArm.rotationPointY = bipedLeftArm.rotationPointY = -2F;` — 팔 피벗 -2
+
+    1.21.1 sm_animateRopeSliding (MixinPEMC L151-L182): 주석에 "rotationPointY 변경: 피벗 이동 생략" 명시 — 의도된 생략이지만 매핑 표 분류상 [누락]. 영향: 로프 매달림 자세에서 머리/팔 위치 미세 차이 (2 픽셀).
+
+    이식 방안: ModelPart `pivotY` public field 사용 가능. 단 vanilla `setAngles` 진입 시점에 매 프레임 reset 되므로 sm_setAngles @Inject(TAIL) 위치에서 +2/-2 보정 → 안전.
 
 ---
 
