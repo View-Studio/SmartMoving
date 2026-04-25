@@ -39,7 +39,7 @@
 |---|---------|---------|---------------|-----------|-------------|---|
 | 1 | 1 블록 통로 클라이밍 + 크롤 (천장 1.5 블록 이하) | isCrawlClimbing → true | `(wasCrawling \|\| isCrawlClimbing) && isClimbing && isNeighborClimbing && sneak && moveForward` (L2737) | ✅ **세션 2 검증 완료 — 이미 정상 작동** (cfg 클라이밍 모드 활성 시) | SmartMovingClimber L385-L455 + ClientState L1542 | ~~B-19~~ ✅ |
 | 2 | 수중 정적 자세 (방향키 없이 수영) | isLevitating → true | `diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (L505) | ✅ **세션 3 검증 완료 — 이미 정상 작동** (B-10d 세션 71 이식 완료) | SmartMovingSwimmer L192-L196 | ~~B-10d~~ ✅ |
-| 3 | Creative 비행 + 좁은 공간 접근 (속도 낮음 + 하강) | tryLanding → standupIfPossible(true, restoreFromFlying) | tryLanding=true → `capabilities.isFlying = false` + restoreFromFlying=true (L2199) | SM `isFlying = false` 만 실행, vanilla 비행 유지 (수동 F 필요) | SmartMovingSelf L2196-L2201 + L2542-L2544 | **§18.1** |
+| 3 | Creative 비행 + 좁은 공간 접근 (속도 낮음 + 하강) | tryLanding → standupIfPossible(true, restoreFromFlying) | tryLanding=true → `capabilities.isFlying = false` + restoreFromFlying=true (L2199) | ✅ **세션 4 이식 완료** — `getAbilities().flying = false` + `UpdatePlayerAbilitiesC2SPacket` 송신 | ClientState L1294-L1322 + L2540-L2549 | ~~§18.1~~ ✅ |
 | 4 | 깊은 물 → 육지 (걷기/스니크/크롤) | fromSwimmingOrDiving 4 분기 (L1369-L1404) | wasShortInWater && !isShortInWater → 4 분기 setHeightOffset(-1F) | 트리거 블록 부분 이식 — 일부 분기 누락 가능성 | SmartMovingSelf L1363-L1405 | **B-fromSwim** |
 | 5 | 물 표면 아래 크롤 유지 | contextContinueCrawl=true (L1389) | 깊은 물 → 수면 아래 크롤 진입 시 set | 미이식 (false 고정) | SmartMovingSelf L1389 | **B-context** |
 
@@ -196,16 +196,31 @@ standupIfPossible 본체 인용 — 모두 `research_state_transitions.md` 에 �
   ```
   호출: sm_travel_client L92 매 tick. ClientState L1176 stale 주석 정정 완료.
 
-**B-3. §18.1 B-N-standup-approx-4 (capabilities.flying sync)** ★ §18.1 잔존 원자
-- [ ] B-3a. ClientState `standupIfPossible(player, true, restoreFromFlying)` 본체에서
-  `tryLanding && groundClose && standUpPossible` 분기 본문 보강:
+**B-3. §18.1 B-N-standup-approx-4 (capabilities.flying sync)** — ✅ **세션 4 이식 완료** ★
+- [x] **B-3a (세션 4)**. UpdatePlayerAbilitiesC2SPacket 1.21.1 시그니처 확인:
+  `new UpdatePlayerAbilitiesC2SPacket(PlayerAbilities)` (public 생성자, flying public field).
+- [x] **B-3b (세션 4)**. ClientState 에 import 추가:
+  `import net.minecraft.network.packet.c2s.play.UpdatePlayerAbilitiesC2SPacket;`
+- [x] **B-3c (세션 4)**. ClientState L1294-L1322 (isFlying 엣지 직후) tryLanding 계산 +
+  standupIfPossible 호출 신규 추가 (원본 L2542-L2544 1:1):
   ```java
-  player.getAbilities().setFlying(false);
-  player.networkHandler.sendPacket(
-          new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));
+  double _horizontalSpeedSquare = vX² + vZ²;
+  boolean tryLanding = isFlying && !cfg.flyCloseToGround
+                    && _horizontalSpeedSquare < 0.003D
+                    && player.getVelocity().y > -0.03D;
+  if (restoreFromFlying || tryLanding) {
+      standupIfPossible(player, tryLanding, restoreFromFlying);
+  }
   ```
-- [ ] B-3b. UpdatePlayerAbilitiesC2SPacket 시그니처 확인 (Yarn 1.21.1).
-- [ ] B-3c. 빌드 + Creative 비행 자동 해제 시나리오 deferred (통합 인게임 검증).
+  상수 0.003D / -0.03D 정확 보존.
+- [x] **B-3d (세션 4)**. ClientState.standupIfPossible(2-arg) L2540-L2549 분기 본문에
+  vanilla flying field + sync 추가:
+  ```java
+  player.getAbilities().flying = false;
+  player.networkHandler.sendPacket(new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));
+  ```
+  flying public field 직접 할당 패턴 — MixinClientPlayerEntity L53 와 일관.
+- [x] **B-3e (세션 4)**. 빌드 BUILD SUCCESSFUL (5s). Creative 인게임 검증 deferred.
 
 **B-4. fromSwimmingOrDiving 트리거 블록 보강** (B-fromSwim)
 - [ ] B-4a. 원본 SmartMovingSelf L1363-L1405 `fromSwimmingOrDiving(wasShortInWater)` 4 분기
@@ -459,6 +474,53 @@ ClientPlayerEntity.tickMovement
 
 진행률: P 2/2 + A 1/1 + B-1 4/4 + B-2 1/1 = **8/13 (~62%)**. B-3 ~ B-6 / C 잔존.
 
+### 세션 4 — 2026-04-25 — B-3 이식 완료 (§18.1 capabilities.flying sync) ★
+
+사용자 지시: 세션 3 prompt 따라 B-3 진입 (실제 코드 변경 첫 원자).
+
+진행한 작업:
+1. **진입 전 검증** (B-19/B-10d 패턴 학습): grep `setFlying|UpdatePlayerAbilities|capabilities.flying`
+   → 진짜 미이식 영역 확정 (B-19/B-10d 와 다름):
+   - ClientState L2535-L2540 분기 본문에 `this.isFlying = false` 만, vanilla flying sync 누락.
+   - tryLanding 계산 + standupIfPossible(true, ...) 호출 자체도 미이식.
+2. **UpdatePlayerAbilitiesC2SPacket 1.21.1 시그니처 확인** (vineflower 디컴파일):
+   - `public UpdatePlayerAbilitiesC2SPacket(PlayerAbilities abilities)` 생성자.
+   - `abilities.flying` public field (`MixinClientPlayerEntity` L53 직접 할당 패턴 일관).
+3. **cfg.flyCloseToGround 이미 존재 확인** (SmartMovingConfig L786 = true 기본).
+4. **이식 (3 변경)**:
+   - **import** 추가: `UpdatePlayerAbilitiesC2SPacket` (ClientState L18).
+   - **L1294-L1322**: isFlying 엣지 처리 직후 tryLanding 계산 + standupIfPossible 호출
+     신규 (원본 L2542-L2544 1:1, 상수 0.003D / -0.03D 정확).
+   - **L2540-L2549**: standupIfPossible(2-arg) 분기 본문에 `getAbilities().flying = false` +
+     `UpdatePlayerAbilitiesC2SPacket` 송신 추가 (원본 L2199 1:1).
+5. **빌드**: `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — import +
+  tryLanding 블록 신규 + standupIfPossible 본문 보강.
+- `docs/fix/focus_03_transition_conditions.md` — §3 Case 3 / §10 B-3 / §16 / §15 세션 4 로그.
+- `docs/research/mapping/research_state_transitions.md` — §5.2 §18.1 정정 (✅ 완료).
+
+회귀 0건 (Creative 비행 한정 영향, Survival 무관).
+
+완료 전 검증 체크리스트 (세션 4 기준):
+- [근거] 원본 SmartMovingSelf L2199 + L2542-L2544 (③ 리서치 §1.4 + §6)
+- [근거] 1.21.1 이식 위치 — ClientState L1294-L1322 (tryLanding) + L2540-L2549 (sync)
+- [대응] 원본 ↔ 1.21.1 1:1 (식 + 호출 + 분기 본문 모두)
+- [분기] tryLanding 4-AND + tryLanding && groundClose && standUpPossible 보존
+- [상수] 0.003D / -0.03D / 1F (gap-only) 정확 보존
+- [타이밍] isFlying 엣지 직후 tryLanding 계산 (원본 흐름 1:1)
+- [근사] 신규 0건. §18.1 잔존 근사 해소 ✓
+- [신규] tryLanding 계산이 1.21.1 자체에 미이식 발견 (원본 L2542 매핑) — 추가 이식 완료
+- [회귀] Phase 1·2 #2.7 Mixin / #2.5 Jumper / #2.6 Lava 영향 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **B-4 (fromSwimmingOrDiving 트리거 보강)** 또는 **B-5 (contextContinueCrawl
+   이식)** 진입 — 단 진입 전 검증 (B-19/B-10d 와 같이 이미 이식됐을 가능성) 우선.
+
+진행률: P 2/2 + A 1/1 + B-1 4/4 + B-2 1/1 + B-3 5/5 = **13/13 (100%) 의 원자 단위로는
+완료** ※ B-4/B-5/B-6 진입 전 검증 필요. 실제 잔존 = 2건 (B-fromSwim / B-context) + C 4 원자.
+
 ---
 
 ## 16. 신규 발견 — 세션 1 4 Agent 결과
@@ -467,6 +529,7 @@ ClientPlayerEntity.tickMovement
 |---|---|---|
 | ~~B-19 isNeighborClimbing 항상 false~~ ✅ **세션 2 정정** | (이미 이식됨 — B-19a4 세션 108. ClientState L1534 stale 주석 정정 완료) | SmartMovingClimber L385-L455 + ClientState L1542 |
 | ~~B-10d isLevitating 항상 false~~ ✅ **세션 3 정정** | (이미 이식됨 — SmartMovingSwimmer L192-L196 세션 71. ClientState L1176 stale 주석 정정 완료) | SmartMovingSwimmer.updateSwimState |
+| ~~§18.1 capabilities.flying sync~~ ✅ **세션 4 이식 완료** | tryLanding 계산 + standupIfPossible 호출 + setFlying + UpdatePlayerAbilitiesC2SPacket 송신 (원본 L2199 + L2542-L2544 1:1) | ClientState L1294-L1322 + L2540-L2549 |
 | **§18.1 capabilities.flying sync** 미실행 | Creative 비행 자동 해제 안 됨 | ClientState L2530-L2531 |
 | **fromSwimmingOrDiving** 4 분기 일부 누락 | 깊은 물 → 좁은 공간 크롤 진입 누락 가능성 | sm_travel_client L115 |
 | **contextContinueCrawl** 미이식 | 수면 아래 크롤 전환 영향 | (1.21.1 미이식) |

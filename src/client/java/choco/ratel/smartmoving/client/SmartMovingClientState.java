@@ -14,6 +14,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.MovementType;
+import net.minecraft.network.packet.c2s.play.UpdatePlayerAbilitiesC2SPacket;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -1304,6 +1305,28 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // **포커스 #3 B-3 (세션 4)**: 원본 L2542-L2544 tryLanding 계산 + standupIfPossible
+            //   호출 이식. 1.21.1 SmartMovingClientState 의 isFlying 엣지 처리 (위 블록) 직후
+            //   원본 흐름과 동일하게 배치.
+            //   원본 식 (L2542):
+            //     boolean tryLanding = isFlying && !Options._flyCloseToGround.value
+            //                       && horizontalSpeedSquare < 0.003D && sp.motionY > -0.03D;
+            //   원본 호출 (L2543-L2544):
+            //     if (restoreFromFlying || tryLanding) standupIfPossible(tryLanding, restoreFromFlying);
+            //   상수: 0.003D (수평 속력 임계) / -0.03D (motionY 임계) 정확 보존.
+            {
+                double _vX = player.getVelocity().x;
+                double _vZ = player.getVelocity().z;
+                double _horizontalSpeedSquare = _vX * _vX + _vZ * _vZ;
+                boolean tryLanding = isFlying
+                        && !cfg0.flyCloseToGround
+                        && _horizontalSpeedSquare < 0.003D
+                        && player.getVelocity().y > -0.03D;
+                if (restoreFromFlying || tryLanding) {
+                    standupIfPossible(player, tryLanding, restoreFromFlying);
+                }
+            }
+
             // B-33 + B-44b (세션 84): 원본 L2441-L2447 매 틱 공식으로 전환.
             // IMPL-01 이원화 구조 (if (!isCrawling) 진입 / else 유지/해제) 를 원본의 단일
             // 매 틱 재계산으로 교체. 해제 판정은 wantCrawl 의 `inputContinueCrawl` /
@@ -2521,8 +2544,10 @@ public final class SmartMovingClientState {
      *
      * B-N-standup-3 해소 (세션 136): gap/overGap 정밀 + sneak/grab 조건 분기 전수 복원.
      *
-     * **§7 근사 잔존 (B-N-standup-approx-4)**: `sp.capabilities.isFlying = false` 는
-     *   client-server sync 필요 → focus_06 후속 대기. 현재 SM 측 `isFlying = false` 만.
+     * **포커스 #3 B-3 (세션 4) §18.1 해소**: `sp.capabilities.isFlying = false` (원본 L2199)
+     *   매핑 — 1.21.1 `player.getAbilities().flying = false` (public 직접 할당) +
+     *   `UpdatePlayerAbilitiesC2SPacket` 송신으로 server sync. flying field 직접 할당
+     *   패턴은 MixinClientPlayerEntity L53 에서 이미 사용 중 (착지 후 flying 복원).
      */
     public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
         if (this.heightOffset >= 0) return;
@@ -2534,8 +2559,11 @@ public final class SmartMovingClientState {
 
         if (tryLanding && groundClose && standUpPossible) {
             this.isFlying = false;
-            // 근사 이식 — 원본과 차이: sp.capabilities.isFlying = false → client-server sync
-            //   필요 (focus_06 후속). 현재 SM 측 isFlying 만 false.
+            // 포커스 #3 B-3 (세션 4): 원본 L2199 `sp.capabilities.isFlying = false` 매핑.
+            //   1.21.1 PlayerAbilities.flying public field 직접 할당 + 서버 sync 패킷.
+            player.getAbilities().flying = false;
+            player.networkHandler.sendPacket(
+                    new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));
             restoreFromFlying = true;
         }
 

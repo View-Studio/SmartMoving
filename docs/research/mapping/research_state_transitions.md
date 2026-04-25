@@ -436,7 +436,7 @@ sm_travel_client(movementInput, ci)
 |---|---|---|---|---|
 | ~~B-10d~~ ✅ **세션 3 정정** | (이미 이식됨 — SmartMovingSwimmer.updateSwimState L192-L196 세션 71. 호출: sm_travel_client L92) | SmartMovingSwimmer L192 + ClientState L1176 (주석 정정) | 정상 작동. | ✅ 완료 |
 | ~~B-19~~ ✅ **세션 2 정정** | (이미 이식됨 — SmartMovingClimber L385-L455 B-19a4 세션 108. 호출: sm_travel_client L177) | SmartMovingClimber L433 + ClientState L1542 | 정상 작동 (cfg 클라이밍 모드 활성 시). | ✅ 완료 |
-| **B-N-standup-approx-4** | capabilities.flying sync (§18.1) | ClientState L2530-L2531 | Creative 비행 자동 해제 안 됨. 수동 F 필요. | 🟡 중간 |
+| ~~B-N-standup-approx-4~~ ✅ **세션 4 이식 완료** | capabilities.flying sync (§18.1) — `getAbilities().flying = false` + UpdatePlayerAbilitiesC2SPacket 송신 + tryLanding 계산 + standupIfPossible 호출 신규 | ClientState L1294-L1322 + L2540-L2549 | ✅ 완료 |
 | **fromSwimmingOrDiving 트리거 블록** | 원본 L1383-L1389 부분 이식 | sm_travel_client L115 | 물→육지 전환 애니메이션 미흡. | 🟡 중간 |
 | **contextContinueCrawl** | 물 아래→육지 크롤 전환 설정 | (1.21.1 미이식) | swim_dive.md L515-L520 추가 필요. | 🟡 중간 |
 | **isFakeShallowWaterSneaking** | 얕은 물 가짜 스니킹 진입 | (1.21.1 미이식) | 얕은 물 스니킹 정확성. | 🟠 낮음 |
