@@ -236,9 +236,18 @@ public class SmartMovingConfig {
     public float wallUpJumpHorizontalFactor = 0.15F;
     // 원본: _wallHeadJumpHorizontalFactor = DecreasingFactor(...).defaults(0.15F)
     public float wallHeadJumpHorizontalFactor = 0.15F;
+    // === ChargeUp 필드 (원본 SmartMovingConfig L254-L257) ===
+    // 원본 L254: _jumpCharge = Unmodified("move.jump.charge") → 기본 true
     public boolean jumpCharge = true;
+    // 원본 L255: _jumpChargeMaximum = Positive("move.jump.charge.maximum").defaults(20F)
+    //   ChargeUp 최대 카운트 (틱당 1 증가, >= 0).
     public float jumpChargeMaximum = 20F;
+    // 원본 L256: _jumpChargeFactor = IncreasingFactor("move.jump.charge.factor").defaults(1.3F)
+    //   ChargeUp 완충 시 점프 속도 배율 (>= 1).
     public float jumpChargeFactor = 1.3F;
+    // 원본 L257: _jumpChargeCancelOnSneakRelease = Modified("move.jump.charge.sneak.release.cancel") → 기본 false (Modified)
+    //   true=sneak 키 떼면 차징 점프 발동, false=sneak 키 떼면 차징 취소.
+    public boolean jumpChargeCancelOnSneakRelease = false;
     public boolean headJump = true;
     public float headJumpControlFactor = 0.2F;
     public float headJumpChargeMaximum = 10F;
@@ -1030,6 +1039,7 @@ public class SmartMovingConfig {
         jumpCharge               = getBool(p,   "move.jump.charge",               jumpCharge);
         jumpChargeMaximum        = getFloat(p,  "move.jump.charge.maximum",       jumpChargeMaximum);
         jumpChargeFactor         = getFloat(p,  "move.jump.charge.factor",        jumpChargeFactor);
+        jumpChargeCancelOnSneakRelease = getBool(p, "move.jump.charge.sneak.release.cancel", jumpChargeCancelOnSneakRelease);
         headJump                 = getBool(p,   "move.jump.head.charge",          headJump);
         headJumpControlFactor    = getFloat(p,  "move.forward.jump.control.factor", headJumpControlFactor);
         headJumpChargeMaximum    = getFloat(p,  "move.forward.jump.charge.maximum", headJumpChargeMaximum);
@@ -1173,6 +1183,7 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.charge",                String.valueOf(jumpCharge));
         p.setProperty("move.jump.charge.maximum",        String.valueOf(jumpChargeMaximum));
         p.setProperty("move.jump.charge.factor",         String.valueOf(jumpChargeFactor));
+        p.setProperty("move.jump.charge.sneak.release.cancel", String.valueOf(jumpChargeCancelOnSneakRelease));
         p.setProperty("move.jump.head.charge",           String.valueOf(headJump));
         p.setProperty("move.forward.jump.control.factor", String.valueOf(headJumpControlFactor));
         p.setProperty("move.forward.jump.charge.maximum", String.valueOf(headJumpChargeMaximum));

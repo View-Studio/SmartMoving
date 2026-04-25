@@ -66,7 +66,7 @@
 | `_walkJump` | true | Walking 점프 활성 |
 | `_runJump` | true | Running 점프 활성 |
 | `_sprintJump` | true | Sprinting 점프 활성 |
-| `_jumpChargeCancelOnSneakRelease` | true (Modified) | ChargeUp 취소 동작 |
+| `_jumpChargeCancelOnSneakRelease` | false (Modified) | ChargeUp 취소 동작 (Properties.java L173 Modified=false) |
 | `_angleJumpSide` | true | Side 점프 활성 |
 | `_angleJumpBack` | true | Back 점프 활성 |
 | `_climbUpJump` | true | ClimbUp 점프 활성 |
@@ -222,10 +222,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-3e. `sprintJump = true` (원본 L249) — 세션 3
 
 **A-4. ChargeUp 필드 4건**
-- [ ] A-4a. `jumpCharge = true` (원본 L254)
-- [ ] A-4b. `jumpChargeMaximum` ✅ 이미 이식됨 — 확인만
-- [ ] A-4c. `jumpChargeFactor` ✅ 이미 이식됨 — 확인만
-- [ ] A-4d. `jumpChargeCancelOnSneakRelease = true` (원본 L257, Modified)
+- [x] A-4a. `jumpCharge = true` (원본 L254) — 세션 4 (이미 이식됨 확인 + 주석 정비)
+- [x] A-4b. `jumpChargeMaximum = 20F` (원본 L255) — 세션 4 (이미 이식됨 확인 + 주석 정비)
+- [x] A-4c. `jumpChargeFactor = 1.3F` (원본 L256) — 세션 4 (이미 이식됨 확인 + 주석 정비)
+- [x] A-4d. `jumpChargeCancelOnSneakRelease = false` (원본 L257, Modified=false) — 세션 4 (신규 이식, 문서 오기 'true' 정정)
 
 **A-5. HeadUp 필드 5건**
 - [ ] A-5a. `headJump = true` (원본 L260)
@@ -796,6 +796,42 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-4 (ChargeUp 필드 4건 — A-4a `jumpCharge=true` + A-4d `jumpChargeCancelOnSneakRelease=true` 이식, A-4b/c 는 ✅ 이미 이식됨 확인만). 원본 L254/L257.
 
 진행률: Phase A 17/40+ (~42.5%), 전체 #2.5 17/~110 (~15.5%).
+
+### 세션 4 — 2026-04-25 — Phase A-4 (ChargeUp 4건: 신규 1 + 확인 3 + 문서 오기 정정)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-4 4건 (A-4a~A-4d) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L254-L257):
+   - L254 `_jumpCharge = Unmodified("move.jump.charge")` → 기본 true
+   - L255 `_jumpChargeMaximum = Positive(...).defaults(20F)` → 20F
+   - L256 `_jumpChargeFactor = IncreasingFactor(...).defaults(1.3F)` → 1.3F
+   - L257 `_jumpChargeCancelOnSneakRelease = Modified("move.jump.charge.sneak.release.cancel")` → **false** (Properties.java L173 `Modified=false`, 기존 §0/§3 의 "true" 는 오기)
+2. 1.21.1 이식 위치 확인:
+   - A-4a/b/c (L239-L241 + load L1030-L1032 + save L1173-L1175) — 모두 이미 이식됨. 값 일치 (true / 20F / 1.3F).
+   - A-4d (신규 — L242 위치에 필드, load/save 양방향 추가)
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 — A-4 ChargeUp 그룹 헤더 주석 추가 + A-4a/b/c 원본 라인 주석 정비 + A-4d 신규 추가
+   - `load()` IO — A-4d 1건 추가 (key: `move.jump.charge.sneak.release.cancel`)
+   - `save()` IO — A-4d 1건 추가
+4. 문서 정정: §0 미이식 표 + §3 A-4d "true (Modified)" → "false (Modified=false)" + 근거 명시.
+5. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 4 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L254-L257 + Properties.java L173 (Modified=false 결정적 근거)
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 L239-L249 / `load()` L1030-L1034 / `save()` L1173-L1177
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치, A-4a/b/c 기존 이식 값 검증)
+- [분기] 분기 없음 (단순 boolean/float 4개)
+- [상수] true / 20F / 1.3F / false (Modified=false 정확 반영, 문서 오기 정정)
+- [타이밍] 필드 선언만 — 호출 타이밍 없음.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 발견: 문서 §0/§3 의 "Modified=true" 오기 → false 정정. (Properties.java 의 Modified() 기본값 결정적 근거)
+- [회귀] 신규 필드 1건만 추가 + 기존 3건 주석 정비 — 동작 변경 0. 기존 코드 영향 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-5 (HeadUp 5건 — A-5a `headJump=true` 확인 + A-5b/c 이미 이식 확인 + A-5d `headFallDamageStartDistance=2F` + A-5e `headFallDamageFactor=2F` ★ 신규). 원본 L260/L264/L265.
+
+진행률: Phase A 21/40+ (~52.5%), 전체 #2.5 21/~110 (~19.1%).
 
 ---
 
