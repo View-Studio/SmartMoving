@@ -296,11 +296,12 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 대상 31 파일 ~5,000줄. 청크 분할 8-10 세션:
 
-- [ ] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄)
+- [x] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄) — **세션 6 완료**
   - [x] R-1 청크 1 (L1-L200) — 세션 3 (정합 84 / 오역 3 / 누락 2 / 잉여 0 / N/A 111)
   - [x] R-1 청크 2 (L201-L400) — 세션 4 (정합 122 / 오역 8 / 누락 5 / 잉여 0 / N/A 65)
   - [x] R-1 청크 3 (L401-L600) — 세션 5 (정합 95 / 오역 3 / 누락 7 / 잉여 0 / N/A 95)
-  - [ ] R-1 청크 4 (L601-L797)
+  - [x] R-1 청크 4 (L601-L797) — 세션 6 (정합 45 / 오역 0 / 누락 0 / 잉여 0 / N/A 152)
+  - **R-1 누적**: 정합 346 / 오역 14 / 누락 14 / 잉여 0 / N/A 423 = 797 라인 전수
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
@@ -586,6 +587,44 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-1 청크 4 (L601-L797) — animateNonStandardBowAiming 잔여 + setArmScales/setLegScales 본체 + 기타 유틸/내부 헬퍼. R-1 마지막 청크 → 완료 시 R-2 진입.
+
+---
+
+### 세션 6 — 2026-04-26 — Phase R / R-1 청크 4 (SmartMovingModel.java L601-L797) — **R-1 완료**
+
+**진행한 작업**:
+
+1. **R-1 청크 4 라인별 read**: 원본 L601-L797 (197 라인 전수 read).
+2. **1.21.1 매핑 검증**: MixinPlayerEntityModelClient setArmScales(L671-L674) + setLegScales(L681-L684) + setAnglesYZX/YXZ/XZY/ZXY(L690-L756) + smFactor(L762-L772) 본체 read.
+3. **매핑 표 추가**: research_animation_line_by_line.md 청크 4 섹션 — 197 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 4 통계**:
+- [정합] 45 (animateArmSwinging isAngleJumping 분기 / setArmScales+setLegScales Scale 분기 본체 / Factor 함수 19 라인 / Between 함수 8 라인 (MathHelper.clamp 매핑) / Normalize 함수 8 라인 (MathHelper.wrapDegrees 매핑))
+- [오역] 0
+- [누락] 0
+- [잉여] 0
+- [N/A] 152 (animateNonStandardBowAiming 잔여 24 라인 / animateHeadRotation/Sleeping/Riding/HoldingItems/WorkingBody/WorkingArms/Sneaking/Arms/BowAiming 11 vanilla 분기 ~80 라인 / setArmScales/setLegScales NoScaleEnd 분기 18 라인 / 필드 선언 31 라인 / 빈 줄/괄호)
+- 합계: 197 라인 전수.
+
+**청크 4 발견**: 신규 [오역]/[누락]/[잉여] 0건. 헬퍼 본체 모두 1:1 이식 검증 (B-3 세션 2 완결 사후 검증).
+
+**R-1 전체 누적 통계**:
+- 합계: 정합 346 / 오역 14 / 누락 14 / 잉여 0 / N/A 423 = 797 라인 전수 (skip 0).
+- R-10+ B-N 후보 13 그룹 식별 (오역 4 + 누락 7 + 잉여 검토 1 + 정합 근사 1).
+
+**검증 체크리스트 (세션 6 R-1 청크 4 + R-1 전체)**:
+- [근거] ✓ 원본 로컬 read (offset=601, limit=197 정확)
+- [전수] ✓ 청크 내 197 라인 + R-1 전체 797 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 4 합계 197 / R-1 전체 합계 797 일치
+- [발견] ✓ 청크 4 신규 발견 0건 (헬퍼 본체 1:1 검증)
+- [통계] ✓ R-1 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (setArmScales/setLegScales/setAnglesYZX/YXZ/XZY/ZXY/smFactor 헬퍼 본체)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-1 완료** — SmartMovingModel.java 797 라인 전수 라인별 1:1 매핑 표 작성 완료.
+
+**다음 R-단계**: R-2 (SmartMovingRender.java 337줄 + SM render/SmartRenderContext.java 26줄 + IModelPlayer.java 34줄 + IRenderPlayer.java 42줄 + ModelPlayer.java 167줄 + RenderPlayer.java 120줄 = ~726줄). 6 파일 1 청크 또는 SmartMovingRender.java 단독 1 청크 + 나머지 5 파일 1 청크.
 
 ---
 

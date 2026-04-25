@@ -645,3 +645,237 @@
 - B-N (isFlying 입력값 [오역]): L477/L478/L479 — totalDistance/currentSpeed → limbSwing/limbSwingAmount (청크 1/2 동일 패턴).
 
 **다음 청크**: R-1 청크 4 (L601-L797) — animateNonStandardBowAiming 잔여 + setArmScales/setLegScales 본체 + 기타 유틸/내부 헬퍼.
+
+### 청크 4 (L601-L797) — animateNonStandardBowAiming 잔여 + animate* 11 vanilla 분기 + setArmScales/setLegScales/Factor/Between/Normalize 헬퍼 + 필드 선언
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L601 | `md.bipedRightShoulder.rotationOrder = ModelRotationRenderer.ZYX;` | (Shoulder 부재) | [N/A] | §16-5 |
+| L602 | (빈 줄) | — | [N/A] | |
+| L603 | `md.bipedLeftShoulder.ignoreSuperRotation = true;` | (Shoulder 부재) | [N/A] | |
+| L604 | `md.bipedLeftShoulder.rotateAngleY = md.workingAngle / RadiantToAngle;` | (Shoulder 부재) | [N/A] | |
+| L605 | `md.bipedLeftShoulder.rotateAngleZ = Half;` | (Shoulder 부재) | [N/A] | |
+| L606 | `md.bipedLeftShoulder.rotationOrder = ModelRotationRenderer.ZYX;` | (Shoulder 부재) | [N/A] | |
+| L607 | (빈 줄) | — | [N/A] | |
+| L608 | `md.bipedRightArm.reset();` | (1.21.1 vanilla setAngles 진입 시 자동 reset, sm_setAngles는 TAIL inject으로 덮어쓰기) | [N/A] | |
+| L609 | `md.bipedLeftArm.reset();` | — | [N/A] | |
+| L610 | (빈 줄) | — | [N/A] | |
+| L611 | `float headRotateAngleY = md.bipedHead.rotateAngleY;` | (백업 — vanilla bow aiming 호출 위해, 1.21.1 vanilla 자동) | [N/A] | |
+| L612 | `float outerRotateAngleY = md.bipedOuter.rotateAngleY;` | (Outer 부재) | [N/A] | |
+| L613 | `float headRotateAngleX = md.bipedHead.rotateAngleX;` | — | [N/A] | |
+| L614 | (빈 줄) | — | [N/A] | |
+| L615 | `md.bipedHead.rotateAngleY = 0;` | — | [N/A] | |
+| L616 | `md.bipedOuter.rotateAngleY = 0;` | (Outer 부재) | [N/A] | |
+| L617 | `md.bipedHead.rotateAngleX = 0;` | — | [N/A] | |
+| L618 | (빈 줄) | — | [N/A] | |
+| L619 | `imp.superAnimateBowAiming(...)` | (vanilla 활쏘기 — 1.21.1 ItemRenderer 자동 처리, 어깨 ZYX 미이식) | [N/A] | |
+| L620 | (빈 줄) | — | [N/A] | |
+| L621 | `md.bipedHead.rotateAngleY = headRotateAngleY;` | (복원) | [N/A] | |
+| L622 | `md.bipedOuter.rotateAngleY = outerRotateAngleY;` | (Outer 부재) | [N/A] | |
+| L623 | `md.bipedHead.rotateAngleX = headRotateAngleX;` | — | [N/A] | |
+| L624 | `}` (animateNonStandardBowAiming 종료) | — | [N/A] | |
+| L625 | (빈 줄) | — | [N/A] | |
+| L626 | `public void animateHeadRotation(...)` | (1.21.1 vanilla setAngles 자동 — head.yaw/pitch는 vanilla가 매개변수로 자동 설정) | [N/A] | sm_setAngles TAIL에서 덮어씀 (필요 시) |
+| L627 | `{` | — | [N/A] | |
+| L628 | `setRotationAngles(totalHorizontalDistance, ...);` | sm_setAngles TAIL inject 자체 호출 위치 | [N/A] | |
+| L629 | (빈 줄) | — | [N/A] | |
+| L630 | `if(isStandard)` | (isStandard 미사용 — vanilla 자동) | [N/A] | |
+| L631 | `imp.superAnimateHeadRotation(...);` | (vanilla 자동) | [N/A] | |
+| L632 | `}` | — | [N/A] | |
+| L633 | (빈 줄) | — | [N/A] | |
+| L634 | `public void animateSleeping(...)` | (vanilla SleepingPose 자동) | [N/A] | |
+| L635 | `{` | — | [N/A] | |
+| L636 | `if(isStandard)` | — | [N/A] | |
+| L637 | `imp.superAnimateSleeping(...);` | (vanilla) | [N/A] | |
+| L638 | `}` | — | [N/A] | |
+| L639 | (빈 줄) | — | [N/A] | |
+| L640 | `public void animateArmSwinging(...)` | (vanilla limbSwing 기반 자동) | [N/A] | |
+| L641 | `{` | — | [N/A] | |
+| L642 | `if(isStandard)` | (sm_setAngles 본체 11-state 체인 외 = vanilla 자동) | [N/A] | |
+| L643 | `if(isAngleJumping)` | MixinPEMC L135: `if (sm.isAngleJumping())` | [정합] | sm_setAngles 본체 직접 분기 |
+| L644 | `animateAngleJumping();` | L136: `sm_animateAngleJumping(sm)` | [정합] | |
+| L645 | `else` | — | [N/A] | (vanilla arm swing 자동) |
+| L646 | `imp.superAnimateArmSwinging(...);` | — | [N/A] | |
+| L647 | `}` | — | [N/A] | |
+| L648 | (빈 줄) | — | [N/A] | |
+| L649 | `public void animateRiding(...)` | (vanilla Riding 자동) | [N/A] | |
+| L650 | `{` | — | [N/A] | |
+| L651 | `if(isStandard)` | — | [N/A] | |
+| L652 | `imp.superAnimateRiding(...);` | — | [N/A] | |
+| L653 | `}` | — | [N/A] | |
+| L654 | (빈 줄) | — | [N/A] | |
+| L655 | `public void animateLeftArmItemHolding(...)` | (vanilla LeftArm item holding 자동) | [N/A] | |
+| L656 | `{` | — | [N/A] | |
+| L657 | `if(isStandard)` | — | [N/A] | |
+| L658 | `imp.superAnimateLeftArmItemHolding(...);` | — | [N/A] | |
+| L659 | `}` | — | [N/A] | |
+| L660 | (빈 줄) | — | [N/A] | |
+| L661 | `public void animateRightArmItemHolding(...)` | (vanilla 자동) | [N/A] | |
+| L662 | `{` | — | [N/A] | |
+| L663 | `if(isStandard)` | — | [N/A] | |
+| L664 | `imp.superAnimateRightArmItemHolding(...);` | — | [N/A] | |
+| L665 | `}` | — | [N/A] | |
+| L666 | (빈 줄) | — | [N/A] | |
+| L667 | `public void animateWorkingBody(...)` | (vanilla / 어깨 부재) | [N/A] | |
+| L668 | `{` | — | [N/A] | |
+| L669 | `if(isStandard)` | — | [N/A] | |
+| L670 | `imp.superAnimateWorkingBody(...);` | — | [N/A] | |
+| L671 | `else if(isWorking())` | (어깨 부재 — animateNonStandardWorking N/A) | [N/A] | §16-5 |
+| L672 | `animateNonStandardWorking(viewVerticalAngelOffset);` | — | [N/A] | |
+| L673 | `}` | — | [N/A] | |
+| L674 | (빈 줄) | — | [N/A] | |
+| L675 | `public void animateWorkingArms(...)` | (vanilla) | [N/A] | |
+| L676 | `{` | — | [N/A] | |
+| L677 | `if(isStandard \|\| isWorking())` | — | [N/A] | |
+| L678 | `imp.superAnimateWorkingArms(...);` | — | [N/A] | |
+| L679 | `}` | — | [N/A] | |
+| L680 | (빈 줄) | — | [N/A] | |
+| L681 | `public void animateSneaking(...)` | (vanilla sneak 자동 — leaningPitch 별도 처리) | [N/A] | sm_setAngles L88 leaningPitch=0 처리 |
+| L682 | `{` | — | [N/A] | |
+| L683 | `if(isStandard && !isAngleJumping)` | — | [N/A] | |
+| L684 | `imp.superAnimateSneaking(...);` | — | [N/A] | |
+| L685 | `}` | — | [N/A] | |
+| L686 | (빈 줄) | — | [N/A] | |
+| L687 | `public void animateArms(...)` | (vanilla applyAnimationOffsets 자동) | [N/A] | |
+| L688 | `{` | — | [N/A] | |
+| L689 | `if(isStandard)` | — | [N/A] | |
+| L690 | `imp.superApplyAnimationOffsets(...);` | — | [N/A] | |
+| L691 | `}` | — | [N/A] | |
+| L692 | (빈 줄) | — | [N/A] | |
+| L693 | `public void animateBowAiming(...)` | (vanilla 자동 + 어깨 부재로 비표준 분기 N/A) | [N/A] | |
+| L694 | `{` | — | [N/A] | |
+| L695 | `if(isStandard)` | — | [N/A] | |
+| L696 | `imp.superAnimateBowAiming(...);` | — | [N/A] | |
+| L697 | `else` | — | [N/A] | |
+| L698 | `animateNonStandardBowAiming(...);` | (어깨 부재 N/A) | [N/A] | §16-5 |
+| L699 | `}` | — | [N/A] | |
+| L700 | (빈 줄) | — | [N/A] | |
+| L701 | `private void setArmScales(float rightScale, float leftScale)` | MixinPEMC L671: `setArmScales(rightArm, leftArm, rightScale, leftScale)` | [정합] | B-3 세션 2 완결. ModelPart 인자 추가 (static 메서드) |
+| L702 | `{` | — | [N/A] | |
+| L703 | `if(scaleArmType == Scale)` | (가드 제거 — 메인 모델 = Scale 항상 true) | [정합] | §16-7 |
+| L704 | `{` | — | [N/A] | |
+| L705 | `md.bipedRightArm.scaleY = rightScale;` | L672: `rightArm.yScale = rightScale` | [정합] | |
+| L706 | `md.bipedLeftArm.scaleY = leftScale;` | L673: `leftArm.yScale = leftScale` | [정합] | |
+| L707 | `}` | — | [N/A] | |
+| L708 | `else if(scaleArmType == NoScaleEnd)` | (1.21.1 미이식 — 갑옷 흉갑 분기 §17 잔여) | [N/A] | §16-8 — ArmorFeatureRenderer 영역 |
+| L709 | `{` | — | [N/A] | |
+| L710 | `md.bipedRightArm.offsetY -= (1F - rightScale) * 0.5F;` | (ModelPart.offsetY 부재) | [N/A] | §16-8 |
+| L711 | `md.bipedLeftArm.offsetY -= (1F - leftScale) * 0.5F;` | (ModelPart.offsetY 부재) | [N/A] | |
+| L712 | `}` | — | [N/A] | |
+| L713 | `}` | — | [N/A] | |
+| L714 | (빈 줄) | — | [N/A] | |
+| L715 | `private void setLegScales(float rightScale, float leftScale)` | MixinPEMC L681: `setLegScales(rightLeg, leftLeg, rightScale, leftScale)` | [정합] | B-3 세션 2 완결 |
+| L716 | `{` | — | [N/A] | |
+| L717 | `if(scaleLegType == Scale)` | (가드 제거) | [정합] | |
+| L718 | `{` | — | [N/A] | |
+| L719 | `md.bipedRightLeg.scaleY = rightScale;` | L682: `rightLeg.yScale = rightScale` | [정합] | |
+| L720 | `md.bipedLeftLeg.scaleY = leftScale;` | L683: `leftLeg.yScale = leftScale` | [정합] | |
+| L721 | `}` | — | [N/A] | |
+| L722 | `else if(scaleLegType == NoScaleEnd)` | (1.21.1 미이식 — §17 잔여) | [N/A] | §16-8 |
+| L723 | `{` | — | [N/A] | |
+| L724 | `md.bipedRightLeg.offsetY -= (1F - rightScale) * 0.5F;` | (offsetY 부재) | [N/A] | |
+| L725 | `md.bipedLeftLeg.offsetY -= (1F - leftScale) * 0.5F;` | (offsetY 부재) | [N/A] | |
+| L726 | `}` | — | [N/A] | |
+| L727 | `}` | — | [N/A] | |
+| L728 | (빈 줄) | — | [N/A] | |
+| L729 | `private static float Factor(float x, float x0, float x1)` | MixinPEMC L762: `private static float smFactor(float x, float x0, float x1)` | [정합] | 표면 매핑 (이름만 변경) |
+| L730 | `{` | `{` | [정합] | |
+| L731 | `if(x0 > x1)` | L763 | [정합] | |
+| L732 | `{` | `{` | [정합] | |
+| L733 | `if(x <= x1)` | L764 | [정합] | |
+| L734 | `return 1F;` | `return 1f;` | [정합] | |
+| L735 | `if(x >= x0)` | L765 | [정합] | |
+| L736 | `return 0F;` | `return 0f;` | [정합] | |
+| L737 | `return (x0 - x) / (x0 - x1);` | L766 | [정합] | |
+| L738 | `}` | `}` | [정합] | |
+| L739 | `else` | `} else` (L767) | [정합] | |
+| L740 | `{` | `{` | [정합] | |
+| L741 | `if(x >= x1)` | L768 | [정합] | |
+| L742 | `return 1F;` | | [정합] | |
+| L743 | `if(x <= x0)` | L769 | [정합] | |
+| L744 | `return 0F;` | | [정합] | |
+| L745 | `return (x - x0) / (x1 - x0);` | L770 | [정합] | |
+| L746 | `}` | `}` | [정합] | |
+| L747 | `}` | `}` | [정합] | |
+| L748 | (빈 줄) | — | [N/A] | |
+| L749 | `private static float Between(float min, float max, float value)` | `MathHelper.clamp(value, min, max)` 직접 사용 (sm_animateRopeSliding L162) | [정합] | 표면 매핑 — vanilla MathHelper.clamp 활용 |
+| L750 | `{` | — | [정합] | clamp 인라인 |
+| L751 | `if(value < min)` | clamp 본체 (vanilla) | [정합] | |
+| L752 | `return min;` | | [정합] | |
+| L753 | `if(value > max)` | | [정합] | |
+| L754 | `return max;` | | [정합] | |
+| L755 | `return value;` | | [정합] | |
+| L756 | `}` | | [정합] | |
+| L757 | (빈 줄) | — | [N/A] | |
+| L758 | `private static float Normalize(float radiant)` | `MathHelper.wrapDegrees(deg) * DEG_TO_RAD` 직접 사용 (sm_animateRopeSliding L159) | [정합] | 표면 매핑 — vanilla wrapDegrees 활용 |
+| L759 | `{` | — | [정합] | |
+| L760 | `while(radiant > Half)` | (wrapDegrees 본체) | [정합] | |
+| L761 | `radiant -= Whole;` | | [정합] | |
+| L762 | `while(radiant < -Half)` | | [정합] | |
+| L763 | `radiant += Whole;` | | [정합] | |
+| L764 | `return radiant;` | | [정합] | |
+| L765 | `}` | | [정합] | |
+| L766 | (빈 줄) | — | [N/A] | |
+| L767 | `public boolean isStandard;` | (1.21.1 미사용 — vanilla 자동) | [N/A] | 필드 선언 |
+| L768 | (빈 줄) | — | [N/A] | |
+| L769 | `public boolean isClimb;` | `SmartMovingClientState.isClimbing` | [N/A] | 필드 — 이전됨 |
+| L770 | `public boolean isClimbJump;` | `sm.isClimbJumping` | [N/A] | |
+| L771 | `public int feetClimbType;` | `sm.actualFeetClimbType` (ordinal) | [N/A] | |
+| L772 | `public int handsClimbType;` | `sm.actualHandsClimbType` | [N/A] | |
+| L773 | `public boolean isHandsVineClimbing;` | `sm.isHandsVineClimbing` | [N/A] | |
+| L774 | `public boolean isFeetVineClimbing;` | `sm.isFeetVineClimbing` | [N/A] | |
+| L775 | `public boolean isCeilingClimb;` | `sm.isCeilingClimbing` | [N/A] | |
+| L776 | (빈 줄) | — | [N/A] | |
+| L777 | `public boolean isSwim;` | `sm.isSwimming_sm` | [N/A] | |
+| L778 | `public boolean isDive;` | `sm.isDiving` | [N/A] | |
+| L779 | `public boolean isCrawl;` | `sm.isCrawling` | [N/A] | |
+| L780 | `public boolean isCrawlClimb;` | `sm.isCrawlClimbing` | [N/A] | |
+| L781 | `public boolean isJump;` | (vanilla jump) | [N/A] | |
+| L782 | `public boolean isHeadJump;` | `sm.isHeadJumping` | [N/A] | |
+| L783 | `public boolean isFlying;` | `flyingCreative` (PlayerAbilities) | [N/A] | |
+| L784 | `public boolean isSlide;` | `sm.isSliding` | [N/A] | |
+| L785 | `public boolean isLevitate;` | (vanilla levitation StatusEffect) | [N/A] | |
+| L786 | `public boolean isFalling;` | `isFalling` (computed inline MixinPEMC L125-L128) | [N/A] | |
+| L787 | `public boolean isGenericSneaking;` | (vanilla sneak) | [N/A] | |
+| L788 | `public boolean isAngleJumping;` | `sm.isAngleJumping()` | [N/A] | |
+| L789 | `public int angleJumpType;` | `sm.angleJumpType` | [N/A] | |
+| L790 | `public boolean isRopeSliding;` | `sm.isRopeSliding` | [N/A] | |
+| L791 | (빈 줄) | — | [N/A] | |
+| L792 | `public float currentHorizontalSpeedFlattened;` | `sm.currentHorizontalSpeedFlattened` | [N/A] | |
+| L793 | `public float smallOverGroundHeight;` | `sm.smallOverGroundHeight` (computeSmallOverGroundHeight 산출) | [N/A] | |
+| L794 | `public Block overGroundBlock;` | (1.21.1: smallOverGroundHeight < 5f 단순화 — §16-21) | [N/A] | |
+| L795 | (빈 줄) | — | [N/A] | |
+| L796 | `public int scaleArmType;` | (메인 = Scale 가드 제거) | [N/A] | §16-7 |
+| L797 | `public int scaleLegType;` | (메인 = Scale) | [N/A] | |
+
+**청크 4 (L601-L797) 통계: 정합 45 / 오역 0 / 누락 0 / 잉여 0 / N/A 152 = 197 라인 전수.**
+
+**청크 4 발견**:
+- 신규 [오역]/[누락]/[잉여] 0건. 청크 4는 헬퍼 본체(setArmScales/setLegScales/Factor/Between/Normalize) + vanilla 자동 처리 메서드(animateHeadRotation/Sleeping/ArmSwinging/Riding/HoldingItems/WorkingBody/WorkingArms/Sneaking/Arms/BowAiming) + 필드 선언 위주 — 모두 [정합] 또는 [N/A] 분류.
+- 헬퍼 본체 모두 1.21.1 측에 1:1 이식되어 있음을 확인 (B-3 세션 2 완결 검증).
+
+**R-1 전체 (4 청크) 누적 통계**:
+| 청크 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A |
+|-----|-----|------|------|------|------|------|
+| 1 (L1-L200) | 200 | 84 | 3 | 2 | 0 | 111 |
+| 2 (L201-L400) | 200 | 122 | 8 | 5 | 0 | 65 |
+| 3 (L401-L600) | 200 | 95 | 3 | 7 | 0 | 95 |
+| 4 (L601-L797) | 197 | 45 | 0 | 0 | 0 | 152 |
+| **합계** | **797** | **346** | **14** | **14** | **0** | **423** |
+
+**R-1 전체 발견 (R-10+ B-N 후보 종합)**:
+1. [오역] climbing arm/leg verticalDistance/verticalSpeed 입력 손실 (L80/L144/L200/L201/L219/L220 = 6 라인)
+2. [오역] FeetVineClimbing total/difference 입력 (L228/L232 = 2 라인)
+3. [오역] Dive 입력값 (L365/L366/L367 = 3 라인)
+4. [오역] Flying 입력값 (L477/L478/L479 = 3 라인)
+5. [누락] isRopeSliding 머리/팔 pivotY (L106/L117 = 2 라인)
+6. [누락] NoGrab+non-NoStep body.pivotZ -6F (L285)
+7. [누락] Swim head.pivotZ -2F (L329)
+8. [누락] Swim body.yaw 좌우 흔들림 (L335)
+9. [누락] Dive head.pitch -EIGHTH + head.pivotZ -2F (L370/L371)
+10. [누락] isCrawl head.pivotZ + body.pivotY (L401/L405)
+11. [누락] isSlide head/body/outer 피벗·offset (L442/L444/L448/L452/L453 = 5 라인)
+12. [잉여 검토] sm_animateCeilingClimbing head.yaw 추가 차감 (1.21.1 L332)
+13. [정합 근사] isHeadJump overGroundBlock 단순화 (L521)
+
+**R-1 완료**. 다음 R-단계: **R-2 (SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer ~726줄)**.
