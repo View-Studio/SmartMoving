@@ -9,9 +9,10 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ✅ AI 완결 (세션 2, 2026-04-26) — Phase B 3/3 + C 4/4 = 7/7. 통합테스트 대기. |
-| 현재 단계 | 통합테스트 인계 (사용자 in-game 시각 검증) |
+| 상태 | 🟡 진행 중 — 1차 선행 보강 (B-1/B-2/B-3) 완결, **라인별 전수 1:1 대응 작업 진입 (Phase R / 세션 3+)** |
+| 현재 단계 | Phase R — 애니메이션 관련 원본 모든 파일 라인별 read + 라인별 1.21.1 매핑 보강 |
 | 선행 의존 | #2 (애니메이션 입력 상태가 정확해야 의미 있음) — 완료 |
+| 자기 정정 | 세션 2 "AI 완결" 마킹은 **부적절** (3 누락만 메웠지 전수 1:1 감사 안 함) → 되돌림 |
 
 ---
 
@@ -285,11 +286,33 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 ### A. 원인 분석 (시각 차이 발견 시)
 - [ ] A-N. (케이스별 — 원본 공식 vs 현재 구현 side-by-side, 회전순서/구조부재 위험 표 §9 우선 점검)
 
-### B. 수정 (선행 1:1 보강 — 세션 2 완결)
+### B. 1차 선행 1:1 보강 — 세션 2 완결 (식별된 누락 3 메움)
 - [x] B-3. ModelPart yScale 활용 setArmScales/setLegScales 이식 (세션 2) — climbing arm vine + leg vine + swimming + diving + crawling 5 호출 지점 1:1
 - [x] B-1. YXZ 헬퍼 추가 (`setAnglesYXZ()`) + 호출 교체 (세션 2) — isSwim head + isSlide body
 - [x] B-2. XZY 헬퍼 추가 (`setAnglesXZY()`) + 호출 교체 (세션 2) — isFlying arm + isFalling arm
-- [ ] B-N. (시각 재현 케이스별 공식 교체) — 통합테스트 후
+
+### R. 라인별 전수 1:1 대응 작업 (세션 3+) ★ 본격 1:1 대응 진입점
+사용자 지시 (2026-04-26): "에니메이션과 관련된 모든 코드를 싹 다 가져와서 그걸 전부 1대1 대응 ... 모든 라인을 라인별로 청크 분리해서 읽고 ... 리서치 + 포커스 보강 후에 작업 진행".
+
+대상 31 파일 ~5,000줄. 청크 분할 8-10 세션:
+
+- [ ] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄)
+- [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
+- [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
+- [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
+- [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
+- [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
+- [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
+- [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
+- [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
+- [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
+
+### B. 본격 1:1 대응 (R-10 이후)
+- [ ] B-N. (라인별 발견 시 atom 단위로 추가)
+
+### C. 검증 (세션 2 부분 완결, 전수 감사 후 재검증 필요)
+- [x] C-1. 빌드 — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (세션 2 한정)
+- [x] C-2. 재현 케이스 grep 정합 — setArmScales 4 / setLegScales 4 / setAnglesYXZ 2 / setAnglesXZY 2 호출 (세션 2 한정)
 
 ### C. 검증 (세션 2 완결)
 - [x] C-1. 빌드 — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL
