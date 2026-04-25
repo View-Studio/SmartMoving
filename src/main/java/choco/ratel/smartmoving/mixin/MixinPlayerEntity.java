@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.mixin;
 
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.server.SmartMovingServer;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityPose;
@@ -27,28 +28,38 @@ public abstract class MixinPlayerEntity {
     /**
      * 6-1 (서버): SM 포즈별 커스텀 EntityDimensions 반환.
      *
-     * **포커스 #2.7 Phase C-1 (세션 3, 2026-04-25)**: 원본 1:1 정정.
+     * **포커스 #2.7 Phase C 재작성 (세션 4, 2026-04-25)**: 클라와 완전 대칭 (옵션 3).
      *   원본 `setHeightOffset(-1F)` (SmartMovingSelf L1694-L1704) → `sp.height = 1.8F + (-1F)
      *   = 0.8F` + `getEyeHeight() = height - 0.18F = 0.62F` (ServerPlayerBase L142-L145).
-     *   → 모든 small 상태 (isCrawling/isClimbCrawling/isHeadJumping/isSliding/isSwimming/
-     *   isDiving/isFlying/isLevitating) 통합 0.6×0.8 + 0.62F 가 1:1 정확.
+     *   → 모든 small 상태 (isCrawling/isCrawlClimbing/isHeadJumping/isSliding/isSwimming/
+     *   isDiving/isFlying/isLevitating) 통합 0.6×0.8 + 0.62F.
      *
-     * 이전 (세션 137 ~ 세션 2): SWIMMING + isCrawling → 0.6×1.0 + 0.4F. 1:1 위반.
-     * 정정: SWIMMING + isCrawling → 0.6×0.8 + 0.62F (원본 1:1).
-     *
-     * SLIDING 포즈: isSmall=true 시 서버가 SLIDING 포즈를 설정 (sm_updatePose_server).
-     *   → 동일 0.6×0.8 + 0.62F.
+     * 클라 (MixinPlayerEntityClient.sm_getBaseDimensions_client) 와 동일 8 SM OR 분기.
+     * isFlying 은 vanilla `abilities.flying + cfg.fly + !isSwimming + !isDiving` 원본 공식
+     * (SmartMovingSelf L2509-L2515) 1:1.
      */
     @Inject(method = "getBaseDimensions", at = @At("HEAD"), cancellable = true)
     private void sm_getBaseDimensions_server(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
-        if (pose == EntityPose.SLIDING) {
+        if (!((Object) this instanceof ServerPlayerEntity player)) return;
+        SmartMovingServer sm = SmartMovingServer.get(player);
+
+        // 원본 setHeightOffset(-1F) 상태 전수 — 클라와 동일 OR 분기.
+        // isFlying 원본 공식 (SmartMovingSelf L2509-L2515): cfg.fly && abilities.flying
+        //   && !isSwimming && !isDiving.
+        boolean smFlying = SmartMovingConfig.Config.fly
+                && player.getAbilities().flying
+                && !sm.isSwimming && !sm.isDiving;
+        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
+                       || sm.isHeadJumping || sm.isSliding
+                       || sm.isSwimming || sm.isDiving
+                       || smFlying || sm.isLevitating;
+        if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
         }
-        if (!((Object) this instanceof ServerPlayerEntity player)) return;
-        SmartMovingServer sm = SmartMovingServer.get(player);
-        if (sm.isCrawling && pose == EntityPose.SWIMMING) {
-            // Phase C-1 (세션 3): 1.0F → 0.8F, 0.4F → 0.62F (원본 height - 0.18F)
+
+        // SLIDING POSE 가 vanilla 가 아닌 경로로 들어온 경우 보강 (외부 모드 등).
+        if (pose == EntityPose.SLIDING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
         }
     }
@@ -56,23 +67,41 @@ public abstract class MixinPlayerEntity {
     /**
      * 6-4 (서버): SM 이동 상태에서 vanilla updatePose() 취소 후 SM 포즈 강제 설정.
      *
-     * 서버는 isHeadJumping을 직접 알 수 없으므로 isSmall 비트(State 패킷 bit 1)로 판단:
-     *   isSmall=true → SLIDING (크롤링/슬라이딩/헤드점프 공통 0.8H 상태)
-     *   isCrawling=true → SWIMMING (1.0H)
-     *   그 외 → vanilla updatePose() 정상 실행
+     * **포커스 #2.7 Phase D-1 (세션 4, 2026-04-25)**: 클라와 완전 대칭 (옵션 3).
+     *   클라 (MixinPlayerEntityClient.sm_updatePose_client) 와 동일 4 분기 매핑:
+     *     isCrawling || isCrawlClimbing            → SWIMMING (엎드림)
+     *     isHeadJumping || isSliding               → SLIDING  (납작)
+     *     isSwimming || isDiving                   → SWIMMING (수영)
+     *     isFlying (원본 공식) || isLevitating     → SLIDING  (비행)
+     *     이외                                     → vanilla 통과
+     *
+     * 클라/서버 POSE 동일 sync → datatracker 진동 0.
      */
     @Inject(method = "updatePose", at = @At("HEAD"), cancellable = true)
     private void sm_updatePose_server(CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
 
-        if (sm.isCrawling) {
+        if (sm.isCrawling || sm.isCrawlClimbing) {
             player.setPose(EntityPose.SWIMMING);
             ci.cancel();
-        } else if (sm.isSmall) {
+        } else if (sm.isHeadJumping || sm.isSliding) {
             player.setPose(EntityPose.SLIDING);
             ci.cancel();
+        } else if (sm.isSwimming || sm.isDiving) {
+            player.setPose(EntityPose.SWIMMING);
+            ci.cancel();
+        } else {
+            // isFlying 원본 공식 (SmartMovingSelf L2509-L2515) 1:1.
+            boolean smFlying = SmartMovingConfig.Config.fly
+                    && player.getAbilities().flying
+                    && !sm.isSwimming && !sm.isDiving;
+            if (smFlying || sm.isLevitating) {
+                player.setPose(EntityPose.SLIDING);
+                ci.cancel();
+            }
         }
+        // isDipping / 그 외 → vanilla updatePose() 통과 (STANDING/CROUCHING/FALL_FLYING/SPIN_ATTACK)
     }
 
     /**

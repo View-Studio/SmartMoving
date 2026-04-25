@@ -179,18 +179,24 @@ public float getEyeHeight() {
 > → 기존 Phase A (8 필드 추가) / Phase B (bit 확장) **불필요**. Phase C/D 단순화.
 > 신규 Phase G (네트워크 핸들러 배선) + Phase H (isSmall OR 인코딩 검증) 핵심.
 
-### Phase A. ~~server 필드 확장~~ → **검증만** (세션 2 정정 / 세션 3 [x])
+### Phase A. server 필드 — 세션 4 정정 (옵션 3 1:1 완전 번역)
 
-**A-1. 현 SmartMovingServer 필드 11종 검증**
-- [x] **A-1 (세션 3)**. SmartMovingServer.java L34-L80 검증 완료. 11+ 필드 보유:
-  resetFallDistance / resetTicksForFloatKick / initialized / withinOnLivingUpdate /
-  crawlingCooldown / isCrawling / isSmall / hunger / disableAddExhaustion(+Depth) /
-  isSneakButtonPressed / forceIsSneaking / distanceClimbedModified / clientVersion +
-  패킷 디코딩 필드 4 (isClimbing / isCrawlClimbing / isCeilingClimbing / isWallJumping).
-  원본 11 필드 1:1 충족 (원본보다 약간 풍부).
-- [x] **A-2 (세션 3)**. 누락 0 확인. 원본 PacketStream 도 isHeadJumping/isSliding/
-  isSwimming/isDiving/isDipping/isFlying/isLevitating 서버 비트 **없음** → 1.21.1 도
-  서버 필드 추가 불필요.
+**세션 2/3 정정 → 세션 4 재정정 (옵션 3 채택)**: 사용자 결정 — "1대1 완전번역" → 클라/서버
+POSE 완전 대칭화. SmartMovingServer 에 5 필드 + processStatePacket 5 비트 디코딩 추가.
+
+**A-1. 기존 11 필드 검증** (세션 3 완료)
+- [x] **A-1 (세션 3)**. SmartMovingServer.java L34-L80 11+ 필드 보유. 원본 1:1 충족.
+
+**A-2. 옵션 3 — 5 필드 추가** ★ (세션 4 신규)
+- [x] **A-2a (세션 4)**. SmartMovingServer 에 5 필드 추가 (POSE 분기용):
+  - `isDiving` (bit 9) — POSE.SWIMMING
+  - `isSwimming` (bit 11) — POSE.SWIMMING
+  - `isLevitating` (bit 19) — POSE.SLIDING
+  - `isHeadJumping` (bit 20) — POSE.SLIDING
+  - `isSliding` (bit 21) — POSE.SLIDING
+- [x] **A-2b (세션 4)**. `processStatePacket` 에 5 비트 디코딩 추가 (bit 9/11/19/20/21).
+  isFlying 은 vanilla `player.getAbilities().flying` 으로 직접 참조 — 별도 비트 불필요
+  (원본 공식 `cfg.fly && abilities.flying && !isSwimming && !isDiving` 서버 동일 계산).
 
 ### Phase B. ~~StatePayload 인코딩 확장~~ → **이미 완료** (세션 2 정정)
 
@@ -205,30 +211,44 @@ public float getEyeHeight() {
 ### Phase C. server `MixinPlayerEntity.getBaseDimensions` height 정정 ★
 
 **C-1. 원본 1:1 재작성** — 원본 setHeightOffset(-1F) → height = 0.8F (1.8 - 1)
-- [x] **C-1 (세션 3 완료)**. `MixinPlayerEntity.sm_getBaseDimensions_server` L43-L45
-  정정: `pose == SWIMMING && isCrawling → changing(0.6F, 0.8F).withEyeHeight(0.62F)`.
-  이전 1.0F + 0.4F → 0.8F + 0.62F (원본 1:1).
+- [x] **C-1 (세션 3 → 세션 4 재작성)**. `MixinPlayerEntity.sm_getBaseDimensions_server`
+  세션 3: `pose == SWIMMING && isCrawling → 0.8F + 0.62F` (height 정정만).
+  세션 4: **클라와 완전 대칭** — 8 SM OR 통합 분기 (smSmall):
+  ```java
+  boolean smFlying = cfg.fly && player.getAbilities().flying
+                  && !sm.isSwimming && !sm.isDiving;
+  boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
+                 || sm.isHeadJumping || sm.isSliding
+                 || sm.isSwimming || sm.isDiving
+                 || smFlying || sm.isLevitating;
+  if (smSmall) cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+  if (pose == SLIDING) cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+  ```
 - [x] **C-1a (세션 3 완료)**. 기존 height 1.0F + eyeHeight 0.4F **제거** ✓.
 - [x] **C-1b (세션 3 완료)**. eyeHeight 0.62F 정확 보존 (원본 `height - 0.18F = 0.8 - 0.18`).
+- [x] **C-1c (세션 4)**. 8 SM OR 통합 — Phase 1 client 와 동일 분기.
 
-### Phase D. server `MixinPlayerEntity.updatePose` 단순화 (세션 2 정정)
+### Phase D. server `MixinPlayerEntity.updatePose` 클라와 완전 대칭화 (세션 4 옵션 3)
 
-**D-1. 원본 1:1 — isSmall 단일 분기**
-- [ ] D-1. `sm_updatePose_server` 단순화 — 원본 서버는 **isSmall 단일 필드** 만 보유 →
-  POSE 결정도 isSmall 단일:
+**세션 2 정정 → 세션 4 재정정**: 사용자 결정 "1대1 완전번역" → 옵션 3 (서버 4 분기 클라와
+동일). 클라 SWIMMING/SLIDING 매핑이 8 SM 상태에 따라 다르므로, 서버도 같은 분기 처리하여
+datatracker POSE sync 진동 방지.
+
+**D-1. 클라와 동일 4 분기** ★
+- [x] **D-1 (세션 4)**. `sm_updatePose_server` 4 분기 클라와 완전 대칭:
   ```java
-  if (sm.isSmall) {
-      ((LivingEntity)(Object)this).setPose(EntityPose.SLIDING);
-      ci.cancel();
-  }
-  // isCrawling 자체는 sm.isSmall 에 OR 포함되어 있음 → SLIDING 통일
-  // 이외 → vanilla 통과 (STANDING / CROUCHING / SLEEPING / FALL_FLYING / SPIN_ATTACK 등)
+  if (sm.isCrawling || sm.isCrawlClimbing) → setPose(SWIMMING) + cancel
+  else if (sm.isHeadJumping || sm.isSliding) → setPose(SLIDING) + cancel
+  else if (sm.isSwimming || sm.isDiving) → setPose(SWIMMING) + cancel
+  else if (smFlying || sm.isLevitating) → setPose(SLIDING) + cancel
+  // isDipping / 그 외 → vanilla 통과
   ```
-- [ ] D-1a. 기존 `isCrawling → SWIMMING / isSmall → SLIDING` 2 분기 → isSmall 단일 분기로
-  통합. Phase 1 client 측은 8 SM 상태 OR 결과를 isSmall 로 송신하므로 서버는 isSmall 만
-  체크하면 됨.
-- [ ] D-1b. 검증: SLIDING 포즈 사용 시 vanilla leaningPitch 자동 발동 차단 (POSE_DIMENSIONS
-  미등록 → STANDING 폴백 → Mixin override 로 0.6×0.8 주입).
+  isFlying 원본 공식: `cfg.fly && abilities.flying && !isSwimming && !isDiving`
+  (SmartMovingSelf L2509-L2515).
+- [x] **D-1a (세션 4)**. 클라 (MixinPlayerEntityClient.sm_updatePose_client L109-L135)
+  와 완전 일치 → datatracker POSE sync 진동 0.
+- [x] **D-1b (세션 4)**. SLIDING 포즈 사용 시 vanilla leaningPitch 자동 발동 차단
+  (POSE_DIMENSIONS 미등록 → STANDING 폴백 → Mixin override 로 0.6×0.8 주입).
 
 ### Phase E. ~~heightOffset 렌더링 보정~~ → **N/A 자동 처리** (세션 2 정정)
 
@@ -472,6 +492,66 @@ Phase F (빌드 + 회귀 감사 + 플레이테스트)     — 5+ 원자 (E-3 def
    정확한지 검증. 비대칭 발견 시 정정. 그 후 Phase G (네트워크 핸들러 배선) 본격 진행.
 
 진행률: Phase A 2/2 + B 1/1 + C 3/3 + E 2/2 = **8/23 (~35%)**. Phase D/G/H/F 잔존.
+
+### 세션 4 — 2026-04-25 — Phase D-1 옵션 3 (1:1 완전 번역) — 클라/서버 POSE 완전 대칭화
+
+사용자 지시: 옵션 1/2/3 브리핑 후 "1대1 완전번역으로 가야지" 선택 → 옵션 3 채택.
+
+**핵심 변경**: 서버 POSE 매핑을 클라 (Phase 1) 와 완전 대칭화하여 datatracker POSE sync
+   진동 0 보장.
+
+진행한 작업:
+1. **A-2 (세션 2/3 정정 → 세션 4 재정정)**: SmartMovingServer 에 5 필드 추가 + 5 비트 디코딩.
+   - 추가 필드 (POSE 분기용): isDiving (bit 9) / isSwimming (bit 11) / isLevitating (bit 19)
+     / isHeadJumping (bit 20) / isSliding (bit 21).
+   - isFlying 은 vanilla `player.getAbilities().flying` 으로 직접 참조 + 원본 공식
+     (`cfg.fly && abilities.flying && !isSwimming && !isDiving`) 서버에서 계산 — 별도 비트
+     불필요.
+2. **C 재작성**: `MixinPlayerEntity.sm_getBaseDimensions_server` 8 SM OR 통합:
+   ```java
+   smFlying = cfg.fly && abilities.flying && !isSwimming && !isDiving;
+   smSmall = isCrawling || isCrawlClimbing || isHeadJumping || isSliding
+          || isSwimming || isDiving || smFlying || isLevitating;
+   if (smSmall) → 0.6×0.8 + 0.62F
+   if (pose == SLIDING) → 0.6×0.8 + 0.62F (외부 모드 보강)
+   ```
+   클라 (MixinPlayerEntityClient L62-L74) 와 8 SM OR 분기 완전 동일.
+3. **D-1 신규 작성**: `MixinPlayerEntity.sm_updatePose_server` 4 분기 클라와 완전 대칭:
+   - isCrawling || isCrawlClimbing → SWIMMING
+   - isHeadJumping || isSliding → SLIDING
+   - isSwimming || isDiving → SWIMMING
+   - smFlying || isLevitating → SLIDING
+   - 이외 → vanilla 통과
+   클라 (MixinPlayerEntityClient L114-L133) 와 분기 + 순서 완전 일치.
+4. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/main/java/choco/ratel/smartmoving/server/SmartMovingServer.java` — 5 필드 추가 + 5 비트 디코딩.
+- `src/main/java/choco/ratel/smartmoving/mixin/MixinPlayerEntity.java` — Phase C 재작성 +
+  Phase D-1 신규.
+- `docs/fix/focus_02_7_bbox_server_sync.md` — §3 Phase A/C/D 재정정 + 본 세션 로그.
+
+회귀 0건 (클라/서버 POSE 진동 위험 해소 + dimensions 동치 유지).
+
+완료 전 검증 체크리스트 (세션 4 기준):
+- [근거] 원본 SmartMovingPacketStream L93-L109 (sendState long state) + SmartMovingServer
+  processStatePacket L69-L91 (③ 리서치 §2.1, §2.2)
+- [근거] 1.21.1 이식 위치 — SmartMovingServer L77-L96 (5 필드) + L112-L137 (5 비트 디코딩)
+  + MixinPlayerEntity L37-L60 (getBaseDimensions) + L70-L97 (updatePose)
+- [대응] 원본 ↔ 1.21.1 1:1 (8 SM OR + isFlying 원본 공식 1:1)
+- [분기] 4 분기 (SWIMMING/SLIDING/SWIMMING/SLIDING) + 순서 클라와 완전 일치
+- [상수] 0.6F / 0.8F / 0.62F 정확 보존 ✓
+- [타이밍] @At("HEAD") cancellable=true — vanilla updatePose / getBaseDimensions 차단 ✓
+- [근사] 신규 0건. §7 영구 동치 4건 유지.
+- [신규] 추가 의존 발견 없음. SmartMovingState 21 bit 인코딩은 이미 완료 (Phase B [x]).
+- [회귀] 포커스 #2 Extended (B-N-standup) / #2.5 / #2.6 영향 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **Phase G (네트워크 핸들러 배선 4 원자)** — 핵심 누락 해소.
+   G-1 ServerPlayNetworking.registerReceiver / G-2 클라 매 tick 송신 / G-3 서버 브로드캐스트
+   / G-4 클라 다른 플레이어 수신.
+
+진행률: Phase A 2/2 + B 1/1 + C 3/3 + D 1/1 + E 2/2 = **9/23 (~39%)**. Phase G/H/F 잔존.
 
 ---
 

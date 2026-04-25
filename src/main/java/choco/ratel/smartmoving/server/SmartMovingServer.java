@@ -79,6 +79,25 @@ public final class SmartMovingServer {
     public boolean isCeilingClimbing;
     public boolean isWallJumping;
 
+    // ── 포커스 #2.7 D-1 (세션 4): 클라/서버 POSE 완전 대칭화 — 5 필드 추가 ──
+    // 원본은 PacketStream 7 비트 sync 만, 서버 dimensions 결정은 isSmall 단일 의존.
+    // 그러나 1.21.1 vanilla POSE 시스템은 양쪽 동일 분기 매핑 필요 (datatracker sync 진동
+    // 방지). Phase 1 client 측이 이미 8 SM 상태 → 4 분기 (SWIMMING/SLIDING) 매핑하므로,
+    // 서버도 동일 분기 처리하려면 추가 비트 디코딩 필요. SmartMovingState 는 이미 21 bit
+    // 인코딩 (bit 9 isDiving / 11 isSwimming / 19 isLevitating / 20 isHeadJumping /
+    // 21 isSliding) — 서버에서 디코딩만 추가하면 됨.
+
+    /** SmartMovingState bit 9. SM 다이빙 상태. POSE.SWIMMING 매핑. */
+    public boolean isDiving;
+    /** SmartMovingState bit 11. SM 수영 상태. POSE.SWIMMING 매핑. */
+    public boolean isSwimming;
+    /** SmartMovingState bit 19. Levitate 포션 상태. POSE.SLIDING 매핑. */
+    public boolean isLevitating;
+    /** SmartMovingState bit 20. SM 헤드 점프 상태. POSE.SLIDING 매핑. */
+    public boolean isHeadJumping;
+    /** SmartMovingState bit 21. SM 슬라이딩 상태. POSE.SLIDING 매핑. */
+    public boolean isSliding;
+
     // ── 인스턴스 관리 ─────────────────────────────────────────────
 
     private static final Map<UUID, SmartMovingServer> INSTANCES = new HashMap<>();
@@ -100,14 +119,22 @@ public final class SmartMovingServer {
      * 원본 SmartMovingServer.processStatePacket() 이식.
      *
      * 서버가 읽는 비트:
-     *   bit 12: isCrawlClimbing
-     *   bit 13: isCrawling
-     *   bit 14: isClimbing
-     *   bit 15: isSmall
-     *   bit 18: isCeilingClimbing
-     *   bit 31: isWallJumping
-     *   bit 33: isSneakButtonPressed
-     * 원본 미추출: isSliding(bit 21), angleJumpType(bits 22-24) 등 — 서버 물리에 불필요
+     *   bit 12: isCrawlClimbing  (원본)
+     *   bit 13: isCrawling       (원본)
+     *   bit 14: isClimbing       (원본)
+     *   bit 15: isSmall          (원본)
+     *   bit 18: isCeilingClimbing (원본)
+     *   bit 31: isWallJumping    (원본)
+     *   bit 33: isSneakButtonPressed (원본)
+     *
+     * **포커스 #2.7 D-1 (세션 4)**: 클라/서버 POSE 완전 대칭화 — 5 비트 추가 디코딩.
+     * 원본 PacketStream 미사용 비트 (1.21.1 SmartMovingState 가 이미 인코딩) 를 서버에서
+     * 디코딩하여 sm_updatePose_server 가 클라와 동일 4 분기 처리 가능.
+     *   bit  9: isDiving        ★ 신규 (Phase D-1, POSE.SWIMMING 매핑)
+     *   bit 11: isSwimming      ★ 신규 (Phase D-1, POSE.SWIMMING)
+     *   bit 19: isLevitating    ★ 신규 (Phase D-1, POSE.SLIDING)
+     *   bit 20: isHeadJumping   ★ 신규 (Phase D-1, POSE.SLIDING)
+     *   bit 21: isSliding       ★ 신규 (Phase D-1, POSE.SLIDING)
      */
     public void processStatePacket(ServerPlayerEntity player, long bits) {
         isClimbing        = ((bits >> 14) & 1) != 0;
@@ -119,6 +146,13 @@ public final class SmartMovingServer {
         boolean newSmall = ((bits >> 15) & 1) != 0;
         if (newSmall != isSmall) setSmall(player, newSmall);
         isSneakButtonPressed = ((bits >> 33) & 1) != 0;
+
+        // ── 포커스 #2.7 D-1 신규 디코딩 (POSE 완전 대칭화) ──────────────
+        isDiving       = ((bits >>  9) & 1) != 0;
+        isSwimming     = ((bits >> 11) & 1) != 0;
+        isLevitating   = ((bits >> 19) & 1) != 0;
+        isHeadJumping  = ((bits >> 20) & 1) != 0;
+        isSliding      = ((bits >> 21) & 1) != 0;
 
         // 3-9: 낙하 거리 리셋 조건 (벽점프 포함)
         resetFallDistance     = isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping;
