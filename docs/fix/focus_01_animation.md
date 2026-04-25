@@ -328,6 +328,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-7 청크 2 (SR playerapi: SmartRender 44 + ModelPlayerBase 249 + RenderPlayerBase 163 = 456) — 세션 20 (정합 12 / 오역 0 / 누락 0 / 잉여 0 / N/A 444)
   - **R-7 누적**: 정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 771 = 793 라인 전수
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
+  - [x] R-8 청크 1 (SmartStatistics 198 + Factory 143 = 341) — 세션 21 (정합 16 / 오역 0 / 누락 0 / 잉여 0 / N/A 325)
+  - [ ] R-8 청크 2 (Datas/Data/Context/Other/IEntityPlayerSP 5 파일 ~223줄)
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
 - [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
 
@@ -1191,6 +1193,45 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-7 완료** — SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 793 라인 전수 라인별 1:1 매핑.
 
 **다음 R-단계**: R-8 (SmartStatistics 일체 7 파일 ~620 라인 — SmartStatistics 197 + Factory 142 + Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22). SR mod의 통계 시스템 — 1.21.1 SmartMovingClientState/limbAnimator/age 등가 매핑. §16-10/12/13/15 [오역] 발견 변수 (totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed)의 *원본 갱신 로직* 검증 핵심 1차 자료.
+
+---
+
+### 세션 21 — 2026-04-26 — Phase R / R-8 청크 1 (SmartStatistics + Factory)
+
+**진행한 작업**:
+
+1. **R-8 청크 1 라인별 read** (2 파일):
+   - SmartStatistics.java (198 라인) — 통계 계산 본체 (calculateAllStats + horizontal/vertical/all distance·speed getter + 3 Flattened smoothing)
+   - SmartStatisticsFactory.java (143 라인) — singleton factory + 다른 플레이어 통계 관리
+
+2. **1.21.1 매핑 검증**: vanilla `player.limbAnimator.getPos()/getSpeed()/getPrevSpeed()` 등가 비교 + §16-10/12/13/15 [오역] 발견 변수의 갱신 로직 1차 자료 검증.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-8 청크 1 2 파트 섹션 — 341 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계 (2 파일 합)**:
+- [정합] 16 (SmartStatistics 클래스 / calculateAllStats 시그니처 / diffX/Y/Z 3 / horizontal calculate + apply 3 / 3 getHorizontal getter / getTotalHorizontalDistance method + getCurrentHorizontalSpeed method = 4 + 4)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 325 (수직/3D 거리 통계 갱신 부재 + 3 Flattened smoothing 부재 + Factory singleton 인프라 + 빈 줄)
+- 합계: 341 라인 전수.
+
+**청크 1 발견 (검증 사항)**: 신규 [오역]/[누락]/[잉여] 0건. 다음 **§16-10/12/13/15 [오역] 발견 변수의 갱신 로직 1차 자료 확정**:
+- L59 `data.vertical.calcualte(abs(diffY))` — 수직 거리 누적 갱신 (1.21.1 미이식 → §16-10 [오역] 근거)
+- L60 `data.all.calcualte(sqrt(diffX² + diffY² + diffZ²))` — 3D 거리 누적 (1.21.1 미이식 → §16-12/13/15 [오역] 근거)
+- L90-L113 4 getter (getTotalVertical/getTotalDistance/getCurrentVertical/getCurrentSpeed) — 모두 1.21.1 미이식 → R-1 청크 1/2/3 [오역] 진단 근거 확정.
+- vanilla limbAnimator 등가 검증: `sp.prevLimbSwingAmount → player.limbAnimator.getPrevSpeed` / `sp.limbSwingAmount → player.limbAnimator.getSpeed (limbSwingAmount)` / `sp.limbSwing → player.limbAnimator.getPos (limbSwing)`.
+- 3 Flattened smoothing (10-tick 평균) — 1.21.1 미이식. 노이즈 smoothing 영향 가능 (저우선순위).
+
+**검증 체크리스트 (세션 21 R-8 청크 1)**:
+- [근거] ✓ 2 파일 라인별 read 완료
+- [전수] ✓ 청크 내 341 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 341 일치 (16+0+0+0+325)
+- [발견] ✓ §16-10/12/13/15 [오역] 발견 변수의 갱신 로직 1차 자료 확정
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (player.limbAnimator + R-1 청크 1/2/3 [오역] 근거)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-8 청크 2 (Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22 = 5 파일 ~223 라인). R-8 마지막 청크.
 
 ---
 

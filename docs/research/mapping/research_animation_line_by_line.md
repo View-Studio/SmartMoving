@@ -3607,3 +3607,193 @@
 | **합계** | **5 파일** | **793** | **22** | **0** | **0** | **0** | **771** |
 
 **R-7 완료**. 다음 R-단계: **R-8 (SmartStatistics 일체 7 파일 ~620 라인 — SmartStatistics 197 + Factory 142 + Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22)**. SR mod의 통계 시스템 — 1.21.1 SmartMovingClientState/limbAnimator/age 등가 매핑.
+
+---
+
+## R-8: SmartStatistics 일체 7 파일 (~620 라인) — §16-10/12/13/15 [오역] 발견 변수의 갱신 로직 검증 핵심 1차 자료
+
+### 청크 1 (SmartStatistics 198 + SmartStatisticsFactory 143 = 2 파일 341 라인)
+
+**파트 A — SmartStatistics.java (198 라인)** — 통계 계산 본체 (calculateAllStats + horizontal/vertical/all distance·speed getter + 3 Flattened smoothing)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render.statistics;` | — | [N/A] | |
+| L20 | `import net.minecraft.entity.player.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.util.*;` | — | [N/A] | |
+| L22 | (빈 줄) | — | [N/A] | |
+| L23 | `public class SmartStatistics extends SmartStatisticsContext` | (1.21.1: SmartMovingClientState 흡수 + vanilla limbAnimator 자동) | [정합] | state holder + limbAnimator 등가 |
+| L24 | `{` | — | [N/A] | |
+| L25 | `private final EntityPlayer sp;` | (Mixin: this player 직접) | [N/A] | |
+| L26 | (빈 줄) | — | [N/A] | |
+| L27 | `private float tickDistance;` | (1.21.1 부재 — 3D tick 거리 capture 부재) | [N/A] | |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | `public int ticksRiding;` | (vanilla RidingPose 자동) | [N/A] | |
+| L30 | `public float prevHorizontalAngle = Float.NaN;` | (sm_captureBodyYaw 자체 lerp 자동 — atan2 NaN 방지) | [N/A] | R-6 청크 1 매핑 |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `private final static SmartStatisticsDatas dummy = new SmartStatisticsDatas();` | (캐시 부재) | [N/A] | |
+| L33 | `private final SmartStatisticsDatas[] datas = new SmartStatisticsDatas[10];` | (10-tick 회전 버퍼 — Flattened smoothing용. 1.21.1 부재) | [N/A] | |
+| L34 | `private int currentDataIndex = -1;` | — | [N/A] | |
+| L35 | (빈 줄) | — | [N/A] | |
+| L36 | `public SmartStatistics(EntityPlayer sp)` | (Mixin: 생성자 부재 — vanilla 자동) | [N/A] | |
+| L37 | `{` | — | [N/A] | |
+| L38 | `this.sp = sp;` | — | [N/A] | |
+| L39 | `}` | — | [N/A] | |
+| L40 | (빈 줄) | — | [N/A] | |
+| L41 | `public void calculateAllStats(boolean remote)` | (1.21.1: SmartMovingClientStateUpdater 자동 + vanilla limbAnimator 자동) | [정합] | 매 tick 통계 갱신 |
+| L42 | `{` | — | [N/A] | |
+| L43 | `double diffX = sp.posX - sp.prevPosX;` | `vel.x` (vanilla 자체 lerp) | [정합] | |
+| L44 | `double diffY = sp.posY - sp.prevPosY;` | `vel.y` | [정합] | |
+| L45 | `double diffZ = sp.posZ - sp.prevPosZ;` | `vel.z` | [정합] | |
+| L46 | (빈 줄) | — | [N/A] | |
+| L47 | `SmartStatisticsDatas previous = get();` | (10-tick 회전 버퍼 부재) | [N/A] | |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49 | `currentDataIndex++;` | — | [N/A] | |
+| L50 | `if(currentDataIndex >= datas.length)` | — | [N/A] | |
+| L51 | `currentDataIndex = 0;` | — | [N/A] | |
+| L52 | (빈 줄) | — | [N/A] | |
+| L53 | `SmartStatisticsDatas data = datas[currentDataIndex];` | — | [N/A] | |
+| L54 | `if(data == null)` | — | [N/A] | |
+| L55 | `data = datas[currentDataIndex] = new SmartStatisticsDatas();` | — | [N/A] | |
+| L56 | `data.initialize(previous);` | — | [N/A] | |
+| L57 | (빈 줄) | — | [N/A] | |
+| L58 | `data.horizontal.calcualte(MathHelper.sqrt_double(diffX * diffX + diffZ * diffZ));` | vanilla `player.limbAnimator.update(sqrt(diffX²+diffZ²))` 등가 — limbSwing/limbSwingAmount 자동 | [정합] | 수평 거리 → vanilla limbSwing 등가 |
+| L59 | `data.vertical.calcualte((float)Math.abs(diffY));` | (1.21.1 부재 — 수직 거리 capture 부재) | [N/A] | §16-10 [오역] 발견 변수 갱신 부재 |
+| L60 | `tickDistance = data.all.calcualte(MathHelper.sqrt_double(diffX * diffX + diffY * diffY + diffZ * diffZ));` | (1.21.1 부재 — 3D 거리 capture 부재) | [N/A] | §16-12/13/15 [오역] 발견 변수 갱신 부재 |
+| L61 | (빈 줄) | — | [N/A] | |
+| L62 | `if(calculateHorizontalStats && !remote)` | (vanilla 자체 limbSwing 갱신은 모든 플레이어 자동) | [정합] | |
+| L63 | `data.horizontal.apply(sp);` | (vanilla limbSwing/limbSwingAmount 자동 — sp 직접 갱신) | [정합] | 자기 자신 직접 갱신 |
+| L64 | `}` | — | [N/A] | |
+| L65 | (빈 줄) | — | [N/A] | |
+| L66 | `public void calculateRiddenStats()` | (vanilla RidingPose 자동) | [N/A] | |
+| L67 | `{` | — | [N/A] | |
+| L68 | `ticksRiding++;` | (vanilla 자동) | [N/A] | |
+| L69 | `}` | — | [N/A] | |
+| L70 | (빈 줄) | — | [N/A] | |
+| L71 | `public float getHorizontalPrevLegYaw() { return sp.prevLimbSwingAmount; }` | `player.limbAnimator.getPrevSpeed()` 등가 | [정합] | vanilla limbAnimator 등가 |
+| L72 | `public float getHorizontalLegYaw() { return sp.limbSwingAmount; }` | `player.limbAnimator.getSpeed(tickDelta)` 등가 (= limbSwingAmount) | [정합] | |
+| L73 | `public float getHorizontalTotal() { return sp.limbSwing; }` | `player.limbAnimator.getPos(tickDelta)` 등가 (= limbSwing) | [정합] | |
+| L74 | (빈 줄) | — | [N/A] | |
+| L75 | `public float getVerticalPrevLegYaw() { return datas[currentDataIndex].vertical.prevLegYaw; }` | (1.21.1 부재) | [N/A] | §16-10 |
+| L76 | `public float getVerticalLegYaw() { return datas[currentDataIndex].vertical.legYaw; }` | (1.21.1 부재) | [N/A] | §16-10 |
+| L77 | `public float getVerticalTotal() { return datas[currentDataIndex].vertical.total; }` | (1.21.1 부재) | [N/A] | §16-10 |
+| L78 | (빈 줄) | — | [N/A] | |
+| L79 | `public float getAllPrevLegYaw() { return datas[currentDataIndex].all.prevLegYaw; }` | (1.21.1 부재) | [N/A] | §16-12/13/15 |
+| L80 | `public float getAllLegYaw() { return datas[currentDataIndex].all.legYaw; }` | (1.21.1 부재) | [N/A] | |
+| L81 | `public float getAllTotal() { return datas[currentDataIndex].all.total; }` | (1.21.1 부재) | [N/A] | |
+| L82 | (빈 줄) | — | [N/A] | |
+| L83 | `public float getTickDistance() { return tickDistance; }` | (1.21.1 부재) | [N/A] | |
+| L84 | (빈 줄) | — | [N/A] | |
+| L85 | `public float getTotalHorizontalDistance(float renderPartialTicks)` | `player.limbAnimator.getPos(tickDelta)` (= limbSwing) | [정합] | sm_setAngles limbSwing 인자 |
+| L86 | `{` | — | [N/A] | |
+| L87 | `return get(renderPartialTicks).getTotalHorizontalDistance();` | (vanilla limbSwing 자체) | [정합] | |
+| L88 | `}` | — | [N/A] | |
+| L89 | (빈 줄) | — | [N/A] | |
+| L90 | `public float getTotalVerticalDistance(float renderPartialTicks)` | (1.21.1 미이식 — vanilla limbSwing 부정확 매핑) | [N/A] | ⚠️ §16-10 [오역] 발견 변수 — 1.21.1 측에서 limbSwing 잘못 매핑 |
+| L91 | `{` | — | [N/A] | |
+| L92 | `return get(renderPartialTicks).getTotalVerticalDistance();` | — | [N/A] | |
+| L93 | `}` | — | [N/A] | |
+| L94 | (빈 줄) | — | [N/A] | |
+| L95 | `public float getTotalDistance(float renderPartialTicks)` | (1.21.1 미이식 — limbSwing/animationProgress 잘못 매핑) | [N/A] | ⚠️ §16-12/13/15 [오역] 발견 변수 |
+| L96 | `{` | — | [N/A] | |
+| L97 | `return get(renderPartialTicks).getTotalDistance();` | — | [N/A] | |
+| L98 | `}` | — | [N/A] | |
+| L99 | (빈 줄) | — | [N/A] | |
+| L100 | `public float getCurrentHorizontalSpeed(float renderPartialTicks)` | `player.limbAnimator.getSpeed(tickDelta)` (= limbSwingAmount) | [정합] | sm_setAngles limbSwingAmount 인자 |
+| L101 | `{` | — | [N/A] | |
+| L102 | `return get(renderPartialTicks).getCurrentHorizontalSpeed();` | — | [정합] | |
+| L103 | `}` | — | [N/A] | |
+| L104 | (빈 줄) | — | [N/A] | |
+| L105 | `public float getCurrentVerticalSpeed(float renderPartialTicks)` | (1.21.1 미이식 — limbSwingAmount 잘못 매핑) | [N/A] | ⚠️ §16-10 [오역] 발견 변수 |
+| L106 | `{` | — | [N/A] | |
+| L107 | `return get(renderPartialTicks).getCurrentVerticalSpeed();` | — | [N/A] | |
+| L108 | `}` | — | [N/A] | |
+| L109 | (빈 줄) | — | [N/A] | |
+| L110 | `public float getCurrentSpeed(float renderPartialTicks)` | (1.21.1 미이식 — limbSwingAmount 잘못 매핑) | [N/A] | ⚠️ §16-13/15 [오역] 발견 변수 |
+| L111 | `{` | — | [N/A] | |
+| L112 | `return get(renderPartialTicks).getCurrentSpeed();` | — | [N/A] | |
+| L113 | `}` | — | [N/A] | |
+| L114 | (빈 줄) | — | [N/A] | |
+| L115-L118 | `private SmartStatisticsDatas get()` 4 라인 | (캐시 부재) | [N/A] | |
+| L119 | (빈 줄) | — | [N/A] | |
+| L120-L125 | `private SmartStatisticsDatas get(float renderPartialTicks)` 6 라인 | (lerp 자동) | [N/A] | |
+| L126 | (빈 줄) | — | [N/A] | |
+| L127-L149 | `getCurrentHorizontalSpeedFlattened(float renderPartialTicks, int strength)` 23 라인 (10-tick 회전 버퍼 평균) | (1.21.1: 단순 limbSwingAmount 사용 — flattened 부재) | [N/A] | smoothing 미이식 |
+| L150 | (빈 줄) | — | [N/A] | |
+| L151-L173 | `getCurrentVerticalSpeedFlattened(...)` 23 라인 | (1.21.1 부재) | [N/A] | §16-10 영향 |
+| L174 | (빈 줄) | — | [N/A] | |
+| L175-L197 | `getCurrentSpeedFlattened(...)` 23 라인 | (1.21.1 부재) | [N/A] | §16-13/15 영향 |
+| L198 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 A 통계: 정합 16 / 오역 0 / 누락 0 / 잉여 0 / N/A 182 = 198 라인 전수.** 핵심 검증:
+- L43-L45 diffX/Y/Z + L58 horizontal calculate + L62-L63 apply → vanilla `limbAnimator.update` 자동 등가 [정합].
+- L71-L73 getHorizontalPrev/LegYaw/Total → `limbAnimator.getPrevSpeed/getSpeed/getPos` 등가 [정합].
+- L85-L88 getTotalHorizontalDistance / L100-L103 getCurrentHorizontalSpeed → vanilla `limbSwing` / `limbSwingAmount` 등가 [정합].
+- ⚠️ L59 vertical calculate / L60 all calculate / L75-L83 vertical/all getter / L90-L113 getTotalVertical/getTotalDistance/getCurrentVertical/getCurrentSpeed = §16-10/12/13/15 [오역] 발견 변수의 *원본 갱신 로직*. 1.21.1 부재 → R-1 청크 1/2 [오역] 진단 근거 확정.
+- L127-L197 3 Flattened (10-tick 평균 smoothing) — 1.21.1 미이식. 진폭 노이즈 영향 가능 (저우선순위).
+
+**파트 B — SmartStatisticsFactory.java (143 라인)** — singleton factory + 다른 플레이어 통계 관리
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render.statistics;` | — | [N/A] | |
+| L20 | `import java.util.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22-L25 | imports 4 라인 (Minecraft/client.entity/entity/entity.player) | — | [N/A] | |
+| L26 | (빈 줄) | — | [N/A] | |
+| L27 | `public class SmartStatisticsFactory` | (1.21.1: SmartMovingClientStateAccess 등가 — singleton 부재) | [N/A] | |
+| L28 | `{` | — | [N/A] | |
+| L29 | `private static SmartStatisticsFactory factory;` | (싱글톤 부재) | [N/A] | |
+| L30 | (빈 줄) | — | [N/A] | |
+| L31 | `private Hashtable<Integer, SmartStatisticsOther> otherStatistics;` | (1.21.1: 모든 플레이어 단일 sm via Mixin Accessor) | [N/A] | |
+| L32 | (빈 줄) | — | [N/A] | |
+| L33-L38 | 생성자 6 라인 (싱글톤 가드) | (Mixin 자동) | [N/A] | |
+| L39 | (빈 줄) | — | [N/A] | |
+| L40-L43 | `isInitialized()` 4 라인 | (Mixin 자동) | [N/A] | |
+| L44 | (빈 줄) | — | [N/A] | |
+| L45-L49 | `initialize()` 5 라인 | (ModInitializer 자동) | [N/A] | |
+| L50 | (빈 줄) | — | [N/A] | |
+| L51-L54 | `handleMultiPlayerTick(Minecraft)` 4 라인 | (1.21.1: ClientTickEvent 자동) | [N/A] | |
+| L55 | (빈 줄) | — | [N/A] | |
+| L56-L59 | `getInstance(EntityPlayer)` 4 라인 | (Mixin Accessor 자동) | [N/A] | |
+| L60 | (빈 줄) | — | [N/A] | |
+| L61-L64 | `getOtherStatistics(int entityId)` 4 라인 | (entity ID 기반 — Mixin 자동) | [N/A] | |
+| L65 | (빈 줄) | — | [N/A] | |
+| L66-L69 | `getOtherStatistics(EntityOtherPlayerMP entity)` 4 라인 | (entity 직접 — Mixin 자동) | [N/A] | |
+| L70 | (빈 줄) | — | [N/A] | |
+| L71-L99 | `doHandleMultiPlayerTick(Minecraft)` 29 라인 (다른 플레이어 통계 갱신 + GC) | (1.21.1: 모든 플레이어 ClientWorld iterator + ClientTickEvent + Mixin 자동) | [N/A] | vanilla limbAnimator 자체 갱신 |
+| L100 | (빈 줄) | — | [N/A] | |
+| L101-L108 | `doGetInstance(EntityPlayer)` 8 라인 (자기 자신 vs 타인 분기) | (1.21.1: 모든 플레이어 동일 Mixin Accessor — 분기 부재) | [N/A] | |
+| L109 | (빈 줄) | — | [N/A] | |
+| L110-L120 | `doGetOtherStatistics(int entityId)` 11 라인 (Hashtable 조회 + 추가) | (Mixin 자동) | [N/A] | |
+| L121 | (빈 줄) | — | [N/A] | |
+| L122-L128 | `doGetOtherStatistics(EntityOtherPlayerMP)` 7 라인 | (Mixin 자동) | [N/A] | |
+| L129 | (빈 줄) | — | [N/A] | |
+| L130-L135 | `tryGetOtherStatistics(int entityId)` 6 라인 (lazy init Hashtable) | (Mixin 자동) | [N/A] | |
+| L136 | (빈 줄) | — | [N/A] | |
+| L137-L142 | `addOtherStatistics(EntityOtherPlayerMP entity)` 6 라인 | (Mixin 자동) | [N/A] | |
+| L143 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 B 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 143 = 143 라인 전수.** singleton + Hashtable 인프라 — 1.21.1 SmartMovingClientStateAccess Mixin 등가, 본 포커스 외.
+
+**R-8 청크 1 통계 (2 파일 합)**:
+- 파트 A (SmartStatistics): 16 / 0 / 0 / 0 / 182 = 198 라인
+- 파트 B (Factory): 0 / 0 / 0 / 0 / 143 = 143 라인
+- **합계: 정합 16 / 오역 0 / 누락 0 / 잉여 0 / N/A 325 = 341 라인 전수**
+
+**청크 1 발견 (검증 사항)**: 신규 [오역]/[누락]/[잉여] 0건. 다음 핵심 검증:
+- **§16-10/12/13/15 [오역] 발견 변수의 갱신 로직 1차 자료 확정**:
+  - L59 `data.vertical.calcualte(abs(diffY))` — 수직 거리 누적 갱신 (1.21.1 미이식 → §16-10 [오역] 근거)
+  - L60 `data.all.calcualte(sqrt(diffX² + diffY² + diffZ²))` — 3D 거리 누적 (1.21.1 미이식 → §16-12/13/15 [오역] 근거)
+  - L90-L113 4 getter (getTotalVertical/getTotalDistance/getCurrentVertical/getCurrentSpeed) — 모두 1.21.1 미이식 → R-1 청크 1/2 [오역] 진단 근거 확정.
+- **vanilla limbAnimator 등가 검증**:
+  - sp.prevLimbSwingAmount → player.limbAnimator.getPrevSpeed
+  - sp.limbSwingAmount → player.limbAnimator.getSpeed (limbSwingAmount)
+  - sp.limbSwing → player.limbAnimator.getPos (limbSwing)
+- **3 Flattened smoothing (10-tick 평균)** — 1.21.1 미이식. 노이즈 smoothing 영향 가능 (저우선순위).
+
+**다음 청크**: R-8 청크 2 (Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22 = 5 파일 ~223 라인). R-8 마지막 청크.
