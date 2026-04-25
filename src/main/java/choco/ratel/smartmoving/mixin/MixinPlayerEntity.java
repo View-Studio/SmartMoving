@@ -27,10 +27,17 @@ public abstract class MixinPlayerEntity {
     /**
      * 6-1 (서버): SM 포즈별 커스텀 EntityDimensions 반환.
      *
-     * SLIDING 포즈: isSmall=true 시 서버가 SLIDING 포즈를 설정 (sm_updatePose_server).
-     *   → SM 원본: height=0.8F, eyeHeight=0.62F (pose_strategy.md M-04 확인)
+     * **포커스 #2.7 Phase C-1 (세션 3, 2026-04-25)**: 원본 1:1 정정.
+     *   원본 `setHeightOffset(-1F)` (SmartMovingSelf L1694-L1704) → `sp.height = 1.8F + (-1F)
+     *   = 0.8F` + `getEyeHeight() = height - 0.18F = 0.62F` (ServerPlayerBase L142-L145).
+     *   → 모든 small 상태 (isCrawling/isClimbCrawling/isHeadJumping/isSliding/isSwimming/
+     *   isDiving/isFlying/isLevitating) 통합 0.6×0.8 + 0.62F 가 1:1 정확.
      *
-     * SWIMMING 포즈 + isCrawling: vanilla 0.6H → SM 크롤링 1.0H로 교체.
+     * 이전 (세션 137 ~ 세션 2): SWIMMING + isCrawling → 0.6×1.0 + 0.4F. 1:1 위반.
+     * 정정: SWIMMING + isCrawling → 0.6×0.8 + 0.62F (원본 1:1).
+     *
+     * SLIDING 포즈: isSmall=true 시 서버가 SLIDING 포즈를 설정 (sm_updatePose_server).
+     *   → 동일 0.6×0.8 + 0.62F.
      */
     @Inject(method = "getBaseDimensions", at = @At("HEAD"), cancellable = true)
     private void sm_getBaseDimensions_server(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
@@ -41,7 +48,8 @@ public abstract class MixinPlayerEntity {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.isCrawling && pose == EntityPose.SWIMMING) {
-            cir.setReturnValue(EntityDimensions.changing(0.6F, 1.0F).withEyeHeight(0.4F));
+            // Phase C-1 (세션 3): 1.0F → 0.8F, 0.4F → 0.62F (원본 height - 0.18F)
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
         }
     }
 

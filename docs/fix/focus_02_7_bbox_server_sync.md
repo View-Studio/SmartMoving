@@ -179,14 +179,18 @@ public float getEyeHeight() {
 > → 기존 Phase A (8 필드 추가) / Phase B (bit 확장) **불필요**. Phase C/D 단순화.
 > 신규 Phase G (네트워크 핸들러 배선) + Phase H (isSmall OR 인코딩 검증) 핵심.
 
-### Phase A. ~~server 필드 확장~~ → **검증만** (세션 2 정정)
+### Phase A. ~~server 필드 확장~~ → **검증만** (세션 2 정정 / 세션 3 [x])
 
 **A-1. 현 SmartMovingServer 필드 11종 검증**
-- [ ] A-1. SmartMovingServer.java 의 isCrawling/isSmall/isClimbing/isCrawlClimbing/
-  isCeilingClimbing/isWallJumping/isSneakButtonPressed + 보조 4 (resetFallDistance/
-  crawlingCooldown/hunger 등) 가 원본 11 필드와 1:1 일치하는지 grep.
-- [ ] A-2. 누락 필드 0건 확인 시 **Phase A 완결**. 원본도 isHeadJumping/isSliding/
-  isSwimming/isDiving/isDipping/isFlying/isLevitating 서버 필드 **없음** — 추가 불필요.
+- [x] **A-1 (세션 3)**. SmartMovingServer.java L34-L80 검증 완료. 11+ 필드 보유:
+  resetFallDistance / resetTicksForFloatKick / initialized / withinOnLivingUpdate /
+  crawlingCooldown / isCrawling / isSmall / hunger / disableAddExhaustion(+Depth) /
+  isSneakButtonPressed / forceIsSneaking / distanceClimbedModified / clientVersion +
+  패킷 디코딩 필드 4 (isClimbing / isCrawlClimbing / isCeilingClimbing / isWallJumping).
+  원본 11 필드 1:1 충족 (원본보다 약간 풍부).
+- [x] **A-2 (세션 3)**. 누락 0 확인. 원본 PacketStream 도 isHeadJumping/isSliding/
+  isSwimming/isDiving/isDipping/isFlying/isLevitating 서버 비트 **없음** → 1.21.1 도
+  서버 필드 추가 불필요.
 
 ### Phase B. ~~StatePayload 인코딩 확장~~ → **이미 완료** (세션 2 정정)
 
@@ -201,21 +205,11 @@ public float getEyeHeight() {
 ### Phase C. server `MixinPlayerEntity.getBaseDimensions` height 정정 ★
 
 **C-1. 원본 1:1 재작성** — 원본 setHeightOffset(-1F) → height = 0.8F (1.8 - 1)
-- [ ] C-1. `sm_getBaseDimensions_server` 를 **height 0.8F** 로 정정 (현 1.0F → 0.8F 가
-  1:1 위반):
-  ```java
-  if (sm.isSmall) {
-      cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
-      return;
-  }
-  if (pose == EntityPose.SLIDING) {
-      cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
-  }
-  // 이외 → vanilla 통과
-  ```
-- [ ] C-1a. 기존 `pose == SWIMMING && isCrawling → height 1.0F` ★ **제거** (1:1 위반).
-  isSmall 단일 분기로 통합.
-- [ ] C-1b. eyeHeight `0.62F` 정확 보존 (원본 `height - 0.18F = 0.8 - 0.18 = 0.62`).
+- [x] **C-1 (세션 3 완료)**. `MixinPlayerEntity.sm_getBaseDimensions_server` L43-L45
+  정정: `pose == SWIMMING && isCrawling → changing(0.6F, 0.8F).withEyeHeight(0.62F)`.
+  이전 1.0F + 0.4F → 0.8F + 0.62F (원본 1:1).
+- [x] **C-1a (세션 3 완료)**. 기존 height 1.0F + eyeHeight 0.4F **제거** ✓.
+- [x] **C-1b (세션 3 완료)**. eyeHeight 0.62F 정확 보존 (원본 `height - 0.18F = 0.8 - 0.18`).
 
 ### Phase D. server `MixinPlayerEntity.updatePose` 단순화 (세션 2 정정)
 
@@ -239,14 +233,15 @@ public float getEyeHeight() {
 ### Phase E. ~~heightOffset 렌더링 보정~~ → **N/A 자동 처리** (세션 2 정정)
 
 **E-1. vanilla eyeHeight / lighting 자동 반영 검증**
-- [x] **E-1 (세션 2 검증)**. 1.21.1 `Entity.calculateDimensions` → `standingEyeHeight =
-  newDims.eyeHeight()` 즉시 반영. lighting 계산은 `entity.getEyeY()` (eyeHeight 기반) 자동
-  사용 → 원본 `getBrightness` 의 `posY -= heightOffset` 보정 **불필요**. §7 영구 동치 등록.
+- [x] **E-1 (세션 2 검증, 세션 3 재확인)**. 1.21.1 `Entity.calculateDimensions` →
+  `standingEyeHeight = newDims.eyeHeight()` 즉시 반영. lighting 계산은 `entity.getEyeY()`
+  (eyeHeight 기반) 자동 사용 → 원본 `getBrightness` 의 `posY -= heightOffset` 보정
+  **불필요**. §7 영구 동치 등록.
 
 **E-2. afterMoveEntity posY 보정 자동 처리 검증**
-- [x] **E-2 (세션 2 검증)**. 원본 `afterMoveEntity` L1608-L1609 `if (heightOffset != 0F)
-  posY += heightOffset` — 1.21.1 `Entity.calculateDimensions` 의 `refreshPosition() +
-  setBoundingBox()` 즉시 반영으로 자동 처리. §7 영구 동치 등록.
+- [x] **E-2 (세션 2 검증, 세션 3 재확인)**. 원본 `afterMoveEntity` L1608-L1609
+  `if (heightOffset != 0F) posY += heightOffset` — 1.21.1 `Entity.calculateDimensions`
+  의 `refreshPosition() + setBoundingBox()` 즉시 반영으로 자동 처리. §7 영구 동치 등록.
 
 ### Phase G. ★ 네트워크 핸들러 배선 — **NEW (세션 2 추가)**
 
@@ -430,6 +425,53 @@ Phase F (빌드 + 회귀 감사 + 플레이테스트)     — 5+ 원자 (E-3 def
 
 **다음 세션 권고**: Phase A-1 + B-1 (검증만, 코드 변경 0) → Phase C-1 (height 0.8F 정정,
    1:1 위반 해소). Phase G/H 는 후속 세션.
+
+### 세션 3 — 2026-04-25 — Phase A 검증 + B/E 마킹 + Phase C-1 정정
+
+사용자 지시: 포커스 #2.7 진입 prompt 제공 — "엄격 1:1" + 진입 첫 액션 5단계.
+
+진행한 작업:
+1. **1.21.1 현재 코드 read** (MixinPlayerEntity / SmartMovingServer / SmartMovingState).
+2. **A-1 검증** (코드 변경 0): SmartMovingServer L34-L80 11+ 필드 (resetFallDistance/
+   resetTicksForFloatKick/initialized/withinOnLivingUpdate/crawlingCooldown/isCrawling/
+   isSmall/hunger/disableAddExhaustion(+Depth)/isSneakButtonPressed/forceIsSneaking/
+   distanceClimbedModified/clientVersion + 패킷 디코딩 4) 보유. 원본 11 필드 1:1 충족.
+3. **A-2 검증** (코드 변경 0): 누락 0. 원본 PacketStream 도 isHeadJumping/isSliding/
+   isSwimming/isDiving/isDipping/isFlying/isLevitating 비트 없음 — 추가 불필요.
+4. **B-1 / E-1 / E-2 마킹** (이미 [x] 였음 — 재확인): SmartMovingState 21 bit 인코딩 완료
+   확인 + vanilla EntityDimensions 자동 처리 재확인.
+5. **C-1 정정** ★ (1:1 위반 해소 첫 코드 변경):
+   - `MixinPlayerEntity.sm_getBaseDimensions_server` L43-L45.
+   - 이전: `pose == SWIMMING && isCrawling → changing(0.6F, 1.0F).withEyeHeight(0.4F)`.
+   - 정정: `pose == SWIMMING && isCrawling → changing(0.6F, 0.8F).withEyeHeight(0.62F)`.
+   - 근거: 원본 `setHeightOffset(-1F)` → `sp.height = 1.8 + (-1) = 0.8F` +
+     `getEyeHeight() = height - 0.18F = 0.8 - 0.18 = 0.62F` (ServerPlayerBase L142-L145).
+6. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/main/java/choco/ratel/smartmoving/mixin/MixinPlayerEntity.java` — Phase C-1 정정.
+- `docs/fix/focus_02_7_bbox_server_sync.md` — §3 Phase A/B/C/E [x] 마킹 + 본 세션 로그.
+
+회귀 0건 (Phase 1 client 측 0.8F + 0.62F 와 이제 완전 대칭).
+
+완료 전 검증 체크리스트 (세션 3 기준):
+- [근거] 원본 SmartMovingSelf L1681-L1704 setHeightOffset / ServerPlayerBase L142-L145
+  getEyeHeight (③ 리서치 §1.1, §3.2 발췌)
+- [근거] 1.21.1 이식 위치 — MixinPlayerEntity L35-L46 (sm_getBaseDimensions_server)
+- [대응] 원본 ↔ 1.21.1 1:1 (setHeightOffset(-1F) → 0.6×0.8 + 0.62F)
+- [분기] SLIDING 분기 + SWIMMING+isCrawling 분기 모두 0.8F + 0.62F 통일 ✓
+- [상수] 0.6F (width) / 0.8F (height) / 0.62F (eyeHeight) 정확 보존 ✓
+- [타이밍] HEAD cancellable=true — vanilla getBaseDimensions 차단 ✓
+- [근사] 신규 0건. §7 영구 동치 4건 유지.
+- [신규] 추가 의존 발견 없음
+- [회귀] 포커스 #2 Extended (B-N-standup) / #2.5 / #2.6 영향 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **Phase D-1 (server updatePose 분기 검토)** — 현 `if (isCrawling)
+   SWIMMING / else if (isSmall) SLIDING` 분기가 클라 Phase 1 매핑 (8 SM 상태) 과 정합
+   정확한지 검증. 비대칭 발견 시 정정. 그 후 Phase G (네트워크 핸들러 배선) 본격 진행.
+
+진행률: Phase A 2/2 + B 1/1 + C 3/3 + E 2/2 = **8/23 (~35%)**. Phase D/G/H/F 잔존.
 
 ---
 
