@@ -198,10 +198,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ### Phase A. Config Factor 필드 전수 이식 (SmartMovingConfig.java)
 
-**A-1. Jump base factor 2건**
-- [ ] A-1a. `jumpHorizontalFactor = 1F` (원본 L230, IncreasingFactor >= 1)
-- [ ] A-1b. `jumpVerticalFactor = 1F` (원본 L231, PositiveFactor >= 0)
-- [ ] A-1c. `jumpControlFactor = 1F` (원본 L228, DecreasingFactor >= 0, <= 1)
+**A-1. Jump base factor 3건**
+- [x] A-1a. `jumpHorizontalFactor = 1F` (원본 L230, IncreasingFactor >= 1) — 세션 1
+- [x] A-1b. `jumpVerticalFactor = 1F` (원본 L231, PositiveFactor >= 0) — 세션 1
+- [x] A-1c. `jumpControlFactor = 1F` (원본 L228, DecreasingFactor >= 0, <= 1) — 세션 1
 
 **A-2. Speed 별 Horizontal/Vertical factor 10건**
 - [ ] A-2a. `standJumpVerticalFactor = 1F` (원본 L235)
@@ -691,6 +691,38 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 
 **다음 세션 권고**: Phase A-1 (jumpHorizontalFactor / jumpVerticalFactor / jumpControlFactor
 3건 base factor 추가).
+
+### 세션 1 — 2026-04-25 — Phase A-1 (Jump base factor 3건)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-1 3건 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보:
+   - `SmartMovingConfig.java` L228 `_jumpControlFactor = DecreasingFactor("move.jump.control.factor").defaults(1F)` (>= 0, <= 1)
+   - `SmartMovingConfig.java` L230 `_jumpHorizontalFactor = IncreasingFactor("move.jump.horizontal.factor")` — defaults 미지정 → IncreasingFactor 기본 1F (`Properties.java` L189-L190)
+   - `SmartMovingConfig.java` L231 `_jumpVerticalFactor = PositiveFactor("move.jump.vertical.factor")` — defaults 미지정 → PositiveFactor 기본 1F (`Properties.java` L185-L186)
+2. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 (L163-L172, ── Jumping ── 주석 직하단, wallUpJump 위)
+   - `load()` Properties IO 등록 (L949-L951)
+   - `save()` Properties IO 등록 (L1078-L1080)
+   - key 명: `move.jump.control.factor` / `move.jump.horizontal.factor` / `move.jump.vertical.factor`
+3. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 1 기준):
+- [근거] 원본 라인 확보 — 로컬 `C:\Work\minecraft\porting\sm_original\SmartMoving\` L228/L230/L231 + Properties.java L185-L192
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` L163-L172 / L949-L951 / L1078-L1080
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치)
+- [분기] 분기 없음 (단순 필드 3개)
+- [상수] 1F × 3 (DecreasingFactor / IncreasingFactor / PositiveFactor 모두 기본 1F)
+- [타이밍] 필드 선언만 — 호출 타이밍 없음. 실제 사용은 Phase B/D 에서 발생.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음. §3 변경 없음.
+- [회귀] 신규 필드만 추가 — 기존 코드 영향 없음. wallUpJump 등 기존 jumping 필드 무영향.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (17s)
+
+다음 세션 권고: Phase A-2 (Speed 별 Horizontal/Vertical factor 9건 — A-2a~A-2i, 기존 A-2 헤딩 "10건"은 9건 오기).
+
+진행률: Phase A 3/40+ (~7.5%), 전체 #2.5 3/~110 (~2.7%).
 
 ---
 

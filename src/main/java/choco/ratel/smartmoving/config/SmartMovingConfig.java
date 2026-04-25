@@ -160,6 +160,17 @@ public class SmartMovingConfig {
     public boolean levitateSmall = true;
 
     // ── Jumping ─────────────────────────────────────────────────
+    // === Jump base factor (원본 SmartMovingConfig L228-L231) ===
+    // 원본 L228: _jumpControlFactor = DecreasingFactor("move.jump.control.factor").defaults(1F)
+    //   공중 점프 제어 이동 factor (>= 0, <= 1). DecreasingFactor 기본 1F.
+    public float jumpControlFactor = 1F;
+    // 원본 L230: _jumpHorizontalFactor = IncreasingFactor("move.jump.horizontal.factor")
+    //   tryJump getJumpHorizontalFactor 의 base factor (>= 1). IncreasingFactor 기본 1F.
+    public float jumpHorizontalFactor = 1F;
+    // 원본 L231: _jumpVerticalFactor = PositiveFactor("move.jump.vertical.factor")
+    //   tryJump getJumpVerticalFactor 의 base factor (>= 0). PositiveFactor 기본 1F.
+    public float jumpVerticalFactor = 1F;
+
     // 원본: _wallUpJump = Unmodified("move.jump.wall") → 기본값 true
     public boolean wallUpJump = true;
     // 원본: _wallHeadJump = Unmodified("move.jump.wall.head") → 기본값 true
@@ -945,6 +956,9 @@ public class SmartMovingConfig {
         runOnSprintRelease       = getBool(p,   "move.sprint.key.release.run",    runOnSprintRelease);
         walkOnSprintRelease      = getBool(p,   "move.sprint.key.release.walk",   walkOnSprintRelease);
         levitateSmall            = getBool(p,   "move.levitate.small",            levitateSmall);
+        jumpControlFactor              = getFloat(p, "move.jump.control.factor",          jumpControlFactor);
+        jumpHorizontalFactor           = getFloat(p, "move.jump.horizontal.factor",       jumpHorizontalFactor);
+        jumpVerticalFactor             = getFloat(p, "move.jump.vertical.factor",         jumpVerticalFactor);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum",        wallUpJumpFallMaximumDistance);
@@ -1071,6 +1085,9 @@ public class SmartMovingConfig {
         p.setProperty("move.sprint.key.release.run",     String.valueOf(runOnSprintRelease));
         p.setProperty("move.sprint.key.release.walk",    String.valueOf(walkOnSprintRelease));
         p.setProperty("move.levitate.small",             String.valueOf(levitateSmall));
+        p.setProperty("move.jump.control.factor",            String.valueOf(jumpControlFactor));
+        p.setProperty("move.jump.horizontal.factor",         String.valueOf(jumpHorizontalFactor));
+        p.setProperty("move.jump.vertical.factor",           String.valueOf(jumpVerticalFactor));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum",         String.valueOf(wallUpJumpFallMaximumDistance));
