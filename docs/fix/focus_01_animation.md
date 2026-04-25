@@ -309,10 +309,11 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - **R-2 누적**: 정합 60 / 오역 0 / 누락 3 / 잉여 0 / N/A 668 = 731 라인 전수
 - [x] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄) — **세션 10 완료**
   - 합계: 정합 14 / 오역 0 / 누락 0 / 잉여 0 / N/A 362 = 376 라인 전수
-- [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
+- [x] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄) — **세션 13 완료**
   - [x] R-4 청크 1 (L1-L160) — 세션 11 (정합 15 / 오역 0 / 누락 0 / 잉여 0 / N/A 145)
   - [x] R-4 청크 2 (L161-L320) — 세션 12 (정합 30 / 오역 0 / 누락 1 / 잉여 0 / N/A 129)
-  - [ ] R-4 청크 3 (L321-L469)
+  - [x] R-4 청크 3 (L321-L469) — 세션 13 (정합 17 / 오역 0 / 누락 0 / 잉여 0 / N/A 132)
+  - **R-4 누적**: 정합 62 / 오역 0 / 누락 1 / 잉여 0 / N/A 406 = 469 라인 전수
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
@@ -860,6 +861,44 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-4 청크 3 (L321-L469) — animateSneaking 잔여 + animateArms + animateBowAiming + reset/getter/필드 선언. R-4 마지막 청크.
+
+---
+
+### 세션 13 — 2026-04-26 — Phase R / R-4 청크 3 (SmartRenderModel.java L321-L469) — **R-4 완료**
+
+**진행한 작업**:
+
+1. **R-4 청크 3 라인별 read**: 원본 SmartRenderModel.java L321-L469 (149 라인 전수 read).
+2. **1.21.1 매핑 검증**: vanilla BipedEntityModel.setAngles applyAnimationOffsets + 활쏘기 분기 + reset 자동 + ModelData 시스템 (boxList 부재) 비교.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-4 청크 3 섹션 — 149 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 3 통계**:
+- [정합] 17 (sneak leg/arm 잔여 3 / animateArms 4 / animateBowAiming 본체 10)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 132 (Pelvic/Breast/Neck/Shoulder×2 구조 부재 + Outer fade + reset 16 노드 + getRandomBox 영혼 파티클 + 필드 선언 44 라인 + 빈 줄)
+- 합계: 149 라인 전수.
+
+**청크 3 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 검증:
+- L321-L323 sneak + L336-L339 animateArms + L344-L353 animateBowAiming 모두 vanilla BipedEntityModel.setAngles 자동 처리 분기 일치 검증.
+- L431-L434 §16-10/12/13/15 [오역] 발견 변수 (totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed)의 원본 *필드 선언* 위치 확인 — public field, SmartRenderRender 에서 매 프레임 갱신.
+
+**검증 체크리스트 (세션 13 R-4 청크 3 + R-4 전체)**:
+- [근거] ✓ 원본 로컬 read (offset=321, limit=149 정확)
+- [전수] ✓ 청크 내 149 라인 + R-4 전체 469 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 3 합계 149 / R-4 전체 합계 469 일치
+- [발견] ✓ 청크 3 신규 발견 0건
+- [통계] ✓ R-4 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (vanilla 본체 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-4 전체 누적 (469 라인, 3 청크 3 세션)**:
+- 합계: 정합 62 / 오역 0 / 누락 1 / 잉여 0 / N/A 406 = 469 라인 전수 (skip 0).
+- R-10+ B-N 후보 1 그룹 식별 (§16-24 cloak.pitch SIXTYFOURTH).
+
+**R-4 완료** — SmartRenderModel.java 469 라인 전수 라인별 1:1 매핑.
+
+**다음 R-단계**: R-5 (ModelRotationRenderer.java 368줄 (2 청크 × ~184) + RendererData/CapeRenderer/EarsRenderer/SpecialRenderer 4 파일 ~232줄 = 6 파일 ~601 라인). ModelRotationRenderer는 6 회전순서(XYZ/XZY/YXZ/YZX/ZXY/ZYX) 직접 정의 클래스로 R-1 회전순서 검증의 핵심 1차 자료.
 
 ---
 

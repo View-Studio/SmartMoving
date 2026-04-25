@@ -2018,3 +2018,177 @@
 - L271-L275 arm/leg swing 공식: vanilla 1.21.1 BipedEntityModel.setAngles 와 정확히 일치 (cos * 0.6662 * 2.0 * 0.5 / cos * 1.4) — 검증 완료.
 
 **다음 청크**: R-4 청크 3 (L321-L469) — animateSneaking 잔여 + animateArms + animateBowAiming + reset/getter/필드 선언. R-4 마지막 청크.
+
+### 청크 3 (L321-L469) — animateSneaking 잔여 + animateArms + animateBowAiming + reset() + renderCloak + getRandomBox + 필드 선언 (R-4 마지막 청크)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L321 | `bipedLeftLeg.rotateAngleX += -0.5F;` | (vanilla sneak 자동) | [정합] | sneak leg 대칭 |
+| L322 | `bipedRightArm.rotateAngleX += -0.1F;` | (vanilla sneak 자동) | [정합] | |
+| L323 | `bipedLeftArm.rotateAngleX += -0.1F;` | (vanilla sneak 자동) | [정합] | |
+| L324 | (빈 줄) | — | [N/A] | |
+| L325 | `bipedPelvic.offsetY = -0.137F;` | (Pelvic 부재 + offsetY 부재) | [N/A] | §16-3 + ModelPart.offsetY 부재 |
+| L326 | `bipedPelvic.offsetZ = -0.051F;` | — | [N/A] | |
+| L327 | (빈 줄) | — | [N/A] | |
+| L328 | `bipedBreast.offsetY = -0.014F;` | (Breast 부재) | [N/A] | §16-2 |
+| L329 | `bipedBreast.offsetZ = -0.057F;` | — | [N/A] | |
+| L330 | (빈 줄) | — | [N/A] | |
+| L331 | `bipedNeck.offsetY = 0.0621F;` | (Neck 부재) | [N/A] | |
+| L332 | `}` | — | [N/A] | animateSneaking 종료 |
+| L333 | (빈 줄) | — | [N/A] | |
+| L334 | `public void animateArms(float totalTime)` | (vanilla applyAnimationOffsets 자동) | [N/A] | |
+| L335 | `{` | — | [N/A] | |
+| L336 | `bipedRightArm.rotateAngleZ += MathHelper.cos(totalTime * 0.09F) * 0.05F + 0.05F;` | vanilla applyAnimationOffsets: `rightArm.roll += cos(animationProgress * 0.09f) * 0.05f + 0.05f` | [정합] | vanilla 동일 공식 |
+| L337 | `bipedLeftArm.rotateAngleZ -= MathHelper.cos(totalTime * 0.09F) * 0.05F + 0.05F;` | vanilla 자동 | [정합] | |
+| L338 | `bipedRightArm.rotateAngleX += MathHelper.sin(totalTime * 0.067F) * 0.05F;` | vanilla 자동 | [정합] | |
+| L339 | `bipedLeftArm.rotateAngleX -= MathHelper.sin(totalTime * 0.067F) * 0.05F;` | vanilla 자동 | [정합] | |
+| L340 | `}` | — | [N/A] | |
+| L341 | (빈 줄) | — | [N/A] | |
+| L342 | `public void animateBowAiming(float totalTime)` | (vanilla 활쏘기 자동 — BipedEntityModel.setAngles 활쏘기 분기) | [N/A] | |
+| L343 | `{` | — | [N/A] | |
+| L344 | `bipedRightArm.rotateAngleZ = 0.0F;` | vanilla 자동 (활쏘기 시 roll reset) | [정합] | |
+| L345 | `bipedLeftArm.rotateAngleZ = 0.0F;` | vanilla 자동 | [정합] | |
+| L346 | `bipedRightArm.rotateAngleY = -0.1F + bipedHead.rotateAngleY - bipedOuter.rotateAngleY;` | vanilla 자동 (rightArm.yaw = -0.1F + head.yaw — outer는 vanilla 자체 부재이므로 무시) | [정합] | |
+| L347 | `bipedLeftArm.rotateAngleY = 0.1F + bipedHead.rotateAngleY + 0.4F - bipedOuter.rotateAngleY;` | vanilla 자동 | [정합] | |
+| L348 | `bipedRightArm.rotateAngleX = -1.570796F + bipedHead.rotateAngleX;` (-π/2 + headX) | vanilla 자동 | [정합] | |
+| L349 | `bipedLeftArm.rotateAngleX = -1.570796F + bipedHead.rotateAngleX;` | vanilla 자동 | [정합] | |
+| L350 | `bipedRightArm.rotateAngleZ += MathHelper.cos(totalTime * 0.09F) * 0.05F + 0.05F;` | vanilla 자동 (활 들고 미세 흔들림) | [정합] | |
+| L351 | `bipedLeftArm.rotateAngleZ -= MathHelper.cos(totalTime * 0.09F) * 0.05F + 0.05F;` | vanilla 자동 | [정합] | |
+| L352 | `bipedRightArm.rotateAngleX += MathHelper.sin(totalTime * 0.067F) * 0.05F;` | vanilla 자동 | [정합] | |
+| L353 | `bipedLeftArm.rotateAngleX -= MathHelper.sin(totalTime * 0.067F) * 0.05F;` | vanilla 자동 | [정합] | |
+| L354 | `}` | — | [N/A] | |
+| L355 | (빈 줄) | — | [N/A] | |
+| L356 | `public void reset()` | (vanilla setAngles 진입 시 자동 reset) | [N/A] | |
+| L357 | `{` | — | [N/A] | |
+| L358 | `bipedOuter.reset();` | (Outer 부재) | [N/A] | |
+| L359 | `bipedTorso.reset();` | (Torso 부재) | [N/A] | |
+| L360 | `bipedBody.reset();` | (vanilla 자동 reset) | [N/A] | |
+| L361 | `bipedBreast.reset();` | (Breast 부재) | [N/A] | |
+| L362 | `bipedNeck.reset();` | (Neck 부재) | [N/A] | |
+| L363 | `bipedHead.reset();` | (vanilla 자동) | [N/A] | |
+| L364 | `bipedHeadwear.reset();` | (vanilla hat 자동) | [N/A] | |
+| L365 | `bipedEars.reset();` | (Ears 부재) | [N/A] | |
+| L366 | `bipedCloak.reset();` | (vanilla cloak 자동) | [N/A] | |
+| L367 | `bipedRightShoulder.reset();` | (Shoulder 부재) | [N/A] | |
+| L368 | `bipedRightArm.reset();` | (vanilla 자동) | [N/A] | |
+| L369 | `bipedLeftShoulder.reset();` | (Shoulder 부재) | [N/A] | |
+| L370 | `bipedLeftArm.reset();` | (vanilla 자동) | [N/A] | |
+| L371 | `bipedPelvic.reset();` | (Pelvic 부재) | [N/A] | |
+| L372 | `bipedRightLeg.reset();` | (vanilla 자동) | [N/A] | |
+| L373 | `bipedLeftLeg.reset();` | (vanilla 자동) | [N/A] | |
+| L374 | (빈 줄) | — | [N/A] | |
+| L375 | `bipedRightShoulder.setRotationPoint(-5F, 2.0F, 0.0F);` | (Shoulder 부재) | [N/A] | |
+| L376 | `bipedLeftShoulder.setRotationPoint(5F, 2.0F, 0.0F);` | (Shoulder 부재) | [N/A] | |
+| L377 | `bipedPelvic.setRotationPoint(0.0F, 12.0F, 0.0F);` | (Pelvic 부재) | [N/A] | |
+| L378 | `bipedRightLeg.setRotationPoint(-2F, 0.0F, 0.0F);` | (vanilla 기본 pivot 자동) | [N/A] | |
+| L379 | `bipedLeftLeg.setRotationPoint(2.0F, 0.0F, 0.0F);` | (vanilla 자동) | [N/A] | |
+| L380 | `bipedCloak.setRotationPoint(0.0F, 0.0F, 2.0F);` | (vanilla 자동) | [N/A] | |
+| L381 | `}` | — | [N/A] | |
+| L382 | (빈 줄) | — | [N/A] | |
+| L383 | `public void renderCloak(float f)` | (vanilla CapeFeatureRenderer 자동) | [N/A] | |
+| L384 | `{` | — | [N/A] | |
+| L385 | `attemptToCallRenderCape = true;` | (1.21.1 부재 — vanilla cloak 자동) | [N/A] | |
+| L386 | `if(!disabled)` | (vanilla 자동) | [N/A] | |
+| L387 | `imp.superRenderCloak(f);` | (vanilla 자동) | [N/A] | |
+| L388 | `}` | — | [N/A] | |
+| L389 | (빈 줄) | — | [N/A] | |
+| L390 | `public ModelRenderer getRandomBox(Random par1Random)` | (1.21.1: 파티클 효과 영역 — 본 포커스 외) | [N/A] | 영혼/연기 파티클 |
+| L391 | `{` | — | [N/A] | |
+| L392 | `List<?> boxList = mp.boxList;` | (1.21.1: ModelData 시스템 — boxList 부재) | [N/A] | |
+| L393 | `int size = boxList.size();` | — | [N/A] | |
+| L394 | `int renderersWithBoxes = 0;` | — | [N/A] | |
+| L395 | (빈 줄) | — | [N/A] | |
+| L396 | `for(int i=0; i<size; i++)` | — | [N/A] | |
+| L397 | `{` | — | [N/A] | |
+| L398 | `ModelRenderer renderer = (ModelRenderer)boxList.get(i);` | — | [N/A] | |
+| L399 | `if(canBeRandomBoxSource(renderer))` | — | [N/A] | |
+| L400 | `renderersWithBoxes++;` | — | [N/A] | |
+| L401 | `}` | — | [N/A] | |
+| L402 | (빈 줄) | — | [N/A] | |
+| L403 | `if(renderersWithBoxes != 0)` | — | [N/A] | |
+| L404 | `{` | — | [N/A] | |
+| L405 | `int random = par1Random.nextInt(renderersWithBoxes);` | — | [N/A] | |
+| L406 | `renderersWithBoxes = -1;` | — | [N/A] | |
+| L407 | (빈 줄) | — | [N/A] | |
+| L408 | `for(int i=0; i<size; i++)` | — | [N/A] | |
+| L409 | `{` | — | [N/A] | |
+| L410 | `ModelRenderer renderer = (ModelRenderer)boxList.get(i);` | — | [N/A] | |
+| L411 | `if(canBeRandomBoxSource(renderer))` | — | [N/A] | |
+| L412 | `renderersWithBoxes++;` | — | [N/A] | |
+| L413 | `if(renderersWithBoxes == random)` | — | [N/A] | |
+| L414 | `return renderer;` | — | [N/A] | |
+| L415 | `}` | — | [N/A] | |
+| L416 | `}` | — | [N/A] | |
+| L417 | (빈 줄) | — | [N/A] | |
+| L418 | `return null;` | — | [N/A] | |
+| L419 | `}` | — | [N/A] | |
+| L420 | (빈 줄) | — | [N/A] | |
+| L421 | `private static boolean canBeRandomBoxSource(ModelRenderer renderer)` | (1.21.1 boxList 부재) | [N/A] | |
+| L422 | `{` | — | [N/A] | |
+| L423 | `return renderer.cubeList != null && renderer.cubeList.size() > 0 && (!(renderer instanceof ModelRotationRenderer) \|\| ((ModelRotationRenderer)renderer).canBeRandomBoxSource());` | — | [N/A] | |
+| L424 | `}` | — | [N/A] | |
+| L425 | (빈 줄) | — | [N/A] | |
+| L426 | `public boolean isInventory;` | (vanilla 자동) | [N/A] | 필드 선언 |
+| L427 | (빈 줄) | — | [N/A] | |
+| L428 | `public int scaleArmType;` | (메인 = Scale 묵시) | [N/A] | §16-7 |
+| L429 | `public int scaleLegType;` | (메인 = Scale) | [N/A] | |
+| L430 | (빈 줄) | — | [N/A] | |
+| L431 | `public float totalVerticalDistance;` | (§16-10 [오역] 발견 변수의 정의 — 1.21.1 limbSwing 잘못 매핑) | [N/A] | 필드 선언 |
+| L432 | `public float currentVerticalSpeed;` | (§16-10 [오역] 발견 — 1.21.1 limbSwingAmount 잘못) | [N/A] | |
+| L433 | `public float totalDistance;` | (§16-12/13/15 [오역] 발견 — 1.21.1 limbSwing/animationProgress 잘못) | [N/A] | |
+| L434 | `public float currentSpeed;` | (§16-13/15 [오역] 발견 — 1.21.1 limbSwingAmount 잘못) | [N/A] | |
+| L435 | (빈 줄) | — | [N/A] | |
+| L436 | `public double distance;` | (state holder) | [N/A] | |
+| L437 | `public double verticalDistance;` | (1.21.1 capture 부재) | [N/A] | |
+| L438 | `public double horizontalDistance;` | (1.21.1 limbSwing 등가) | [N/A] | |
+| L439 | `public float currentCameraAngle;` | (player.getYaw 활용) | [N/A] | |
+| L440 | `public float currentVerticalAngle;` | (sm.stats.currentVerticalAngle) | [N/A] | |
+| L441 | `public float currentHorizontalAngle;` | (atan2(-vel.x, vel.z)) | [N/A] | |
+| L442 | (빈 줄) | — | [N/A] | |
+| L443 | `public float actualRotation;` | (player.getYaw 처리) | [N/A] | |
+| L444 | `public float forwardRotation;` | sm_captureBodyYaw lerp 처리 | [N/A] | |
+| L445 | `public float workingAngle;` | (어깨 부재로 N/A) | [N/A] | §16-5 |
+| L446 | (빈 줄) | — | [N/A] | |
+| L447 | `public ModelRotationRenderer bipedOuter;` | (Outer 부재) | [N/A] | |
+| L448 | `public ModelRotationRenderer bipedTorso;` | (Torso 부재) | [N/A] | §16-2 |
+| L449 | `public ModelRotationRenderer bipedBody;` | `body` (필드 선언) | [N/A] | R-4 청크 1 매핑됨 |
+| L450 | `public ModelRotationRenderer bipedBreast;` | (Breast 부재) | [N/A] | |
+| L451 | `public ModelRotationRenderer bipedNeck;` | (Neck 부재) | [N/A] | |
+| L452 | `public ModelRotationRenderer bipedHead;` | `head` | [N/A] | |
+| L453 | `public ModelRotationRenderer bipedHeadwear;` | `hat` | [N/A] | |
+| L454 | `public ModelRotationRenderer bipedRightShoulder;` | (Shoulder 부재) | [N/A] | |
+| L455 | `public ModelRotationRenderer bipedRightArm;` | `rightArm` | [N/A] | |
+| L456 | `public ModelRotationRenderer bipedLeftShoulder;` | (Shoulder 부재) | [N/A] | |
+| L457 | `public ModelRotationRenderer bipedLeftArm;` | `leftArm` | [N/A] | |
+| L458 | `public ModelRotationRenderer bipedPelvic;` | (Pelvic 부재) | [N/A] | |
+| L459 | `public ModelRotationRenderer bipedRightLeg;` | `rightLeg` | [N/A] | |
+| L460 | `public ModelRotationRenderer bipedLeftLeg;` | `leftLeg` | [N/A] | |
+| L461 | `public ModelEarsRenderer bipedEars;` | (Ears 부재) | [N/A] | |
+| L462 | `public ModelCapeRenderer bipedCloak;` | `cloak` | [N/A] | |
+| L463 | (빈 줄) | — | [N/A] | |
+| L464 | (빈 줄) | — | [N/A] | |
+| L465 | `public boolean disabled;` | — | [N/A] | |
+| L466 | `public boolean attemptToCallRenderCape;` | — | [N/A] | |
+| L467 | `public RendererData prevOuterRenderData;` | (Outer fade 데이터 부재) | [N/A] | §17 |
+| L468 | `public boolean isSleeping;` | (vanilla SleepingPose 자동) | [N/A] | |
+| L469 | `public boolean firstPerson;` | (vanilla 1인칭 자동) | [N/A] | |
+
+**청크 3 (L321-L469) 통계: 정합 17 / 오역 0 / 누락 0 / 잉여 0 / N/A 132 = 149 라인 전수.**
+
+**청크 3 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 검증:
+- L321-L323 sneak 잔여 + L336-L339 animateArms + L344-L353 animateBowAiming = vanilla BipedEntityModel.setAngles 자동 처리 분기와 정확히 일치 (계수/공식 검증).
+- L431-L434 [오역] 발견 변수의 *원본 정의 위치* 확인 — SmartRenderModel public field 선언으로, R-4 청크 1 L95-L98 캐싱 매개체.
+- L390-L424 getRandomBox/canBeRandomBoxSource 영혼·연기 파티클 영역 — 본 포커스 #1 외.
+
+**R-4 전체 (3 청크 469 라인 3 세션) 누적 통계**:
+| 청크 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A |
+|-----|-----|------|------|------|------|------|
+| 1 (L1-L160) | 160 | 15 | 0 | 0 | 0 | 145 |
+| 2 (L161-L320) | 160 | 30 | 0 | 1 | 0 | 129 |
+| 3 (L321-L469) | 149 | 17 | 0 | 0 | 0 | 132 |
+| **합계** | **469** | **62** | **0** | **1** | **0** | **406** |
+
+**R-4 전체 발견 (R-10+ B-N 후보)**:
+- B-N (cloak.pitch SIXTYFOURTH 기본 기울임 — §16-24): 청크 2 L251 1 라인.
+
+**R-4 완료**. 다음 R-단계: **R-5 (ModelRotationRenderer.java 368줄 라인별 (2 청크) + RendererData/CapeRenderer/EarsRenderer/SpecialRenderer 4 파일 ~232줄)** = 6 파일 ~601 라인.
