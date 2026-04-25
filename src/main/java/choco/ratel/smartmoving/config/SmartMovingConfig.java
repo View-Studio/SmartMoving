@@ -1080,7 +1080,7 @@ public class SmartMovingConfig {
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
         wallHeadJump                   = getBool(p,  "move.jump.wall.head",                wallHeadJump);
         wallUpJumpFallMaximumDistance  = getFloat(p, "move.jump.wall.fall.maximum.distance", wallUpJumpFallMaximumDistance);
-        wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum",  wallHeadJumpFallMaximumDistance);
+        wallHeadJumpFallMaximumDistance = getFloat(p, "move.jump.wall.head.fall.maximum.distance", wallHeadJumpFallMaximumDistance);
         wallUpJumpOrthogonalTolerance   = getFloat(p, "move.jump.wall.orthogonal.tolerance", wallUpJumpOrthogonalTolerance);
         wallUpJumpVerticalFactor       = getFloat(p, "move.jump.wall.vertical.factor",     wallUpJumpVerticalFactor);
         wallHeadJumpVerticalFactor     = getFloat(p, "move.jump.wall.head.vertical.factor", wallHeadJumpVerticalFactor);
@@ -1239,7 +1239,7 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
         p.setProperty("move.jump.wall.head",                 String.valueOf(wallHeadJump));
         p.setProperty("move.jump.wall.fall.maximum.distance", String.valueOf(wallUpJumpFallMaximumDistance));
-        p.setProperty("move.jump.wall.head.fall.maximum",    String.valueOf(wallHeadJumpFallMaximumDistance));
+        p.setProperty("move.jump.wall.head.fall.maximum.distance", String.valueOf(wallHeadJumpFallMaximumDistance));
         p.setProperty("move.jump.wall.orthogonal.tolerance", String.valueOf(wallUpJumpOrthogonalTolerance));
         p.setProperty("move.jump.wall.vertical.factor",      String.valueOf(wallUpJumpVerticalFactor));
         p.setProperty("move.jump.wall.head.vertical.factor", String.valueOf(wallHeadJumpVerticalFactor));

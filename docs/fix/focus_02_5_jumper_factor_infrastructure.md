@@ -266,16 +266,14 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-10d. `wallUpJumpFallMaximumDistance = 2F` (원본 L296) — 세션 10 (필드/값 이식 + **IO key '.distance' suffix 누락 정정** `move.jump.wall.fall.maximum` → `move.jump.wall.fall.maximum.distance`)
 - [x] A-10e. `wallUpJumpOrthogonalTolerance = 5F` (원본 L297) — 세션 10 (이미 이식 + IO 확인)
 
-**A-11. WallHead 필드 4건** (일부 이식)
-- [ ] A-11a. `wallHeadJump = true` (원본 L300)
-- [ ] A-11b. `wallHeadJumpVerticalFactor` ✅ 이미 이식됨 — 확인만
-- [ ] A-11c. `wallHeadJumpHorizontalFactor = 0.15F` ★ (원본 L302) — **미이식** 추가
-- [ ] A-11d. `wallHeadJumpFallMaximumDistance` ✅ 이미 이식됨 — 확인만
+**A-11. WallHead 필드 4건** (이미 전부 이식)
+- [x] A-11a. `wallHeadJump = true` (원본 L300) — 세션 11 (이미 이식 + IO 확인)
+- [x] A-11b. `wallHeadJumpVerticalFactor = 0.3F` (원본 L301) — 세션 11 (이미 이식 + IO 확인)
+- [x] A-11c. `wallHeadJumpHorizontalFactor = 0.15F` ★ (원본 L302) — 세션 11 (이미 이식 + IO 확인, §3 "미이식" 표기는 오기)
+- [x] A-11d. `wallHeadJumpFallMaximumDistance = 3F` (원본 L303) — 세션 11 (필드/값 이식 + **IO key '.distance' suffix 누락 정정** `move.jump.wall.head.fall.maximum` → `move.jump.wall.head.fall.maximum.distance`)
 
 **A-12. Properties IO 등록** (추가된 모든 필드 `load()` + `save()` 양방향)
-- [ ] A-12. 모든 신규 필드를 `SmartMovingConfig.load(Properties p)` + `save(Properties p)` 에
-     등록. 원본 `Unmodified/Modified/Positive/PositiveFactor/IncreasingFactor/DecreasingFactor`
-     정확한 key 복사 (`move.jump.wall.horizontal.factor` 등).
+- [x] A-12. 세션 1~11 진행 중 매 원자마다 load/save IO 양방향 동시 등록 완료. A-1 (3건) ~ A-11 (4건) 합계 50건 + 그룹 헤더 / 주석 정비 / key 정정 (A-10d, A-11d). Phase A 전수 IO 등록 완결. — 세션 11
 
 ---
 
@@ -1060,6 +1058,44 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-11 (WallHead 4건 — A-11a `wallHeadJump=true` ✅ + A-11b `wallHeadJumpVerticalFactor=0.3F` ✅ + A-11c `wallHeadJumpHorizontalFactor=0.15F` ★ ✅ + **A-11d IO key '.distance' 누락 정정** `move.jump.wall.head.fall.maximum` → `move.jump.wall.head.fall.maximum.distance`). 원본 L300-L303. **Phase A 완결 임박**.
 
 진행률: Phase A 48/~50 (~96%), 전체 #2.5 48/~110 (~43.6%).
+
+### 세션 11 — 2026-04-25 — Phase A-11 (WallHead 4건: 확인 3 + IO key 정정 1) + Phase A 완결
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-11 4건 검증 + 정정 + Phase A 완결 마킹.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L300-L303):
+   - L300 `_wallHeadJump = Unmodified("move.jump.wall.head")` → 기본 true
+   - L301 `_wallHeadJumpVerticalFactor = DecreasingFactor("move.jump.wall.head.vertical.factor").defaults(0.3F)` → 0.3F
+   - L302 `_wallHeadJumpHorizontalFactor = DecreasingFactor("move.jump.wall.head.horizontal.factor").defaults(0.15F)` ★ → 0.15F
+   - L303 `_wallHeadJumpFallMaximumDistance = Positive("move.jump.wall.head.fall.maximum.distance").defaults(3F).min(_wallUpJumpFallMaximumDistance)` → 3F (key 끝 `.distance`)
+2. 1.21.1 이식 위치 확인:
+   - A-11a 필드 L222 = true ✅ + IO L1081 ✅ + save L1240 ✅
+   - A-11b 필드 L234 = 0.3F ✅ + IO L1086 ✅ + save L1245 ✅
+   - A-11c 필드 L238 = 0.15F ✅ + IO L1088 ✅ + save L1247 ✅ (§3 "미이식 추가" 표기는 오기)
+   - A-11d 필드 L226 = 3F ✅ + **IO key 오역**: `move.jump.wall.head.fall.maximum` (suffix `.distance` 누락). save L1242 동일.
+3. 1.21.1 정정 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - load L1083 key: `move.jump.wall.head.fall.maximum` → `move.jump.wall.head.fall.maximum.distance`
+   - save L1242 key: 동일 정정
+4. Phase A-12 (Properties IO 등록) 사후 검증: 세션 1~11 진행 중 매 원자마다 IO 동시 등록 — 누락 0. [x] 마킹.
+5. **Phase A 완결**: A-1 ~ A-12 전수 [x]. 약 52 원자 (필드 50건 + IO 등록 1건 + key 정정 2건).
+6. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 11 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L300-L303 + Properties.java L181-L186 (Positive/DecreasingFactor 기본값)
+- [근거] 1.21.1 이식 위치 확정 — 필드 L222-L238 / load L1081-L1088 / save L1240-L1247
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/key 모두 일치 후)
+- [분기] 분기 없음 (단순 boolean/float 4개)
+- [상수] true / 0.3F / **0.15F** ★ / 3F — 모두 정확
+- [타이밍] 필드 선언만. Phase B getJumpVertical/HorizontalFactor (WallHead 분기) + Phase D WallHead 분기에 사용.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] A-10 발견 사항 (A-11d 동일 오역) 해소.
+- [회귀] IO key 변경 — A-10d 와 동일 영향 (이전 잘못된 key 무시, 원본 일치 정정).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: **Phase B 진입**. B-1 `getJumpSpeed(isStanding, isSneaking, isRunning, isSprinting, angle)` 헬퍼 신설. 원본 `SmartMovingSelf.java` L2148-L2163 (1:1 번역). 위치: `SmartMovingConfig.java` 또는 `SmartMovingJumper.java` 정적 메서드 (전자 권장 — 원본 ClientConfig 위치).
+
+진행률: **Phase A 완결 (~52 원자)**, 전체 #2.5 52/~110 (~47.3%) — 약 절반 통과.
 
 ---
 
