@@ -298,8 +298,15 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] B-2. `SmartMovingConfig` 정적 상수 `SPEED_SPRINTING=0, SPEED_RUNNING=1,
      SPEED_WALKING=2, SPEED_SNEAKING=3, SPEED_STANDING=4` 5개 신설 (B-1 과 묶어 처리).
 
-**B-3. `isJumpingEnabled(speed, type)`** (원본 L194-L227)
-- [ ] B-3. SmartMovingConfig 에 메서드 신설 — 11 type 분기 전수 + speed 5 분기:
+**B-2.5. Jump Type 상수** (원본 L178-L192, B-3 의존으로 신규 원자 추가) — 세션 13 완료
+- [x] B-2.5. `SmartMovingConfig` 정적 상수 15개 — `JUMP_TYPE_UP=0, CHARGE_UP=1, ANGLE=2,
+     HEAD_UP=3, SLIDE_DOWN=4, CLIMB_UP=5, CLIMB_UP_HANDS_ONLY=6, CLIMB_BACK_UP=7,
+     CLIMB_BACK_UP_HANDS_ONLY=8, CLIMB_BACK_HEAD=9, CLIMB_BACK_HEAD_HANDS_ONLY=10,
+     WALL_UP=11, WALL_HEAD=12, WALL_UP_SLIDE=13, WALL_HEAD_SLIDE=14`. 1.21.1 SmartMovingJumper
+     기존 jumpType 매핑 정렬은 Phase E 처리.
+
+**B-3. `isJumpingEnabled(speed, type)`** (원본 L194-L227) — 세션 13 완료
+- [x] B-3. SmartMovingConfig 에 instance 메서드 신설 (B-2.5 와 묶음). 11 type 분기 전수 + speed 5 분기:
   - ChargeUp → `jumpCharge`
   - SlideDown → `slide`
   - ClimbUp/ClimbUpHandsOnly → `climbUpJump`
@@ -1133,6 +1140,48 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase B-3 (`isJumpingEnabled(speed, type)` 신설). 원본 `SmartMovingClientConfig.java` L194-L227 — 11 type 분기 + 5 speed 분기 전수 이식. 의존 추가 — Jump Type 상수 (Up=0~WallHeadSlide=14, 15개) 도 같이 이식 필요 (B-3 의존). 별도 원자 B-2.5 (Type 상수) 추가 후 B-3 진행 권장.
 
 진행률: Phase B 2/8 (B-1 + B-2 완료, ~25%), 전체 #2.5 54/~110 (~49.1%).
+
+### 세션 13 — 2026-04-25 — Phase B-2.5 + B-3 (Jump Type 상수 15건 + isJumpingEnabled)
+
+사용자 지시: "엄격 1:1" 유지 + Phase B-3 진입 + 의존 B-2.5 (Type 상수 15) 묶어 이식.
+
+진행한 작업:
+1. 원본 라인 + 본체 확보:
+   - `SmartMovingClientConfig.java` L178-L192 — Jump Type 상수 15개 (Up=0 ~ WallHeadSlide=14)
+   - `SmartMovingClientConfig.java` L194-L227 — `isJumpingEnabled(speed, type)` instance 메서드
+2. 1.21.1 의존 grep 확인:
+   - `enabled` ✅ (L692)
+   - `slide` ✅ (L675)
+   - `jumpCharge` / `climbUpJump` / `climbBackUpJump` / `climbBackHeadJump` / `wallUpJump` /
+     `wallHeadJump` / `sprintJump` / `runJump` / `walkJump` / `sneakJump` / `standJump` —
+     모두 Phase A 에서 추가 ✅
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - B-2.5 Type 상수 15개 — Speed 상수 직후 Phase B 인프라 그룹 내
+   - B-3 isJumpingEnabled instance 메서드 — getJumpSpeed 직후 (Phase B 인프라 그룹)
+4. 명명: `Up/ChargeUp/...` → `JUMP_TYPE_UP/JUMP_TYPE_CHARGE_UP/...` (Java 컨벤션, 표면 매핑).
+5. 가시성: 원본 `public boolean isJumpingEnabled` → 1.21.1 `public boolean` (instance 메서드 — `enabled`, `jumpCharge` 등 instance 필드 의존).
+6. 분기 순서 보존:
+   - `!enabled → return true` (SM 비활성 = vanilla 위임)
+   - Type 우선 (ChargeUp / SlideDown / ClimbUp* / ClimbBackUp* / ClimbBackHead* / WallUp / WallHead) 7 분기
+   - Speed 5 분기 (Sprint/Run/Walk/Sneak/Stand)
+   - fallthrough `return true` (Up/HeadUp/Angle/WallUpSlide/WallHeadSlide & speed 미통과 시)
+7. 근사 여부: 없음. 1:1 (분기 / 순서 / 반환값 모두 보존).
+
+완료 전 검증 체크리스트 (세션 13 기준):
+- [근거] 원본 라인 확보 — `SmartMovingClientConfig.java` L178-L192 + L194-L227
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` Phase B 인프라 그룹 (SPEED_* 다음 Type 상수, getJumpSpeed 다음 isJumpingEnabled)
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/분기/순서/반환 모두 일치)
+- [분기] 14개 분기 전수 (`!enabled` + Type 7 + Speed 5 + fallthrough)
+- [상수] 0~14 정확 반영
+- [타이밍] instance 메서드 — Phase D-4 호출. 호출 타이밍 변경 없음.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음 (모든 sub-jump boolean Phase A 완료).
+- [회귀] 신규 정적 상수 + instance 메서드 추가 — 기존 코드 영향 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase B-4 `getJumpHorizontalFactor(speed, type)` 신설 (원본 `SmartMovingClientConfig.java` L465-L505). `!enabled` 시 `speed==Running ? 2F : 1F`, `enabled` 시 base × type × speed 분기. L501 `speed==Standing && type!=ClimbBack*` → `*0F` 특수 처리 포함.
+
+진행률: Phase B 4/9 (B-1 + B-2 + B-2.5 + B-3 완료, ~44%), 전체 #2.5 70/~110 (~63.6%) — Type 상수 15건 + isJumpingEnabled 본체 합산.
 
 ---
 

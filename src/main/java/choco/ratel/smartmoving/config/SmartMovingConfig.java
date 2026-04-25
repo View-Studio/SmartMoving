@@ -33,6 +33,26 @@ public class SmartMovingConfig {
     public static final int SPEED_SNEAKING  = 3;
     public static final int SPEED_STANDING  = 4;
 
+    // === Jump Type 상수 (원본 SmartMovingClientConfig L178-L192, B-2.5) ===
+    //   tryJump / isJumpingEnabled / getJumpHorizontalFactor / getJumpVerticalFactor /
+    //   getMaxHorizontalMotion / getHeadJumpFactor 의 type 파라미터 도메인 (15종).
+    //   주: 1.21.1 SmartMovingJumper 의 기존 jumpType 상수와 매핑 정렬은 Phase E 에서 처리.
+    public static final int JUMP_TYPE_UP                     = 0;
+    public static final int JUMP_TYPE_CHARGE_UP              = 1;
+    public static final int JUMP_TYPE_ANGLE                  = 2;
+    public static final int JUMP_TYPE_HEAD_UP                = 3;
+    public static final int JUMP_TYPE_SLIDE_DOWN             = 4;
+    public static final int JUMP_TYPE_CLIMB_UP               = 5;
+    public static final int JUMP_TYPE_CLIMB_UP_HANDS_ONLY    = 6;
+    public static final int JUMP_TYPE_CLIMB_BACK_UP          = 7;
+    public static final int JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY = 8;
+    public static final int JUMP_TYPE_CLIMB_BACK_HEAD        = 9;
+    public static final int JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY = 10;
+    public static final int JUMP_TYPE_WALL_UP                = 11;
+    public static final int JUMP_TYPE_WALL_HEAD              = 12;
+    public static final int JUMP_TYPE_WALL_UP_SLIDE          = 13;
+    public static final int JUMP_TYPE_WALL_HEAD_SLIDE        = 14;
+
     /**
      * Phase B-1 — getJumpSpeed 헬퍼.
      *
@@ -66,6 +86,68 @@ public class SmartMovingConfig {
         else if (isSneaking)  return SPEED_SNEAKING;
         else if (isStanding)  return SPEED_STANDING;
         else                  return SPEED_WALKING;
+    }
+
+    /**
+     * Phase B-3 — isJumpingEnabled(speed, type).
+     *
+     * 원본 `SmartMovingClientConfig.java` L194-L227 (1:1 번역):
+     * <pre>
+     * public boolean isJumpingEnabled(int speed, int type) {
+     *     if (!enabled)                                  return true;   // SM 비활성 = vanilla 동작 = 모두 허용
+     *     if (type == ChargeUp)                          return _jumpCharge.value;
+     *     if (type == SlideDown)                         return _slide.value;
+     *     if (type == ClimbUp || type == ClimbUpHandsOnly)             return _climbUpJump.value;
+     *     if (type == ClimbBackUp || type == ClimbBackUpHandsOnly)     return _climbBackUpJump.value;
+     *     if (type == ClimbBackHead || type == ClimbBackHeadHandsOnly) return _climbBackHeadJump.value;
+     *     if (type == WallUp)                            return _wallUpJump.value;
+     *     if (type == WallHead)                          return _wallHeadJump.value;
+     *     if (speed == Sprinting)                        return _sprintJump.value;
+     *     else if (speed == Running)                     return _runJump.value;
+     *     else if (speed == Walking)                     return _walkJump.value;
+     *     else if (speed == Sneaking)                    return _sneakJump.value;
+     *     else if (speed == Standing)                    return _standJump.value;
+     *     return true;   // type=Up/HeadUp/Angle/WallUpSlide/WallHeadSlide & speed 분기 미통과 시
+     * }
+     * </pre>
+     *
+     * 원본 의도: !enabled (SM 비활성) → 모든 점프 vanilla 위임 (true). type 우선 분기 →
+     * speed 분기 → fallthrough true.
+     *
+     * 호출처: tryJump (Phase D-4) — `boolean enabled = cfg.isJumpingEnabled(speed, type);`
+     */
+    public boolean isJumpingEnabled(int speed, int type) {
+        if (!enabled)
+            return true;
+
+        if (type == JUMP_TYPE_CHARGE_UP)
+            return jumpCharge;
+        if (type == JUMP_TYPE_SLIDE_DOWN)
+            return slide;
+        if (type == JUMP_TYPE_CLIMB_UP || type == JUMP_TYPE_CLIMB_UP_HANDS_ONLY)
+            return climbUpJump;
+        if (type == JUMP_TYPE_CLIMB_BACK_UP || type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY)
+            return climbBackUpJump;
+        if (type == JUMP_TYPE_CLIMB_BACK_HEAD || type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            return climbBackHeadJump;
+
+        if (type == JUMP_TYPE_WALL_UP)
+            return wallUpJump;
+        if (type == JUMP_TYPE_WALL_HEAD)
+            return wallHeadJump;
+
+        if (speed == SPEED_SPRINTING)
+            return sprintJump;
+        else if (speed == SPEED_RUNNING)
+            return runJump;
+        else if (speed == SPEED_WALKING)
+            return walkJump;
+        else if (speed == SPEED_SNEAKING)
+            return sneakJump;
+        else if (speed == SPEED_STANDING)
+            return standJump;
+
+        return true;
     }
 
 
