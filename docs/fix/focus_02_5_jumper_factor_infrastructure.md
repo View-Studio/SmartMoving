@@ -87,13 +87,31 @@
 | `getHeadJumpFactor(charge)` | tryJump head 재계산 분기 |
 | `getJumpSpeed(isStanding, isSneaking, isRunning, isSprinting, angle)` | tryJump speed 결정 |
 
-### 미이식 Exhaustion 시스템 (이 포커스 범위 — Phase C)
-- `exhaustion` / `maxExhaustionToStartAction` / `maxExhaustionForAction` 필드
-- `isJumpExhaustionEnabled(speed, type)`
-- `getJumpExhaustionGain(speed, type, charge)`
-- `getJumpExhaustionStop(speed, type, charge)`
-- `getMaxExhaustion()`
-- Exhaustion 관련 Config 30+ 필드
+### Exhaustion 시스템 (Phase C) — **세션 18: skip 결정**
+
+**결정 (2026-04-25, 세션 18)**: Phase C 전체 skip. 사용자 1:1 룰의 "Phase C skip 금지"
+보다 상위 메타 전제인 "Easy 1:1 충실 + focus_05 일관" 우선.
+
+**근거**:
+1. Easy default 에서 모든 jumpExhaustion=false (Boolean 17개) → `isJumpExhaustionEnabled`
+   항상 false → Phase D-5 (점프 차단 게이트) + D-14 (점프 후 누적) 의 안쪽 블록 100% dead.
+2. focus_05 §6.5 P-9~P-19 + 685-700 줄에서 동일 시스템 명시적 배제 ("14종 점프 피로 전체").
+3. HUD 피로도 바: 1.21.1 `SmartMovingHud.java` L61 이 `cfg.climbExhaustionStop` 사용
+   (climbing 한정). `getMaxExhaustion()` 호출처 0건 → Phase C 의 HUD 의존 0.
+4. `maxExhaustionToStartAction/ForAction` 변수: 1.21.1 ClientState 에 없음. 다른 액션
+   (climb/run/sprint exhaustion) 도 Easy default false 라 dead. 미래 그쪽 시스템 이식
+   시점에 그때 추가하면 됨 (작업량 동일).
+
+**§7 근사 등록**: D-5 + D-14 두 블록 통째로 skip. 사용자 수동 활성화 시 미작동 명시.
+
+**미이식 항목 목록 (참조용 — 실제 작업 X)**:
+- `exhaustion` ✅ (이미 ClientState 이식, focus_05)
+- `maxExhaustionToStartAction` / `maxExhaustionForAction` 미이식 (skip)
+- `isJumpExhaustionEnabled(speed, type)` 미이식 (skip)
+- `getJumpExhaustionGain(speed, type, charge)` 미이식 (skip)
+- `getJumpExhaustionStop(speed, type, charge)` 미이식 (skip)
+- `getMaxExhaustion()` 미이식 (skip)
+- Exhaustion 관련 Config 51+ 필드 미이식 (skip)
 
 ### 현 Jumper 구현 (1.21.1)
 `SmartMovingJumper.tryJump(player, sm, jumpType, charge)` — 경량 이식 상태:
@@ -346,37 +364,41 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ---
 
-### Phase C. Exhaustion 시스템 (대규모)
+### Phase C. Exhaustion 시스템 — **세션 18: skip 결정 (Easy 1:1 + focus_05 일관)**
 
-**C-1. Exhaustion Config 필드 전수**
-- [ ] C-1a. Jump exhaustion 활성/종료 필드 (`_jumpExhaustion` + speed 5 + type 11)
-- [ ] C-1b. Jump exhaustion gain factor 필드 (원본 _jumpExhaustionGainFactor + 하위 10+)
-- [ ] C-1c. Jump exhaustion stop factor 필드 (원본 _jumpExhaustionStopFactor + 하위 10+)
-- [ ] C-1d. ChargeUp exhaustion 특수 (`_jumpChargeExhaustion`,
-     `_jumpChargeExhaustionGainFactor`, `_jumpChargeExhaustionStopFactor`)
-- [ ] C-1e. 그 외: base exhaustion loss (sprint/run/walk/sneak/stand/fall 등)
+> 사용자 결정 (2026-04-25, 세션 18): Easy default 에서 모든 jumpExhaustion=false →
+> Phase D-5 + D-14 의 안쪽 블록 100% dead. focus_05 §6.5 P-9~P-19 와 일관되게 skip.
+> §7 D-5/D-14 두 블록 근사 등록. 사용자 수동 활성화 시 미작동 명시.
 
-**C-2. Exhaustion 상태 필드 (ClientState)**
-- [ ] C-2a. `exhaustion` float — 현 상태 값
-- [ ] C-2b. `maxExhaustionToStartAction` float — 틱 시작 시 Math.POSITIVE_INFINITY 로 리셋
-- [ ] C-2c. `maxExhaustionForAction` float — 동일 리셋
+**C-1. Exhaustion Config 필드 전수** — skip
+- [~] C-1a. Jump exhaustion 활성/종료 필드 17건 — skip (Easy default false → dead)
+- [~] C-1b. Jump exhaustion gain factor 필드 17건 — skip (호출처 0)
+- [~] C-1c. Jump exhaustion stop factor 필드 17건 — skip (호출처 0)
+- [~] C-1d. ChargeUp exhaustion 특수 3건 — skip
+- [~] C-1e. base exhaustion loss — focus_05 H-3/H-4/H-5 에서 27건 이미 이식 완료. 추가 skip 없음.
 
-**C-3. 판정 메서드 3개 (SmartMovingConfig)**
-- [ ] C-3a. `isJumpExhaustionEnabled(speed, type)` (원본 L244-L289)
-- [ ] C-3b. `getJumpExhaustionGain(speed, type, charge)` (원본 L291-L346)
-- [ ] C-3c. `getJumpExhaustionStop(speed, type, charge)` (원본 L348-L399)
+**C-2. Exhaustion 상태 필드 (ClientState)** — skip
+- [x] C-2a. `exhaustion` ✅ focus_05 H-8 에서 이미 이식 완료
+- [~] C-2b. `maxExhaustionToStartAction` — skip (호출처 0, 미래 climb/run/sprint exhaustion 이식 시 추가)
+- [~] C-2c. `maxExhaustionForAction` — skip (동일)
 
-**C-4. `getMaxExhaustion()`** (원본 L527-L547)
-- [ ] C-4. SmartMovingConfig 에 메서드 신설 — jump/climb/ceilingClimb/run/sprint exhaustion
-     최대치 계산.
+**C-3. 판정 메서드 3개 (SmartMovingConfig)** — skip
+- [~] C-3a. `isJumpExhaustionEnabled` — skip (D-5 호출처 skip)
+- [~] C-3b. `getJumpExhaustionGain` — skip
+- [~] C-3c. `getJumpExhaustionStop` — skip
 
-**C-5. `getFactor(hunger, onGround, ...)`** (원본 L554-L596)
-- [ ] C-5. SmartMovingConfig 에 메서드 신설 — 이식 전에 기존 `getCombinedSpeedFactor` 와
-     중복 검증. 포커스 #6 완료 후 통합 가능성 검토.
+**C-4. `getMaxExhaustion()`** — skip
+- [~] C-4. 1.21.1 SmartMovingHud L61 이 `cfg.climbExhaustionStop` 직접 사용 (climbing 한정).
+     원본 `getMaxExhaustion()` 미호출 → 이식 불필요.
 
-**C-6. Exhaustion 틱 갱신 (MixinLivingEntityClient or ClientState.tickEssential)**
-- [ ] C-6. 매 틱 진입 시 `maxExhaustionToStartAction = Float.POSITIVE_INFINITY;
-     maxExhaustionForAction = Float.POSITIVE_INFINITY;` 리셋 (원본 L2025-L2026 이후 호출 시).
+**C-5. `getFactor(hunger, onGround, ...)`** — 이미 이식
+- [x] C-5. focus_05 H-7 에서 SmartMovingConfig 에 이미 이식 완료. 본 포커스 추가 작업 0.
+
+**C-6. Exhaustion 틱 갱신** — skip
+- [~] C-6. C-2b/c skip 으로 리셋 대상 변수 자체 없음. focus_05 H-9 의 `handleExhaustion` 가
+     `exhaustion -= exhaustionLoss` 로 자연 감소 → Phase C 와 무관하게 이미 동작.
+
+**범례**: `[x]` = 완료, `[~]` = skip 결정, `[ ]` = 미완료 (현재 0건)
 
 ---
 
@@ -659,11 +681,23 @@ Phase E (호출 경로 통합) — 기존 경량 메서드 대체 + HandsOnly + 
 Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게임 검증
 ```
 
-**전체 규모**: Phase A 40+ 필드 + Phase B 8 메서드 + Phase C 30+ 필드 + 3 메서드 + 상태 필드
-+ 리셋 + Phase D 18 서브 + Phase E 5 원자 + Phase F 6 감사. **약 110+ 원자 / 예상 10-20 세션**.
+**전체 규모 (세션 18 갱신)**: Phase A 52 필드 (완료) + Phase B 7 메서드 + 상수 20 (완료) + ~~Phase C~~ (skip 결정)
++ Phase D 18 서브 (D-5/D-14 skip) + Phase E 5 원자 + Phase F 6 감사. **약 80+ 원자 / 예상 8-15 세션**.
 
-**권장 진행**: Phase A/B 먼저 끝내서 기존 경량 `tryJump` 에 factor 인프라 주입 (DB 전수
-이식 전 factor 반영). Phase C 는 독립 대규모 — 별도 세션 집중. Phase D/E/F 는 연결/검증.
+**의존 그래프 (세션 18 갱신)**:
+```
+Phase A (Config factor 필드, 완료) → Phase B (판정 헬퍼, 완료)
+   ↓
+~~Phase C (Exhaustion)~~ — skip 결정 (Easy 1:1 + focus_05 일관)
+   ↓
+Phase D (tryJump 재작성, D-5/D-14 skip + §7 등록)
+   ↓
+Phase E → Phase F
+```
+
+**권장 진행**: Phase A/B 완결 (세션 11/17). Phase C skip → Phase D 직접 진입. Phase D 의 D-5
+(점프 차단 게이트) + D-14 (점프 후 누적) 두 블록만 통째로 skip + §7 근사 등록. 나머지 16개
+서브 원자 (D-1~D-4, D-6~D-13, D-15~D-18) 정상 1:1 이식. Phase E/F 는 연결/검증.
 
 ---
 
@@ -1346,12 +1380,125 @@ WallHead 특이점 (현 1.21.1 주석에도 명시됨):
 
 진행률: **Phase B 완결** (9/9 = 100%), 전체 #2.5 75/~110 (~68.2%).
 
+### 세션 18 — 2026-04-25 — Phase C skip 결정 (Easy 1:1 + focus_05 일관)
+
+사용자 지시: Phase C 진입 전 jumpExhaustion 시스템 검토. "Easy 모드만 쓴다는 전제 +
+다른 포커스 (focus_05) 의 명시적 배제 결정과 일관 유지" 메타 전제 도출 → Phase C 전체 skip.
+
+진행한 작업:
+1. 포커스 파일 전수 grep — `exhaustion|Exhaustion|허기|hunger` (5개 파일 매칭)
+2. 두 시스템 분리 확인:
+   - **Base Exhaustion + Hunger Sync** (focus_05 H 시리즈, 세션 23 완료) — 매 틱 자연 소진 / 자연 회복
+   - **Jump Exhaustion** (Phase C, 본 포커스) — tryJump 시점 게이팅 + type-specific 누적
+   - 두 시스템은 같은 `exhaustion` 변수 공유하지만 메커니즘 분리
+3. 원본 grep — `maxExhaustionToStartAction|maxExhaustionForAction|isJumpExhaustionEnabled|getJumpExhaustionGain|getJumpExhaustionStop|getMaxExhaustion`
+   - tryJump (D-5 + D-14): jumpExhaustion 호출
+   - HUD `SmartMovingRender` L239-L244 + `getMaxExhaustion()` (Render L30): 점프 피로 시각화
+   - 다른 액션 (Climbing/CeilingClimbing/Running/Sprinting): 같은 maxExhaustion* 변수 공유
+4. 1.21.1 SmartMovingHud L61 검증: `cfg.climbExhaustionStop` 직접 사용 (climbing 한정).
+   `getMaxExhaustion()` 호출처 0건 → Phase C 의 HUD 의존 0
+5. focus_05 §6.5 P-9~P-19 + 685-700 줄 검증: "14종 점프 피로 전체" 명시적 배제 선례
+
+Easy default 영향 분석:
+- 모든 jumpExhaustion=false (Boolean 17개) → `isJumpExhaustionEnabled` 항상 false
+- D-5 안쪽 6줄 + D-14 안쪽 3줄 모두 100% dead
+- HUD 피로도 바: max=0 라 표시 안 됨 (어차피 Easy 에서 안 보임)
+- 사용자 체감 영향: 0건
+
+문서 갱신:
+1. §0 미이식 Exhaustion 시스템 항목 → "skip 결정" 표기 + 근거 + 미이식 항목 목록
+2. §3 Phase C 전체 → `[~]` (skip 결정) 표기. C-2a/C-5 는 `[x]` (focus_05 H-8/H-7 이미 이식)
+3. §4 의존 그래프 → Phase C 제거 (A → B → D → E → F)
+4. §7-1 근사 등록: D-5 + D-14 통합 근사. 원본 코드 + 1.21.1 처리 + Easy 영향 분석 +
+   사용자 수동 활성화 영향 + 미래 작업 시 추가 필요 항목 + 근거 + 해소 조건 전수 기록
+5. 본 세션 18 로그 추가
+
+근사 여부: §7-1 등록 (1건). 이 근사는 사용자 메타 결정에 따른 영구 등록 — 포커스 완결 후에도 유지.
+
+완료 전 검증 체크리스트 (세션 18 기준):
+- [근거] 원본 grep 전수 — `SmartMovingClientConfig.java` L244-L399 + `SmartMovingSelf.java` L2018-L2027 + L2120-L2124 + `SmartMovingClient.java` L30 + `SmartMovingRender.java` L239-L244
+- [근거] focus_05 §6.5 P-9~P-19 dead 분석 + 685-700 줄 명시 배제 인용
+- [근거] 1.21.1 SmartMovingHud L61 (`cfg.climbExhaustionStop`) 직접 검증
+- [대응] 코드 변경 0건 — 문서 정리만
+- [분기] N/A (skip 결정)
+- [상수] N/A
+- [타이밍] N/A
+- [근사] §7-1 등록 + 주석 (원본 코드 + Easy 영향 + 미해소 명시)
+- [신규] §0/§3/§4/§7 동시 갱신
+- [회귀] 코드 변경 0 → 회귀 0
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (변경 없음 검증)
+
+다음 세션 권고: **Phase D 진입** — D-1 (시그니처 정비) 부터. `tryJump(int type, Boolean inWaterOrNull, Boolean isRunningOrNull, Float angle)` 원본 시그니처 1:1 이식. 호출처 정비는 Phase E.
+
+진행률: **Phase A + Phase B 완결, Phase C skip 결정**, 전체 #2.5 76/~80 (~95%) — Phase C 32개 원자 제거로 분모 감소. 실질 남은 작업 Phase D (16 서브 — D-5/D-14 skip) + Phase E (5) + Phase F (6) = 27 원자.
+
 ---
 
 ## 7. 근사 이식 지점 (이 포커스)
 
 **§7 이 파일**: Phase 진행 중 불가피한 근사 이식 지점을 여기 등록. 포커스 완결 시 0건 목표.
-현재 시작 시점: 0건.
+현재 시작 시점: 0건. **세션 18 갱신: 1건 등록 (Phase C skip 결정에 따른 D-5/D-14 통합 근사)**.
+
+### §7-1. Phase D-5 + D-14 jumpExhaustion 게이트/누적 미이식 — 세션 18
+
+**원본 위치**: `SmartMovingSelf.java` L2018-L2027 (D-5) + L2120-L2124 (D-14)
+
+**원본 코드**:
+```java
+// D-5 (L2018-L2027)
+if (enabled) {
+    boolean exhausionEnabled = Config.isJumpExhaustionEnabled(speed, type);
+    if (exhausionEnabled) {
+        float maxExhausionForJump = Config.getJumpExhaustionStop(speed, type, jumpCharge);
+        if (exhaustion > maxExhausionForJump) return false;
+        maxExhaustionToStartAction = Math.min(maxExhaustionToStartAction, maxExhausionForJump);
+        maxExhaustionForAction = Math.min(maxExhaustionForAction,
+            maxExhausionForJump + Config.getJumpExhaustionGain(speed, type, jumpCharge));
+    }
+    ...
+}
+
+// D-14 (L2120-L2124)
+if (exhausionEnabled) {
+    float exhaustionFromJump = Config.getJumpExhaustionGain(speed, type, jumpCharge);
+    exhaustion += exhaustionFromJump;
+}
+```
+
+**1.21.1 처리**: 두 블록 통째로 skip. `exhausionEnabled` 변수 자체 미선언.
+
+**근사 이식 — 원본과 차이**:
+- jumpExhaustion 게이트 미작동 (점프 시도 차단 안 됨)
+- 점프 후 `exhaustion += gain` 누적 미작동
+- `maxExhaustionToStartAction` / `maxExhaustionForAction` 변수 미존재 → HUD 점프 임계값 시각화 미작동
+
+**Easy default 영향 분석 (세션 18)**:
+- Easy default 에서 모든 jumpExhaustion=false (Boolean 17개) → `isJumpExhaustionEnabled` 항상 false
+- → `exhausionEnabled = false` 상태로 D-5/D-14 안쪽 블록 100% dead
+- → **Easy default 동작 영향 0** (focus_05 §6.5 P-9~P-19 dead 분석 참조)
+
+**사용자 수동 활성화 영향**:
+- 사용자가 properties 파일에 `move.jump.exhaustion=true` + `move.jump.{up|sneak|...}.exhaustion=true` 등 수동 추가 시 → 1.21.1 에 해당 key/로직 없음 → **작동 안 함**
+
+**미래 작업 시 추가 필요 항목**:
+- 다른 액션 (climb/run/sprint) exhaustion 게이팅 이식 시:
+  - `maxExhaustionToStartAction` / `maxExhaustionForAction` ClientState 필드 (~5줄)
+  - 매 틱 리셋 (`= Float.MAX_VALUE`, ~2줄)
+  - 그때 함께 추가 (작업량 동일)
+- HUD 피로도 바 점프 임계값 시각화 원할 시:
+  - `getMaxExhaustion()` Config 메서드
+  - SmartMovingHud / Render 의 `maxExhaustion` 참조 갱신
+  - 본 포커스 외 별도 작업
+
+**근거 (skip 결정)**:
+1. 사용자 명시 결정 (2026-04-25, 세션 18 대화): Easy 1:1 + focus_05 일관 우선
+2. focus_05 §6.5 P-9~P-19 + 685-700 줄 — 14종 점프 피로 명시적 배제 선례
+3. 1.21.1 SmartMovingHud L61 이 `cfg.climbExhaustionStop` 직접 사용 → `getMaxExhaustion()` 호출처 0
+4. Phase C 의 51 Config 필드 + 3 메서드 + 2 변수 + 리셋 모두 호출처 없는 dead code
+
+**해소 조건 (포커스 완결 시 0건 목표)**:
+- 미해소. 본 §7-1 은 사용자 메타 결정에 따른 영구 등록 — 포커스 #2.5 완결 후에도 유지.
+- 추후 Hard 모드 / 사용자 수동 활성화 / HUD 피로도 바 시각화 요구 발생 시 별도 포커스로 해소 가능.
 
 ---
 
