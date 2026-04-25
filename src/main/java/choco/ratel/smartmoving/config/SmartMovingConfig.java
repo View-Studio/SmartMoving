@@ -289,6 +289,22 @@ public class SmartMovingConfig {
     //   ClimbBackUp Hands-only 추가 horizontal factor (>= 0, <= 1). DecreasingFactor 기본 1F.
     public float climbBackUpJumpHandsOnlyHorizontalFactor = 1F;
 
+    // === ClimbBackHead 점프 (원본 SmartMovingConfig L285-L290) — 구조 ClimbBackUp 와 동일 ===
+    // 원본 L286: _climbBackHeadJump = Unmodified("move.jump.climb.back.head") → 기본 true
+    public boolean climbBackHeadJump = true;
+    // 원본 L287: _climbBackHeadJumpVerticalFactor = DecreasingFactor(...).defaults(0.2F).defaults(1F, _pre_sm_3_1) ★
+    //   ClimbBackHead vertical factor (>= 0, <= 1). 0.2F (sm_3_1 이상). _pre_sm_3_1 만 1F.
+    public float climbBackHeadJumpVerticalFactor = 0.2F;
+    // 원본 L288: _climbBackHeadJumpHorizontalFactor = DecreasingFactor(...).defaults(0.3F).defaults(1F, _pre_sm_3_1) ★
+    //   ClimbBackHead horizontal factor (>= 0, <= 1). 0.3F (sm_3_1 이상). _pre_sm_3_1 만 1F.
+    public float climbBackHeadJumpHorizontalFactor = 0.3F;
+    // 원본 L289: _climbBackHeadJumpHandsOnlyVerticalFactor = DecreasingFactor(...).defaults(0.8F) ★
+    //   ClimbBackHead Hands-only 추가 vertical factor (>= 0, <= 1). 기본 0.8F.
+    public float climbBackHeadJumpHandsOnlyVerticalFactor = 0.8F;
+    // 원본 L290: _climbBackHeadJumpHandsOnlyHorizontalFactor = DecreasingFactor("move.jump.climb.back.head.hands.only.horizontal.factor")
+    //   ClimbBackHead Hands-only 추가 horizontal factor (>= 0, <= 1). DecreasingFactor 기본 1F.
+    public float climbBackHeadJumpHandsOnlyHorizontalFactor = 1F;
+
     /**
      * 원본: _angleJumpDoubleClickTicks = Positive("move.jump.angle.double.click.ticks").singular().up(3F, 2F)
      * 각도 점프 더블클릭 감지 타이머(틱). 첫 클릭 후 이 시간 내에 두 번째 클릭 시 트리거.
@@ -1091,6 +1107,11 @@ public class SmartMovingConfig {
         climbBackUpJumpHorizontalFactor = getFloat(p, "move.jump.climb.back.up.horizontal.factor", climbBackUpJumpHorizontalFactor);
         climbBackUpJumpHandsOnlyVerticalFactor = getFloat(p, "move.jump.climb.back.up.hands.only.vertical.factor", climbBackUpJumpHandsOnlyVerticalFactor);
         climbBackUpJumpHandsOnlyHorizontalFactor = getFloat(p, "move.jump.climb.back.up.hands.only.horizontal.factor", climbBackUpJumpHandsOnlyHorizontalFactor);
+        climbBackHeadJump        = getBool(p,   "move.jump.climb.back.head",      climbBackHeadJump);
+        climbBackHeadJumpVerticalFactor = getFloat(p, "move.jump.climb.back.head.vertical.factor", climbBackHeadJumpVerticalFactor);
+        climbBackHeadJumpHorizontalFactor = getFloat(p, "move.jump.climb.back.head.horizontal.factor", climbBackHeadJumpHorizontalFactor);
+        climbBackHeadJumpHandsOnlyVerticalFactor = getFloat(p, "move.jump.climb.back.head.hands.only.vertical.factor", climbBackHeadJumpHandsOnlyVerticalFactor);
+        climbBackHeadJumpHandsOnlyHorizontalFactor = getFloat(p, "move.jump.climb.back.head.hands.only.horizontal.factor", climbBackHeadJumpHandsOnlyHorizontalFactor);
         angleJumpDoubleClickTicks = getFloat(p, "move.jump.angle.double.click.ticks", angleJumpDoubleClickTicks);
         wallJumpDoubleClick      = getBool(p,   "move.jump.wall.double.click",    wallJumpDoubleClick);
         wallJumpDoubleClickTicks = getFloat(p,  "move.jump.wall.double.click.ticks", wallJumpDoubleClickTicks);
@@ -1245,6 +1266,11 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.climb.back.up.horizontal.factor", String.valueOf(climbBackUpJumpHorizontalFactor));
         p.setProperty("move.jump.climb.back.up.hands.only.vertical.factor", String.valueOf(climbBackUpJumpHandsOnlyVerticalFactor));
         p.setProperty("move.jump.climb.back.up.hands.only.horizontal.factor", String.valueOf(climbBackUpJumpHandsOnlyHorizontalFactor));
+        p.setProperty("move.jump.climb.back.head",       String.valueOf(climbBackHeadJump));
+        p.setProperty("move.jump.climb.back.head.vertical.factor", String.valueOf(climbBackHeadJumpVerticalFactor));
+        p.setProperty("move.jump.climb.back.head.horizontal.factor", String.valueOf(climbBackHeadJumpHorizontalFactor));
+        p.setProperty("move.jump.climb.back.head.hands.only.vertical.factor", String.valueOf(climbBackHeadJumpHandsOnlyVerticalFactor));
+        p.setProperty("move.jump.climb.back.head.hands.only.horizontal.factor", String.valueOf(climbBackHeadJumpHandsOnlyHorizontalFactor));
         p.setProperty("move.jump.angle.double.click.ticks", String.valueOf(angleJumpDoubleClickTicks));
         p.setProperty("move.jump.wall.double.click",     String.valueOf(wallJumpDoubleClick));
         p.setProperty("move.jump.wall.double.click.ticks", String.valueOf(wallJumpDoubleClickTicks));

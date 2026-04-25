@@ -253,11 +253,11 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-8e. `climbBackUpJumpHandsOnlyHorizontalFactor = 1F` (원본 L283, DecreasingFactor 기본) — 세션 8 (신규)
 
 **A-9. ClimbBackHead 필드 5건**
-- [ ] A-9a. `climbBackHeadJump = true` (원본 L286)
-- [ ] A-9b. `climbBackHeadJumpVerticalFactor = 0.2F` ★ (원본 L287)
-- [ ] A-9c. `climbBackHeadJumpHorizontalFactor = 0.3F` ★ (원본 L288)
-- [ ] A-9d. `climbBackHeadJumpHandsOnlyVerticalFactor = 0.8F` ★ (원본 L289)
-- [ ] A-9e. `climbBackHeadJumpHandsOnlyHorizontalFactor = 1F` (원본 L290)
+- [x] A-9a. `climbBackHeadJump = true` (원본 L286) — 세션 9 (신규)
+- [x] A-9b. `climbBackHeadJumpVerticalFactor = 0.2F` ★ (원본 L287, sm_3_1 오버라이드) — 세션 9 (신규)
+- [x] A-9c. `climbBackHeadJumpHorizontalFactor = 0.3F` ★ (원본 L288, sm_3_1 오버라이드) — 세션 9 (신규)
+- [x] A-9d. `climbBackHeadJumpHandsOnlyVerticalFactor = 0.8F` ★ (원본 L289) — 세션 9 (신규)
+- [x] A-9e. `climbBackHeadJumpHandsOnlyHorizontalFactor = 1F` (원본 L290, DecreasingFactor 기본) — 세션 9 (신규)
 
 **A-10. WallUp 필드 5건** (일부 이식)
 - [ ] A-10a. `wallUpJump = true` (원본 L293)
@@ -984,6 +984,43 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-9 (ClimbBackHead 5건 — 전부 신규: A-9a `climbBackHeadJump=true` + A-9b `climbBackHeadJumpVerticalFactor=0.2F` ★ + A-9c `climbBackHeadJumpHorizontalFactor=0.3F` ★ + A-9d `climbBackHeadJumpHandsOnlyVerticalFactor=0.8F` ★ + A-9e `climbBackHeadJumpHandsOnlyHorizontalFactor=1F`). 원본 L286-L290 — 구조 A-8 과 동일.
 
 진행률: Phase A 38/40+ (~95%), 전체 #2.5 38/~110 (~34.5%).
+
+### 세션 9 — 2026-04-25 — Phase A-9 (ClimbBackHead 5건: 전부 신규 + §3 A-9e 누락 보완)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-9 5건 (A-9a~A-9e) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L285-L290) — 구조 A-8 ClimbBackUp 과 동일:
+   - L286 `_climbBackHeadJump = Unmodified("move.jump.climb.back.head")` → 기본 true
+   - L287 `_climbBackHeadJumpVerticalFactor = DecreasingFactor(...).defaults(0.2F).defaults(1F, _pre_sm_3_1)` ★ → **0.2F**
+   - L288 `_climbBackHeadJumpHorizontalFactor = DecreasingFactor(...).defaults(0.3F).defaults(1F, _pre_sm_3_1)` ★ → **0.3F**
+   - L289 `_climbBackHeadJumpHandsOnlyVerticalFactor = DecreasingFactor(...).defaults(0.8F)` ★ → 0.8F
+   - L290 `_climbBackHeadJumpHandsOnlyHorizontalFactor = DecreasingFactor(...)` → DecreasingFactor 기본 1F
+2. 1.21.1 이식 위치 확인:
+   - climbBackHead* 1.21.1 에 **전무** (grep 결과 0건). 모두 신규.
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 — ClimbBackUp 그룹 (L290) 직후 ClimbBackHead 그룹 신설 (헤더 + 5 항목)
+   - `load()` IO 신규 5건 — climbBackUpJumpHandsOnlyHorizontalFactor 다음
+   - `save()` IO 신규 5건 — 동일 위치
+   - key 명: `move.jump.climb.back.head{|.vertical.factor|.horizontal.factor|.hands.only.vertical.factor|.hands.only.horizontal.factor}`
+4. §3 보완: A-9e 항목 §3 누락 발견 → 추가 + 완료 표시.
+5. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 9 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L286-L290 + Properties.java L191-L192 (DecreasingFactor 기본 1F)
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 ClimbBackUp 그룹 직후 / load + save 양방향 신규
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치)
+- [분기] 분기 없음 (단순 boolean/float 5개)
+- [상수] true / **0.2F** ★ / **0.3F** ★ / **0.8F** ★ / 1F (DecreasingFactor 기본)
+- [타이밍] 필드 선언만. Phase B getJumpVertical/HorizontalFactor (ClimbBackHead/HandsOnly 분기) + Phase D ClimbBackHead 분기에 사용.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 발견: §3 A-9e 항목 누락 → 보완 추가.
+- [회귀] 신규 필드만 추가 — 기존 코드 영향 0. ClimbBackHead/HandsOnly 점프 type 자체가 1.21.1 에 아직 없음 (Phase E).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-10 (WallUp 5건 — A-10a `wallUpJump=true` ✅ 확인 / A-10b `wallUpJumpVerticalFactor=0.4F` ✅ 확인 / A-10c `wallUpJumpHorizontalFactor=0.15F` ★ ✅ 확인 (이미 세션 1 이전에 이식됨) / A-10d `wallUpJumpFallMaximumDistance=2F` ✅ 확인 / A-10e `wallUpJumpOrthogonalTolerance=5F` ✅ 확인). 원본 L293-L297 — 모두 이미 이식 확인 + 주석 정비만.
+
+진행률: Phase A 43/40+ (Phase A 완료 임박, 5건 초과 — 실제 약 50건), 전체 #2.5 43/~110 (~39%).
 
 ---
 
