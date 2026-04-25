@@ -371,28 +371,46 @@ vanilla 위임.
 ### Phase D. lava 연관 상태/점프 경로 감사
 
 **D-1. `tryJump(SLIDE_DOWN/Up)` lava 조건**
-- [ ] D-1. 원본 L1852 `jump = jumpAvoided && isJumping && !isInWater() && !isInLava()` —
-  1.21.1 에서 점프 차단 조건이 lava 포함인지 grep 으로 확인. 미포함 시 추가.
+- [x] **D-1 (세션 5 완료)**. 원본 L1852 `boolean jump = jumpAvoided && isJumping && !isInWater()
+  && !handleLavaMovement()`. 1.21.1 분석:
+  - vanilla 1.21.1 `LivingEntity.tickMovement()` L2632-L2653 jump 분기: `isInLava` + onGround
+    && `g <= h` 시 vanilla `jump()` 호출 (L2645) → sm_jump 인터셉트 (Mixin L231-L238) →
+    `jumpAvoided=true`. 즉 **lava 안에서도 jumpAvoided 가 켜질 수 있음** → 명시적 회피 필요.
+  - 1.21.1 적용 위치: `SmartMovingJumper.handleJumping()` `e. 일반 점프` 진입 조건 (L468-L483)
+    에 `&& !player.isTouchingWater() && !player.isInLava()` 추가.
+  - 매핑: `!sp.isInWater()` ↔ `!player.isTouchingWater()` / `!sp.handleLavaMovement()` ↔
+    `!player.isInLava()`. cfg.lavaLikeWater=true 시 lava 안 일반점프 차단 + handleLava 가
+    motion 처리.
 
 **D-2. `isHeadJumping` 해제 lava 조건**
-- [ ] D-2. 원본 L2525-L2530 `isHeadJumping = isHeadJumping && ... && !isInLava()` — 1.21.1
-  이식 상태 grep. 미포함 시 `|| player.isInLava()` 해제 조건 추가.
+- [x] **D-2 (세션 5 완료)**. 원본 L2525-L2530 `isHeadJumping = isHeadJumping && !sp.onGround
+  && !(isSwimming || isDiving) && !(isFlying || capabilities.isFlying) && !(waterMovement &&
+  motionY < 0) && !sp.handleLavaMovement()`. 1.21.1 검증:
+  - `SmartMovingClientState.tickMain` L1413-L1418 이미 5개 게이트 모두 일치 (`!isOnGround`,
+    `!(isSwimming_sm || isDiving)`, `!(isFlying || abilities.flying)`, `!(isTouchingWater
+    && velocity.y < 0)`, `!isInLava`).
+  - **추가 작업 없음**. 세션 119 (B-24 이식 시) 부터 lava 조건 포함되어 있었음.
 
 **D-3. `isGroundSprinting` 해제 lava 조건**
-- [ ] D-3. 원본 L2679 `isGroundSprinting = ... && !isSwimming && !isDiving && !isClimbing`
-  — lava 조건 없음. 1.21.1 동일 확인.
+- [x] **D-3 (세션 5 완료)**. 원본 L2679 `isGroundSprinting = canHorizontallySprint && (sp.onGround
+  || isLevitating()) && !isSwimming && !isDiving && !isClimbing` — **lava 조건 없음**.
+  - `SmartMovingClientState.tickMain` L1232-L1234 완벽 일치 (`_canHorizontallySprint17 &&
+    (isOnGround() || isLevitating) && !isSwimming_sm && !isDiving && !isClimbing`).
+  - **추가 작업 없음**.
 
-**D-4. `isSprintJump` 해제 lava 조건** (원본 L2643) — 세션 1 정정 (이전 jumpAvoided 오기)
-- [ ] D-4. 원본 L2643 `if (sp.onGround || isFlying || capabilities.isFlying || isSwimming
-  || isDiving || sp.handleLavaMovement()) isSprintJump = false;` — 1.21.1 grep 하여
-  `player.isInLava()` 또는 `sm.isInLava` 포함 여부 확인. 미포함 시 추가.
+**D-4. `isSprintJump` 해제 lava 조건** (원본 L2643)
+- [x] **D-4 (세션 5 완료)**. 원본 L2643 `if (sp.onGround || isFlying || capabilities.isFlying
+  || isSwimming || isDiving || sp.handleLavaMovement()) isSprintJump = false;`. 1.21.1 검증:
+  - `SmartMovingClientState.tickMain` L1184-L1187 이미 6개 OR 모두 일치 (`isOnGround() ||
+    isFlying || abilities.flying || isSwimming_sm || isDiving || isInLava()`).
+  - **추가 작업 없음**.
 
 ---
 
 ### Phase E. 빌드 + 플레이테스트
 
 **E-1. 빌드 검증**
-- [ ] E-1. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL.
+- [x] **E-1 (세션 5)**. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
 
 **E-2. 회귀 감사**
 - [ ] E-2. 포커스 #2 Extended 기존 이식 영향 확인:
@@ -679,6 +697,36 @@ vanilla 부작용 평가 (사용자 요청 전수 조사 결과)
    1.21.1 grep 후 누락 시 추가.
 
 진행률: Phase C 완결 (5/5 = 100%), 전체 #2.6 15/21 (~71%).
+
+### 세션 5 — 2026-04-25 — Phase D 완결 (lava 연관 점프/상태 조건 감사)
+
+진행한 작업:
+1. **D-1 (원본 L1852, lava 안 일반점프 회피)** — 1.21.1 vanilla `LivingEntity.tickMovement()`
+   디컴파일 (.tmp_research/LivingEntity_1_21_1.java L2632-L2653) 분석:
+   - vanilla 분기에서 lava 안 + `onGround` && `g <= h` 시 vanilla `jump()` 호출 → SM
+     `sm_jump` 인터셉트로 `jumpAvoided=true` 가 켜짐 → **명시적 lava 회피 조건 필요**.
+   - `SmartMovingJumper.handleJumping()` `e. 일반 점프` 진입 조건에 `&& !player.isTouchingWater()
+     && !player.isInLava()` 추가 (원본 L1852 `!isInWater() && !handleLavaMovement()` 1:1).
+2. **D-2 (원본 L2530, isHeadJumping 해제 lava)** — `SmartMovingClientState.tickMain` L1413-L1418
+   이미 `&& !player.isInLava()` 포함 (세션 119 B-24 이식 시 반영). 추가 작업 없음.
+3. **D-3 (원본 L2679, isGroundSprinting lava 조건)** — 원본 자체에 lava 조건 없음.
+   1.21.1 L1232-L1234 도 동일 (`&& !isSwimming_sm && !isDiving && !isClimbing`).
+4. **D-4 (원본 L2643, isSprintJump 해제 lava)** — `SmartMovingClientState.tickMain` L1184-L1187
+   이미 `|| player.isInLava()` 포함. 추가 작업 없음.
+
+수정 파일:
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — handleJumping
+  e. 일반 점프 진입 조건에 lava/water 회피 2-AND 추가 (원본 L1852 1:1).
+- `docs/fix/focus_02_6_lava_liquid_border.md` — §3 Phase D 4 원자 모두 [x] 마킹 + 본 세션
+  로그 추가.
+
+빌드: `./gradlew compileJava compileClientJava --rerun-tasks` (다음 단계 검증).
+
+진행률: Phase D 완결 (4/4 = 100%), 전체 #2.6 19/21 (~90%). Phase E 만 잔존 (E-1 빌드,
+   E-2 회귀, E-3 인게임 테스트는 모든 포커스 통합 후).
+
+다음 세션 권고: **Phase E-1 빌드 + E-2 회귀 감사** — 단일 변경 (Jumper 1줄 추가) 빌드 검증
+   후 본 포커스 종결. E-3 인게임 테스트는 포커스 #1/#2/#3 통합 후 실시.
 
 ---
 

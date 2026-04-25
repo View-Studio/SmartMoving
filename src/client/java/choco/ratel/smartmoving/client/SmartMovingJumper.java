@@ -465,8 +465,14 @@ public final class SmartMovingJumper {
         // ── e. 일반 점프 ────────────────────────────────────────────────────
         // 원본: !blockJumpTillButtonRelease && !isJumpCharging && !isHeadJumpCharging
         //       && !isVineAnyClimbing && jumpButton.StartPressed(=jumpPending)
+        // **포커스 #2.6 D-1 (세션 5)**: 원본 L1852 `boolean jump = jumpAvoided && isJumping
+        //   && !isInWater() && !handleLavaMovement()` 의 lava/water 회피 — 1.21.1 매핑.
+        //   vanilla L2643-L2647: lava 안이라도 onGround 시 `jump()` 호출 → sm_jump 인터셉트 →
+        //   jumpAvoided=true 가 됨. 따라서 명시적 회피 필요. cfg.lavaLikeWater=true 시
+        //   lava 안 점프 차단 + handleLava 가 자체 motion 처리.
         if (!sm.blockJumpTillButtonRelease && !isJumpCharging && !isHeadJumpCharging
-                && sm.jumpPending && !sm.isClimbing && !sm.isCrawlClimbing) {
+                && sm.jumpPending && !sm.isClimbing && !sm.isCrawlClimbing
+                && !player.isTouchingWater() && !player.isInLava()) {
             // 방향 점프 각도 계산
             // 원본: angleJumpType = ((360 - movementAngle) / 45) % 8
             Vec3d vel = player.getVelocity();
