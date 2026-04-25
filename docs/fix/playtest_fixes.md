@@ -8,7 +8,7 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #3 — 상태 전환 조건 이상 AI 완결 (세션 6 — 14/14 + 감사 후 B-7 신규 이식, 다음 포커스 #4 또는 #1)
+항목 #4 — 키 커맨드 조합 이상 진행 중 (세션 1 — 4 Agent 전수 리서치 / 핵심 100% 1:1 완결, 8 채팅 옵션 결정 대기)
 ```
 
 **작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)
@@ -96,7 +96,7 @@
 | 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟢 AI 완결 임박 (Phase A/B/C/D 19/21 = 90%, E-1 빌드 ✓ / E-2 회귀 진행 / E-3 통합 인게임 deferred) | #2 완료 |
 | 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 AI 완결 임박 (Phase A~H 22/23 = 96%, F-3 통합 인게임 deferred) | #2 완료 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ✅ AI 완결 (2026-04-25, 세션 6) — 14/14 원자 (감사 후 B-7 추가) / 인게임 통합 검증 deferred | #2 / #2.5 / #2.6 / #2.7 완료 |
-| 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
+| 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | 🟢 진행 중 (P/A/C 8/10 = 80% 완결, 핵심 키 메커니즘 100% 1:1 / 8 채팅 옵션 결정 대기) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
 
 **의존 해석**: 상태 자체가 틀린 상태(#2)에서 전환 조건(#3)이나 애니메이션(#1)을 손대면
