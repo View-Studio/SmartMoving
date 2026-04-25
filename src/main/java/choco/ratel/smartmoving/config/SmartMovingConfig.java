@@ -190,6 +190,57 @@ public class SmartMovingConfig {
     }
 
     /**
+     * Phase B-7 — getJumpChargeFactor(jumpCharge).
+     *
+     * 원본 `SmartMovingClientConfig.java` L401-L408 (1:1 번역):
+     * <pre>
+     * public float getJumpChargeFactor(float jumpCharge) {
+     *     if (!enabled || !_jumpCharge.value) return 1F;
+     *     jumpCharge = Math.min(jumpCharge, _jumpChargeMaximum.value);
+     *     return 1F + jumpCharge / _jumpChargeMaximum.value * (_jumpChargeFactor.value - 1F);
+     * }
+     * </pre>
+     *
+     * 공식: charge=0 → 1F, charge=max → jumpChargeFactor (1.3F 기본). 선형 보간.
+     *
+     * 호출처: tryJump (Phase D-6) — `float jumpChargeFactor = charged ? cfg.getJumpChargeFactor(sm.jumpCharge) : 1F;`
+     */
+    public float getJumpChargeFactor(float jumpCharge) {
+        if (!enabled || !this.jumpCharge)
+            return 1F;
+
+        jumpCharge = Math.min(jumpCharge, jumpChargeMaximum);
+        return 1F + jumpCharge / jumpChargeMaximum * (jumpChargeFactor - 1F);
+    }
+
+    /**
+     * Phase B-8 — getHeadJumpFactor(headJumpCharge).
+     *
+     * 원본 `SmartMovingClientConfig.java` L410-L416 (1:1 번역):
+     * <pre>
+     * public float getHeadJumpFactor(float headJumpCharge) {
+     *     if (!enabled || !_headJump.value) return 1F;
+     *     headJumpCharge = Math.min(headJumpCharge, _headJumpChargeMaximum.value);
+     *     return (headJumpCharge - 1) / (_headJumpChargeMaximum.value - 1);
+     * }
+     * </pre>
+     *
+     * 공식: charge=1 → 0, charge=max → 1. 헤드점프의 normalAngle 회전 비율 (Phase D-10).
+     *
+     * 주의: charge=0 일 때 결과 -1 / (max-1) (음수). 호출 측 (Phase D-10) 에서 head 분기 진입
+     * 전 이미 charge >= 1 보장된다고 가정 (원본 그대로).
+     *
+     * 호출처: tryJump head 재계산 (Phase D-10) — `double newAngle = cfg.getHeadJumpFactor(sm.headJumpCharge) * normalAngle;`
+     */
+    public float getHeadJumpFactor(float headJumpCharge) {
+        if (!enabled || !this.headJump)
+            return 1F;
+
+        headJumpCharge = Math.min(headJumpCharge, headJumpChargeMaximum);
+        return (headJumpCharge - 1) / (headJumpChargeMaximum - 1);
+    }
+
+    /**
      * Phase B-5 — getJumpVerticalFactor(speed, type).
      *
      * 원본 `SmartMovingClientConfig.java` L418-L463 (1:1 번역):

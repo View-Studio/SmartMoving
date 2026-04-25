@@ -336,12 +336,13 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   (inWater 시 `0.07839602977037292F`) × speed 분기 (Sprint→sprintFactor / Run→runFactor /
   Sneak→sneakFactor). `!enabled` 시 speed==Running → baseMaxMotion × 1.3F. type 파라미터 미사용.
 
-**B-7. `getJumpChargeFactor(charge)`** (원본 L401-L408)
-- [ ] B-7. SmartMovingConfig 에 이식 — 기존 Jumper L180-L182 계산 로직과 동일. Jumper 에서
-  이 헬퍼 호출로 교체.
+**B-7. `getJumpChargeFactor(charge)`** (원본 L401-L408) — 세션 17 완료
+- [x] B-7. SmartMovingConfig 에 instance 메서드 신설. `1F + (charge / max) × (factor - 1F)` 선형
+  보간. Jumper 호출 교체는 Phase D-6 에서.
 
-**B-8. `getHeadJumpFactor(charge)`** (원본 L410-L416)
-- [ ] B-8. SmartMovingConfig 에 이식 — `(charge - 1) / (max - 1)` 공식. Jumper 에서 호출.
+**B-8. `getHeadJumpFactor(charge)`** (원본 L410-L416) — 세션 17 완료
+- [x] B-8. SmartMovingConfig 에 instance 메서드 신설. `(charge - 1) / (max - 1)` 공식. Jumper
+  호출 교체는 Phase D-10 에서.
 
 ---
 
@@ -1303,6 +1304,47 @@ WallHead 특이점 (현 1.21.1 주석에도 명시됨):
 다음 세션 권고: Phase B-7 + B-8 (`getJumpChargeFactor(charge)` + `getHeadJumpFactor(charge)`) — 묶어 처리. 원본 L401-L408 (`getJumpChargeFactor`) + L410-L416 (`getHeadJumpFactor`). 둘 다 단순 (charge / max) 보간 공식. 기존 Jumper L180-L182 에 동등 계산 있음 — 이식 후 Jumper 호출 교체는 Phase D 에서.
 
 진행률: Phase B 7/9 (~78%), 전체 #2.5 73/~110 (~66.4%).
+
+### 세션 17 — 2026-04-25 — Phase B-7 + B-8 (getJumpChargeFactor + getHeadJumpFactor) — Phase B 완결
+
+사용자 지시: "엄격 1:1" 유지 + Phase B-7 + B-8 묶어 이식 → Phase B 완결.
+
+진행한 작업:
+1. 원본 라인 + 본체 확보:
+   - `SmartMovingClientConfig.java` L401-L408 — `getJumpChargeFactor(float jumpCharge)`
+   - `SmartMovingClientConfig.java` L410-L416 — `getHeadJumpFactor(float headJumpCharge)`
+2. 1.21.1 의존 grep 확인:
+   - B-7: `enabled` ✅ / `jumpCharge` boolean (A-4a) ✅ / `jumpChargeMaximum` (A-4b) ✅ / `jumpChargeFactor` (A-4c) ✅
+   - B-8: `enabled` ✅ / `headJump` (A-5a) ✅ / `headJumpChargeMaximum` (A-5c) ✅
+3. 1.21.1 이식 (`SmartMovingConfig.java`, getJumpVerticalFactor 직전):
+   - `public float getJumpChargeFactor(float jumpCharge)` instance 메서드
+   - `public float getHeadJumpFactor(float headJumpCharge)` instance 메서드
+   - 원본 공식 그대로:
+     - B-7: `1F + jumpCharge / jumpChargeMaximum * (jumpChargeFactor - 1F)` (선형 보간 0→1F, max→factor)
+     - B-8: `(headJumpCharge - 1) / (headJumpChargeMaximum - 1)` (charge=1→0, max→1)
+   - `Math.min(charge, max)` 클램프 보존
+4. 명명 충돌 처리: 인자 `jumpCharge` (float) vs 필드 `jumpCharge` (boolean) 동명 → `this.jumpCharge` 명시 / `headJump` 동일 처리.
+5. 근사 여부: 없음. 1:1 (공식/클램프/조기반환 모두 보존).
+
+완료 전 검증 체크리스트 (세션 17 기준):
+- [근거] 원본 라인 확보 — `SmartMovingClientConfig.java` L401-L416
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` Phase B 인프라 그룹 (getJumpVerticalFactor 직전)
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (공식/클램프/조기반환 모두 일치)
+- [분기] `!enabled || !jumpCharge` (B-7) / `!enabled || !headJump` (B-8) 조기 반환 1F
+- [상수] `1F` 보간 base / `(charge - 1) / (max - 1)` 공식
+- [타이밍] instance 메서드 — Phase D-6 (B-7) / Phase D-10 (B-8) 호출.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 명명 충돌 발견: 인자 vs 필드 동명 — `this.` 명시로 해소.
+- [회귀] 신규 instance 메서드 2건 추가 — 기존 코드 영향 0. 기존 Jumper L180-L182 동등 계산은 Phase D 진입 시 본 헬퍼 호출로 교체 예정.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s)
+
+**Phase B 완결**: B-1 + B-2 + B-2.5 + B-3 + B-4 + B-5 + B-6 + B-7 + B-8 = 9 원자 모두 [x]. Speed 상수 5 + Type 상수 15 + 6 메서드 (getJumpSpeed / isJumpingEnabled / getJumpHorizontalFactor / getJumpVerticalFactor / getMaxHorizontalMotion / getJumpChargeFactor / getHeadJumpFactor) = 7 메서드. tryJump 재작성 (Phase D) 의존 인프라 100% 충족.
+
+다음 세션 권고: **Phase C 진입** — Exhaustion 시스템 대규모 이식. C-1a (Jump exhaustion 활성/종료 필드 — `_jumpExhaustion` + speed 5 + type 11) 부터. 원본 `SmartMovingConfig.java` L323+ (jumpExhaustion 필드) 참조. 또는 Phase D 우선 진행 옵션 검토 (Phase C 가 D-5 의존이지만 D 의 다른 17 서브 원자는 독립).
+
+**대안 진입**: Phase D 직접 진입 + Phase C 병행 — D-5 만 임시 stub 으로 두고 (계획 §7 근사로 임시 등록) 나머지 D 원자 진행 후 C 완결 시 D-5 복구. 단, 사용자 룰 "Phase C skip 금지 — Phase D 이전에 전수 이식" 명시 → 정공법 (Phase C 먼저).
+
+진행률: **Phase B 완결** (9/9 = 100%), 전체 #2.5 75/~110 (~68.2%).
 
 ---
 
