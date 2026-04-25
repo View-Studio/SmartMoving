@@ -13,9 +13,13 @@
 
 ---
 
-## 0. 현재 상태 (진입 시점)
+## 0. 현재 상태 (진입 시점 스냅샷 — 2026-04-25 세션 0)
 
-### 이식된 Factor 필드 (2026-04-25 기준)
+> **주의 (세션 23 갱신)**: §0 의 표는 **포커스 #2.5 진입 시점** 스냅샷이다. Phase A~F
+> 완결 후 갱신하지 않는다. 실제 최신 이식 상태는 §3 Phase 체크박스 (모두 [x]/[~]) 와
+> §6 세션 22 마지막 진행률 (포커스 #2.5 AI 완결, F-6 deferred) 참조.
+
+### 이식된 Factor 필드 (2026-04-25 진입 시점 기준)
 | 원본 필드 | 1.21.1 필드 | 상태 |
 |---|---|---|
 | `_wallUpJumpFallMaximumDistance` | `wallUpJumpFallMaximumDistance = 2F` | ✅ 이식 |
@@ -32,7 +36,7 @@
 | `_freeClimbingDownSpeedFactor` | `freeClimbingDownSpeedFactor` | ✅ 이식 |
 | `_sprintFactor` | `sprintFactor` | ✅ 이식 |
 
-### 미이식 Factor 필드 (이 포커스 범위)
+### 미이식 Factor 필드 (이 포커스 범위 — 진입 시점, **모두 Phase A 세션 1~11 에서 이식 완결**)
 | 원본 필드 | 기본값 | 미이식 이유 |
 |---|---|---|
 | `_jumpHorizontalFactor` | 1F (IncreasingFactor) | base factor — Jump 전체에 공통 |
@@ -76,7 +80,7 @@
 | `_headFallDamageStartDistance` | 2F | 헤드점프 낙하 데미지 시작 거리 |
 | `_headFallDamageFactor` | **2F** | 헤드점프 낙하 데미지 배율 |
 
-### 미이식 판정 메서드 (이 포커스 범위)
+### 미이식 판정 메서드 (이 포커스 범위 — 진입 시점, **모두 Phase B 세션 12~17 에서 이식 완결**)
 | 원본 메서드 | 소비처 |
 |---|---|
 | `isJumpingEnabled(speed, type)` | tryJump 진입 조건 |
@@ -113,12 +117,15 @@
 - `getMaxExhaustion()` 미이식 (skip)
 - Exhaustion 관련 Config 51+ 필드 미이식 (skip)
 
-### 현 Jumper 구현 (1.21.1)
-`SmartMovingJumper.tryJump(player, sm, jumpType, charge)` — 경량 이식 상태:
+### 현 Jumper 구현 (1.21.1) — 진입 시점 스냅샷
+`SmartMovingJumper.tryJump(player, sm, jumpType, charge)` — 경량 이식 상태 (Phase D 진입 전):
 - jumpType: UP / CHARGE_UP / HEAD_UP / WALL_UP / WALL_HEAD / WALL_UP_SLIDE / WALL_HEAD_SLIDE / SLIDE_DOWN (세션 134)
 - Exhaustion 완전 미이식
 - Factor 인프라 하드코딩 (WALL_UP = 0.4F, WALL_HEAD = 0.3F 만 반영, 기타 speed 별 factor 미반영)
 - `trySlideDownJump` 별도 메서드 (세션 134 B-42-B26 경량)
+
+**→ 세션 19 정리 완료**: tryJump 새 시그니처 1:1 재작성 + trySlideDownJump 제거 + 상수
+   alias 통일 + 호출처 7곳 갱신 (Phase D 일괄 + E-1 통합). Exhaustion 은 Phase C skip.
 
 ---
 
@@ -145,10 +152,11 @@ L172-L547 Jumper 인프라를 **축약·간소화·대체 매핑 금지**. vanil
 | `Property<Float>.value` | `float` 필드 직접 |
 | `Property<Boolean>.value` | `boolean` 필드 직접 |
 
-### 금지
+### 금지 (진입 시점, 세션 18 일부 갱신)
 - `factor = 1F` 하드코딩 근사 (base + speed별 + override 전수 반영 필수)
 - `!cfg.xxx` 단순 근사 (`isJumpingEnabled(speed, type)` 호출 체인 전수 이식)
-- Exhaustion 누락 — Phase C 에서 전수 이식
+- ~~Exhaustion 누락 — Phase C 에서 전수 이식~~ → **세션 18 갱신**: Phase C skip 결정
+  (Easy 1:1 + focus_05 일관, §7-1 영구 등록). jumpExhaustion 시스템 미이식.
 
 ### 예외 (1.21.1 API 제약)
 - `Property.versionSources/versionDefaults/min/max/depends/chapter/book/comment` 등 속성 시스템
@@ -168,7 +176,7 @@ ClimbBackHead=9, ClimbBackHeadHandsOnly=10,
 WallUp=11, WallHead=12, WallUpSlide=13, WallHeadSlide=14
 ```
 
-**1.21.1 `SmartMovingJumper` 현 상태**:
+**1.21.1 `SmartMovingJumper` 진입 시점 (세션 19 정리 전)**:
 ```java
 UP=0, CHARGE_UP=1, HEAD_UP=2, WALL_UP=3,
 CLIMB_UP=4, CLIMB_BACK=5, CLIMB_BACK_HEAD=6,
@@ -176,16 +184,22 @@ LEFT=7, RIGHT=8, BACK=9, WALL_HEAD=10,
 WALL_UP_SLIDE=11, WALL_HEAD_SLIDE=12, SLIDE_DOWN=13
 ```
 
-**매핑**:
-- `Angle` 은 1.21.1 에서 `LEFT/RIGHT/BACK` 으로 분리 (각도 파라미터로 구별). 원본도 `tryAngleJump(angle)` 에서 `Angle` type + angle 파라미터 조합. **1:1 이식 시** 원본 `Angle` 단일 type + angle 파라미터 조합으로 복원 검토 필요. 현 분리는 결과 동일이나 type 매핑 재정렬 필요.
-- `ClimbUpHandsOnly`, `ClimbBackUp`, `ClimbBackUpHandsOnly`, `ClimbBackHeadHandsOnly` 누락 — 현재 1.21.1 에는 `ClimbUp/ClimbBack/ClimbBackHead` 만. HandsOnly 분기는 `feetClimbing.isNone() && handsClimbing.isUp()` 상태에서 사용되는데 type 자체가 별도.
+**1.21.1 `SmartMovingJumper` 현 상태 (세션 19/20 정리 후)**: 원본 값으로 통일 — `SmartMovingConfig.JUMP_TYPE_*` alias 적용. CLIMB_UP_HANDS_ONLY / CLIMB_BACK_HANDS_ONLY / CLIMB_BACK_HEAD_HANDS_ONLY 도 alias 추가. LEFT/RIGHT/BACK 은 sentinel 제거 (E-4 ANGLE 통합 후 사용처 0). ANGLE=2 추가.
+
+**매핑 (세션 19/20 정리 완료)**:
+- ~~`Angle` 1.21.1 분리~~ → **세션 19 정리**: `JUMP_TYPE_ANGLE=2` alias + 세션 20 E-4 통합 으로
+  더블클릭 방향 점프가 `tryJump(ANGLE, ..., worldAngleDeg)` 단일 호출 사용. 원본 1:1 복원.
+- ~~HandsOnly 분기 별도 type 누락~~ → **세션 13 정리**: `JUMP_TYPE_CLIMB_*_HANDS_ONLY` 상수
+  3개 추가. 단 호출처 0 (1.21.1 climb-jump 시스템 미이식, Phase E-3 N/A 결정).
 
 ### 2.2 Speed 상수 (SmartMovingClientConfig L172-L176)
 ```java
 Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 ```
 
-**1.21.1 미이식** — `getJumpSpeed` 헬퍼 신설 + 상수 추가 필요.
+~~**1.21.1 미이식** — `getJumpSpeed` 헬퍼 신설 + 상수 추가 필요.~~ → **세션 12 완료**:
+`SmartMovingConfig.SPEED_SPRINTING/RUNNING/WALKING/SNEAKING/STANDING` 상수 5개 + `getJumpSpeed`
+정적 헬퍼 신설 (Phase B-1/B-2).
 
 ### 2.3 원본 tryJump 본체 (SmartMovingSelf L1999-L2136)
 [`docs/research/original/jumper_tryjump_full.md`](../research/original/jumper_tryjump_full.md) 로
@@ -1676,6 +1690,56 @@ Easy default 영향 분석:
 
 진행률: **포커스 #2.5 AI 완결 (F-6 deferred)**, 전체 #2.5 100/100 (~100%, F-6 분리 후 분모 갱신).
 
+### 세션 23 — 2026-04-25 — 포커스 #2.5 전수 조사 + 문서 정리 누락 9건 갱신
+
+사용자 지시: "마지막으로 2.5 jumpfactor 에서 미결된거나 누락된거는 없는지 마지막으로
+   이 파일 처음부터 끝까지 라인별로 청크 나눠서 싹 전수 조사하자".
+
+진행한 작업:
+1. **전수 조사 (1773줄, 7 청크)**:
+   - 청크 1: §0~§2 (L1-L350)
+   - 청크 2: §3 Phase A~F 체크박스 (L350-L730)
+   - 청크 3: §4~§5 (L730-L900)
+   - 청크 4: §6 세션 0~22 진행률 일관성 (L900-L1700)
+   - 청크 5: §7~§9 (L1700-끝)
+   - grep `^- \[ \]` — **잔여 0건**
+   - grep `^진행률|^### 세션` — 23 세션 로그 일관 (세션 0~22)
+2. **코드 cross-check**:
+   - `SmartMovingConfig.java` 필드 grep (jumpFactor/Jump boolean/Angle/Climb/Wall) — 189건 매치
+   - `SmartMovingConfig.java` 메서드/상수 grep (getJumpSpeed/SPEED_*/JUMP_TYPE_*/getJump...Factor) — 118건 매치
+   - 모든 의도 항목 1.21.1 코드 존재 확인
+3. **문서 정리 누락 9건 발견 + 갱신** (코드 변경 0):
+   - §0 헤더에 "진입 시점 스냅샷" 명시 + 갱신 안 한다는 정책 명시
+   - §0 미이식 Factor 필드 표 → "Phase A 세션 1~11 이식 완결" 헤더
+   - §0 미이식 판정 메서드 표 → "Phase B 세션 12~17 이식 완결" 헤더
+   - §0 현 Jumper 구현 → "세션 19 정리 완료" 명시
+   - §1 금지 Exhaustion → "세션 18 Phase C skip 결정" 갱신
+   - §2.1 1.21.1 SmartMovingJumper 현 상태 → 세션 19 alias 통일 표시
+   - §2.1 매핑 → 세션 19/20 정리 완료 표시
+   - §2.2 1.21.1 미이식 → 세션 12 완료 표시
+   - §8 소비처 영향 감사 → 각 항목 처리 상태 (✅/⚠️/🚫)
+   - §9 1.21.1 이식 대상 → MixinLivingEntityClient (exhaustion 리셋) Phase C skip 명시
+
+미결/누락 발견 결과: **코드 0 / 문서 정리 9** — 코드는 모두 의도대로 이식. 문서만 옛 상태.
+
+근사 여부: 신규 0. §7-1 (1건) 만 영구 등록.
+
+완료 전 검증 체크리스트 (세션 23 기준):
+- [근거] 전수 조사 1773줄 + grep 통과 (잔여 [ ] 0건, 23 세션 로그 일관)
+- [근거] 코드 cross-check 통과 (필드 189건 + 메서드 118건 모두 존재)
+- [대응] 문서 ↔ 실제 코드 1:1 (문서 9건 정리 후)
+- [분기] §3 Phase 체크박스 전수 확인 ([x] 또는 [~])
+- [상수] 코드 cross-check 로 검증
+- [타이밍] N/A (조사)
+- [근사] 신규 0. §7-1 영구 등록 변경 없음.
+- [신규] 문서 정리 누락 9건 → 갱신 완료. 코드 미결 없음.
+- [회귀] 코드 변경 0 → 회귀 0
+- [빌드] 코드 변경 없음 — 빌드 영향 0
+
+다음 세션 권고: **포커스 #2.5 진짜 완결**. 다음 포커스 후보 (#2.6/#2.7/#3) 사용자 결정 대기.
+
+진행률: **포커스 #2.5 AI 완결 검증 통과** — 코드/문서 모두 정합. F-6 통합 인게임 검증만 대기.
+
 ---
 
 ## 7. 근사 이식 지점 (이 포커스)
@@ -1747,14 +1811,25 @@ if (exhausionEnabled) {
 
 ---
 
-## 8. 소비처 영향 감사
+## 8. 소비처 영향 감사 (세션 23 갱신)
 
-Jumper factor 변경은 다음에 영향:
+Jumper factor 변경 영향 (각 항목 처리 상태):
 - **포커스 #2 Extended B-26 경량** (세션 134): 기존 `trySlideDownJump` 완전 대체 — 제거 후 통합.
+  → ✅ **세션 19 완료**: `trySlideDownJump` 메서드 제거 + ClientState L1394 호출처를 `tryJump
+  (SLIDE_DOWN, false, wasRunning, null)` 로 교체 (E-1 통합).
 - **포커스 #1 애니메이션**: 점프 속도 변경 → `isSprintJump` 등 애니 트리거에 영향 가능.
+  → ⚠️ **F-6 통합 인게임 검증 단계로 이관**. `isSprintJump` 세팅 D-13 위치 + 타이밍 원본 1:1.
 - **포커스 #3 상태 전환**: 점프 후 `isHeadJumping` / `isJumping` 상태 타이밍 미세 차이.
+  → ⚠️ **F-6 통합 검증 단계로 이관**. `isHeadJumping` D-15 + `isJumping` D-16 원본 L2126-L2132 1:1.
 - **포커스 #4 키 조합**: Angle 점프 (LEFT/RIGHT/BACK) 이중 클릭 판정 건드릴 수 있음 → 호출
   경로 유지 확인.
+  → ✅ **세션 20 E-4 정리**: 더블클릭 감지 (`leftJumpCount/rightJumpCount/backJumpCount`) 로직
+  보존, `tryJump(ANGLE, ..., worldAngleDeg)` 호출만 변경. 키 조합 판정 로직 무영향.
+
+**F-6 통합 검증 시점에 추가 확인 필요**:
+1. 포커스 #1 애니메이션의 `isSprintJump` 트리거 → 세션 21 회귀 #2 정정 (sprint 점프 수평 ~50% 감소) 영향 가능
+2. 포커스 #3 상태 전환의 `isHeadJumping` / `isJumping` 타이밍 — D-15/D-16 위치
+3. 포커스 #1 애니메이션의 더블클릭 방향 점프 (E-4 통합) — angleJumpVerticalFactor=0.2F 기반 수직 속도 ~5분의 1 감소 영향 가능
 
 ---
 
@@ -1766,8 +1841,12 @@ Jumper factor 변경은 다음에 영향:
 - `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\config\SmartMovingConfig.java` (L227-L310 Jumper factor 필드)
 - `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\properties\Properties.java` (L180-L215 factor 기본값)
 
-### 1.21.1 이식 대상
-- `src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`
-- `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java`
-- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` (exhaustion 필드)
-- `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` (exhaustion 리셋)
+### 1.21.1 이식 대상 (세션 23 갱신)
+- ✅ `src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java` — Phase A (52 필드) +
+  Phase B (상수 20 + 7 메서드) 완결.
+- ✅ `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — Phase D (tryJump 1:1) +
+  Phase E (trySlideDownJump 제거 + ANGLE 통합) + Phase F-1 회귀 정정 완결.
+- ✅ `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — vanilla() public
+  변경 + tryJump 호출처 2곳 갱신. exhaustion 필드는 focus_05 H-8 에서 이미 이식.
+- 🚫 `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` (exhaustion
+  리셋) — **Phase C skip 결정으로 본 포커스 작업 0**. focus_05 H-10 의 `handleExhaustion(player)` 호출 그대로 유지.
