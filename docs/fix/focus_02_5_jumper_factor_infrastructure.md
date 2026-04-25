@@ -259,12 +259,12 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-9d. `climbBackHeadJumpHandsOnlyVerticalFactor = 0.8F` ★ (원본 L289) — 세션 9 (신규)
 - [x] A-9e. `climbBackHeadJumpHandsOnlyHorizontalFactor = 1F` (원본 L290, DecreasingFactor 기본) — 세션 9 (신규)
 
-**A-10. WallUp 필드 5건** (일부 이식)
-- [ ] A-10a. `wallUpJump = true` (원본 L293)
-- [ ] A-10b. `wallUpJumpVerticalFactor` ✅ 이미 이식됨 — 확인만
-- [ ] A-10c. `wallUpJumpHorizontalFactor = 0.15F` ★ (원본 L295) — **미이식** 추가
-- [ ] A-10d. `wallUpJumpFallMaximumDistance` ✅ 이미 이식됨 — 확인만
-- [ ] A-10e. `wallUpJumpOrthogonalTolerance` ✅ 이미 이식됨 — 확인만
+**A-10. WallUp 필드 5건** (이미 전부 이식)
+- [x] A-10a. `wallUpJump = true` (원본 L293) — 세션 10 (이미 이식 + IO 확인)
+- [x] A-10b. `wallUpJumpVerticalFactor = 0.4F` (원본 L294) — 세션 10 (이미 이식 + IO 확인)
+- [x] A-10c. `wallUpJumpHorizontalFactor = 0.15F` ★ (원본 L295) — 세션 10 (이미 이식 + IO 확인, §3 "미이식" 표기는 오기)
+- [x] A-10d. `wallUpJumpFallMaximumDistance = 2F` (원본 L296) — 세션 10 (필드/값 이식 + **IO key '.distance' suffix 누락 정정** `move.jump.wall.fall.maximum` → `move.jump.wall.fall.maximum.distance`)
+- [x] A-10e. `wallUpJumpOrthogonalTolerance = 5F` (원본 L297) — 세션 10 (이미 이식 + IO 확인)
 
 **A-11. WallHead 필드 4건** (일부 이식)
 - [ ] A-11a. `wallHeadJump = true` (원본 L300)
@@ -1021,6 +1021,45 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-10 (WallUp 5건 — A-10a `wallUpJump=true` ✅ 확인 / A-10b `wallUpJumpVerticalFactor=0.4F` ✅ 확인 / A-10c `wallUpJumpHorizontalFactor=0.15F` ★ ✅ 확인 (이미 세션 1 이전에 이식됨) / A-10d `wallUpJumpFallMaximumDistance=2F` ✅ 확인 / A-10e `wallUpJumpOrthogonalTolerance=5F` ✅ 확인). 원본 L293-L297 — 모두 이미 이식 확인 + 주석 정비만.
 
 진행률: Phase A 43/40+ (Phase A 완료 임박, 5건 초과 — 실제 약 50건), 전체 #2.5 43/~110 (~39%).
+
+### 세션 10 — 2026-04-25 — Phase A-10 (WallUp 5건: 확인 4 + IO key 정정 1)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-10 5건 (A-10a~A-10e) 검증 + 정정.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L293-L297):
+   - L293 `_wallUpJump = Unmodified("move.jump.wall")` → 기본 true
+   - L294 `_wallUpJumpVerticalFactor = DecreasingFactor("move.jump.wall.vertical.factor").defaults(0.4F)` → 0.4F
+   - L295 `_wallUpJumpHorizontalFactor = DecreasingFactor("move.jump.wall.horizontal.factor").defaults(0.15F)` ★ → 0.15F
+   - L296 `_wallUpJumpFallMaximumDistance = Positive("move.jump.wall.fall.maximum.distance").defaults(2F)` → 2F (key 끝 `.distance`)
+   - L297 `_wallUpJumpOrthogonalTolerance = Positive("move.jump.wall.orthogonal.tolerance").defaults(5F)` → 5F
+2. 1.21.1 이식 위치 확인:
+   - A-10a 필드 L220 = true ✅ + IO L1080 ✅ + save L1239 ✅
+   - A-10b 필드 L231 = 0.4F ✅ + IO L1085 ✅ + save L1244 ✅
+   - A-10c 필드 L236 = 0.15F ✅ + IO L1087 ✅ + save L1246 ✅ (§3 "미이식 추가" 표기는 오기 — 이미 이식됨)
+   - A-10d 필드 L224 = 2F ✅ + **IO key 오역**: `move.jump.wall.fall.maximum` (suffix `.distance` 누락). save L1241 동일 오역.
+   - A-10e 필드 L228 = 5F ✅ + IO L1084 ✅ + save L1243 ✅
+3. 1.21.1 정정 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - load L1082 key: `move.jump.wall.fall.maximum` → `move.jump.wall.fall.maximum.distance`
+   - save L1241 key: 동일 정정
+4. 발견: A-11d (`wallHeadJumpFallMaximumDistance`) 도 동일 오역 (load L1083 / save L1242) — 다음 세션 (A-11) 에서 정정.
+5. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 10 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L293-L297 + Properties.java L181-L186 (Positive/PositiveFactor/DecreasingFactor 기본값)
+- [근거] 1.21.1 이식 위치 확정 — 필드 L220-L236 / load L1080-L1087 / save L1239-L1246
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/key 모두 일치 후)
+- [분기] 분기 없음 (단순 boolean/float 5개)
+- [상수] true / 0.4F / **0.15F** ★ / 2F / 5F — 모두 정확
+- [타이밍] 필드 선언만. Phase B getJumpVertical/HorizontalFactor (WallUp 분기) + Phase D WallUp 분기에 사용. WallUp 점프 type 은 1.21.1 이미 존재.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 발견: A-10d IO key 오역 (`.distance` 누락) → 정정. A-11d 도 동일 오역 발견 (다음 세션).
+- [회귀] IO key 변경 — 사용자가 이전에 잘못된 key (`move.jump.wall.fall.maximum`) 로 설정 파일에 값을 적었다면 정정 후 그 값은 무시됨. 그러나 이전 key 자체가 원본과 다르므로 호환성 깨짐 상태였음 → 원본 일치 정정이 옳음.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-11 (WallHead 4건 — A-11a `wallHeadJump=true` ✅ + A-11b `wallHeadJumpVerticalFactor=0.3F` ✅ + A-11c `wallHeadJumpHorizontalFactor=0.15F` ★ ✅ + **A-11d IO key '.distance' 누락 정정** `move.jump.wall.head.fall.maximum` → `move.jump.wall.head.fall.maximum.distance`). 원본 L300-L303. **Phase A 완결 임박**.
+
+진행률: Phase A 48/~50 (~96%), 전체 #2.5 48/~110 (~43.6%).
 
 ---
 
