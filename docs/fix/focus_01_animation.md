@@ -302,10 +302,11 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-1 청크 3 (L401-L600) — 세션 5 (정합 95 / 오역 3 / 누락 7 / 잉여 0 / N/A 95)
   - [x] R-1 청크 4 (L601-L797) — 세션 6 (정합 45 / 오역 0 / 누락 0 / 잉여 0 / N/A 152)
   - **R-1 누적**: 정합 346 / 오역 14 / 누락 14 / 잉여 0 / N/A 423 = 797 라인 전수
-- [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
+- [x] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄) — **세션 9 완료**
   - [x] R-2 청크 1 (SmartMovingRender.java L1-L200) — 세션 7 (정합 51 / 오역 0 / 누락 3 / 잉여 0 / N/A 146)
   - [x] R-2 청크 2 (SmartMovingRender.java L201-L337 + Context/IModel/IRender 4 파일) — 세션 8 (정합 4 / 오역 0 / 누락 0 / 잉여 0 / N/A 238)
-  - [ ] R-2 청크 3 (ModelPlayer.java + RenderPlayer.java ~287줄)
+  - [x] R-2 청크 3 (ModelPlayer.java + RenderPlayer.java) — 세션 9 (정합 5 / 오역 0 / 누락 0 / 잉여 0 / N/A 284)
+  - **R-2 누적**: 정합 60 / 오역 0 / 누락 3 / 잉여 0 / N/A 668 = 731 라인 전수
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
@@ -705,6 +706,49 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **R-2 진행률**: 청크 1 + 청크 2 = SmartMovingRender 337 + Context 27 + IModel 35 + IRender 43 = 442 / 726 라인 (60.9%). 다음 청크: ModelPlayer.java 167 + RenderPlayer.java 120 = 287 라인 (R-2 마지막).
+
+---
+
+### 세션 9 — 2026-04-26 — Phase R / R-2 청크 3 (ModelPlayer + RenderPlayer) — **R-2 완료**
+
+**진행한 작업**:
+
+1. **R-2 청크 3 라인별 read** (2 파일):
+   - ModelPlayer.java (168 라인) — IModelPlayer 구현 클래스 (model 위임 + 11 animateXxx + 11 superAnimateXxx)
+   - RenderPlayer.java (121 라인) — IRenderPlayer 구현 클래스 (render 위임 + doRender/rotateCorpse/renderLivingAt/passSpecialRender + super 호출)
+
+2. **1.21.1 매핑 검증**:
+   - ModelPlayer 22 메서드 모두 vanilla 자동 처리 또는 sm_setAngles TAIL inject 통합 → 일괄 [N/A]
+   - RenderPlayer 5 진입점 매핑 [정합]: 클래스 (Mixin) / rotateCorpse(setupTransforms+@ModifyArg) / renderLivingAt(getPositionOffset) / passSpecialRender(adjustLabelY)
+   - 위임 본체는 R-2 청크 1 SmartMovingRender 매핑과 중복 → [N/A]
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-2 청크 3 2 파트 섹션 — 289 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 3 통계 (2 파일 합)**:
+- [정합] 5 (RenderPlayer 클래스 + rotateCorpse + renderLivingAt + passSpecialRender 진입점 5 라인)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 284 (ModelPlayer 168 + RenderPlayer 116)
+- 합계: 289 라인 전수.
+
+**청크 3 발견**: 신규 [오역]/[누락]/[잉여] 0건. ModelPlayer/RenderPlayer는 위임자 패턴 — 1.21.1 Mixin 구조에서 자동 처리.
+
+**검증 체크리스트 (세션 9 R-2 청크 3 + R-2 전체)**:
+- [근거] ✓ 2 파일 라인별 read 완료
+- [전수] ✓ 청크 내 289 라인 + R-2 전체 731 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 3 합계 289 / R-2 전체 합계 731 일치
+- [발견] ✓ 청크 3 신규 발견 0건 (위임자 패턴)
+- [통계] ✓ R-2 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (R-2 청크 1 매핑과 일관 확인)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-2 전체 누적 (731 라인, 6 파일 3 청크 3 세션)**:
+- 합계: 정합 60 / 오역 0 / 누락 3 / 잉여 0 / N/A 668 = 731 라인 전수 (skip 0).
+- R-10+ B-N 후보 2 그룹 식별 (청크 1 §16-22~23 — 타인 크롤링 위치 보정 + Levitate 후처리).
+
+**R-2 완료** — SmartMovingRender + SM render 5 파일 731 라인 전수 라인별 1:1 매핑 완료.
+
+**다음 R-단계**: R-3 (SM render/playerapi 3 파일 ~373줄 — SmartMoving.java 54 + SmartMovingModelPlayerBase.java 181 + SmartMovingRenderPlayerBase.java 138). 1 청크 또는 2 청크로 처리.
 
 ---
 

@@ -1274,3 +1274,201 @@
 **청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. HUD 영역 + 인터페이스 시그니처 — 본 포커스 #1 외이거나 vanilla 자동 처리.
 
 **다음 청크**: R-2 청크 3 (ModelPlayer.java 167줄 + RenderPlayer.java 120줄 = ~287줄). R-2 마지막 청크.
+
+### 청크 3 (ModelPlayer.java 168 + RenderPlayer.java 121 = 289 라인) — R-2 마지막 청크
+
+**파트 A — ModelPlayer.java (168 라인)** — IModelPlayer 구현 클래스 (model 위임 패턴)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 헤더 + `==` | — | [N/A] | 17 라인 일괄 |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | (1.21.1 별도 패키지) | [N/A] | |
+| L20 | `public class ModelPlayer extends net.smart.render.ModelPlayer implements IModelPlayer` | (1.21.1: 단일 PlayerEntityModel — ModelPlayer 별도 클래스 부재) | [N/A] | 다층 모델 부재 |
+| L21 | `{` | — | [N/A] | |
+| L22 | `private final SmartMovingModel model;` | (1.21.1: SmartMovingClientState 흡수 — model 별도 인스턴스 부재) | [N/A] | |
+| L23 | (빈 줄) | — | [N/A] | |
+| L24 | `public ModelPlayer(float f)` | (1.21.1: vanilla PlayerEntityModel(ModelPart) 자동) | [N/A] | |
+| L25 | `{` | — | [N/A] | |
+| L26 | `super(f);` | (vanilla super 자동) | [N/A] | |
+| L27 | (빈 줄) | — | [N/A] | |
+| L28 | `model = new SmartMovingModel(this, this);` | (별도 SmartMovingModel 인스턴스 부재 — Mixin 직접 처리) | [N/A] | |
+| L29 | `}` | — | [N/A] | |
+| L30 | (빈 줄) | — | [N/A] | |
+| L31-L35 | `@Override public SmartMovingModel getMovingModel() { return model; }` 5 라인 | (별도 모델 부재) | [N/A] | |
+| L36 | (빈 줄) | — | [N/A] | |
+| L37-L41 | `@Override animateHeadRotation(...) { model.animateHeadRotation(...) }` 5 라인 | (vanilla setAngles 자동 — head.yaw/pitch 매개변수) | [N/A] | sm_setAngles TAIL inject 가 vanilla 결과 덮어씀 (분기 시) |
+| L42 | (빈 줄) | — | [N/A] | |
+| L43-L47 | `@Override animateSleeping(...) { model.animateSleeping(...) }` | (vanilla SleepingPose 자동) | [N/A] | |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49-L53 | `@Override animateArmSwinging(...) { model.animateArmSwinging(...) }` | (vanilla limbSwing 자동) | [N/A] | sm_setAngles 11-state 분기 시 덮어씀 |
+| L54 | (빈 줄) | — | [N/A] | |
+| L55-L59 | `@Override animateRiding(...) { model.animateRiding(...) }` | (vanilla Riding 자동) | [N/A] | |
+| L60 | (빈 줄) | — | [N/A] | |
+| L61-L65 | `@Override animateLeftArmItemHolding(...) { model.animateLeftArmItemHolding(...) }` | (vanilla item holding 자동) | [N/A] | |
+| L66 | (빈 줄) | — | [N/A] | |
+| L67-L71 | `@Override animateRightArmItemHolding(...) { model.animateRightArmItemHolding(...) }` | (vanilla 자동) | [N/A] | |
+| L72 | (빈 줄) | — | [N/A] | |
+| L73-L77 | `@Override animateWorkingBody(...) { model.animateWorkingBody(...) }` | (vanilla 자동 — 어깨 NonStandardWorking 미이식 §16-5) | [N/A] | |
+| L78 | (빈 줄) | — | [N/A] | |
+| L79-L83 | `@Override animateWorkingArms(...) { model.animateWorkingArms(...) }` | (vanilla 자동) | [N/A] | |
+| L84 | (빈 줄) | — | [N/A] | |
+| L85-L89 | `@Override animateSneaking(...) { model.animateSneaking(...) }` | (vanilla sneak 자동 — leaningPitch=0 별도) | [N/A] | sm_setAngles L88 leaningPitch=0 처리 |
+| L90 | (빈 줄) | — | [N/A] | |
+| L91-L95 | `@Override animateArms(...) { model.animateArms(...) }` | (vanilla applyAnimationOffsets 자동) | [N/A] | |
+| L96 | (빈 줄) | — | [N/A] | |
+| L97-L101 | `@Override animateBowAiming(...) { model.animateBowAiming(...) }` | (vanilla 활쏘기 자동 — 어깨 NonStandardBowAiming 미이식 §16-5) | [N/A] | |
+| L102 | (빈 줄) | — | [N/A] | |
+| L103-L107 | `@Override superAnimateHeadRotation(...) { super.animateHeadRotation(...) }` 5 라인 | (super 호출 = vanilla 자동) | [N/A] | |
+| L108 | (빈 줄) | — | [N/A] | |
+| L109-L113 | `@Override superAnimateSleeping(...) { super.animateSleeping(...) }` | (super = vanilla) | [N/A] | |
+| L114 | (빈 줄) | — | [N/A] | |
+| L115-L119 | `@Override superAnimateArmSwinging(...) { super.animateArmSwinging(...) }` | (super = vanilla) | [N/A] | |
+| L120 | (빈 줄) | — | [N/A] | |
+| L121-L125 | `@Override superAnimateRiding(...) { super.animateRiding(...) }` | (super = vanilla) | [N/A] | |
+| L126 | (빈 줄) | — | [N/A] | |
+| L127-L131 | `@Override superAnimateLeftArmItemHolding(...) { super.animateLeftArmItemHolding(...) }` | (super = vanilla) | [N/A] | |
+| L132 | (빈 줄) | — | [N/A] | |
+| L133-L137 | `@Override superAnimateRightArmItemHolding(...) { super.animateRightArmItemHolding(...) }` | (super = vanilla) | [N/A] | |
+| L138 | (빈 줄) | — | [N/A] | |
+| L139-L143 | `@Override superAnimateWorkingBody(...) { super.animateWorkingBody(...) }` | (super = vanilla) | [N/A] | |
+| L144 | (빈 줄) | — | [N/A] | |
+| L145-L149 | `@Override superAnimateWorkingArms(...) { super.animateWorkingArms(...) }` | (super = vanilla) | [N/A] | |
+| L150 | (빈 줄) | — | [N/A] | |
+| L151-L155 | `@Override superAnimateSneaking(...) { super.animateSneaking(...) }` | (super = vanilla) | [N/A] | |
+| L156 | (빈 줄) | — | [N/A] | |
+| L157-L161 | `@Override superApplyAnimationOffsets(...) { super.animateArms(...) }` | (super = vanilla applyAnimationOffsets) | [N/A] | |
+| L162 | (빈 줄) | — | [N/A] | |
+| L163-L167 | `@Override superAnimateBowAiming(...) { super.animateBowAiming(...) }` | (super = vanilla) | [N/A] | |
+| L168 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 A 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 168 = 168 라인 전수.** ModelPlayer = 1.21.1 단일 PlayerEntityModel + Mixin 구조에서 위임자 패턴 일체 부재 (vanilla 자동 + sm_setAngles TAIL inject 통합 처리).
+
+**파트 B — RenderPlayer.java (121 라인)** — IRenderPlayer 구현 클래스 (render 위임 패턴)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | — | [N/A] | |
+| L20 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L22 | `import net.minecraft.client.renderer.entity.*;` | — | [N/A] | |
+| L23 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L24 | (빈 줄) | — | [N/A] | |
+| L25 | `public class RenderPlayer extends net.smart.render.RenderPlayer implements IRenderPlayer` | `@Mixin(PlayerEntityRenderer.class) public abstract class MixinPlayerEntityRenderer` | [정합] | 표면 매핑 |
+| L26 | `{` | `{` | [정합] | |
+| L27 | `public RenderPlayer()` | (Mixin: 생성자 부재) | [N/A] | |
+| L28 | `{` | — | [N/A] | |
+| L29 | `render = new SmartMovingRender(this);` | (별도 render 인스턴스 부재 — Mixin this 직접) | [N/A] | |
+| L30 | `}` | — | [N/A] | |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `@Override` | — | [N/A] | |
+| L33 | `public net.smart.render.IModelPlayer createModel(ModelBiped existing, float f)` | (1.21.1: 단일 PlayerEntityModel — createModel 부재) | [N/A] | |
+| L34 | `{` | — | [N/A] | |
+| L35 | `return new ModelPlayer(f);` | — | [N/A] | |
+| L36 | `}` | — | [N/A] | |
+| L37 | (빈 줄) | — | [N/A] | |
+| L38 | `@Override` | — | [N/A] | |
+| L39 | `public void doRender(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks)` | (vanilla render 본체 — Mixin TAIL inject 자동) | [N/A] | render.renderPlayer 위임자 |
+| L40 | `{` | — | [N/A] | |
+| L41 | `render.renderPlayer(entityplayer, d, d1, d2, f, renderPartialTicks);` | (R-2 청크 1 매핑된 본체 — 직접 Mixin 분리) | [N/A] | |
+| L42 | `}` | — | [N/A] | |
+| L43 | (빈 줄) | — | [N/A] | |
+| L44 | `@Override` | — | [N/A] | |
+| L45 | `public void superRenderRenderPlayer(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks)` | (vanilla render 호출 위임자 — Mixin 자동) | [N/A] | |
+| L46 | `{` | — | [N/A] | |
+| L47 | `super.doRender(entityplayer, d, d1, d2, f, renderPartialTicks);` | — | [N/A] | |
+| L48 | `}` | — | [N/A] | |
+| L49 | (빈 줄) | — | [N/A] | |
+| L50 | `@Override` | — | [N/A] | |
+| L51 | `protected void rotateCorpse(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2)` | MixinPlayerEntityRenderer.sm_captureBodyYaw HEAD + @ModifyArg index=3 | [정합] | rotateCorpse = setupTransforms 진입점 (1.7.10 → 1.21.1 이름 변경) |
+| L52 | `{` | — | [N/A] | |
+| L53 | `render.rotatePlayer(entityplayer, totalTime, actualRotation, f2);` | (R-2 청크 1 L137-L152 매핑된 본체) | [N/A] | 위임 — Mixin 직접 처리 |
+| L54 | `}` | — | [N/A] | |
+| L55 | (빈 줄) | — | [N/A] | |
+| L56 | `@Override` | — | [N/A] | |
+| L57 | `public void superRenderRotatePlayer(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2)` | (vanilla setupTransforms 호출 위임자 — @ModifyArg가 인자 변환 후 vanilla 자동) | [N/A] | |
+| L58 | `{` | — | [N/A] | |
+| L59 | `super.rotateCorpse(entityplayer, totalTime, actualRotation, f2);` | — | [N/A] | |
+| L60 | `}` | — | [N/A] | |
+| L61 | (빈 줄) | — | [N/A] | |
+| L62 | `@Override` | — | [N/A] | |
+| L63 | `protected void renderLivingAt(AbstractClientPlayer entityplayer, double d, double d1, double d2)` | MixinPlayerEntityRenderer.sm_getPositionOffset @Inject(cancellable) | [정합] | renderLivingAt = getPositionOffset 진입점 |
+| L64 | `{` | — | [N/A] | |
+| L65 | `render.renderPlayerAt(entityplayer, d, d1, d2);` | (R-2 청크 1 L154-L163 매핑된 본체) | [N/A] | 위임 |
+| L66 | `}` | — | [N/A] | |
+| L67 | (빈 줄) | — | [N/A] | |
+| L68 | `@Override` | — | [N/A] | |
+| L69 | `public void superRenderRenderPlayerAt(AbstractClientPlayer entityplayer, double d, double d1, double d2)` | (vanilla 자동) | [N/A] | |
+| L70 | `{` | — | [N/A] | |
+| L71 | `super.renderLivingAt(entityplayer, d, d1, d2);` | — | [N/A] | |
+| L72 | `}` | — | [N/A] | |
+| L73 | (빈 줄) | — | [N/A] | |
+| L74 | `@Override` | — | [N/A] | |
+| L75 | `protected void passSpecialRender(EntityLivingBase par1EntityLiving, double par2, double par4, double par6)` | MixinPlayerEntityRenderer.smartmoving$adjustLabelY @Inject(HEAD, cancellable) + MixinLivingEntityRenderer.hasLabel @Redirect | [정합] | passSpecialRender = renderLabelIfPresent 진입점 |
+| L76 | `{` | — | [N/A] | |
+| L77 | `render.renderName(par1EntityLiving, par2, par4, par6);` | (R-2 청크 1 L165-L195 매핑된 본체) | [N/A] | 위임 |
+| L78 | `}` | — | [N/A] | |
+| L79 | (빈 줄) | — | [N/A] | |
+| L80 | `@Override` | — | [N/A] | |
+| L81 | `public void superRenderRenderName(EntityLivingBase par1EntityLiving, double par2, double par4, double par6)` | (vanilla renderLabelIfPresent — @Inject HEAD ci.cancel() 미발동 시 진행) | [N/A] | |
+| L82 | `{` | — | [N/A] | |
+| L83 | `super.passSpecialRender(par1EntityLiving, par2, par4, par6);` | — | [N/A] | |
+| L84 | `}` | — | [N/A] | |
+| L85 | (빈 줄) | — | [N/A] | |
+| L86 | `@Override` | — | [N/A] | |
+| L87 | `public RenderManager getRenderManager()` | (1.21.1: EntityRenderDispatcher 자동 — getter 부재) | [N/A] | |
+| L88 | `{` | — | [N/A] | |
+| L89 | `return renderManager;` | — | [N/A] | |
+| L90 | `}` | — | [N/A] | |
+| L91 | (빈 줄) | — | [N/A] | |
+| L92 | `@Override` | — | [N/A] | |
+| L93 | `public IModelPlayer getPlayerModelBipedMain()` | (1.21.1: 단일 모델 — this.getModel() 자동) | [N/A] | |
+| L94 | `{` | — | [N/A] | |
+| L95 | `return (ModelPlayer)super.getModelBipedMain();` | — | [N/A] | |
+| L96 | `}` | — | [N/A] | |
+| L97 | (빈 줄) | — | [N/A] | |
+| L98 | `@Override` | — | [N/A] | |
+| L99 | `public IModelPlayer getPlayerModelArmorChestplate()` | (갑옷 ArmorFeatureRenderer §17 잔여) | [N/A] | §16-8 |
+| L100 | `{` | — | [N/A] | |
+| L101 | `return (ModelPlayer)super.getModelArmorChestplate();` | — | [N/A] | |
+| L102 | `}` | — | [N/A] | |
+| L103 | (빈 줄) | — | [N/A] | |
+| L104 | `@Override` | — | [N/A] | |
+| L105 | `public IModelPlayer getPlayerModelArmor()` | (갑옷) | [N/A] | |
+| L106 | `{` | — | [N/A] | |
+| L107 | `return (ModelPlayer)super.getModelArmor();` | — | [N/A] | |
+| L108 | `}` | — | [N/A] | |
+| L109 | (빈 줄) | — | [N/A] | |
+| L110 | `@Override` | — | [N/A] | |
+| L111 | `public IModelPlayer[] getPlayerModels()` | (다층 모델 부재) | [N/A] | |
+| L112 | `{` | — | [N/A] | |
+| L113 | `if(allIModelPlayers == null)` | — | [N/A] | |
+| L114 | `allIModelPlayers = new IModelPlayer[] { getPlayerModelBipedMain(), getPlayerModelArmorChestplate(), getPlayerModelArmor() };` | — | [N/A] | |
+| L115 | `return allIModelPlayers;` | — | [N/A] | |
+| L116 | `}` | — | [N/A] | |
+| L117 | (빈 줄) | — | [N/A] | |
+| L118 | `private IModelPlayer[] allIModelPlayers;` | — | [N/A] | |
+| L119 | (빈 줄) | — | [N/A] | |
+| L120 | `private final SmartMovingRender render;` | (별도 render 인스턴스 부재 — Mixin this) | [N/A] | |
+| L121 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 B 통계: 정합 5 / 오역 0 / 누락 0 / 잉여 0 / N/A 116 = 121 라인 전수.** RenderPlayer = vanilla render dispatcher 직접 Mixin (rotateCorpse/renderLivingAt/passSpecialRender 진입점 매핑 5 라인 제외 모두 [N/A]).
+
+**R-2 청크 3 통계 (2 파일 합)**:
+- 파트 A (ModelPlayer): 0 / 0 / 0 / 0 / 168 = 168 라인
+- 파트 B (RenderPlayer): 5 / 0 / 0 / 0 / 116 = 121 라인
+- **합계: 정합 5 / 오역 0 / 누락 0 / 잉여 0 / N/A 284 = 289 라인 전수**
+
+**청크 3 발견**: 신규 [오역]/[누락]/[잉여] 0건. ModelPlayer/RenderPlayer 위임자 패턴 — 1.21.1 Mixin 구조에서 일체 자동 처리 또는 동등 매핑 (R-2 청크 1과 일관).
+
+**R-2 전체 (3 청크 6 파일) 누적 통계**:
+| 청크 | 파일 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A |
+|-----|-----|-----|------|------|------|------|------|
+| 1 | SmartMovingRender L1-L200 | 200 | 51 | 0 | 3 | 0 | 146 |
+| 2 | SmartMovingRender L201-L337 + Context + IModel + IRender | 242 | 4 | 0 | 0 | 0 | 238 |
+| 3 | ModelPlayer + RenderPlayer | 289 | 5 | 0 | 0 | 0 | 284 |
+| **합계** | **6 파일** | **731** | **60** | **0** | **3** | **0** | **668** |
+
+**R-2 완료**. 다음 R-단계: **R-3 (SM render/playerapi 3 파일 — SmartMoving.java 54 + SmartMovingModelPlayerBase.java 181 + SmartMovingRenderPlayerBase.java 138 = ~373줄)**.
