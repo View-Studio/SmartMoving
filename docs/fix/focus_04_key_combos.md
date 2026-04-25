@@ -367,6 +367,77 @@ TAIL: sm_sendStatePacket (StatePayload 송신)
 진행률: P 2/2 + A 3/3 + B-1 검토 (deferred) + B-3 1/1 + C-1/2/3 = **9/10 + 1 신규 [x]**
    = ~92% AI 완결.
 
+### 세션 3 — 2026-04-26 — 3 Agent 전수 감사 + B-4 결함 #2 정정 (vanilla Creative 비행 가속) ★
+
+사용자 지시: "원본에 존재하는 모든 키콤보를 다 검수해야돼. 내가 예시로 든것 말고도 모든
+   키콤보 전부다. 하나도 빼먹으면 안됨".
+
+진행한 작업:
+1. **3 Agent 병렬 전수 감사** (학습 패턴: grep 만 하지 말고 분기 본체 정확 비교):
+   - Agent #1 (점프 영역 8 영역) — 결함 3 보고
+   - Agent #2 (updateEntityActionState 본체 13 영역) — 결함 0 (근사 2 만 — 영향 0)
+   - Agent #3 (기타 10 영역) — 결함 0 보고 (★ Agent #1 와 충돌)
+
+2. **Agent #1 vs #3 충돌 직접 검증**:
+   - 원본 L637-L640 (handleLand 안): vanilla Creative 비행 + sprint+jump → motionY 가속.
+   - 1.21.1 SmartMovingFlyer.handleFlying L43-L45: SM 비행 (cfg.fly) 안의 jump 처리 — 다른 메커니즘.
+   - **Agent #1 정확** — vanilla Creative 비행 가속 = 진짜 미이식.
+
+3. **Agent #1 결함 3 직접 재검증**:
+   - 결함 #1 (isStillSwimmingJump): ★ **이미 이식됨** (ClientState L1744 `if (_jumpPressed3a) isStillSwimmingJump = true;`). Agent #1 부정확.
+   - 결함 #2 (vanilla 비행 가속): ★ **진짜 미이식 확정** (Config sprintFactorLevitate 매핑 0건).
+   - 결함 #3 (landMotionPost grabButton): **의미 등가** (sm_travel_client L115 무조건 호출, 의도적 통합). Agent #1 평가 과도.
+
+4. **B-4 정정 — 결함 #2 만 진짜 미이식**:
+   - **Config 신규 2 필드**:
+     - `sprintFactorLevitate = 1.5F` (Survival, Creative 3F 가능)
+     - `sprintFactorLevitateVertical = 0.185F`
+   - **load/save IO** 추가 (`move.sprint.factor.levitate` / `move.sprint.factor.levitate.vertical`).
+   - **MixinLivingEntityClient.sm_travel_client** L156-L171 신규 분기 — Flyer.handleFlying 가
+     false 반환 후 (SM 비행 비활성, vanilla Creative 비행 활성 가능 시점):
+     ```java
+     if (cfg.sprint && this.jumping
+             && options.sprintKey.isPressed()
+             && player.getAbilities().flying) {
+         player.setVelocity(v.x, v.y + cfg.sprintFactorLevitate * cfg.sprintFactorLevitateVertical, v.z);
+     }
+     ```
+   - 매 tick 적용 (jump 키 hold 중 motionY 가속, 기본 0.2775F).
+
+5. **빌드**: BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java` — 2 필드 + load/save.
+- `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` —
+  L156-L171 vanilla Creative 비행 가속 분기 신규.
+- `docs/fix/focus_04_key_combos.md` — §15 세션 3 / 본 세션 로그.
+
+영향:
+- ✅ vanilla Creative 비행 + sprint(Ctrl) + jump(Space) hold → motionY 가속 (원본 의도 복원).
+
+회귀 0건 (Flyer.handleFlying 분기 외부 + abilities.flying 게이트로 SM 비행 / Survival 영향 0).
+
+완료 전 검증 체크리스트 (세션 3 기준):
+- [근거] 원본 SmartMovingSelf L633-L640 + SmartMovingConfig L180-L181 (Agent #1 + 직접 read)
+- [근거] 1.21.1 이식 위치 — Config 추가 + sm_travel_client L156-L171
+- [대응] 원본 ↔ 1.21.1 1:1 (4 조건 AND + motionY 가속 식)
+- [분기] Flyer 진입 후 = SM 비행 처리됨 / Flyer 미진입 = vanilla Creative 가능
+- [상수] 기본값 1.5F / 0.185F 정확 (Creative 3F 는 사용자 변경 가능)
+- [타이밍] 매 tick jump 키 hold 중 가속 (원본 동일)
+- [근사] 0건. Creative 자동 3F 분기는 추후 (사용자 수동 변경 권장)
+- [신규] B-1 채팅 옵션 + B-4 비행 가속 = 2 신규 원자 추가
+- [회귀] Flyer 분기 외부 + abilities.flying 게이트 → 영향 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **사용자 인게임 검증** → 재검 시나리오:
+   1. shift만 → 차지 점프 X (세션 2 정정)
+   2. shift+space hold → release → 차지 점프 발동
+   3. sprint+grab+space hold → release → 헤드 점프 발동
+   4. **Creative 비행 + Ctrl+Space hold → motionY 가속 (세션 3 신규 정정)**
+   5. 다른 키 콤보 정상 동작.
+
+진행률: 11/12 (~92%) AI 완결. B-1 채팅 옵션 결정 대기 + 사용자 인게임 검증 대기.
+
 ---
 
 ## 16. 신규 발견 — 세션 1

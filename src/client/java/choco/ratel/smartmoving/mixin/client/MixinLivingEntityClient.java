@@ -153,6 +153,23 @@ public abstract class MixinLivingEntityClient {
             return;
         }
 
+        // **포커스 #4 B-4 (세션 3) — 결함 #2 정정**: vanilla Creative 비행 + sprint+jump 가속.
+        // 원본 SmartMovingSelf L633-L640 `handleLand` 진입 시 `!handledAlternativeFlying` 분기:
+        //   if (esp.movementInput.jump && Config.isSprintingEnabled() && sprintButton.Pressed
+        //       && sp.capabilities.isFlying)
+        //       sp.motionY += sprintFactorLevitate * sprintFactorLevitateVertical;
+        //
+        // 1.21.1 매핑 위치: Flyer.handleFlying 가 false 반환 후 (= SM 비행 비활성, vanilla
+        // Creative 비행 활성 가능 시점). cfg.sprint && abilities.flying && jumping && sprint 키.
+        // 매 tick 적용 — jump 키 hold 중 motionY 가속 (기본 1.5 * 0.185 = 0.2775F).
+        if (cfg.sprint && this.jumping
+                && net.minecraft.client.MinecraftClient.getInstance().options.sprintKey.isPressed()
+                && player.getAbilities().flying) {
+            net.minecraft.util.math.Vec3d _v = player.getVelocity();
+            double _boost = cfg.sprintFactorLevitate * cfg.sprintFactorLevitateVertical;
+            player.setVelocity(_v.x, _v.y + _boost, _v.z);
+        }
+
         // [5-1] 클라이밍 처리
         World world = player.getWorld();
         boolean isSmall = sm.isSmall || sm.isCrawling;

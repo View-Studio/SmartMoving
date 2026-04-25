@@ -8,7 +8,7 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #4 — 키 커맨드 조합 이상 진행 중 (세션 2 — handleJumping 본체 9 단계 1:1 재작성, 사용자 인게임 검증 대기)
+항목 #4 — 키 커맨드 조합 이상 진행 중 (세션 3 — 3 Agent 감사 + B-4 vanilla 비행 가속 신규 정정)
 ```
 
 **작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)

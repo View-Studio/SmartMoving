@@ -443,6 +443,21 @@ public class SmartMovingConfig {
     public float runFactor = 1.3F;
     public float sprintFactor = 1.5F;
 
+    /**
+     * 원본 SmartMovingConfig L180 `_sprintFactorLevitate = PositiveFactor("move.sprint.factor.levitate")
+     *   .defaults(Value(1.5F).c(3F))` — 부유/비행 중 sprint 가속 배율. Survival 1.5F / Creative 3F.
+     * **포커스 #4 B-4 (세션 3)**: vanilla Creative 비행 + sprint+jump 가속 분기 미이식 정정.
+     *   (#4 감사 결과 결함 #2 — 원본 SmartMovingSelf L637-L639)
+     */
+    public float sprintFactorLevitate = 1.5F;
+
+    /**
+     * 원본 SmartMovingConfig L181 `_sprintFactorLevitateVertical = PositiveFactor("move.sprint.factor.levitate.vertical")
+     *   .defaults(0.185F)` — 부유/비행 중 sprint 시 수직 상승 속도 배율 (sprintFactorLevitate 와 곱).
+     * 매 tick 적용: motionY += sprintFactorLevitate * sprintFactorLevitateVertical.
+     */
+    public float sprintFactorLevitateVertical = 0.185F;
+
     // ── Climbing ────────────────────────────────────────────────
     // 원본: Options._baseClimb = "standard" (processBlockCode §0 코드). "standard" → true, 그 외 → false
     public boolean baseClimb = true;
@@ -1432,6 +1447,8 @@ public class SmartMovingConfig {
         crawlFactor              = getFloat(p,  "move.crawl.factor",              crawlFactor);
         runFactor                = getFloat(p,  "move.run.factor",                runFactor);
         sprintFactor             = getFloat(p,  "move.sprint.factor",             sprintFactor);
+        sprintFactorLevitate         = getFloat(p, "move.sprint.factor.levitate",          sprintFactorLevitate);
+        sprintFactorLevitateVertical = getFloat(p, "move.sprint.factor.levitate.vertical", sprintFactorLevitateVertical);
         baseClimb                = getBool(p,   "move.climb.base",                baseClimb);
         freeClimb                = getBool(p,   "move.climb.free",                freeClimb);
         simpleClimb              = getBool(p,   "move.climb.simple",              simpleClimb);
@@ -1592,6 +1609,8 @@ public class SmartMovingConfig {
         p.setProperty("move.crawl.factor",               String.valueOf(crawlFactor));
         p.setProperty("move.run.factor",                 String.valueOf(runFactor));
         p.setProperty("move.sprint.factor",              String.valueOf(sprintFactor));
+        p.setProperty("move.sprint.factor.levitate",          String.valueOf(sprintFactorLevitate));
+        p.setProperty("move.sprint.factor.levitate.vertical", String.valueOf(sprintFactorLevitateVertical));
         p.setProperty("move.climb.base",                 String.valueOf(baseClimb));
         p.setProperty("move.climb.free",                 String.valueOf(freeClimb));
         p.setProperty("move.climb.simple",               String.valueOf(simpleClimb));
