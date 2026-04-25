@@ -2084,26 +2084,47 @@ public final class SmartMovingClientState {
      *
      * 1.21.1 매핑:
      *   - `world.getBlock(i,j,k).getMaterial()` → `world.getFluidState(pos)` 로 단순화
-     *   - `FluidState.isIn(FluidTags.WATER)` + `getHeight(world, pos)` → 물 높이 (0~1)
-     *   - **§7 근사 (B-42c-a)**: FiniteLiquid mod 분기 생략 (mod 1.21.1 미이식)
-     *   - **§7 근사 (B-42c-b)**: `_lavaLikeWater` Config 필드 미이식 → lava 처리 생략
-     *     (lava 는 항상 `0F` 반환). 원본 default 값은 false 이므로 근사 영향 제한적.
+     *   - `FluidState.isIn(FluidTags.WATER/LAVA)` + `getHeight(world, pos)` → 액체 높이 (0~1)
+     *   - **§7 근사 (B-42c-a-mod)**: FiniteLiquid mod 분기 생략 (mod 1.21.1 미이식 — 영구).
+     *   - ~~**§7 근사 (B-42c-b)**: lava 처리 생략~~ → **포커스 #2.6 세션 2 해소** (A-1):
+     *     `fluid.isIn(FluidTags.LAVA) && lavaLikeWater ? fluid.getHeight : 0F` 분기 복원.
+     *     원본 SmartMovingBase L139-L140 + L142-L144 통합 (lava block + Material.lava).
      *   - **§7 근사 (B-42c-c)**: Normal/Material.water 분기 통합 — FluidState 는 항상
      *     `getHeight()` 반환. `getNormalWaterBorder` 의 metadata 기반 구분
      *     (`>=8→1F / ==0+air→0.8875F / 기타→(8-meta)/8F`) 은 1.21.1 `FluidState.getHeight`
-     *     내부 로직에 흡수됨 (FlowableFluid 구현).
+     *     내부 로직에 흡수됨 (FlowableFluid 구현). 동치 — 영구 근사.
+     *   - ~~modded liquid (`material.isLiquid()` → 1F) 누락~~ → **포커스 #2.6 세션 2 해소** (A-2):
+     *     water/lava 도 아닌 fluid 발견 시 `1F` 반환. Petroleum/Oil/Honey 등 modded fluid 지원.
      *
      * B-42c (세션 119) — Phase 6 세 번째 원자 (액체 경계 헬퍼).
+     * 포커스 #2.6 A-1+A-2 (세션 2): lava + modded 분기 복원, §7 근사 B-42c-b 해소.
      */
     private static float getLiquidBorder(ClientPlayerEntity player, int i, int j, int k) {
         net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(i, j, k);
         net.minecraft.fluid.FluidState fluid = player.getWorld().getFluidState(pos);
+
+        // 분기 1 (원본 L135-L136): empty → 0F
         if (fluid.isEmpty()) return 0F;
-        // 근사 이식 — 원본과 차이: water 만 처리. lava 는 _lavaLikeWater 미이식으로 0F
+
+        // 분기 2 (원본 L135-L136 + L145-L146): water (water + flowing_water + Material.water 통합)
         if (fluid.isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
             return fluid.getHeight(player.getWorld(), pos);
         }
-        return 0F;
+
+        // 분기 3 + 4 (원본 L139-L140 + L142-L144): lava (lava + flowing_lava + Material.lava 통합)
+        //   _lavaLikeWater ? getNormalWaterBorder : 0F
+        //   1.21.1 fluid.getHeight 가 LavaFluid 도 올바른 높이 반환 (level 기반).
+        //   포커스 #2.6 A-1: §7 근사 B-42c-b 해소 (lava 분기 복원, 세션 2).
+        if (fluid.isIn(net.minecraft.registry.tag.FluidTags.LAVA)) {
+            SmartMovingConfig cfg = SmartMovingConfig.Config;
+            return cfg.isLavaLikeWaterEnabled() ? fluid.getHeight(player.getWorld(), pos) : 0F;
+        }
+
+        // 분기 6 (원본 L147-L148): modded liquid (`material.isLiquid()` → 1F)
+        //   1.21.1 `!fluid.isEmpty()` 가 modded fluid 모두 포함. water/lava 둘 다 false 라면
+        //   modded fluid (Petroleum/Oil/Honey 등) — 원본은 1F (꽉찬 fluid) 반환.
+        //   포커스 #2.6 A-2: §7 근사 B-42c-a-modded 해소 (modded 분기 복원, 세션 2).
+        return 1F;
     }
 
     /**

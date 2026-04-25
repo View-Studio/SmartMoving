@@ -526,6 +526,18 @@ public class SmartMovingConfig {
      */
     public boolean lavaLikeWater = false;
     /**
+     * 원본: `_lavaSwimParticlePeriodFactor = PositiveFactor("move.lava.swim.particle.period.factor")
+     *   .defaults(4F)` (SmartMovingConfig L164).
+     * lava 수영 시 splash/bubble 파티클 생성 주기 배수.
+     * 공식 (원본 SmartMoving.java L123): `maxSpawnSwimmingParticle = factor × 0.01F`.
+     * `spawnSwimmingParticle += horizontalSpeedSquare` 가 임계 초과 시 파티클 생성.
+     *   - water (`_swimParticlePeriodFactor`, default `1F`): 임계 `0.01`
+     *   - lava (이 필드, default `4F`): 임계 `0.04` → water 대비 4배 드물게 생성.
+     * 1.21.1 사용처: 0건 (`spawnSwimmingParticle` 시스템 자체 미이식). 미래 SM 자체 파티클
+     *   시스템 이식 시 `_swimParticlePeriodFactor` 와 함께 활용. 포커스 #2.6 A-5 (세션 2).
+     */
+    public float lavaSwimParticlePeriodFactor = 4F;
+    /**
      * 원본: _runOnSprintRelease = _sprintKeyReleaseAction.is("run").and(_run)
      *   → _sprintKeyReleaseAction 기본값 "run" + _run 기본 true → 기본 true.
      * sprint 해제 엣지 (원본 L2702-L2704) 시 `setSprinting(runOnSprintRelease ||
@@ -1446,6 +1458,7 @@ public class SmartMovingConfig {
         swimDownOnSneak          = getBool(p,   "move.swim.down.sneak",           swimDownOnSneak);
         diveDownOnSneak          = getBool(p,   "move.dive.down.sneak",           diveDownOnSneak);
         lavaLikeWater            = getBool(p,   "move.lava.water",                lavaLikeWater);
+        lavaSwimParticlePeriodFactor = getFloat(p, "move.lava.swim.particle.period.factor", lavaSwimParticlePeriodFactor);
         runOnSprintRelease       = getBool(p,   "move.sprint.key.release.run",    runOnSprintRelease);
         walkOnSprintRelease      = getBool(p,   "move.sprint.key.release.walk",   walkOnSprintRelease);
         levitateSmall            = getBool(p,   "move.levitate.small",            levitateSmall);
@@ -1605,6 +1618,7 @@ public class SmartMovingConfig {
         p.setProperty("move.swim.down.sneak",            String.valueOf(swimDownOnSneak));
         p.setProperty("move.dive.down.sneak",            String.valueOf(diveDownOnSneak));
         p.setProperty("move.lava.water",                 String.valueOf(lavaLikeWater));
+        p.setProperty("move.lava.swim.particle.period.factor", String.valueOf(lavaSwimParticlePeriodFactor));
         p.setProperty("move.sprint.key.release.run",     String.valueOf(runOnSprintRelease));
         p.setProperty("move.sprint.key.release.walk",    String.valueOf(walkOnSprintRelease));
         p.setProperty("move.levitate.small",             String.valueOf(levitateSmall));

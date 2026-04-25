@@ -8,15 +8,15 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #2.5 — ✅ AI 완결 (세션 22, 2026-04-25)
-다음 후보: #2.6 / #2.7 / #3 (사용자 결정 대기)
+항목 #2.6 — Lava Liquid Border 진행 중 (세션 2 — Phase A 일괄)
 ```
 
+**작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)
+**종합 리서치**: [`docs/research/mapping/research_lava_border.md`](../research/mapping/research_lava_border.md)
+   — 원본 4 파일 5526 줄 전수 read 결과 (세션 1 완료)
 **완결 문서 (#2.5)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
-   — Phase A 완결 + B 완결 + C skip (Easy 1:1) + D 완결 + E 완결 + F-1~F-5 완결.
-   F-6 (인게임 플레이테스트) 는 통합 인게임 검증 단계로 분리.
-**다음 후보**:
-- [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md) (~15 원자, 2-3 세션)
+   — Phase A/B 완결 + C skip + D/E 완결 + F-1~F-5 완결. F-6 통합 인게임 검증 대기.
+**대기 후보**:
 - [`focus_02_7_bbox_server_sync.md`](focus_02_7_bbox_server_sync.md) (Phase 2, ~20 원자)
 - [`focus_03_transition_conditions.md`](focus_03_transition_conditions.md) (#2 / #2.5 / #2.6 / #2.7 완료 의존)
 **참조 문서 (본체)**: [`focus_02_state_issues.md`](focus_02_state_issues.md) (Extended 기록)

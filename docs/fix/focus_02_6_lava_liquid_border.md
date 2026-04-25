@@ -246,8 +246,8 @@ vanilla 위임.
 
 ### Phase A. `getLiquidBorder` lava + modded 분기 복원
 
-**A-1. lava 분기** (원본 L139-L140, L143-L144)
-- [ ] A-1. `ClientState.getLiquidBorder` 에 FluidTags.LAVA 분기 추가:
+**A-1. lava 분기** (원본 L139-L140, L143-L144) — 세션 2 완료
+- [x] A-1. `ClientState.getLiquidBorder` 에 FluidTags.LAVA 분기 추가:
   ```java
   if (fluid.isIn(FluidTags.LAVA)) {
       return cfg.isLavaLikeWaterEnabled() ? fluid.getHeight(world, pos) : 0F;
@@ -259,8 +259,8 @@ vanilla 위임.
   `fluid.getHeight(world, pos)` 는 LavaFluid 도 올바른 높이 (1F 또는 level 기반) 반환.
   vanilla LAVA 는 source `1F` + flowing `(8-level)/9F` 단계 — 원본 의도와 동치.
 
-**A-2. modded liquid 분기** (원본 L147-L148)
-- [ ] A-2. `ClientState.getLiquidBorder` 에 `!fluid.isEmpty() && !water && !lava` 시 `1F` 반환
+**A-2. modded liquid 분기** (원본 L147-L148) — 세션 2 완료
+- [x] A-2. `ClientState.getLiquidBorder` 에 `!fluid.isEmpty() && !water && !lava` 시 `1F` 반환
   추가:
   ```java
   if (!fluid.isEmpty()) {
@@ -274,15 +274,15 @@ vanilla 위임.
   ```
   원본 L147-L148 `material.isLiquid() → 1F` 대응. Petroleum/Oil/Honey 등 modded fluid 지원.
 
-**A-3. 주석 갱신**
-- [ ] A-3. `getLiquidBorder` Javadoc §7 근사 B-42c 기록 갱신 (lava + modded 해소).
+**A-3. 주석 갱신** — 세션 2 완료
+- [x] A-3. `getLiquidBorder` Javadoc §7 근사 B-42c-b lava 해소 + modded 분기 추가 표기 갱신.
 
-**A-4. §7 근사 기록 갱신**
-- [ ] A-4. `focus_02_state_issues.md` §7 B-42c (2) 해소 완료 기록. FiniteLiquid mod 분기만
-  잔존 (mod 미이식 — 해소 불가).
+**A-4. §7 근사 기록 갱신** — 세션 2 완료
+- [x] A-4. `focus_02_state_issues.md` §7 B-42c (2) `_lavaLikeWater` 항목에 "세션 2 해소
+  (A-1+A-2)" 명시. FiniteLiquid mod (1) + getNormalWaterBorder metadata (3) 영구 잔존.
 
-**A-5. `_lavaSwimParticlePeriodFactor = 4F` Config 필드** (세션 1 신규 발견, SmartMovingConfig L164)
-- [ ] A-5. `SmartMovingConfig.java` 에 필드 + load/save IO 신규 등록.
+**A-5. `_lavaSwimParticlePeriodFactor = 4F` Config 필드** (세션 1 신규 발견) — 세션 2 완료
+- [x] A-5. `SmartMovingConfig.java` 에 필드 + load/save IO 신규 등록.
   ```java
   public float lavaSwimParticlePeriodFactor = 4F;
   // load: getFloat(p, "move.lava.swim.particle.period.factor", lavaSwimParticlePeriodFactor)
@@ -512,6 +512,54 @@ Phase D 4 + Phase E 3 = **약 21 원자 / 예상 3-4 세션**. 단 다수 검증
    (`_lavaSwimParticlePeriodFactor`) 묶어 진행. 단 A-5 는 이식 vs §7 등록 사용자 결정 필요.
 
 진행률: **세션 1 리서치 완료**, Phase 진입 전. 전체 #2.6 1/21 (~5%).
+
+### 세션 2 — 2026-04-25 — Phase A 일괄 (A-1~A-5)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A 일괄. A-5 사용처 검증 후 §7 등록 vs 이식 결정 →
+   사용자 직관 ("코드 추가 길지 않으면 그냥 지금 하는게 나을것같은데") 채택 → **이식 진행**.
+
+진행한 작업:
+1. **A-1+A-2 `getLiquidBorder` 본체 1:1 재작성** (`SmartMovingClientState.java` L2098-L2125):
+   - 분기 1 (empty → 0F): 보존
+   - 분기 2 (water + Material.water 통합 → fluid.getHeight): 보존
+   - **분기 3+4 (lava 신규)**: `fluid.isIn(FluidTags.LAVA) && cfg.isLavaLikeWaterEnabled()
+     ? fluid.getHeight : 0F` (원본 L139-L140 + L142-L144 통합)
+   - **분기 6 (modded 신규)**: 위 분기 모두 미통과 + !fluid.isEmpty() (이미 위에서 0F 반환했으므로
+     도달 시 자동) → `1F` (원본 L147-L148, modded liquid 지원)
+2. **A-3 Javadoc 갱신**: B-42c-b lava 해소 + modded 분기 추가 표기 (세션 2 표시).
+3. **A-4 `focus_02_state_issues.md` §7 갱신**: B-42c (2) `_lavaLikeWater` 항목에 "세션 2
+   해소 (A-1+A-2)" 명시 + 영구 잔존 (1) FiniteLiquid mod / (3) getNormalWaterBorder
+   metadata 항목 표기.
+4. **A-5 `lavaSwimParticlePeriodFactor = 4F` 필드 + IO 신규** (`SmartMovingConfig.java`):
+   - 필드 선언 (L528-L540, lavaLikeWater 직후) + 원본 사용처 발견 (`SmartMoving.java` L123)
+     주석 명시 — `maxSpawnSwimmingParticle = factor × 0.01F`, water (1F) 대비 4배 드물게.
+   - load IO `move.lava.swim.particle.period.factor` (lavaLikeWater 직후)
+   - save IO 동일 key
+   - 사용처 0건 (1.21.1 spawnSwimmingParticle 시스템 자체 미이식) — 미래 활용 대비.
+5. **`playtest_fixes.md` 갱신**: 현재 포커스 #2.6 진행 중 + 종합 리서치 파일 링크 추가.
+
+근사 여부: 신규 0. **세션 1 §7 후보 4건 중 1건 (lavaSwimParticle) 사전 해소** (이식). 영구 잔존
+   3건 (FiniteLiquid mod / isInsideOfMaterial water 전용 / reverseHandleAcc water 전용).
+
+완료 전 검증 체크리스트 (세션 2 기준):
+- [근거] 원본 라인 — `SmartMovingBase.java` L131-L150 + `SmartMovingConfig.java` L164 +
+   `SmartMoving.java` L123 (③ 리서치 §1 발췌)
+- [근거] 1.21.1 이식 위치 — `SmartMovingClientState.java` L2098-L2125 (getLiquidBorder) +
+   `SmartMovingConfig.java` L528-L540 + IO L1448-L1449 / L1607-L1608
+- [대응] 원본 ↔ 1.21.1 1:1 (분기 4개 + 상수 + 게이트)
+- [분기] empty / water / lava (lavaLikeWater 게이트) / modded — 4 분기 전수
+- [상수] `0F` / `1F` 정확 / `4F` (factor) 보존
+- [타이밍] 분기 순서 보존 (empty 먼저 → water → lava → modded)
+- [근사] 신규 0. §7-1 영구 후보 3건 유지.
+- [신규] §3 A-5 추가 의존 발견 없음. focus_02_state_issues §7 갱신 1건.
+- [회귀] 신규 분기 추가 — 기존 water 동작 영향 0. lava `lavaLikeWater = false` 시 0F (기존 동치).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (6s)
+
+다음 세션 권고: **Phase B** (검증 — 코드 변경 0). B-1 `isInLiquid` 자동 반영 확인 + B-2
+   `getMax/MinPlayerLiquidBetween` 자동 반영 확인 + B-3 소비처 전수 감사 + B-4 `handleSwimming`
+   진입 조건 검증 (원본 L232 의 3-OR 조건이 1.21.1 SmartMovingSwimmer.updateSwimState 에 보존?).
+
+진행률: Phase A 완결 (5/5 = 100%), 전체 #2.6 6/21 (~29%).
 
 ---
 
