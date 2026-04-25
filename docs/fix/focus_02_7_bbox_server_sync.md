@@ -29,15 +29,36 @@
 | client `sm_updatePose_client` POSE 매핑 확장 (8 상태 전수) | MixinPlayerEntityClient L85-L117 | ✅ |
 | StatePayload encode/decode (22+ bit 전수) | SmartMovingState.java L40-L114 | ✅ |
 
-### 미이식 / 근사 (이 포커스 범위)
+### 미이식 / 근사 (이 포커스 범위) — 세션 2 전수 리서치 후 정정
 | 항목 | 원인 |
 |---|---|
-| server `MixinPlayerEntity.getBaseDimensions` 구 로직 (0.6 × 1.0 크롤) | client Phase 1 과 불일치 — 수정 필요 |
-| server `MixinPlayerEntity.updatePose` `isSmall` 만 체크 | 확장 상태 (isHeadJumping / isSwimming / isDiving / isFlying / isLevitating / isClimbCrawling) 반영 안 됨 |
-| server `SmartMovingServer` 상태 필드 부족 | `isCrawling` / `isSmall` 만 존재. 나머지 8+ 필드 미이식 |
-| StatePayload 수신 → server 필드 저장 경로 | server 필드 부족으로 일부만 저장 |
-| `isClimbCrawling` / `isFlying` / `isLevitating` 네트워크 전송 | StatePayload 에 없음 — 추가 필요 |
-| 원본 heightOffset 렌더링 보정 (`getBrightness` 등 `posY -= heightOffset`) | 1.21.1 에서는 eyeHeight Mixin 으로 대체 — 추가 보완 필요 |
+| **server `MixinPlayerEntity.getBaseDimensions` height 1.0F** ★ | 원본 0.8F (heightOffset(-1F) → 1.8 - 1 = 0.8) 와 불일치 — **1:1 위반, 정정 필수** |
+| ~~server `MixinPlayerEntity.updatePose` 확장 상태 반영~~ | **세션 2 정정**: 원본 PacketStream 도 isSmall 단일 비트만 사용 — 현 isSmall 분기로 충분 |
+| ~~server `SmartMovingServer` 8+ 필드 미이식~~ | **세션 2 정정**: 원본 서버 11 필드 (isCrawling/isSmall + 보조 6) 수준 — 현 11 필드 이미 충족 |
+| ~~StatePayload 수신 → server 필드 저장~~ | **세션 2 정정**: server.processStatePacket L112-L127 이미 7 비트 (12,13,14,15,18,31,33) 정확 디코딩 |
+| ~~isClimbCrawling/isFlying/isLevitating StatePayload 추가~~ | **세션 2 정정**: SmartMovingState 이미 21 bit 분리 인코딩 (bit 9~33) — 추가 필요 0 |
+| **★ 네트워크 핸들러 배선 (NEW Phase G)** | `ServerPlayNetworking.registerReceiver` / 클라 송신 / 서버 브로드캐스트 모두 미배선 — **핵심 누락** |
+| **★ isSmall OR 인코딩 검증 (NEW Phase H)** | SmartMovingState.encode 가 `isCrawling \|\| isClimbCrawling \|\| isHeadJumping \|\| isSliding \|\| isSwimming_sm \|\| isDiving \|\| isFlying \|\| isLevitating` OR 결과를 isSmall(bit 15) 로 송신하는지 검증 |
+| ~~heightOffset 렌더링 보정 (getBrightness 등)~~ | **세션 2 정정**: 1.21.1 `standingEyeHeight = newDims.eyeHeight()` 자동 반영 → N/A (영구 동치, §7 등록) |
+
+### 세션 2 신규 발견 (2026-04-25, 4 Agent 병렬 read 결과)
+> **종합 리서치**: `docs/research/mapping/research_bbox_pose_eyeheight.md` — 원본 13 파일 5091 줄
+> + vanilla 11 리서치 + 1.21.1 이식 5 코드 모두 라인별 전수 read.
+
+추가 검증/보강 항목:
+1. **`resetInternalHeightOffset()` L1688-L1692** ★ 신규 — 수면 전용 (bbox 유지 + height 만 초기화).
+   호출처 L1359 (`landMotionPost` + isSleeping). 1.21.1 vanilla 수면 자동 dimensions → N/A.
+2. **`afterMoveEntity` L1608-L1609** ★ 신규 — `if (heightOffset != 0F) sp.posY += heightOffset`.
+   매 프레임 posY 보정. 1.21.1 EntityDimensions 의 `setBoundingBox` + `standingEyeHeight`
+   즉시 반영으로 자동 처리 → N/A.
+3. **resetHeightOffset() 호출처 14건** (L249/L528/L1171/L1375/L2173/L2207/L2219/L2273/L2746/
+   L2774/L2780/L2816/L2819/L2824/L2842) — 모두 #2.7 시맨틱 영향. setHeightOffset(-1F) 와
+   대칭 — POSE.STANDING 또는 vanilla 통과로 매핑.
+4. **setHeightOffset(wasHeightOffset)** L422/L558 — 이전 offset 복원 (-1F 아님). 수영 컨텍스트.
+5. **클라/서버 비대칭** ★ 핵심 — 원본 SmartMovingPlayerBase 에 `getEyeHeight` override **없음**.
+   서버 ServerPlayerBase 만 `player.height - 0.18F`. 1.21.1 EntityDimensions.withEyeHeight
+   가 클라/서버 자동 대칭 처리 — Mixin 불필요.
+6. **doFlyingAnimation()** (playerapi/SmartMovingSelf L36) — SPC 호환. 1.21.1 N/A 데드 코드.
 
 ---
 
@@ -52,26 +73,56 @@ private void setHeightOffset(float offset) {
     sp.boundingBox.minY -= heightOffset;    // minY += 1 (offset=-1 시)
     sp.height += heightOffset;               // height -= 1
 }
-private void resetHeightOffset() {
+private void resetHeightOffset() {                  // L1681-L1686
     sp.boundingBox.minY += heightOffset;    // 원위치 복원
     sp.height -= heightOffset;
     heightOffset = 0F;
+}
+private void resetInternalHeightOffset() {          // L1688-L1692 ★ 세션 2 신규
+    sp.height -= heightOffset;              // height 만 변경 (bbox 유지)
+    heightOffset = 0F;                       // 호출처 L1359 (수면 전용)
+}
+```
+
+원본 `SmartMovingSelf.afterMoveEntity` 매 프레임 posY 보정 (L1608-L1609) ★ 세션 2 신규:
+```java
+public void afterMoveEntity(double d, double d1, double d2) {
+    // ...
+    if (heightOffset != 0F)
+        sp.posY = sp.posY + heightOffset;  // 매 프레임 posY 자동 보정
+}
+```
+
+원본 `SmartMovingSelf.getBrightness(f)` 렌더 보정 (L1708-L1714):
+```java
+public float getBrightness(float f) {
+    sp.posY -= heightOffset;               // 임시 상향 (lighting 머리 기준)
+    float result = isp.localGetBrightness(f);
+    sp.posY += heightOffset;               // 복원
+    return result;
 }
 ```
 
 원본 `SmartMovingServerPlayerBase.getEyeHeight()` (L142-L145):
 ```java
 public float getEyeHeight() {
-    return player.height - 0.18F;
+    return player.height - 0.18F;          // small 0.62F / normal 1.62F
 }
 ```
+※ 클라 `SmartMovingPlayerBase` 에 `getEyeHeight` override **없음** ★ — 원본 클라/서버 비대칭.
+   클라는 vanilla `EntityPlayer.getEyeHeight()` 가 sp.height 기반 자동 계산.
 
 → 원본은 bbox + height + eyeHeight 3 필드를 동시에 관리. 1.21.1 대응:
 - bbox + height → `EntityDimensions` (`getBaseDimensions` Mixin 으로 반환)
 - eyeHeight → `EntityDimensions.withEyeHeight(float)` (동일 dimensions 내 지정)
 - POSE → vanilla POSE 시스템 (`setPose` + 매 tick `updatePose` Mixin 으로 독점)
+- afterMoveEntity posY 보정 → 1.21.1 `Entity.calculateDimensions` 의 `refreshPosition` +
+  `setBoundingBox` 즉시 반영으로 **자동 처리** (별도 Mixin 불필요).
+- getBrightness 보정 → 1.21.1 `standingEyeHeight = newDims.eyeHeight()` 자동 반영 (lighting
+  은 eyeY 기반) — N/A.
 
-**client / server 양쪽** 에 동일 로직 적용 시 동치 달성.
+**client / server 양쪽** 에 동일 로직 적용 시 동치 달성. 단 원본은 클라 측에 명시 override
+없으므로, **1.21.1 Mixin 은 원본보다 대칭화 (양쪽 동일 처리)** — 기능 동치 + 안전성 향상.
 
 ### 표면 매핑
 | 원본 | 1.21.1 |
@@ -117,75 +168,121 @@ public float getEyeHeight() {
 
 ---
 
-## 3. Phase 구조
+## 3. Phase 구조 — 세션 2 전수 리서치 후 대폭 정정
 
-### Phase A. server-side `SmartMovingServer` 필드 확장
+> **핵심 정정**: 원본 PacketStream 분석 결과 — 원본은 **`isSmall` 단일 비트** (bit 15)
+> 로 모든 small 상태 (isCrawling || isClimbCrawling || isHeadJumping || isSliding ||
+> isSwimming || isDiving || isFlying || isLevitating) 통합 sync. 1.21.1 SmartMovingState
+> 의 21 bit 분리 인코딩은 **다른 클라이언트 애니메이션용** 으로만 활용. 서버 dimensions
+> 결정은 isSmall 단일로 충분 (원본 1:1).
+>
+> → 기존 Phase A (8 필드 추가) / Phase B (bit 확장) **불필요**. Phase C/D 단순화.
+> 신규 Phase G (네트워크 핸들러 배선) + Phase H (isSmall OR 인코딩 검증) 핵심.
 
-**A-1. 누락 필드 추가** (원본 대응 + StatePayload 참조)
-- [ ] A-1a. `public boolean isClimbCrawling` (StatePayload bit 14 추가 필요 시)
-- [ ] A-1b. `public boolean isHeadJumping` (StatePayload bit 20, 서버 필드만 누락)
-- [ ] A-1c. `public boolean isSliding` (StatePayload bit 21)
-- [ ] A-1d. `public boolean isSwimming` (bit 11)
-- [ ] A-1e. `public boolean isDiving` (bit 9)
-- [ ] A-1f. `public boolean isDipping` (bit 10)
-- [ ] A-1g. `public boolean isFlying` (bit ?) — StatePayload 존재 여부 확인
-- [ ] A-1h. `public boolean isLevitating` (bit 19)
+### Phase A. ~~server 필드 확장~~ → **검증만** (세션 2 정정)
 
-### Phase B. `SmartMovingState.java` 인코딩 확장
+**A-1. 현 SmartMovingServer 필드 11종 검증**
+- [ ] A-1. SmartMovingServer.java 의 isCrawling/isSmall/isClimbing/isCrawlClimbing/
+  isCeilingClimbing/isWallJumping/isSneakButtonPressed + 보조 4 (resetFallDistance/
+  crawlingCooldown/hunger 등) 가 원본 11 필드와 1:1 일치하는지 grep.
+- [ ] A-2. 누락 필드 0건 확인 시 **Phase A 완결**. 원본도 isHeadJumping/isSliding/
+  isSwimming/isDiving/isDipping/isFlying/isLevitating 서버 필드 **없음** — 추가 불필요.
 
-**B-1. 누락 bit 추가**
-- [ ] B-1a. `isClimbCrawling` — bit 14 또는 신규 비트 할당 + encode/decode 양방향
-- [ ] B-1b. `isFlying` — StatePayload 에 없으면 신규 bit 할당 (현재 ClientState.isFlying
-     은 vanilla `getAbilities().flying` 기반 — 그 값 자체를 전송 여부 결정)
-- [ ] B-1c. 전수 grep 하여 StatePayload 에 없는 필드 확인 + 추가
+### Phase B. ~~StatePayload 인코딩 확장~~ → **이미 완료** (세션 2 정정)
 
-**B-2. StatePayload 수신부 (서버) 에서 모든 필드 저장**
-- [ ] B-2. `SmartMovingNetwork` 서버 수신 핸들러에서 `SmartMovingState.decode(bits)` 결과를
-     `SmartMovingServer` 필드에 전수 복사.
+**B-1. SmartMovingState 21 bit 인코딩 검증**
+- [x] **B-1 (세션 2 검증)**. SmartMovingState.encode/decode 가 bit 0-3 actualFeetClimbType /
+  4-7 actualHandsClimbType / 8 isJumping / 9 isDiving / 10 isDipping / 11 isSwimming / 12
+  isCrawlClimbing / 13 isCrawling / 14 isClimbing / 15 isSmall / 16 doFallingAnimation /
+  17 doFlyingAnimation / 18 isCeilingClimbing / 19 isLevitating / 20 isHeadJumping / 21
+  isSliding / 22-24 angleJumpType / 25-31 vine·climb·sneak·sprint / 33 isSneakButtonPressed
+  모두 양방향 인코딩 완료 — **1.21.1 이 원본 PacketStream 의 7 bit 보다 풍부**. 추가 불필요.
 
-### Phase C. server `MixinPlayerEntity.getBaseDimensions` 재작성
+### Phase C. server `MixinPlayerEntity.getBaseDimensions` height 정정 ★
 
-**C-1. client 와 동일 로직 이식**
-- [ ] C-1. `sm_getBaseDimensions_server` 를 client Phase 1 버전과 동일 구조로 재작성:
+**C-1. 원본 1:1 재작성** — 원본 setHeightOffset(-1F) → height = 0.8F (1.8 - 1)
+- [ ] C-1. `sm_getBaseDimensions_server` 를 **height 0.8F** 로 정정 (현 1.0F → 0.8F 가
+  1:1 위반):
   ```java
-  boolean smSmall = sm.isCrawling || sm.isClimbCrawling
-                 || sm.isHeadJumping || sm.isSliding
-                 || sm.isSwimming || sm.isDiving
-                 || sm.isFlying || sm.isLevitating;
-  if (smSmall) {
+  if (sm.isSmall) {
       cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
       return;
   }
   if (pose == EntityPose.SLIDING) {
       cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
   }
+  // 이외 → vanilla 통과
   ```
-- [ ] C-1a. server 측 기존 `isSmall && pose == SWIMMING → 0.6 × 1.0` 근사 **제거** (client 수정에 맞춤).
+- [ ] C-1a. 기존 `pose == SWIMMING && isCrawling → height 1.0F` ★ **제거** (1:1 위반).
+  isSmall 단일 분기로 통합.
+- [ ] C-1b. eyeHeight `0.62F` 정확 보존 (원본 `height - 0.18F = 0.8 - 0.18 = 0.62`).
 
-### Phase D. server `MixinPlayerEntity.updatePose` POSE 매핑 확장
+### Phase D. server `MixinPlayerEntity.updatePose` 단순화 (세션 2 정정)
 
-**D-1. POSE 매핑 전수** (client 와 동일)
-- [ ] D-1. `sm_updatePose_server` 재작성:
+**D-1. 원본 1:1 — isSmall 단일 분기**
+- [ ] D-1. `sm_updatePose_server` 단순화 — 원본 서버는 **isSmall 단일 필드** 만 보유 →
+  POSE 결정도 isSmall 단일:
   ```java
-  if (sm.isCrawling || sm.isClimbCrawling) setPose(SWIMMING); cancel();
-  else if (sm.isHeadJumping || sm.isSliding) setPose(SLIDING); cancel();
-  else if (sm.isSwimming || sm.isDiving) setPose(SWIMMING); cancel();
-  else if (sm.isFlying || sm.isLevitating) setPose(SLIDING); cancel();
-  // isDipping / 그 외 → vanilla 통과
+  if (sm.isSmall) {
+      ((LivingEntity)(Object)this).setPose(EntityPose.SLIDING);
+      ci.cancel();
+  }
+  // isCrawling 자체는 sm.isSmall 에 OR 포함되어 있음 → SLIDING 통일
+  // 이외 → vanilla 통과 (STANDING / CROUCHING / SLEEPING / FALL_FLYING / SPIN_ATTACK 등)
   ```
+- [ ] D-1a. 기존 `isCrawling → SWIMMING / isSmall → SLIDING` 2 분기 → isSmall 단일 분기로
+  통합. Phase 1 client 측은 8 SM 상태 OR 결과를 isSmall 로 송신하므로 서버는 isSmall 만
+  체크하면 됨.
+- [ ] D-1b. 검증: SLIDING 포즈 사용 시 vanilla leaningPitch 자동 발동 차단 (POSE_DIMENSIONS
+  미등록 → STANDING 폴백 → Mixin override 로 0.6×0.8 주입).
 
-### Phase E. 원본 heightOffset 렌더링 보정 (원본 L1708-L1722)
+### Phase E. ~~heightOffset 렌더링 보정~~ → **N/A 자동 처리** (세션 2 정정)
 
-원본에서 `getBrightness(f)` / `getBrightnessForRender(f)` 등이 `posY -= heightOffset` 으로
-임시 조정 — heightOffset 시 머리가 minY+1 위치이므로 light level 계산을 머리 기준으로.
+**E-1. vanilla eyeHeight / lighting 자동 반영 검증**
+- [x] **E-1 (세션 2 검증)**. 1.21.1 `Entity.calculateDimensions` → `standingEyeHeight =
+  newDims.eyeHeight()` 즉시 반영. lighting 계산은 `entity.getEyeY()` (eyeHeight 기반) 자동
+  사용 → 원본 `getBrightness` 의 `posY -= heightOffset` 보정 **불필요**. §7 영구 동치 등록.
 
-**E-1. vanilla eyeHeight 참조 여부 확인**
-- [ ] E-1. 1.21.1 vanilla 가 light level / brightness 계산에 어떤 좌표 쓰는지 확인. 대부분
-     `player.getEyeY()` (eyeHeight 기반) 참조 → 이미 Phase 1 eyeHeight 수정으로 자동 반영.
+**E-2. afterMoveEntity posY 보정 자동 처리 검증**
+- [x] **E-2 (세션 2 검증)**. 원본 `afterMoveEntity` L1608-L1609 `if (heightOffset != 0F)
+  posY += heightOffset` — 1.21.1 `Entity.calculateDimensions` 의 `refreshPosition() +
+  setBoundingBox()` 즉시 반영으로 자동 처리. §7 영구 동치 등록.
 
-**E-2. 렌더 보정 잔여 확인**
-- [ ] E-2. SM 상태에서 light level / 수중 효과 / 안개 등이 원본과 차이 있는지 플레이테스트.
-     차이 있으면 별도 Mixin 고려.
+### Phase G. ★ 네트워크 핸들러 배선 — **NEW (세션 2 추가)**
+
+**G-1. SmartMoving.onInitialize 에 서버 수신 등록**
+- [ ] G-1. `ServerPlayNetworking.registerReceiver(StatePayload.ID, (payload, context) -> {
+  SmartMovingServer.get(context.player()).processStatePacket(context.player(), payload.state());
+  });`
+
+**G-2. 클라 → 서버 매 tick 송신**
+- [ ] G-2. `SmartMovingClientState.tick*` 에서 매 tick `ClientPlayNetworking.send(new
+  StatePayload(player.getId(), SmartMovingState.encode(sm)));` 송신. 변경 검출 후 송신
+  최적화 가능 (원본도 매 tick 송신 — 1:1 충실).
+
+**G-3. 서버 → 다른 클라 브로드캐스트**
+- [ ] G-3. `SmartMovingServer.processStatePacket` 끝에 `PlayerLookup.tracking(player)`
+  으로 `ServerPlayNetworking.send(other, payload)` 브로드캐스트. 원본 L90 `mp.
+  sendPacketToTrackedPlayers(packet)` 1:1.
+
+**G-4. 클라 다른 플레이어 수신 → 애니메이션용 상태**
+- [ ] G-4. `ClientPlayNetworking.registerReceiver(StatePayload.ID, ...)` 으로 다른 플레이어
+  ID 의 state 수신 → SmartMovingOther (또는 1.21.1 등가물) 필드 갱신. 본 포커스 #2.7 의
+  애니메이션·렌더 영향 — 미구현 시 다른 플레이어 SM 상태 sync 안 됨.
+
+### Phase H. ★ isSmall OR 인코딩 검증 — **NEW (세션 2 추가)**
+
+**H-1. SmartMovingState.encode 에서 isSmall 비트 OR 정합성 검증**
+- [ ] H-1. `SmartMovingState.encode(sm)` 가 isSmall 비트 (15) 를 어떻게 인코딩하는지 grep:
+  - 단순 `sm.isSmall` 필드 그대로 송신인지?
+  - 클라 측에서 `sm.isSmall = isCrawling || isClimbCrawling || isHeadJumping || isSliding
+    || isSwimming_sm || isDiving || isFlying || isLevitating` OR 결과를 미리 갱신했는지?
+- [ ] H-2. SmartMovingClientState 의 isSmall 필드 갱신 위치 grep — Phase 1 (세션 137) 에서
+  도입한 8 SM OR 식이 `tickEssential` / `tickMain` 어디서 매 tick 적용되는지 확인.
+- [ ] H-3. 서버 측 `sm_getBaseDimensions_server` 가 isSmall 만 사용 → 클라 OR 식 정확성에
+  의존. 클라 OR 식 누락 시 server dimensions 결정 잘못됨 — 회귀 위험.
+
+### Phase F. 검증 + 회귀 감사 + 플레이테스트 (기존 유지, 일부 정정)
 
 ### Phase F. 검증 + 회귀 감사 + 플레이테스트
 
@@ -214,24 +311,32 @@ public float getEyeHeight() {
 
 ---
 
-## 4. 의존 순서
+## 4. 의존 순서 — 세션 2 정정
 
 ```
-Phase A (서버 필드 확장)
+Phase A (필드 검증, 코드 변경 0)               — 2 원자
    ↓
-Phase B (StatePayload 인코딩 확장 + 수신부 저장)
+Phase B (StatePayload bit 검증, 코드 변경 0) — 1 원자 (이미 [x])
    ↓
-Phase C (server getBaseDimensions 재작성, client 와 동치)
+Phase C (server getBaseDimensions height 정정 ★) — 3 원자
    ↓
-Phase D (server updatePose POSE 매핑 전수)
+Phase D (server updatePose isSmall 단일 분기) — 3 원자
    ↓
-Phase E (렌더 보정 잔여 확인, 대부분 eyeHeight 로 자동)
+Phase E (렌더/posY 보정 N/A 검증, 코드 변경 0) — 2 원자 (이미 [x])
    ↓
-Phase F (검증 + 회귀 + 플레이테스트)
+Phase G ★ (네트워크 핸들러 배선) — 4 원자 (핵심)
+   ↓
+Phase H ★ (isSmall OR 인코딩 검증) — 3 원자
+   ↓
+Phase F (빌드 + 회귀 감사 + 플레이테스트)     — 5+ 원자 (E-3 deferred)
 ```
 
-**규모**: A 8 필드 + B 1-3 bit + C 1 재작성 + D 1 재작성 + E 1-2 확인 + F 5+ 시나리오 =
-**약 18-22 원자 / 예상 3-5 세션**.
+**규모 (세션 2 갱신)**: A 2 + B 1(완) + C 3 + D 3 + E 2(완) + G 4 + H 3 + F 5 =
+**약 23 원자**. 단 B/E 이미 검증 완료 (3 원자 [x] 시작), Phase A 도 검증만 → 실 작업 ~17.
+**예상 3-4 세션**.
+
+→ 이전 18-22 원자 추정 → 23 원자 (Phase G/H 신규) 로 약간 증가하나 **Phase A/B 가 검증만**
+이라 실 코드 변경 작업은 ~13 원자로 **감소**.
 
 ---
 
@@ -266,15 +371,85 @@ Phase F (검증 + 회귀 + 플레이테스트)
 
 **다음 세션 권고**: Phase A-1 (SmartMovingServer 누락 필드 8 건 추가).
 
+### 세션 2 — 2026-04-25 — 4 Agent 병렬 전수 리서치 + Phase 대폭 정정
+
+사용자 지시: "2.7페이즈와 관련된 모든 원본 코드및 리서치 파일들을 1개도 빠트리지 말고,
+   각 파일의 처음부터 끝까지 라인별로 청크 분리해서 모든 라인을 읽고... 1대1 번역이라는
+   걸 명심하고 모든라인을 다 리서칭".
+
+진행한 작업:
+1. **원본 13 파일 size 확인 + 4 Agent 병렬 분담**:
+   - **Agent A (heightOffset 시스템)**: SmartMovingSelf.java 3345 줄
+   - **Agent B (서버 sync 인프라)**: Server/ServerComm/PacketStream/Comm/Client/IEntityPlayerMP/
+     ISmartMovingClient 7 파일 1000 줄
+   - **Agent C (playerapi 베이스)**: PlayerBase/ServerPlayerBase/playerapi/Self/IEntityPlayerSP/
+     ISmartMovingSelf 5 파일 746 줄
+   - **Agent D (1.21.1 vanilla + 매핑)**: vanilla 11 리서치 + 1.21.1 이식 5 코드
+   - **합계 (원본만)**: **13 파일 5091 줄**
+2. **종합 리서치 작성**: `docs/research/mapping/research_bbox_pose_eyeheight.md` 신규.
+   §1 heightOffset / §2 서버 sync / §3 playerapi / §4 vanilla / §5 1.21.1 현황 / §6 매핑
+   정합 / §7 보강 권고 / §8 1:1 결론.
+
+3. **★ 핵심 발견 7건**:
+   1. **원본 PacketStream 은 7 bit 만 사용** (bit 12 isCrawlClimbing / 13 isCrawling /
+      14 isClimbing / **15 isSmall** / 18 isCeilingClimbing / 31 isWallJumping / 33
+      isSneakButtonPressed). isHeadJumping/isSliding/isSwimming/isDiving/isDipping/isFlying/
+      isLevitating **비트 없음** ★ — 원본은 isSmall 단일로 통합 sync.
+   2. **server 측 height 1.0F 가 1:1 위반** ★ — 원본 0.8F (heightOffset(-1F) → 1.8 - 1).
+      MixinPlayerEntity L43-L44 정정 필수.
+   3. **resetInternalHeightOffset() L1688-L1692** ★ 신규 — 수면 전용. 1.21.1 N/A.
+   4. **afterMoveEntity L1608-L1609** ★ 신규 — 매 프레임 posY 보정. 1.21.1 EntityDimensions
+      자동 처리로 N/A.
+   5. **resetHeightOffset() 호출처 14건** ★ 추가 발견 (L249/L528/L1171/L1375/L2173/L2207/
+      L2219/L2273/L2746/L2774/L2780/L2816/L2819/L2824/L2842) — POSE.STANDING / vanilla 통과.
+   6. **클라/서버 비대칭** ★ — 원본 PlayerBase (클) 에 `getEyeHeight` override **없음**.
+      ServerPlayerBase (서버) 만 명시 override. 1.21.1 EntityDimensions.withEyeHeight 가
+      클라/서버 자동 대칭 → Mixin 불필요.
+   7. **네트워크 핸들러 배선 누락** ★ — SmartMovingNetwork Payload 정의 완료, 그러나
+      `ServerPlayNetworking.registerReceiver(StatePayload)` / 클라 송신 / 서버 브로드캐스트
+      모두 미배선. 핵심 누락.
+
+4. **§3 Phase 대폭 정정**:
+   - Phase A "8 필드 추가" → **검증만** (원본도 7 필드만, 1.21.1 11 필드 충족).
+   - Phase B "bit 확장" → **이미 완료** [x] (SmartMovingState 21 bit 분리 인코딩 끝남).
+   - Phase C **height 1.0F → 0.8F 정정** ★ (1:1 위반 해소).
+   - Phase D **isSmall 단일 분기** 단순화 (원본 1:1).
+   - Phase E "렌더 보정" → **N/A 자동 처리** [x] (vanilla calculateDimensions).
+   - **Phase G 신규** (네트워크 핸들러 배선 4 원자) — 핵심 누락 해소.
+   - **Phase H 신규** (isSmall OR 인코딩 검증 3 원자) — 클라 OR 식 정합성.
+
+5. **규모 갱신**: 18-22 원자 → **23 원자** (G/H 신규). 단 B/E 이미 [x] (3 원자 시작점)
+   + Phase A 검증만 → 실 코드 변경 작업 ~13 원자로 **감소**.
+
+수정 파일:
+- `docs/research/mapping/research_bbox_pose_eyeheight.md` 신규 (~700줄).
+- `docs/fix/focus_02_7_bbox_server_sync.md` — §0 표 정정 + §1 본체 보강 (resetInternalHeightOffset
+  + afterMoveEntity 추가) + §3 Phase 전면 재구성 + §4 의존 순서 갱신 + 본 세션 로그.
+
+회귀 0건 (코드 변경 0). 빌드 N/A.
+
+**다음 세션 권고**: Phase A-1 + B-1 (검증만, 코드 변경 0) → Phase C-1 (height 0.8F 정정,
+   1:1 위반 해소). Phase G/H 는 후속 세션.
+
 ---
 
-## 7. 근사 이식 지점 (이 포커스)
+## 7. 근사 이식 지점 (이 포커스) — 세션 2 갱신
 
-현재 0건. 완결 목표도 **0건**. client/server 완전 대칭 + 원본 heightOffset 시맨틱 100%
-재현이 목표.
+현재 0건 (코드 변경). 완결 목표도 **0건** (1:1 위반 부분).
 
-**잔존 가능 후보**:
-- 없음. 모든 로직이 Mixin + EntityDimensions + StatePayload 로 매핑 가능.
+**영구 동치 (§7 등록 — 의무 아님)** — 세션 2 검증:
+- **`afterMoveEntity` posY 보정** (원본 L1608-L1609) — 1.21.1 `Entity.calculateDimensions`
+  의 `refreshPosition() + setBoundingBox()` 즉시 반영으로 **자동 처리**. 별도 Mixin 불필요.
+- **`getBrightness` 렌더 보정** (원본 L1708-L1714) — 1.21.1 `standingEyeHeight =
+  newDims.eyeHeight()` 즉시 반영. lighting 은 `entity.getEyeY()` (eyeHeight 기반) 자동 사용.
+- **`resetInternalHeightOffset()` 수면 전용** (원본 L1688-L1692) — 1.21.1 vanilla 수면
+  자동 dimensions (POSE.SLEEPING) → 별도 처리 N/A.
+- **클라 PlayerBase `getEyeHeight` override 없음 (원본)** — 1.21.1 EntityDimensions.
+  withEyeHeight 가 클라/서버 자동 대칭 → 원본보다 안전한 대칭 처리.
+
+**잔존 1:1 위반 (Phase C 에서 해소)**:
+- **server `MixinPlayerEntity.sm_getBaseDimensions_server` height 1.0F** — 원본 0.8F 와
+  불일치. Phase C-1 에서 0.8F 로 정정 예정.
 
 ---
 
@@ -301,24 +476,61 @@ Phase F (검증 + 회귀 + 플레이테스트)
 
 ---
 
-## 9. 참고 자료
+## 9. 참고 자료 — 세션 2 보강
 
-### 원본 소스 경로
-- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java`
-  - L1681-L1704: `setHeightOffset` / `resetHeightOffset`
-  - L1708-L1722: `getBrightness` 렌더 보정
-  - L511/L518/L1369/L1382/L1390/L1400/L2129/L2512/L2519/L2555/L2798/L2829/L2851/L2858:
-    `setHeightOffset(-1F)` 설정 지점 전수
-- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\playerapi\SmartMovingServerPlayerBase.java`
-  - L142-L145: `getEyeHeight()` 공식 (height - 0.18F)
+### 종합 리서치 (세션 2 신규)
+- `docs/research/mapping/research_bbox_pose_eyeheight.md` — 원본 13 파일 5091 줄 + vanilla
+  11 리서치 + 1.21.1 5 코드 모두 라인별 전수 read 결과. **모든 라인-by-라인 작업의 1차 근거**.
+  §1 heightOffset 시스템 / §2 서버 sync 인프라 / §3 playerapi 베이스 / §4 vanilla / §5
+  1.21.1 현황 / §6 매핑 정합 / §7 보강 권고 / §8 1:1 결론.
 
-### 1.21.1 이식 대상
-- `src/client/java/.../mixin/client/MixinPlayerEntityClient.java` (✅ Phase 1 완료)
+### 원본 소스 경로 (로컬, 라인 정확)
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java` (3345 줄)
+  - **L1608-L1609**: `afterMoveEntity` posY 보정 ★ 세션 2 신규
+  - **L1681-L1686**: `resetHeightOffset`
+  - **L1688-L1692**: `resetInternalHeightOffset` ★ 세션 2 신규 (수면 전용)
+  - **L1694-L1704**: `setHeightOffset(float offset)`
+  - **L1708-L1722**: `getBrightness` / `getBrightnessForRender` 렌더 보정
+  - **setHeightOffset(-1F) 호출처 14건**: L511 / L518 / L1369 / L1382 / L1390 / L1400 /
+    L2129 / L2512 / L2519 / L2555 / L2798 / L2829 / L2851 / L2858
+  - **setHeightOffset(wasHeightOffset) 2건**: L422 / L558 (이전 offset 복원)
+  - **resetHeightOffset() 호출처 14건** ★ 세션 2 신규: L249 / L528 / L1171 / L1375 / L2173 /
+    L2207 / L2219 / L2273 / L2746 / L2774 / L2780 / L2816 / L2819 / L2824 / L2842
+- `...\SmartMovingServer.java` (354 줄)
+  - **L40-L49**: 11 필드 (isCrawling/isSmall/crawlingCooldown/hunger/...)
+  - **L69-L91**: `processStatePacket` (★ 7 비트 디코딩)
+  - **L90**: `mp.sendPacketToTrackedPlayers(packet)` 브로드캐스트
+  - **L225-L230**: `setCrawling`
+  - **L232-L236**: `setSmall(isSmall)` → ★ `mp.setHeight(isSmall ? 0.8F : 1.8F)`
+- `...\SmartMovingPacketStream.java` (214 줄)
+  - **L93-L109**: `sendState` (writeByte + writeInt + **writeLong(state)** 64 bit)
+  - **bit 사용 7개**: 12 isCrawlClimbing / 13 isCrawling / 14 isClimbing / **15 isSmall** /
+    18 isCeilingClimbing / 31 isWallJumping / 33 isSneakButtonPressed
+- `...\playerapi\SmartMovingServerPlayerBase.java` (266 줄)
+  - **L52-L55**: `getHeight()`
+  - **L58-L61**: `getMinY()`
+  - **L64-L67**: `setMaxY(double)`
+  - **L112-L115**: `getBox()`
+  - **L142-L145**: `getEyeHeight()` ★ 공식 `player.height - 0.18F`
+  - **L214-L217**: `setHeight(float)`
+- `...\playerapi\SmartMovingPlayerBase.java` (313 줄, 클라이언트)
+  - **L203-L212**: `updateEntityActionState` 이중 패턴 (tickEssential 항상 + isActive 분기)
+  - **bbox/height/eyeHeight override 0건** ★ — 클라/서버 비대칭
+
+### 1.21.1 이식 대상 (세션 2 갱신)
+- `src/client/java/.../mixin/client/MixinPlayerEntityClient.java` (✅ Phase 1 — 세션 137 완료)
+  - L55-L75 `sm_getBaseDimensions_client` (8 SM OR → 0.6×0.8 + 0.62F)
+  - L109-L135 `sm_updatePose_client` (4 분기 + cancel)
 - `src/main/java/.../mixin/MixinPlayerEntity.java` (Phase C/D 수정 대상)
-- `src/main/java/.../server/SmartMovingServer.java` (Phase A 필드 추가)
-- `src/main/java/.../network/SmartMovingState.java` (Phase B 인코딩 확장)
-- `src/main/java/.../network/SmartMovingNetwork.java` (Phase B 수신부 저장)
+  - L35-L46 `sm_getBaseDimensions_server` ★ height 1.0F → **0.8F 정정 (Phase C-1)**
+  - L56-L68 `sm_updatePose_server` (Phase D-1 isSmall 단일 분기 단순화)
+- `src/main/java/.../server/SmartMovingServer.java` (Phase A 검증만, 11 필드 충족)
+  - L112-L127 `processStatePacket` (★ 7 비트 디코딩 — 원본 1:1)
+- `src/main/java/.../network/SmartMovingState.java` (Phase B 검증 [x] — 21 bit 인코딩 완료)
+- `src/main/java/.../network/SmartMovingNetwork.java` (★ Phase G — 핸들러 미배선)
 
 ### 연관 포커스
 - 포커스 #2 Extended (완료 — 세션 134). B-N-standup 기록 세션 137 에서 Phase 1 연계 갱신.
+- 포커스 #2.5 (Jumper Factor — AI 완결 22/22 + F-6 deferred).
+- 포커스 #2.6 (Lava Liquid Border — AI 완결 20/21 + E-3 deferred).
 - 포커스 #3 §18.1 (B-N-standup-4 vanilla flying sync). 본 포커스 Phase D 와 병합 가능.
