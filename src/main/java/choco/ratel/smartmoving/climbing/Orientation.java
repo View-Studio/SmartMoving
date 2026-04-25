@@ -116,6 +116,16 @@ public class Orientation {
     protected int _i;
     /** 원본 L75 — Z 오프셋 (-1/0/+1). */
     protected int _k;
+
+    /**
+     * 외부 패키지 접근용 X 오프셋 getter.
+     * **포커스 #3 B-7 (세션 6)**: SmartMovingClimber 의 L963-L976 BottomHold ladder
+     *   2-level 체크 이식 시 `ladderOrientation._i` 접근 필요 → public getter 추가.
+     */
+    public int getOffsetI() { return _i; }
+
+    /** 외부 패키지 접근용 Z 오프셋 getter (포커스 #3 B-7 세션 6). */
+    public int getOffsetK() { return _k; }
     /** 원본 L76 — 대각 여부 (`_i != 0 && _k != 0`). */
     private boolean _isDiagonal;
     /** 원본 L77 — 방향 각도 (도 단위, 0-360). */

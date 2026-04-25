@@ -598,6 +598,54 @@ ClientPlayerEntity.tickMovement
 
 진행률: **13/13 (100%) AI 완결**. C-1/C-2/C-3/C-4 모두 [x]. 인게임 검증 deferred.
 
+### 세션 6 — 2026-04-25 — 미결 전수 감사 + B-7 신규 이식 (handleClimbing L963-L976) ★
+
+사용자 지시: "3포커스 미결이나 누락된거 없는지 먼저 꼼꼼히 검사해줘".
+
+진행한 작업 (3 Agent 병렬 교차 대조):
+1. **Agent 1 (체크리스트 vs 코드)**: 13/13 [x] 모두 정합 확정 — 누락 0.
+2. **Agent 2 (9 handleX vs 1.21.1 매핑)**: ★ **세션 1 미발견 2건 발견**:
+   - **L963-L970 BottomHold Ladder 2-level 체크 — 미이식** (회귀 ★ 매우 높음)
+   - **L972-L976 noGrabButton 조건 — 미이식** (회귀 ★ 높음)
+   - 원인: handleClimbing 본체 297 줄 — 세션 1 Agent D 가 깊이 분석 못 함.
+3. **Agent 3 (B-3 정확성 검증)**: ✅ 1:1 정확. desync 위험 0.
+
+**B-7 신규 이식** (★ 발견 즉시 수정 원칙):
+1. **Orientation.java getOffsetI() / getOffsetK() public getter 추가** —
+   `_i / _k` 가 protected 라 외부 패키지 접근 불가. 외부 접근용 getter 신규.
+2. **SmartMovingClimber.handleClimbing 2 분기 신규 이식** (L455-L457 8방향 탐색 직후):
+   - **분기 1 (원본 L963-L970)**: BottomHold + 위 2 블록 ladder + 옆 2 블록 비고체 →
+     handsClimbing=NONE. RedPower 와이어 / 복층 사다리 특수 케이스. `world.getBlockState(pos)
+     .isSolidBlock(world, pos)` 매핑 (Material API 1.21.1 제거).
+   - **분기 2 (원본 L972-L976)**: !grabPressed && Up && None + 주변 공기 → 해제. 스티키
+     클라이밍 방지.
+3. **빌드**: BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/main/java/choco/ratel/smartmoving/climbing/Orientation.java` — getOffsetI/K 추가.
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClimber.java` — 2 분기 신규.
+- `docs/fix/focus_03_transition_conditions.md` — §15 세션 6 / §16 신규 발견 추가.
+- `docs/research/mapping/research_state_transitions.md` — §5.2 정합 갱신.
+
+회귀 0건 (handleClimbing 8방향 탐색 결과 기반 분기, 기존 흐름 영향 0).
+
+완료 전 검증 체크리스트 (세션 6 기준):
+- [근거] 원본 SmartMovingSelf L963-L976 (Agent 2 결과)
+- [근거] 1.21.1 SmartMovingClimber L455-L457 부근 + Orientation 헬퍼 모두 존재
+- [대응] 원본 ↔ 1.21.1 1:1 (2 분기 모두)
+- [분기] BottomHold + UP + 공기/고체 5 조건 모두 보존
+- [상수] +2 (위 ladder 위치) / +1 (vertical step) 정확
+- [타이밍] 8방향 탐색 결과 (handsClimbing/feetClimbing) 직후 분기 (원본 흐름 1:1)
+- [근사] block.getMaterial().isSolid() → state.isSolidBlock(world, pos) 매핑 (Material API
+  제거 — 다른 영역과 일관)
+- [신규] 2 분기 추가로 사실상 14/13 원자 (B-7 추가)
+- [회귀] 8방향 탐색 결과 활용만 — sm_travel_client / tickEssential 영향 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **#3 진정한 AI 완결** — 추가 누락 가능성은 0건 확인. 다음 포커스 진입 (#4 / #1).
+
+진행률: **14/14 (100%) AI 완결** (B-7 추가). 인게임 검증 deferred.
+
 ---
 
 ## 16. 신규 발견 — 세션 1 4 Agent 결과
@@ -611,6 +659,7 @@ ClientPlayerEntity.tickMovement
 | ~~fromSwimmingOrDiving 4 분기 일부 누락~~ ✅ **세션 5 정정** | (이미 완전 이식 — B-42-B39 세션 124. ClientState L2772-L2814) | ClientState.fromSwimmingOrDiving |
 | ~~contextContinueCrawl 미이식~~ ✅ **세션 5 정정** | (이미 이식 — 분기 2 안 L2800. ClientState L514-L519 stale 주석 정정 완료) | ClientState L2800 |
 | ~~isFakeShallowWaterSneaking 미이식~~ ✅ **세션 5 정정** | (이미 완전 이식 — B-5 세션 63. SmartMovingSwimmer L298-L351 + ClientState L1042) | SmartMovingSwimmer + ClientState |
+| **★ B-7 (세션 6 신규 발견 + 이식)** | handleClimbing L963-L976 2 분기 (BottomHold ladder + noGrabButton) — 진짜 미이식 → 세션 6 이식 완료 | SmartMovingClimber L455-L457 부근 신규 + Orientation public getter |
 
 ---
 

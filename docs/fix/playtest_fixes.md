@@ -8,7 +8,7 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #3 — 상태 전환 조건 이상 AI 완결 (세션 5 — 13/13 + C-1~C-4 완료, 다음 포커스 #4 또는 #1)
+항목 #3 — 상태 전환 조건 이상 AI 완결 (세션 6 — 14/14 + 감사 후 B-7 신규 이식, 다음 포커스 #4 또는 #1)
 ```
 
 **작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)
@@ -95,7 +95,7 @@
 | 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | ✅ AI 완결 (2026-04-25, 세션 22) — F-1~F-5 통과 / F-6 통합 인게임 검증 대기 | #2 완료 |
 | 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟢 AI 완결 임박 (Phase A/B/C/D 19/21 = 90%, E-1 빌드 ✓ / E-2 회귀 진행 / E-3 통합 인게임 deferred) | #2 완료 |
 | 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 AI 완결 임박 (Phase A~H 22/23 = 96%, F-3 통합 인게임 deferred) | #2 완료 |
-| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ✅ AI 완결 (2026-04-25, 세션 5) — 13/13 원자 + C-1~C-4 [x] / 인게임 통합 검증 deferred | #2 / #2.5 / #2.6 / #2.7 완료 |
+| 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ✅ AI 완결 (2026-04-25, 세션 6) — 14/14 원자 (감사 후 B-7 추가) / 인게임 통합 검증 deferred | #2 / #2.5 / #2.6 / #2.7 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
 

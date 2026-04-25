@@ -455,6 +455,52 @@ public final class SmartMovingClimber {
             sm.hasClimbCrawlGap = outHandsGap.mustCrawl || outFeetGap.mustCrawl;
         }
 
+        // **포커스 #3 B-7 (세션 6)**: 원본 L963-L976 누락 2 분기 이식 (★ #3 감사 발견).
+        // 원본 SmartMovingSelf L963-L976 — 8방향 탐색 후 클라이밍 상태 보정.
+        {
+            int ix2 = (int) Math.floor(player.getX());
+            int jd2 = (int) Math.floor(player.getBoundingBox().minY);
+            int iz2 = (int) Math.floor(player.getZ());
+
+            // 원본 L963-L970: BottomHold + 위 2 블록 ladder + 옆 2 블록 비고체 → handsClimbing 해제
+            //   if (handsClimbing == BottomHold && Orientation.isLadder(world.getBlock(i, j+2, k))) {
+            //     ladderOrientation = getKnownLadderOrientation(...);
+            //     remote_i = i + ladderOrientation._i; remote_k = k + ladderOrientation._k;
+            //     if (!world.getBlock(remote_i, j, remote_k).isSolid()
+            //         && !world.getBlock(remote_i, j+1, remote_k).isSolid())
+            //         handsClimbing = None;
+            //   }
+            // RedPower 와이어 / 복층 사다리 특수 케이스. 1.21.1 isSolid 매핑 = state.isSolidBlock().
+            if (handsClimbing == HandsClimbing.BOTTOM_HOLD
+                    && Orientation.isLadder(world.getBlockState(new BlockPos(ix2, jd2 + 2, iz2)))) {
+                Orientation ladderOrientation = Orientation.getKnownLadderOrientation(
+                        world, ix2, jd2 + 2, iz2);
+                if (ladderOrientation != null) {
+                    int remoteI = ix2 + ladderOrientation.getOffsetI();
+                    int remoteK = iz2 + ladderOrientation.getOffsetK();
+                    BlockPos pos0 = new BlockPos(remoteI, jd2, remoteK);
+                    BlockPos pos1 = new BlockPos(remoteI, jd2 + 1, remoteK);
+                    BlockState s0 = world.getBlockState(pos0);
+                    BlockState s1 = world.getBlockState(pos1);
+                    if (!s0.isSolidBlock(world, pos0) && !s1.isSolidBlock(world, pos1)) {
+                        handsClimbing = HandsClimbing.NONE;
+                    }
+                }
+            }
+
+            // 원본 L972-L976: !grabPressed && handsClimbing==Up && feetClimbing==None →
+            //   주변 공기 + !horizontalCollision 시 handsClimbing 해제 (스티키 클라이밍 방지).
+            if (!SmartMovingKeys.grab.isPressed()
+                    && handsClimbing == HandsClimbing.UP
+                    && feetClimbing == FeetClimbing.NONE) {
+                if (!player.horizontalCollision
+                        && world.isAir(new BlockPos(ix2, jd2, iz2))
+                        && world.isAir(new BlockPos(ix2, jd2 + 1, iz2))) {
+                    handsClimbing = HandsClimbing.NONE;
+                }
+            }
+        }
+
         // 클라이밍 가능한 표면이 없으면 처리하지 않음
         if (!handsClimbing.isRelevant() && !feetClimbing.isRelevant()) {
             return;
