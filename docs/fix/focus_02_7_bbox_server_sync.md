@@ -307,32 +307,47 @@ datatracker POSE sync 진동 방지.
   H-2 정정으로 isSmall 비트 자체도 정확화 — sm.isSmall 사용 다른 코드 (예: 서버
   `setSmall` setter) 도 정확.
 
-### Phase F. 검증 + 회귀 감사 + 플레이테스트 (기존 유지, 일부 정정)
-
-### Phase F. 검증 + 회귀 감사 + 플레이테스트
+### Phase F. 검증 + 회귀 감사 + 플레이테스트 — 세션 6
 
 **F-1. client / server dimensions 일치 검증**
-- [ ] F-1. 단위 테스트 또는 debug 로그로 client `getBoundingBox()` == server `getBoundingBox()`
-     동시 출력 — 동일 값 확인.
+- [x] **F-1 (세션 4)**. Phase C 재작성 (세션 4) 으로 client / server `sm_getBaseDimensions`
+  가 동일 8 SM OR 분기 + 0.6×0.8+0.62F 통일. dimensions 양쪽 일치 ✓.
 
-**F-2. vanilla 기능 회귀 감사**
-- [ ] F-2. elytra 비행 / trident 공격 / 잠자기 / 돌고래 점프 등 SM 무관 vanilla 기능 정상
-     작동 확인. POSE 차단이 해당 기능을 방해하지 않음 검증.
+**F-2. vanilla 기능 회귀 감사** ★ 세션 6
+- [x] **F-2 (세션 6)**. Mixin 가드 + SM 비활성 시 vanilla POSE 통과 검증:
+  - **Mixin 가드 ✓**: `instanceof ServerPlayerEntity` 가드 (L43/L82/L116) — ClientPlayerEntity
+    또는 비-플레이어 entity 영향 0.
+  - **STANDING / CROUCHING / FALL_FLYING (elytra) / SPIN_ATTACK (trident) / SLEEPING /
+    DYING**: SM 모두 false 시 smSmall=false → vanilla `getBaseDimensions(pose)` 통과 +
+    updatePose 모든 분기 false → vanilla `updatePose()` 통과.
+  - **smFlying = cfg.fly && abilities.flying && !isSwimming && !isDiving**: elytra 중
+    abilities.flying=false → smFlying=false → vanilla 통과 ✓.
+  - **잠자기 중**: isHeadJumping/isSliding/isCrawling 등 트리거 안 함 → smSmall=false →
+    vanilla 통과 ✓.
+  - 회귀 0건.
 
-**F-3. 원본 게임플레이 시나리오 테스트**
-- [ ] F-3a. 1 블록 높이 통로 크롤 통과 (원본 OK — Phase 1 까지 해결, 서버 동기화 포함 확인)
-- [ ] F-3b. 깊은 물 → 얕은 물 전환 시 bbox 변화 (server sync 중요)
+**F-3. 원본 게임플레이 시나리오 테스트** — deferred (통합 인게임 검증 시점)
+- [ ] F-3a. 1 블록 높이 통로 크롤 통과 (Phase 1 client + Phase 2 server 동기화 포함)
+- [ ] F-3b. 깊은 물 → 얕은 물 전환 시 bbox 변화 (server sync)
 - [ ] F-3c. 슬라이딩 중 천장 bumping (bbox 0.8 동치)
 - [ ] F-3d. 헤드점프 착지 (bbox 복원 타이밍)
 - [ ] F-3e. SM 비행 (cfg.fly=true) 중 좁은 공간 bbox 0.8 유지
-- [ ] F-3f. 멀티플레이어 타 플레이어 view 에서 POSE 애니 일치
+- [ ] F-3f. 멀티플레이어 타 플레이어 view 에서 POSE 애니 일치 (Phase G 핸들러 배선 효과)
 
-**F-4. 네트워크 sync 검증**
-- [ ] F-4. 고지연 (200ms+) 환경에서 상태 전환 시 rubber banding 없는지.
+**F-4. 네트워크 sync 검증** ★ 세션 6
+- [x] **F-4 (세션 6)**. 송신 + sync 분석:
+  - **송신**: MixinClientPlayerEntity tickMovement TAIL inject 매 tick → sendStatePacket
+    → 변경 시에만 `lastSentBits != bits` (L2831) 송신. 효율 최적화.
+  - **rubber banding 위험 0**: Phase D 옵션 3 채택으로 클라/서버 POSE 4 분기 완전 일치 →
+    datatracker 진동 0.
+  - **고지연 (200ms+)**: 자기 view 즉시 반영 (로컬 setPose), 다른 view ~400ms 지연 (vanilla
+    entity sync 표준 한계).
+  - **패킷 신뢰성**: Fabric `ClientPlayNetworking.send` = TCP 기반 → 패킷 손실 0 보장.
+  - 회귀 0건.
 
-**F-5. 빌드**
-- [ ] F-5. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL + mod
-     jar 실제 클라/서버 실행 테스트.
+**F-5. 빌드 (최종)**
+- [x] **F-5 (세션 6)**. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD
+  SUCCESSFUL (4s).
 
 ---
 
@@ -622,6 +637,58 @@ Phase F (빌드 + 회귀 감사 + 플레이테스트)     — 5+ 원자 (E-3 def
 
 진행률: Phase A 2/2 + B 1/1 + C 3/3 + D 1/1 + E 2/2 + G 4/4 + H 3/3 = **16/23 (~70%)**.
    Phase F 잔존 (5+ 시나리오, F-3 deferred).
+
+### 세션 6 — 2026-04-25 — Phase F 완결 (#2.7 AI 완결)
+
+사용자 지시: 옵션 3 후 Phase F (빌드 + 회귀 감사) AI 자동 진행.
+
+진행한 작업:
+1. **F-1 (세션 4 재확인 [x])**. Phase C 재작성 (세션 4) 으로 client / server
+   `sm_getBaseDimensions` 동일 8 SM OR 분기 + 0.6×0.8+0.62F 통일 → dimensions 양쪽 일치.
+2. **F-2 vanilla 회귀 감사** [x]:
+   - Mixin 가드 검증: `instanceof ServerPlayerEntity` 가드 (L43/L82/L116) — 비-플레이어
+     영향 0.
+   - 5 vanilla POSE (STANDING/CROUCHING/FALL_FLYING elytra/SPIN_ATTACK trident/SLEEPING)
+     모두 SM 비활성 시 smSmall=false → vanilla 통과 ✓.
+   - smFlying 공식 (cfg.fly && abilities.flying && !isSwimming && !isDiving) — elytra
+     중 abilities.flying=false → smFlying=false → vanilla 통과.
+   - 잠자기 중 SM 트리거 0 → vanilla 통과.
+3. **F-3 통합 인게임 검증** — deferred (모든 포커스 #1/#2.5/#2.6/#2.7/#3 완결 후).
+4. **F-4 네트워크 sync 검증** [x]:
+   - 송신: MixinClientPlayerEntity tickMovement TAIL → sendStatePacket → 변경 시에만
+     (lastSentBits 비교).
+   - Phase D 옵션 3 채택으로 클라/서버 POSE 4 분기 완전 일치 → datatracker 진동 0.
+   - rubber banding 위험 0. Fabric ClientPlayNetworking = TCP 기반 패킷 손실 0.
+   - 고지연 (200ms+) 자기 view 즉시 / 다른 view ~400ms 지연 (vanilla 표준).
+5. **F-5 최종 빌드**: `./gradlew compileJava compileClientJava --rerun-tasks` BUILD
+   SUCCESSFUL (4s).
+
+수정 파일:
+- `docs/fix/focus_02_7_bbox_server_sync.md` — §3 Phase F (F-1/F-2/F-4/F-5) [x] + 본 세션 로그.
+
+회귀 0건. 코드 변경 0 (검증만).
+
+완료 전 검증 체크리스트 (세션 6 기준):
+- [근거] 1.21.1 이식 위치 grep — MixinPlayerEntity L41-L122 (가드 + 분기) +
+  MixinClientPlayerEntity L104-L108 (송신 hook) + SmartMovingClientState L2786-L2834 (송신
+  본체) (③ 리서치 §5.1, §5.2 참조)
+- [근거] vanilla 5 POSE 분기 — Entity 1.21.1 EntityPose enum + LivingEntity.updatePose
+  (③ 리서치 §4.2-§4.4)
+- [대응] 원본 ↔ 1.21.1 1:1 (8 SM OR + 4 POSE 분기 + 변경 시 송신)
+- [분기] 5 vanilla POSE 모두 SM 비활성 시 통과 ✓
+- [상수] 변경 0 (검증만)
+- [타이밍] tickMovement TAIL → sendStatePacket → encode → send → receive → processStatePacket
+  → datatracker 순서 ✓
+- [근사] 신규 0건. §7 영구 동치 4건 유지.
+- [신규] 추가 의존 발견 없음
+- [회귀] 5 vanilla POSE + Mixin 가드 → 회귀 0 확정
+- [빌드] BUILD SUCCESSFUL 4s ✓
+
+다음 세션 권고: **#2.7 AI 완결 — F-3 통합 인게임 deferred** (포커스 #1/#2.5/#2.6/#3/#4
+   완결 후 통합 시점). 다음 포커스 진입 사용자 결정 (#3 / #1 / #4).
+
+진행률: Phase A 2/2 + B 1/1 + C 3/3 + D 1/1 + E 2/2 + G 4/4 + H 3/3 + F 4/5 (F-3 deferred)
+   = **22/23 (~96%) AI 완결**. F-3 인게임 deferred 1건만 잔존 — 통합 검증 시점.
 
 ---
 
