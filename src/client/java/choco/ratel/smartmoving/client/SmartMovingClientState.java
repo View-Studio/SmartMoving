@@ -515,8 +515,9 @@ public final class SmartMovingClientState {
      * wouldWantCrawl 식(L2419)의 `isCrawling && (inputContinueCrawl || contextContinueCrawl)` 조건에 사용.
      * 해제 경로: L2411(inputContinue/물속/mustCrawl), L2416(천장 액체 여유), L2447(!isCrawling).
      *
-     * 1.21.1: true 설정 경로(fromSwimmingOrDiving)는 후속 이식 — 현재는 항상 false 유지,
-     * 해제 로직만 선제 이식(원본 1:1).
+     * **포커스 #3 B-5 (세션 5 검증)**: true 설정 경로 (fromSwimmingOrDiving 분기 2 L2800)
+     *   이미 이식 완료 (B-42-B39 세션 124). 원본 L1388 `contextContinueCrawl = true` 1:1.
+     *   stale 주석 정정.
      */
     public boolean contextContinueCrawl;
 
