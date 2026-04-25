@@ -16,15 +16,15 @@
 
 ## 0. 현재 상태 (진입 시점)
 
-### 이식 완료 (의존 조건 만족)
+### 이식 완료 (의존 조건 만족) — 라인 번호 세션 7 갱신 (실 코드 grep 확인)
 | 요소 | 위치 | 상태 |
 |---|---|---|
-| `cfg.lavaLikeWater = false` 필드 | SmartMovingConfig L138 | ✅ 세션 133 |
-| `cfg.isLavaLikeWaterEnabled()` 헬퍼 | SmartMovingConfig L673-L679 | ✅ 세션 133 |
-| Properties IO (`move.lava.water`) | SmartMovingConfig L944/L1070 | ✅ 세션 133 |
+| `cfg.lavaLikeWater = false` 필드 | SmartMovingConfig **L527** | ✅ 세션 133 |
+| `cfg.isLavaLikeWaterEnabled()` 헬퍼 | SmartMovingConfig **L1194** | ✅ 세션 133 |
+| Properties IO (`move.lava.water`) | SmartMovingConfig **L1460/L1620** | ✅ 세션 133 |
 | B-7c updateSwimState 진입 조건 | SmartMovingSwimmer L98-L114 | ✅ 세션 127 |
-| `isInLiquid(player)` 메서드 | ClientState L2184 | ✅ 세션 127 (water-only 기반) |
-| `getMaxPlayerLiquidBetween` / `getMinPlayerLiquidBetween` | ClientState L2117/L2148 | ✅ 세션 119 (water-only 기반) |
+| `isInLiquid(player)` 메서드 | ClientState **L2209** | ✅ 세션 127 (water-only 기반 → 세션 2 lava 자동 반영) |
+| `getMaxPlayerLiquidBetween` / `getMinPlayerLiquidBetween` | ClientState **L2142/L2173** | ✅ 세션 119 (water-only 기반 → 세션 2 lava 자동 반영) |
 
 ### 미이식 (이 포커스 범위)
 | 요소 | 원본 라인 | 상태 |
@@ -807,20 +807,93 @@ vanilla 부작용 평가 (사용자 요청 전수 조사 결과)
 진행률: Phase E-2 완결 (1/2 = 50% — E-3 deferred), **전체 #2.6 20/21 (~95%) AI 완결**.
    E-3 인게임 deferred 1건만 잔존 — 통합 검증 시점 (모든 포커스 완결 후).
 
+### 세션 7 — 2026-04-25 — 미결/누락 전수 감사 (3 Agent 병렬 교차 대조)
+
+사용자 지시: "2.6 미결이나 누락된거 없는지 먼저 꼼꼼히 검사해줘".
+
+진행한 작업 (3 Agent 병렬 매우 꼼꼼 감사):
+1. **Agent 1 (체크리스트 vs 코드 교차 대조)** — §3 21 원자 모두 [x] 검증 + 라인 drift 검출.
+   결과: 21 원자 매핑 100% (E-3 deferred 의도 제외 20/20). 라인 drift 0건 (코드 라인은 정확).
+2. **Agent 2 (원본 5526줄 lava 키워드 vs 1.21.1 매핑)** — 원본 9 메서드 (Base) + 9 위치 (Self)
+   + 1 메서드 (ClientConfig) + 2 Property (Config) 모두 매핑/N/A 분류 검증. 결과: 매핑 100%,
+   누락 0건. handleAlternativeFlying / handleLand handledLava 필터 1.21.1 N/A 결정 재확인.
+3. **Agent 3 (§7 근사 등록 + research 보강 누락)** — §7 후보 4건 + 근사 정당화 부실 우려
+   1건 검증. 결과:
+   - **§7 등록 누락 0건** (FluidTags 통합은 표면 매핑 — §7 의무 아님).
+   - **§0 표 라인 drift 7건 발견** ★ — 발견 즉시 수정 원칙 적용.
+
+발견 즉시 수정 (drift 7건):
+| 요소 | 기존 표기 | 실제 코드 grep | 차이 |
+|---|---|---|---|
+| `lavaLikeWater = false` 필드 | L138 | L527 | +389 |
+| `isLavaLikeWaterEnabled()` 헬퍼 | L673-L679 | L1194 | +521 |
+| Properties IO load (`move.lava.water`) | L944 | L1460 | +516 |
+| Properties IO save | L1070 | L1620 | +550 |
+| `isInLiquid(player)` | L2184 | L2209 | +25 |
+| `getMaxPlayerLiquidBetween` | L2117 | L2142 | +25 |
+| `getMinPlayerLiquidBetween` | L2148 | L2173 | +25 |
+
+원인: 세션 119/127/133 시점 표기 후 #2.5 Phase A 필드 ~52개 추가 + 헬퍼 메서드 추가로 코드
+오프셋 변동. 라인 drift 는 **참조용 메타데이터** 라 1:1 번역 위반은 아니나, 발견 즉시 수정
+원칙에 따라 §0 표 갱신.
+
+§7 정리 (세션 7):
+- **잠재 후보 4건 → 영구 잔존 3건 (FiniteLiquid mod / reverseHandleMaterialAcceleration /
+  getNormalWaterBorder vanilla 동치)** + 해소 2건 (`_lavaSwimParticlePeriodFactor` /
+  vanilla 중력 차이 — 둘 다 §7 의무 아님으로 결론).
+- 신규 등록 0건. 1:1 번역 위반 0건.
+
+수정 파일:
+- `docs/fix/focus_02_6_lava_liquid_border.md` — §0 표 라인 drift 7건 갱신 + §7 정리 + 본
+  세션 로그 추가.
+
+회귀 0건 (코드 변경 0). 빌드 N/A.
+
+완료 전 검증 체크리스트 (세션 7 기준):
+- [근거] 3 Agent 병렬 결과 + 직접 grep 라인 재확인
+- [근거] §0 표 7건 grep 으로 정확 라인 확정
+- [대응] §3 21 원자 + §0 의존 표 + §2 원본 매핑 모두 1:1 누락 0
+- [분기] 원본 9 lava 위치 (Self) + 9 메서드 (Base) 모두 매핑/N/A 분류
+- [상수] 0.5D / 0.02D / 0.60000002384185791D / 0.30000001192092896D / 4F 모두 정확 보존 재확인
+- [타이밍] handleSwimming → handleLava → ... 순서 보존 재확인
+- [근사] 신규 §7 등록 0건. 영구 잔존 3건 정리.
+- [신규] 추가 의존 발견 0건
+- [회귀] 포커스 #2 Extended 영향 0 재확인
+- [빌드] 코드 변경 0 — 재빌드 불필요 (세션 5 BUILD SUCCESSFUL 5s)
+
+다음 세션 권고: **#2.6 종결 — 다음 포커스 진입 (#2.7 Phase 2 / #1 / #3)**.
+
+진행률: 전체 #2.6 **20/21 (~95%) AI 완결 확정**. E-3 인게임 deferred 1건 — 통합 검증 시점.
+
 ---
 
 ## 7. 근사 이식 지점 (이 포커스)
 
-**§7 이 파일**: Phase 진행 중 불가피한 근사 이식 지점. 현재 시작 시점: 0건.
+**§7 이 파일**: Phase 진행 중 불가피한 근사 이식 지점. **세션 7 감사 결과: 신규 0건**.
+포커스 종결 시점: **§7 영구 잔존 3건 (mod 미이식 / water 전용 / 1.21.1 API 부재 외 0).**
 
-잔존 근사 후보 (세션 1 갱신):
-- **FiniteLiquid mod 분기** (원본 SmartMovingBase L137-L138) — mod 1.21.1 미이식. 해소 불가. **영구 유지**.
-- **`_lavaSwimParticlePeriodFactor = 4F`** (원본 SmartMovingConfig L164) — Phase A-5 결정 사항.
-  이식 vs §7 등록 (lava 파티클 vanilla 동작 위임) 중 선택.
-- **`isInsideOfMaterial(Material material)` water 전용** (원본 SmartMovingBase L524-L543) —
-  FiniteLiquid mod 의존, lava 무관. 미이식 영구 (mod 미이식 일관).
+영구 잔존 항목 (세션 7 감사 확정):
+- **FiniteLiquid mod 분기** (원본 SmartMovingBase L137-L138 + L165-L181 + L524-L543) —
+  mod 1.21.1 미이식. `getFiniteLiquidWaterBorder` + `isInsideOfMaterial` 모두 mod 의존,
+  lava 무관. 해소 불가. **영구 유지**.
 - **`reverseHandleMaterialAcceleration()` water 전용** (원본 SmartMovingBase L884-L932) —
-  Material.water 고정, lava 미관련. 본 포커스 영향 0.
+  Material.water 고정, lava 미관련. 본 포커스 영향 0. **영구 유지**.
+- **`getNormalWaterBorder` metadata 계산** (원본 L152-L163) — 1.21.1 `FluidState.getHeight()`
+  가 level property 기반으로 동치 (vanilla FlowableFluid 구현). **영구 동치 — §7 의무 아님**.
+
+해소된 후보 (세션 7 정리):
+- ~~`_lavaSwimParticlePeriodFactor = 4F`~~ — Phase A-5 (세션 2) 에서 이식 완료 (Config L539
+  + IO L1460/L1620). 소비처 (lava 파티클 SM 자체 생성) 는 1.21.1 미이식이나 필드 자체는
+  1:1 이식 → **§7 등록 의무 아님**. 미래 활용 시 필드 그대로 사용 가능.
+- ~~vanilla 중력 차이 (-0.02D vs -0.05D)~~ — 원본 1.7.10 도 -0.02D 고정 → 1:1 번역 위반 아님.
+  Swimmer L762 정확 보존. **§7 등록 의무 아님**.
+
+배경 매핑 (vanilla 동치 — §7 등록 불필요):
+- `Material.water` / `Material.lava` 통합 → `FluidTags.WATER` / `FluidTags.LAVA` (vanilla 1.21
+  유체 태그 시스템). 원본 분기 (water/flowing_water/Material.water 4) → 1.21.1 분기 (water/
+  lava/empty/modded 4) 표면 매핑. §0 §2 명시.
+- `isOffsetPositionInLiquid(dx, dy, dz)` → `getBoundingBox().offset() + world.containsFluid(bb)`
+  (Swimmer L770-L774). vanilla `containsFluid` 가 정확 동치.
 
 ---
 
