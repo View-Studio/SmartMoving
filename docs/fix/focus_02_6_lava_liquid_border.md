@@ -413,10 +413,23 @@ vanilla 위임.
 - [x] **E-1 (세션 5)**. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
 
 **E-2. 회귀 감사**
-- [ ] E-2. 포커스 #2 Extended 기존 이식 영향 확인:
-  - `cfg.lavaLikeWater = false` (기본값) 시 기존 water-only 동작 유지
-  - `cfg.lavaLikeWater = true` 시 lava swim/dive 신규 활성
-  - Creative 모드에서 `lavaLikeWater = true` 기본값 (원본 Creative) — Config 별도 처리
+- [x] **E-2 (세션 6 완료)**. 포커스 #2 Extended 기존 이식 영향 grep 감사 (5 영역 / 코드 변경 0):
+  - **E-2-1 Phase A getLiquidBorder** (ClientState L2102-L2128): lava 분기 ✓
+    (FluidTags.LAVA + isLavaLikeWaterEnabled?), modded 분기 ✓ (1F), lavaSwimParticlePeriodFactor
+    Config 필드 ✓ (Config L539/L1461/L1621 IO).
+  - **E-2-2 Phase B 의존 자동 반영**: B-7c (Swimmer L113-L114 `isLavaLikeWaterEnabled() &&
+    isInLava()` OR), B-42c (getMax/MinPlayerLiquidBetween L2150/L2181 → getLiquidBorder),
+    B-42d (totalSwimWaterBorder L2277 → lava 반영), B-42-B39 (crawlStandUpLiquidCeiling
+    L2737 → getMin → lava 반영) 모두 정상.
+  - **E-2-3 Phase C handleLava** (Swimmer L732-L784): 진입 4-AND ✓, 9 단계 ✓, 상수 0.5D /
+    0.02D / 0.60000002384185791D / 0.30000001192092896D 정확 보존 ✓. ci.cancel() 부작용 0
+    재확인 (vanilla swimUpward / damage / sound / particle 모두 travel() 외부).
+  - **E-2-4 Phase D lava 게이트 5개**: D-1 (Jumper L475 신규), D-2 (ClientState L1418), D-3
+    (ClientState L1232-L1234 — 원본 lava 조건 없음, 일치), D-4 (ClientState L1185) 모두
+    적용. handleLava 자체 진입 (L735) 포함 5개 일관성 ✓.
+  - **E-2-5 playtest_fixes.md** 현재 포커스 표기 갱신 ("세션 6 — Phase E-2 회귀 감사" /
+    상태 "🟢 AI 완결 임박 19/21 = 90%").
+  - 회귀 0건. Phase #2 Extended 이식 (B-7c / B-42c / B-42d / B-42-B39) 영향 0.
 
 **E-3. 플레이테스트 시나리오**
 - [ ] E-3. 사용자 인게임 테스트:
@@ -727,6 +740,72 @@ vanilla 부작용 평가 (사용자 요청 전수 조사 결과)
 
 다음 세션 권고: **Phase E-1 빌드 + E-2 회귀 감사** — 단일 변경 (Jumper 1줄 추가) 빌드 검증
    후 본 포커스 종결. E-3 인게임 테스트는 포커스 #1/#2/#3 통합 후 실시.
+
+### 세션 6 — 2026-04-25 — Phase E-2 회귀 감사 완결 (#2.6 AI 완결)
+
+사용자 지시: "엄격 1:1" 유지 + Phase E-2 회귀 감사 — 포커스 #2 Extended 기존 이식 영향 grep 검증.
+
+진행한 작업 (5 영역, 코드 변경 0):
+1. **E-2-1 Phase A getLiquidBorder 적용 검증** —
+   - ClientState L2102-L2128 `getLiquidBorder()` 본체: 분기 1 (empty=0F) → 분기 2 (water →
+     `fluid.getHeight`) → 분기 3+4 (lava → `isLavaLikeWaterEnabled() ? getHeight : 0F`) →
+     분기 6 (modded → 1F) 7 분기 모두 정상.
+   - Config L539 `lavaSwimParticlePeriodFactor = 4F` + L1461 load (`getFloat` 키
+     `move.lava.swim.particle.period.factor`) + L1621 save (`p.setProperty`) 모두 정상.
+2. **E-2-2 Phase B 의존 자동 반영 검증** —
+   - B-7c updateSwimState (Swimmer L113-L114) `(sm.isSwimming_sm && isInLiquid()) ||
+     (cfg.isLavaLikeWaterEnabled() && player.isInLava())` 3-OR 정상.
+   - B-42c getMax/MinPlayerLiquidBetween (ClientState L2150/L2181) → getLiquidBorder 직접
+     호출 → lava 자동 반영.
+   - B-42d totalSwimWaterBorder (L2277) → getMaxPlayerLiquidBetween → lava 반영.
+   - B-42-B39 crawlStandUpLiquidCeiling (L2737) → getMinPlayerLiquidBetween → lava 반영.
+3. **E-2-3 Phase C handleLava 호출/부작용 검증** —
+   - Swimmer L732-L784 본체: 진입 4-AND (`!isFlying && !isLiquidClimbing && isInLava` +
+     호출자 `!handledSwimming`) ✓, standupIfPossible / resetClimbing / resetSwimming →
+     d1 저장 → moveFlying 0.02F → move(SELF) → damping 0.5D (X/Y/Z) → 중력 -0.02D →
+     벽 점프 (offset 0.60000002384185791D, motionY 0.30000001192092896D) → setVelocity
+     9 단계 모두 정확.
+   - Mixin sm_travel_client L107-L110 호출: handleSwimming 다음 → ci.cancel() 분기 정상.
+   - ci.cancel() 부작용 0 재확인: vanilla swimUpward (tickMovement L2649), lava damage
+     (Entity.tick), lava sound (LivingSoundManager), lava particle (tickMovement 외부)
+     모두 travel() 외부 → 영향 없음.
+4. **E-2-4 Phase D lava 게이트 5개 일관성** —
+   - D-1 (Jumper L475 — 세션 5 신규): `&& !player.isTouchingWater() && !player.isInLava()`
+   - D-2 (ClientState L1418): `&& !player.isInLava()` (세션 119 B-24)
+   - D-3 (ClientState L1232-L1234): 원본 L2679 lava 조건 없음 — 1.21.1 동일 일치
+   - D-4 (ClientState L1185): `|| player.isInLava()` (B-48c 세션 131)
+   - handleLava 자체 진입 (Swimmer L735): `&& player.isInLava()`
+   - 원본 SmartMovingSelf 9 lava 위치 (L132/L133-L134/L135/L136/L232/L578-L600/L602-L604/
+     L633-L643/L1852/L2529-L2530/L2643) 모두 1.21.1 매핑 (handleAltFly/Land 필터는 1.21.1
+     N/A — vanilla 위임으로 결정).
+5. **E-2-5 playtest_fixes.md 현재 포커스 갱신** —
+   - "세션 2 — Phase A 일괄" → "세션 6 — Phase E-2 회귀 감사"
+   - 상태 "🟡 병행 대기" → "🟢 AI 완결 임박 19/21 = 90%"
+
+수정 파일:
+- `docs/fix/focus_02_6_lava_liquid_border.md` — §3 E-2 [x] 마킹 + 본 세션 로그 추가.
+- `docs/fix/playtest_fixes.md` — 현재 포커스 + 표 행 갱신.
+
+회귀 0건 (코드 변경 0). 빌드 검증 불필요 (세션 5 E-1 BUILD SUCCESSFUL 5s).
+
+완료 전 검증 체크리스트 (세션 6 기준):
+- [근거] 원본 SmartMovingSelf 9 lava 위치 + getLiquidBorder L131-L150 (③ 리서치 §1-§2)
+- [근거] 1.21.1 이식 위치 모두 grep 확인 (5 영역)
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (Phase A 4 분기 + Phase C 9 단계 + Phase D 4 게이트)
+- [분기] 모든 if/else 전수 확인 (getLiquidBorder 4 분기 / handleLava 진입 / D-1 e. 일반점프)
+- [상수] 0.5D / 0.02D / 0.60000002384185791D / 0.30000001192092896D / 4F 정확 보존
+- [타이밍] handleSwimming → handleLava → fromSwimmingOrDiving → handleSliding 순 보존
+- [근사] 신규 0건. 기존 §7 영구 후보 4건 (FiniteLiquid mod / isInsideOfMaterial /
+  reverseHandleMaterialAcceleration / vanilla 미세 차이) 외 0.
+- [신규] 추가 의존 발견 없음
+- [회귀] 포커스 #2 Extended 기존 이식 (B-7c / B-42c / B-42d / B-42-B39) 영향 0
+- [빌드] 세션 5 E-1 BUILD SUCCESSFUL 5s — 코드 변경 없으므로 재빌드 N/A
+
+다음 세션 권고: **#2.6 AI 완결 — E-3 통합 인게임 검증 deferred** (포커스 #1/#2/#3/#4
+   완결 후 통합 시점). 다음 포커스 진입 사용자 결정 (#2.7 Phase 2 / #3 / #1).
+
+진행률: Phase E-2 완결 (1/2 = 50% — E-3 deferred), **전체 #2.6 20/21 (~95%) AI 완결**.
+   E-3 인게임 deferred 1건만 잔존 — 통합 검증 시점 (모든 포커스 완결 후).
 
 ---
 
