@@ -670,17 +670,17 @@ public class SmartMovingConfig {
     // ── B-24 (세션 53) — isHeadJumping 해제 엣지 handleCrash Config 필드 ───────────
 
     /**
-     * 원본 `SmartMovingConfig.java` L395:
-     *   `_headFallDamageStartDistance = Positive(...).values(2F, 1F, 3F);`
-     * 기본값 2F. 사용처: `handleCrash(startDistance, factor)` (원본 L2538) — 헤드점프 해제
-     * 엣지 + 자유 클라이밍 낙하 데미지 시작 거리.
+     * 원본 `SmartMovingConfig.java` L264 (포커스 #2.5 A-5d 이식 완결):
+     *   `_headFallDamageStartDistance = Positive("move.fall.head.damage.start.distance").values(2F, 1F, 3F);`
+     * 기본값 2F (values: default=2F, min=1F, max=3F). 사용처: `handleCrash(startDistance, factor)`
+     * (원본 L2538) — 헤드점프 해제 엣지 + 자유 클라이밍 낙하 데미지 시작 거리.
      */
     public float headFallDamageStartDistance = 2F;
 
     /**
-     * 원본 `SmartMovingConfig.java` L396:
-     *   `_headFallDamageFactor = IncreasingFactor(...).defaults(2F);`
-     * 기본값 2F. 사용처: handleCrash 낙하 데미지 배율.
+     * 원본 `SmartMovingConfig.java` L265 (포커스 #2.5 A-5e 이식 완결):
+     *   `_headFallDamageFactor = IncreasingFactor("move.fall.head.damage.factor").defaults(2F);` ★ 오버라이드
+     * 기본값 2F (IncreasingFactor 기본 1F → defaults(2F) 오버라이드). 사용처: handleCrash 낙하 데미지 배율.
      */
     public float headFallDamageFactor = 2F;
 
@@ -1043,6 +1043,8 @@ public class SmartMovingConfig {
         headJump                 = getBool(p,   "move.jump.head.charge",          headJump);
         headJumpControlFactor    = getFloat(p,  "move.forward.jump.control.factor", headJumpControlFactor);
         headJumpChargeMaximum    = getFloat(p,  "move.forward.jump.charge.maximum", headJumpChargeMaximum);
+        headFallDamageStartDistance = getFloat(p, "move.fall.head.damage.start.distance", headFallDamageStartDistance);
+        headFallDamageFactor     = getFloat(p,  "move.fall.head.damage.factor",   headFallDamageFactor);
         angleJumpSide            = getBool(p,   "move.jump.angle.side",           angleJumpSide);
         angleJumpBack            = getBool(p,   "move.jump.angle.back",           angleJumpBack);
         angleJumpHorizontalFactor = getFloat(p, "move.jump.angle.horizontal.factor", angleJumpHorizontalFactor);
@@ -1187,6 +1189,8 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.head.charge",           String.valueOf(headJump));
         p.setProperty("move.forward.jump.control.factor", String.valueOf(headJumpControlFactor));
         p.setProperty("move.forward.jump.charge.maximum", String.valueOf(headJumpChargeMaximum));
+        p.setProperty("move.fall.head.damage.start.distance", String.valueOf(headFallDamageStartDistance));
+        p.setProperty("move.fall.head.damage.factor",    String.valueOf(headFallDamageFactor));
         p.setProperty("move.jump.angle.side",            String.valueOf(angleJumpSide));
         p.setProperty("move.jump.angle.back",            String.valueOf(angleJumpBack));
         p.setProperty("move.jump.angle.horizontal.factor", String.valueOf(angleJumpHorizontalFactor));

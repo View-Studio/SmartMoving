@@ -228,11 +228,11 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-4d. `jumpChargeCancelOnSneakRelease = false` (원본 L257, Modified=false) — 세션 4 (신규 이식, 문서 오기 'true' 정정)
 
 **A-5. HeadUp 필드 5건**
-- [ ] A-5a. `headJump = true` (원본 L260)
-- [ ] A-5b. `headJumpControlFactor` ✅ 이미 이식됨 — 확인만
-- [ ] A-5c. `headJumpChargeMaximum` ✅ 이미 이식됨 — 확인만
-- [ ] A-5d. `headFallDamageStartDistance = 2F` (원본 L264)
-- [ ] A-5e. `headFallDamageFactor = 2F` (원본 L265, 오버라이드)
+- [x] A-5a. `headJump = true` (원본 L260) — 세션 5 (이미 이식 + IO 확인)
+- [x] A-5b. `headJumpControlFactor = 0.2F` (원본 L261) — 세션 5 (이미 이식 + IO 확인, legacy key 유지)
+- [x] A-5c. `headJumpChargeMaximum = 10F` (원본 L262) — 세션 5 (이미 이식 + IO 확인, legacy key 유지)
+- [x] A-5d. `headFallDamageStartDistance = 2F` (원본 L264) — 세션 5 (필드 이미 이식 + IO 신규 + 주석 라인 정정)
+- [x] A-5e. `headFallDamageFactor = 2F` ★ (원본 L265, IncreasingFactor.defaults(2F) 오버라이드) — 세션 5 (필드 이미 이식 + IO 신규 + 주석 라인 정정)
 
 **A-6. Angle 필드 4건**
 - [ ] A-6a. `angleJumpSide = true` (원본 L268)
@@ -832,6 +832,49 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-5 (HeadUp 5건 — A-5a `headJump=true` 확인 + A-5b/c 이미 이식 확인 + A-5d `headFallDamageStartDistance=2F` + A-5e `headFallDamageFactor=2F` ★ 신규). 원본 L260/L264/L265.
 
 진행률: Phase A 21/40+ (~52.5%), 전체 #2.5 21/~110 (~19.1%).
+
+### 세션 5 — 2026-04-25 — Phase A-5 (HeadUp 5건: 확인 3 + IO 추가 2 + 주석 라인 정정 2)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-5 5건 (A-5a~A-5e) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L260-L265):
+   - L260 `_headJump = Unmodified("move.jump.head.charge")` → 기본 true
+   - L261 `_headJumpControlFactor = DecreasingFactor("move.jump.head.control.factor").defaults(0.2F)` → 0.2F
+   - L262 `_headJumpChargeMaximum = Positive("move.jump.head.charge.maximum").defaults(10F)` → 10F
+   - L264 `_headFallDamageStartDistance = Positive("move.fall.head.damage.start.distance").values(2F, 1F, 3F)` → 2F (default)
+   - L265 `_headFallDamageFactor = IncreasingFactor("move.fall.head.damage.factor").defaults(2F)` ★ → 2F (오버라이드)
+2. 1.21.1 이식 위치 확인:
+   - A-5a: 필드 L251 = true ✅ + IO L1043 (key: `move.jump.head.charge` 최신) + save L1187 ✅
+   - A-5b: 필드 L252 = 0.2F ✅ + IO L1044 (key: `move.forward.jump.control.factor` legacy) + save L1188 ✅
+   - A-5c: 필드 L253 = 10F ✅ + IO L1045 (key: `move.forward.jump.charge.maximum` legacy) + save L1189 ✅
+   - A-5d: 필드 L678 = 2F ✅ + IO **없음** ❌ → 신규 등록 필요
+   - A-5e: 필드 L685 = 2F ✅ + IO **없음** ❌ → 신규 등록 필요
+   - 발견: A-5d/e 필드 주석에 "원본 L395/L396" 으로 라인 번호 오기 (실제 L264/L265). 정정.
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 주석 정정 (L672-L685) — L395/L396 → L264/L265, ★ 오버라이드 명시
+   - `load()` IO L1046-L1047 — A-5d/e 신규 (key 최신: `move.fall.head.damage.{start.distance|factor}`)
+   - `save()` IO L1190-L1191 — A-5d/e 신규
+4. key 명 결정:
+   - 신규 A-5d/e 는 **최신 key** (`move.fall.head.damage.*`) 채택. 1:1 원칙상 원본의 주(default) key. 기존 사용자 config 에 해당 항목이 없을 가능성 大 (이전 IO 미등록) → 호환성 영향 0.
+   - 기존 A-5b/c 의 legacy key 유지 (변경 시 사용자 config 호환성 깨짐 위험). head 그룹 일관성 정비는 별도 정리 원자로 후속 처리 가능.
+5. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 5 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L260-L265 + Properties.java L189-L192 (IncreasingFactor 기본 1F)
+- [근거] 1.21.1 이식 위치 확정 — 필드 L251-L253 (head*) + L678/L685 (headFallDamage*) / load L1043-L1047 / save L1187-L1191
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/기본값/오버라이드 모두 일치)
+- [분기] 분기 없음 (단순 boolean/float 5개)
+- [상수] true / 0.2F / 10F / 2F / 2F ★ (A-5e IncreasingFactor.defaults(2F) 오버라이드 정확 반영)
+- [타이밍] 필드 선언만 — 호출 타이밍 없음. 실제 사용은 Phase B/D 와 handleCrash (B-24, 세션 53) 에서 발생.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 발견: A-5d/e 필드 주석 라인 번호 오기 (L395/L396 → L264/L265) 정정. IO 누락 발견 → 등록.
+- [회귀] IO 신규 등록 + 주석 정정 — 동작 변경 0. 기존 IO 등록 (A-5a/b/c) 무영향.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-6 (Angle 4건 — A-6a `angleJumpSide=true` + A-6b `angleJumpBack=true` 이미 이식 확인 + A-6c `angleJumpHorizontalFactor=0.4F` ★ + A-6d `angleJumpVerticalFactor=0.2F` ★ 이미 이식 확인). 원본 L268-L271. (1.21.1 기존 값 0.3F vs 원본 최신 0.4F 검증 필요 — `_sm_1_3` 오버라이드 적용 여부.)
+
+진행률: Phase A 26/40+ (~65%), 전체 #2.5 26/~110 (~23.6%).
 
 ---
 
