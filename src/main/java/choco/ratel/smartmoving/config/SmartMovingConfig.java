@@ -261,6 +261,18 @@ public class SmartMovingConfig {
     public float angleJumpHorizontalFactor = 0.4F;
     // 원본 L271: _angleJumpVerticalFactor = PositiveFactor(...).defaults(0.2F)
     public float angleJumpVerticalFactor = 0.2F;
+
+    // === ClimbUp 점프 (원본 SmartMovingConfig L273-L276) ===
+    // 원본 L274: _climbUpJump = Unmodified("move.jump.climb.up") → 기본 true
+    public boolean climbUpJump = true;
+    // 원본 L275: _climbUpJumpVerticalFactor = DecreasingFactor("move.jump.climb.up.vertical.factor")
+    //   ClimbUp 점프 vertical factor (>= 0, <= 1). DecreasingFactor 기본 1F.
+    public float climbUpJumpVerticalFactor = 1F;
+    // 원본 L276: _climbUpJumpHandsOnlyVerticalFactor = DecreasingFactor(...).defaults(0.8F) ★
+    //   ClimbUp Hands-only 추가 vertical factor (>= 0, <= 1). 기본 0.8F.
+    //   getJumpVerticalFactor(speed, ClimbUpHandsOnly) = ... × (climbUpJumpVerticalFactor × climbUpJumpHandsOnlyVerticalFactor).
+    public float climbUpJumpHandsOnlyVerticalFactor = 0.8F;
+
     /**
      * 원본: _angleJumpDoubleClickTicks = Positive("move.jump.angle.double.click.ticks").singular().up(3F, 2F)
      * 각도 점프 더블클릭 감지 타이머(틱). 첫 클릭 후 이 시간 내에 두 번째 클릭 시 트리거.
@@ -1055,6 +1067,9 @@ public class SmartMovingConfig {
         angleJumpBack            = getBool(p,   "move.jump.angle.back",           angleJumpBack);
         angleJumpHorizontalFactor = getFloat(p, "move.jump.angle.horizontal.factor", angleJumpHorizontalFactor);
         angleJumpVerticalFactor  = getFloat(p,  "move.jump.angle.vertical.factor", angleJumpVerticalFactor);
+        climbUpJump              = getBool(p,   "move.jump.climb.up",             climbUpJump);
+        climbUpJumpVerticalFactor = getFloat(p, "move.jump.climb.up.vertical.factor", climbUpJumpVerticalFactor);
+        climbUpJumpHandsOnlyVerticalFactor = getFloat(p, "move.jump.climb.up.hands.only.vertical.factor", climbUpJumpHandsOnlyVerticalFactor);
         angleJumpDoubleClickTicks = getFloat(p, "move.jump.angle.double.click.ticks", angleJumpDoubleClickTicks);
         wallJumpDoubleClick      = getBool(p,   "move.jump.wall.double.click",    wallJumpDoubleClick);
         wallJumpDoubleClickTicks = getFloat(p,  "move.jump.wall.double.click.ticks", wallJumpDoubleClickTicks);
@@ -1201,6 +1216,9 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.angle.back",            String.valueOf(angleJumpBack));
         p.setProperty("move.jump.angle.horizontal.factor", String.valueOf(angleJumpHorizontalFactor));
         p.setProperty("move.jump.angle.vertical.factor", String.valueOf(angleJumpVerticalFactor));
+        p.setProperty("move.jump.climb.up",              String.valueOf(climbUpJump));
+        p.setProperty("move.jump.climb.up.vertical.factor", String.valueOf(climbUpJumpVerticalFactor));
+        p.setProperty("move.jump.climb.up.hands.only.vertical.factor", String.valueOf(climbUpJumpHandsOnlyVerticalFactor));
         p.setProperty("move.jump.angle.double.click.ticks", String.valueOf(angleJumpDoubleClickTicks));
         p.setProperty("move.jump.wall.double.click",     String.valueOf(wallJumpDoubleClick));
         p.setProperty("move.jump.wall.double.click.ticks", String.valueOf(wallJumpDoubleClickTicks));

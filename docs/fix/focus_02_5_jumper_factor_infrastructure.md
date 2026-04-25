@@ -241,9 +241,9 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-6d. `angleJumpVerticalFactor = 0.2F` ★ (원본 L271) — 세션 6 (이미 이식 + IO 확인 + 주석 정비)
 
 **A-7. ClimbUp 필드 3건**
-- [ ] A-7a. `climbUpJump = true` (원본 L274)
-- [ ] A-7b. `climbUpJumpVerticalFactor = 1F` (원본 L275)
-- [ ] A-7c. `climbUpJumpHandsOnlyVerticalFactor = 0.8F` ★ (원본 L276)
+- [x] A-7a. `climbUpJump = true` (원본 L274) — 세션 7 (신규)
+- [x] A-7b. `climbUpJumpVerticalFactor = 1F` (원본 L275, DecreasingFactor 기본) — 세션 7 (신규)
+- [x] A-7c. `climbUpJumpHandsOnlyVerticalFactor = 0.8F` ★ (원본 L276, defaults(0.8F)) — 세션 7 (신규)
 
 **A-8. ClimbBackUp 필드 5건**
 - [ ] A-8a. `climbBackUpJump = true` (원본 L279)
@@ -914,6 +914,40 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-7 (ClimbUp 3건 — A-7a `climbUpJump=true` + A-7b `climbUpJumpVerticalFactor=1F` (DecreasingFactor 기본 1F) + A-7c `climbUpJumpHandsOnlyVerticalFactor=0.8F` ★ 신규). 원본 L274-L276.
 
 진행률: Phase A 30/40+ (~75%), 전체 #2.5 30/~110 (~27.3%).
+
+### 세션 7 — 2026-04-25 — Phase A-7 (ClimbUp 3건: 전부 신규)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-7 3건 (A-7a~A-7c) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L273-L276):
+   - L274 `_climbUpJump = Unmodified("move.jump.climb.up")` → 기본 true
+   - L275 `_climbUpJumpVerticalFactor = DecreasingFactor("move.jump.climb.up.vertical.factor")` (defaults 미지정) → DecreasingFactor 기본 1F (Properties.java L191-L192)
+   - L276 `_climbUpJumpHandsOnlyVerticalFactor = DecreasingFactor(...).defaults(0.8F)` ★ → 0.8F
+2. 1.21.1 이식 위치 확인:
+   - climbUpJump 관련 필드 1.21.1 에 **전무** (grep 결과 0건). 모두 신규.
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 — angle 그룹 (L262-L263) 직후 (L265-L274) 에 ClimbUp 그룹 신설 (헤더 + 3 항목)
+   - `load()` IO L1058-L1060 — A-7a/b/c 신규 3건
+   - `save()` IO L1204-L1206 — A-7a/b/c 신규 3건
+   - key 명: `move.jump.climb.up{|.vertical.factor|.hands.only.vertical.factor}` (원본 그대로)
+4. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 7 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L273-L276 + Properties.java L191-L192 (DecreasingFactor 기본 1F)
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 L265-L274 / load L1058-L1060 / save L1204-L1206
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치)
+- [분기] 분기 없음 (단순 boolean/float 3개)
+- [상수] true / 1F (DecreasingFactor 기본) / **0.8F** ★ (오버라이드 정확 반영)
+- [타이밍] 필드 선언만. Phase B getJumpVerticalFactor (ClimbUp/ClimbUpHandsOnly 분기) + Phase D ClimbUp 분기에 사용.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음. §3 변경 없음.
+- [회귀] 신규 필드만 추가 — 기존 코드 영향 0. ClimbUp/ClimbUpHandsOnly 점프 type 자체가 1.21.1 에 아직 없음 (Phase E 에서 처리). 현재 사용처 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-8 (ClimbBackUp 5건 — 전부 신규: A-8a `climbBackUpJump=true` + A-8b `climbBackUpJumpVerticalFactor=0.2F` ★ + A-8c `climbBackUpJumpHorizontalFactor=0.3F` ★ + A-8d `climbBackUpJumpHandsOnlyVerticalFactor=0.8F` ★ + A-8e `climbBackUpJumpHandsOnlyHorizontalFactor=1F`). 원본 L279-L283.
+
+진행률: Phase A 33/40+ (~82.5%), 전체 #2.5 33/~110 (~30%).
 
 ---
 
