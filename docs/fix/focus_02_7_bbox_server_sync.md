@@ -263,39 +263,49 @@ datatracker POSE sync 진동 방지.
   `if (heightOffset != 0F) posY += heightOffset` — 1.21.1 `Entity.calculateDimensions`
   의 `refreshPosition() + setBoundingBox()` 즉시 반영으로 자동 처리. §7 영구 동치 등록.
 
-### Phase G. ★ 네트워크 핸들러 배선 — **NEW (세션 2 추가)**
+### Phase G. ★ 네트워크 핸들러 배선 — **NEW (세션 2 추가)** / **세션 5 검증 [x]**
 
 **G-1. SmartMoving.onInitialize 에 서버 수신 등록**
-- [ ] G-1. `ServerPlayNetworking.registerReceiver(StatePayload.ID, (payload, context) -> {
-  SmartMovingServer.get(context.player()).processStatePacket(context.player(), payload.state());
-  });`
+- [x] **G-1 (세션 5 검증)**. `Smartmoving.java` L77-L88 `ServerPlayNetworking.registerGlobalReceiver(
+  StatePayload.ID, ...)` 이미 완료. processStatePacket 호출 → 서버 필드 갱신.
 
 **G-2. 클라 → 서버 매 tick 송신**
-- [ ] G-2. `SmartMovingClientState.tick*` 에서 매 tick `ClientPlayNetworking.send(new
-  StatePayload(player.getId(), SmartMovingState.encode(sm)));` 송신. 변경 검출 후 송신
-  최적화 가능 (원본도 매 tick 송신 — 1:1 충실).
+- [x] **G-2 (세션 5 검증)**. `MixinClientPlayerEntity.java` L104-L108 `tickMovement` TAIL
+  inject 로 매 tick `SmartMovingClientState.get(player).sendStatePacket(player)` 호출.
+  내부 `sendStatePacket` (L2776-L2822) 에서 변경 시에만 송신 (lastSentBits 비교) — 효율
+  최적화. 원본 매 tick 송신과 의미 동치 (변경 0 tick 은 송신 가치 0).
 
 **G-3. 서버 → 다른 클라 브로드캐스트**
-- [ ] G-3. `SmartMovingServer.processStatePacket` 끝에 `PlayerLookup.tracking(player)`
-  으로 `ServerPlayNetworking.send(other, payload)` 브로드캐스트. 원본 L90 `mp.
-  sendPacketToTrackedPlayers(packet)` 1:1.
+- [x] **G-3 (세션 5 검증)**. `Smartmoving.java` L82-L86 `PlayerLookup.tracking(sender)` →
+  `ServerPlayNetworking.send(tracker, payload)` (sender 제외) 브로드캐스트. 원본 L90
+  `mp.sendPacketToTrackedPlayers(packet)` 1:1.
 
 **G-4. 클라 다른 플레이어 수신 → 애니메이션용 상태**
-- [ ] G-4. `ClientPlayNetworking.registerReceiver(StatePayload.ID, ...)` 으로 다른 플레이어
-  ID 의 state 수신 → SmartMovingOther (또는 1.21.1 등가물) 필드 갱신. 본 포커스 #2.7 의
-  애니메이션·렌더 영향 — 미구현 시 다른 플레이어 SM 상태 sync 안 됨.
+- [x] **G-4 (세션 5 검증)**. `SmartMovingClient.java` L43-L53 `ClientPlayNetworking.
+  registerGlobalReceiver(StatePayload.ID, ...)` → `SmartMovingClientState.get(entity.getUuid())
+  .processStatePacket(payload.state())` 다른 플레이어 상태 sync.
 
-### Phase H. ★ isSmall OR 인코딩 검증 — **NEW (세션 2 추가)**
+### Phase H. ★ isSmall OR 인코딩 검증 — **NEW (세션 2 추가)** / **세션 5 정정**
 
-**H-1. SmartMovingState.encode 에서 isSmall 비트 OR 정합성 검증**
-- [ ] H-1. `SmartMovingState.encode(sm)` 가 isSmall 비트 (15) 를 어떻게 인코딩하는지 grep:
-  - 단순 `sm.isSmall` 필드 그대로 송신인지?
-  - 클라 측에서 `sm.isSmall = isCrawling || isClimbCrawling || isHeadJumping || isSliding
-    || isSwimming_sm || isDiving || isFlying || isLevitating` OR 결과를 미리 갱신했는지?
-- [ ] H-2. SmartMovingClientState 의 isSmall 필드 갱신 위치 grep — Phase 1 (세션 137) 에서
-  도입한 8 SM OR 식이 `tickEssential` / `tickMain` 어디서 매 tick 적용되는지 확인.
-- [ ] H-3. 서버 측 `sm_getBaseDimensions_server` 가 isSmall 만 사용 → 클라 OR 식 정확성에
-  의존. 클라 OR 식 누락 시 server dimensions 결정 잘못됨 — 회귀 위험.
+**H-1. SmartMovingState.encode 에서 isSmall 비트 정합성**
+- [x] **H-1 (세션 5 검증)**. `SmartMovingState.encode` L77 `if (s.isSmall) bits |= 1L << 15`
+  단순 sm.isSmall 필드 그대로 인코딩. → 클라 측 isSmall 갱신 식이 정확해야 함.
+
+**H-2. SmartMovingClientState isSmall 갱신 식 정정** ★
+- [x] **H-2 (세션 5 정정)**. SmartMovingClientState.java L1501 isSmall 갱신 식:
+  - 이전: `isSmall = isCrawling || isSliding || isHeadJumping` (3 SM OR — **5 SM 누락**)
+  - 정정: `isSmall = isCrawling || isClimbCrawling || isHeadJumping || isSliding ||
+    isSwimming_sm || isDiving || isFlying || isLevitating` (8 SM OR)
+  - 근거: 원본 SmartMovingSelf L3110 `boolean isSmall = sp.height < 1;` —
+    setHeightOffset(-1F) 호출처 14건 (8 SM 상태) 모두 height = 0.8 < 1 → isSmall=true.
+    1.21.1 매핑 = 8 SM OR.
+
+**H-3. 서버 dimensions 결정 정합성**
+- [x] **H-3 (세션 5 검증)**. Phase D 옵션 3 채택으로 서버 sm_getBaseDimensions_server 가
+  isSmall 외 5 비트 (isHeadJumping/isSliding/isSwimming/isDiving/isLevitating) 별도 디코딩
+  + isFlying 원본 공식 직접 계산. → isSmall OR 식 정확성과 무관하게 dimensions 결정 정확.
+  H-2 정정으로 isSmall 비트 자체도 정확화 — sm.isSmall 사용 다른 코드 (예: 서버
+  `setSmall` setter) 도 정확.
 
 ### Phase F. 검증 + 회귀 감사 + 플레이테스트 (기존 유지, 일부 정정)
 
@@ -552,6 +562,66 @@ Phase F (빌드 + 회귀 감사 + 플레이테스트)     — 5+ 원자 (E-3 def
    / G-4 클라 다른 플레이어 수신.
 
 진행률: Phase A 2/2 + B 1/1 + C 3/3 + D 1/1 + E 2/2 = **9/23 (~39%)**. Phase G/H/F 잔존.
+
+### 세션 5 — 2026-04-25 — Phase G 검증 [x] + Phase H isSmall OR 정정 ★
+
+사용자 지시: 옵션 3 (1:1 완전 번역) 진행 후 Phase G/H 진입.
+
+진행한 작업:
+1. **Phase G 4 원자 검증** (코드 변경 0 — 모두 이미 완료):
+   - **G-1** Smartmoving.java L77-L88 `ServerPlayNetworking.registerGlobalReceiver(
+     StatePayload.ID, ...)` ✓
+   - **G-2** MixinClientPlayerEntity.java L104-L108 tickMovement TAIL inject →
+     `sendStatePacket(player)` 매 tick 호출. SmartMovingClientState.sendStatePacket
+     L2776-L2822 — 변경 시에만 송신 (`lastSentBits` 비교).
+   - **G-3** Smartmoving.java L82-L86 `PlayerLookup.tracking(sender) → send(tracker,
+     payload)` 브로드캐스트 (sender 제외) ✓
+   - **G-4** SmartMovingClient.java L43-L53 `ClientPlayNetworking.registerGlobalReceiver(
+     StatePayload.ID, ...)` → 다른 플레이어 ID 의 SmartMovingClientState.processStatePacket ✓
+
+2. **Phase H isSmall OR 갱신 식 정정** ★ (1:1 위반 해소):
+   - SmartMovingState.encode L77 `if (s.isSmall) bits |= 1L << 15` 검증 — 단순 필드 그대로.
+   - SmartMovingClientState.java L1501 isSmall 갱신 식 정정:
+     - 이전: `isCrawling || isSliding || isHeadJumping` (3 SM OR — **5 SM 누락**)
+     - 정정: `isCrawling || isClimbCrawling || isHeadJumping || isSliding || isSwimming_sm
+       || isDiving || isFlying || isLevitating` (8 SM OR)
+     - 근거: 원본 SmartMovingSelf L3110 `boolean isSmall = sp.height < 1;` —
+       setHeightOffset(-1F) 호출처 14건 (8 SM 상태) 모두 height = 0.8 < 1 → isSmall=true.
+       Phase 1 client Mixin (MixinPlayerEntityClient L62-L65) smSmall 식 (8 SM OR) 과 정합.
+
+3. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+수정 파일:
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — L1499-L1513
+  isSmall 갱신 식 3 OR → 8 OR 정정 + 주석 보강.
+- `docs/fix/focus_02_7_bbox_server_sync.md` — §3 Phase G/H [x] 마킹 + 본 세션 로그.
+
+회귀 영향:
+- Phase D 옵션 3 채택 (세션 4) 으로 서버 sm_getBaseDimensions_server / sm_updatePose_server
+  가 8 SM OR 별도 분기 처리 → isSmall OR 식 정확성과 dimensions 결정 정합성 분리되어 영향 0.
+- 그러나 isSmall 비트 자체 (StatePayload bit 15) 가 정확해져 SmartMovingServer.isSmall
+  / setSmall(player, isSmall) 경로도 정확화 — 미래 보강.
+
+완료 전 검증 체크리스트 (세션 5 기준):
+- [근거] 원본 SmartMovingSelf L3110 isSmall 정의 + setHeightOffset(-1F) 호출처 14건 (③
+  리서치 §1.1, §1.2 발췌)
+- [근거] 1.21.1 이식 위치 grep — Smartmoving L77-L88 / MixinClientPlayerEntity L104-L108 /
+  SmartMovingClient L43-L53 / SmartMovingClientState L2776-L2822 + L1499-L1513
+- [대응] 원본 ↔ 1.21.1 1:1 (8 SM OR + Phase 1 client Mixin smSmall 식과 정합)
+- [분기] 8 SM OR 모든 항목 보존 ✓
+- [상수] 비트 인덱스 15 정확 ✓
+- [타이밍] tickMovement TAIL → sendStatePacket → encode → send 순서 ✓
+- [근사] 신규 0건. §7 영구 동치 4건 유지.
+- [신규] 추가 의존 발견 없음
+- [회귀] Phase D 옵션 3 채택으로 dimensions 결정은 isSmall 식 무관 → 회귀 0
+- [빌드] BUILD SUCCESSFUL 5s ✓
+
+다음 세션 권고: **Phase F (빌드 + 회귀 감사 + 플레이테스트)** — F-1 빌드 완료 ✓ /
+   F-2 vanilla 회귀 감사 (elytra/trident/잠자기) / F-4 네트워크 sync 검증 / F-5 빌드 최종.
+   F-3 통합 인게임 deferred.
+
+진행률: Phase A 2/2 + B 1/1 + C 3/3 + D 1/1 + E 2/2 + G 4/4 + H 3/3 = **16/23 (~70%)**.
+   Phase F 잔존 (5+ 시나리오, F-3 deferred).
 
 ---
 

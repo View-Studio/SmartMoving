@@ -1496,9 +1496,22 @@ public final class SmartMovingClientState {
                 if (backJumpCount  == -2 && leftJumpCount  <= 0 && rightJumpCount <= 0) backJumpCount = -1;
             }
 
-            // R-04: isSmall 원본: isCrawling || isSliding || isHeadJumping
-            // isCrawling/isSliding이 확정된 후 계산해야 정확함
-            isSmall = isCrawling || isSliding || isHeadJumping;
+            // R-04: isSmall 갱신.
+            // 원본 SmartMovingSelf L3110 `boolean isSmall = sp.height < 1;` —
+            // heightOffset(-1F) 가 적용되면 sp.height = 1.8 + (-1) = 0.8 < 1 → isSmall=true.
+            // setHeightOffset(-1F) 호출처 14건 (원본 SmartMovingSelf L511/L518/L1369/L1382/
+            // L1390/L1400/L2129/L2512/L2519/L2555/L2798/L2829/L2851/L2858) 의 진입 SM 상태
+            // 8 가지: isCrawling/isClimbCrawling/isHeadJumping/isSliding/isSwimming_sm/
+            // isDiving/isFlying/isLevitating. 1.21.1 매핑 = 이 8 SM OR.
+            //
+            // **포커스 #2.7 Phase H (세션 5)**: 이전 식 (isCrawling || isSliding || isHeadJumping)
+            // 은 3 SM OR — 5 SM 누락 (isClimbCrawling/isSwimming_sm/isDiving/isFlying/
+            // isLevitating). Phase 1 client Mixin (MixinPlayerEntityClient L62-L65) smSmall
+            // 식 (8 SM OR) 과 정합 + StatePayload bit 15 isSmall 정확성 확보.
+            isSmall = isCrawling || isClimbCrawling
+                   || isHeadJumping || isSliding
+                   || isSwimming_sm || isDiving
+                   || isFlying || isLevitating;
 
             // wouldIsSneaking 은 위 isSlow 계산 블록에서 이미 원본 L2711 공식으로 설정됨.
 

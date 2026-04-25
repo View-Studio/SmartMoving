@@ -8,7 +8,7 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #2.7 — BBox/POSE/EyeHeight 서버 sync 진행 중 (세션 4 — Phase D-1 클라/서버 완전 대칭화)
+항목 #2.7 — BBox/POSE/EyeHeight 서버 sync 진행 중 (세션 5 — Phase G 검증 [x] + H isSmall OR 정정)
 ```
 
 **작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)
@@ -94,7 +94,7 @@
 | 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | ✅ 완료 (2026-04-25, 세션 134) — Extended 67/67 전수 완결 | 없음 |
 | 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | ✅ AI 완결 (2026-04-25, 세션 22) — F-1~F-5 통과 / F-6 통합 인게임 검증 대기 | #2 완료 |
 | 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟢 AI 완결 임박 (Phase A/B/C/D 19/21 = 90%, E-1 빌드 ✓ / E-2 회귀 진행 / E-3 통합 인게임 deferred) | #2 완료 |
-| 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 진행 중 (Phase A/B/C/D/E 9/23 = 39%, Phase G/H/F 잔존) | #2 완료 |
+| 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 진행 중 (Phase A/B/C/D/E/G/H 16/23 = 70%, Phase F 잔존 / F-3 deferred) | #2 완료 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 | #2 / #2.5 / #2.6 / #2.7 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | ⚪ 대기 (재현 케이스) | #2, #3 |
 | 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
