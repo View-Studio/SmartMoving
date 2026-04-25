@@ -194,118 +194,128 @@ public final class SmartMovingJumper {
         int speed = SmartMovingConfig.getJumpSpeed(sm.isStanding, sm.isSlow, isRunning, sm.isFast, angle);
         boolean enabled = cfg.isJumpingEnabled(speed, type);
 
-        // === D-5 — SKIP (§7-1 근사) ===
-        // 원본 L2018-L2027 jumpExhaustion 게이트/누적: Easy default 모든 jumpExhaustion=false →
-        //   exhausionEnabled 항상 false → 안쪽 블록 100% dead. focus_05 §6.5 P-9~P-19 일관.
-        //   사용자 수동 활성화 시 미작동 (focus_02_5 §7-1 영구 등록).
+        // === enabled 게이트 (원본 L2016 if(enabled)) — F-1 감사 정정 (세션 21) ===
+        //   D-5 ~ D-16 모든 점프 처리 블록은 enabled 안쪽. 사용자가 sub-jump 비활성 (예:
+        //   move.jump.run=false) 시 점프 자체 미작동 — 원본 의도. D-18 상태 클리어는
+        //   enabled 와 무관하게 처리 (원본 호출측이 동일하게 처리하던 것을 1.21.1 내부 통합).
+        if (enabled) {
+            // === D-5 — SKIP (§7-1 근사) ===
+            // 원본 L2018-L2027 jumpExhaustion 게이트/누적: Easy default 모든 jumpExhaustion=false →
+            //   exhausionEnabled 항상 false → 안쪽 블록 100% dead. focus_05 §6.5 P-9~P-19 일관.
+            //   사용자 수동 활성화 시 미작동 (focus_02_5 §7-1 영구 등록).
 
-        // === D-6 (원본 L2029-L2032) — jumpFactor (potion) + horizontal/vertical factor + jumpChargeFactor ===
-        float jumpFactor = 1F;
-        StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
-        if (jumpBoost != null)
-            jumpFactor = 1F + (jumpBoost.getAmplifier() + 1) * 0.2F;
-        float horizontalJumpFactor = cfg.getJumpHorizontalFactor(speed, type) * jumpFactor;
-        float verticalJumpFactor   = cfg.getJumpVerticalFactor(speed, type) * jumpFactor;
-        float jumpChargeFactor = charged ? cfg.getJumpChargeFactor(sm.jumpCharge) : 1F;
+            // === D-6 (원본 L2029-L2032) — jumpFactor (potion) + horizontal/vertical factor + jumpChargeFactor ===
+            float jumpFactor = 1F;
+            StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
+            if (jumpBoost != null)
+                jumpFactor = 1F + (jumpBoost.getAmplifier() + 1) * 0.2F;
+            float horizontalJumpFactor = cfg.getJumpHorizontalFactor(speed, type) * jumpFactor;
+            float verticalJumpFactor   = cfg.getJumpVerticalFactor(speed, type) * jumpFactor;
+            float jumpChargeFactor = charged ? cfg.getJumpChargeFactor(sm.jumpCharge) : 1F;
 
-        // === D-7 (원본 L2034-L2038) — !up 변환 (sqrt) ===
-        if (!up) {
-            horizontalJumpFactor = (float) Math.sqrt(
-                    horizontalJumpFactor * horizontalJumpFactor
-                            + verticalJumpFactor * verticalJumpFactor);
-            verticalJumpFactor = 0F;
-        }
-
-        // === D-8 (원본 L2040-L2045) — maxHorizontalMotion + verticalMotion 초기 ===
-        Double maxHorizontalMotion = null;
-        double horizontalMotion = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX
-                                           + sm.jumpMotionZ * sm.jumpMotionZ);
-        double verticalMotion = -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor;
-        if (horizontalJumpFactor > 1F && !player.horizontalCollision) {
-            maxHorizontalMotion = (double) cfg.getMaxHorizontalMotion(speed, type, inWater)
-                                  * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
-        }
-
-        // === D-9 (원본 L2047-L2062) — Up && vanilla 분기 ===
-        Vec3d vel = player.getVelocity();
-        double motionX = vel.x;
-        double motionZ = vel.z;
-        if (type == SmartMovingConfig.JUMP_TYPE_UP && sm.vanilla()) {
-            verticalMotion = 0.41999998688697815D;
-            if (jumpBoost != null) verticalMotion += (jumpBoost.getAmplifier() + 1) * 0.1F;
-            if (player.isSprinting()) {
-                float f = player.getYaw() * 0.017453292F;
-                motionX -= Math.sin(f) * 0.2F;
-                motionZ += Math.cos(f) * 0.2F;
+            // === D-7 (원본 L2034-L2038) — !up 변환 (sqrt) ===
+            if (!up) {
+                horizontalJumpFactor = (float) Math.sqrt(
+                        horizontalJumpFactor * horizontalJumpFactor
+                                + verticalJumpFactor * verticalJumpFactor);
+                verticalJumpFactor = 0F;
             }
-        }
 
-        // === D-10 (원본 L2065-L2079) — head 재계산 ===
-        if (head) {
-            double normalAngle = Math.atan(verticalMotion / horizontalMotion);
-            double totalMotion = Math.sqrt(verticalMotion * verticalMotion
-                                           + horizontalMotion * horizontalMotion);
-            double newAngle = cfg.getHeadJumpFactor(sm.headJumpCharge) * normalAngle;
-            double newVerticalMotion = totalMotion * Math.sin(newAngle);
-            double newHorizontalMotion = totalMotion * Math.cos(newAngle);
-            if (maxHorizontalMotion != null)
-                maxHorizontalMotion = maxHorizontalMotion * (newHorizontalMotion / horizontalMotion);
-            verticalMotion = newVerticalMotion;
-            horizontalMotion = newHorizontalMotion;
-        }
-
-        // === D-11 (원본 L2081-L2095) — angle != null 분기 ===
-        if (angle != null) {
-            // 원본 RadiantToAngle = 180 / PI ≈ 57.2957795
-            float jumpAngleRad = angle / 57.295776F;
-            boolean reset = type == SmartMovingConfig.JUMP_TYPE_WALL_UP
-                         || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
-            double horizontal = Math.max(horizontalMotion, horizontalJumpFactor);
-            double moveX = -Math.sin(jumpAngleRad);
-            double moveZ =  Math.cos(jumpAngleRad);
-            motionX = getJumpMoving(sm.jumpMotionX, moveX, reset, horizontal, horizontalJumpFactor);
-            motionZ = getJumpMoving(sm.jumpMotionZ, moveZ, reset, horizontal, horizontalJumpFactor);
-            horizontalMotion = 0;
-            verticalMotion = verticalJumpFactor;
-        }
-
-        // === D-12 (원본 L2097-L2110) — horizontalMotion > 0 스케일 ===
-        if (horizontalMotion > 0) {
-            double absMotionX = Math.abs(motionX) * horizontalJumpFactor;
-            double absMotionZ = Math.abs(motionZ) * horizontalJumpFactor;
-            if (maxHorizontalMotion != null) {
-                absMotionX = Math.min(absMotionX, maxHorizontalMotion
-                                * (horizontalJumpFactor * (Math.abs(motionX) / horizontalMotion)));
-                absMotionZ = Math.min(absMotionZ, maxHorizontalMotion
-                                * (horizontalJumpFactor * (Math.abs(motionZ) / horizontalMotion)));
+            // === D-8 (원본 L2040-L2045) — maxHorizontalMotion + verticalMotion 초기 ===
+            Double maxHorizontalMotion = null;
+            double horizontalMotion = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX
+                                               + sm.jumpMotionZ * sm.jumpMotionZ);
+            double verticalMotion = -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor;
+            if (horizontalJumpFactor > 1F && !player.horizontalCollision) {
+                maxHorizontalMotion = (double) cfg.getMaxHorizontalMotion(speed, type, inWater)
+                                      * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
             }
-            motionX = Math.signum(motionX) * absMotionX;
-            motionZ = Math.signum(motionZ) * absMotionZ;
+
+            // === D-9 + D-10/D-11/D-12 (원본 L2047-L2111) — Up && vanilla 분기 if/else 구조 ===
+            //   F-1 감사 정정 (세션 21): 원본은 if(Up && vanilla) {...} else { head/angle/scale }
+            //   1.21.1 기존: 4개 if 가 모두 순차 실행 → vanilla Up 점프 시 D-12 스케일 추가
+            //   적용 회귀 (sprint 점프 수평 속도 2배 증폭). if/else 구조 복원.
+            Vec3d vel = player.getVelocity();
+            double motionX = vel.x;
+            double motionZ = vel.z;
+            if (type == SmartMovingConfig.JUMP_TYPE_UP && sm.vanilla()) {
+                // === D-9 (원본 L2047-L2062) — vanilla Up 분기 ===
+                verticalMotion = 0.41999998688697815D;
+                if (jumpBoost != null) verticalMotion += (jumpBoost.getAmplifier() + 1) * 0.1F;
+                if (player.isSprinting()) {
+                    float f = player.getYaw() * 0.017453292F;
+                    motionX -= Math.sin(f) * 0.2F;
+                    motionZ += Math.cos(f) * 0.2F;
+                }
+            } else {
+                // === D-10 (원본 L2065-L2079) — head 재계산 ===
+                if (head) {
+                    double normalAngle = Math.atan(verticalMotion / horizontalMotion);
+                    double totalMotion = Math.sqrt(verticalMotion * verticalMotion
+                                                   + horizontalMotion * horizontalMotion);
+                    double newAngle = cfg.getHeadJumpFactor(sm.headJumpCharge) * normalAngle;
+                    double newVerticalMotion = totalMotion * Math.sin(newAngle);
+                    double newHorizontalMotion = totalMotion * Math.cos(newAngle);
+                    if (maxHorizontalMotion != null)
+                        maxHorizontalMotion = maxHorizontalMotion * (newHorizontalMotion / horizontalMotion);
+                    verticalMotion = newVerticalMotion;
+                    horizontalMotion = newHorizontalMotion;
+                }
+
+                // === D-11 (원본 L2081-L2095) — angle != null 분기 ===
+                if (angle != null) {
+                    // 원본 RadiantToAngle = 180 / PI ≈ 57.2957795
+                    float jumpAngleRad = angle / 57.295776F;
+                    boolean reset = type == SmartMovingConfig.JUMP_TYPE_WALL_UP
+                                 || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
+                    double horizontal = Math.max(horizontalMotion, horizontalJumpFactor);
+                    double moveX = -Math.sin(jumpAngleRad);
+                    double moveZ =  Math.cos(jumpAngleRad);
+                    motionX = getJumpMoving(sm.jumpMotionX, moveX, reset, horizontal, horizontalJumpFactor);
+                    motionZ = getJumpMoving(sm.jumpMotionZ, moveZ, reset, horizontal, horizontalJumpFactor);
+                    horizontalMotion = 0;
+                    verticalMotion = verticalJumpFactor;
+                }
+
+                // === D-12 (원본 L2097-L2110) — horizontalMotion > 0 스케일 ===
+                if (horizontalMotion > 0) {
+                    double absMotionX = Math.abs(motionX) * horizontalJumpFactor;
+                    double absMotionZ = Math.abs(motionZ) * horizontalJumpFactor;
+                    if (maxHorizontalMotion != null) {
+                        absMotionX = Math.min(absMotionX, maxHorizontalMotion
+                                        * (horizontalJumpFactor * (Math.abs(motionX) / horizontalMotion)));
+                        absMotionZ = Math.min(absMotionZ, maxHorizontalMotion
+                                        * (horizontalJumpFactor * (Math.abs(motionZ) / horizontalMotion)));
+                    }
+                    motionX = Math.signum(motionX) * absMotionX;
+                    motionZ = Math.signum(motionZ) * absMotionZ;
+                }
+            }
+
+            // === D-13 (원본 L2113-L2118) — up && !noVertical → motionY 적용 + Stats + isSprintJump ===
+            double motionY = vel.y;  // !up 또는 noVertical 시 default 유지
+            if (up && !noVertical) {
+                motionY = verticalMotion;
+                player.incrementStat(Stats.JUMP);
+                sm.isSprintJump = sm.isFast;
+            }
+
+            // === D-14 — SKIP (§7-1 근사) ===
+            // 원본 L2120-L2124 점프 후 exhaustion 누적: D-5 와 동일 dead.
+
+            // === D-15 (원본 L2126-L2130) — head → isHeadJumping + setPoseSmall + heightOffset ===
+            if (head) {
+                sm.isHeadJumping = true;
+                setPoseSmall(player);
+                sm.heightOffset = -1F;
+            }
+
+            // === D-16 (원본 L2131-L2134) — setVelocity + isJumping ===
+            player.setVelocity(motionX, noVertical ? vel.y : motionY, motionZ);
+            // sp.isAirBorne = true — vanilla 자동 (velocityDirty + fallDistance)
+            sm.isJumping = true;
+            // onLivingJump() — vanilla PlayerEntity 자동 점프 이벤트 처리
         }
-
-        // === D-13 (원본 L2113-L2118) — up && !noVertical → motionY 적용 + Stats + isSprintJump ===
-        double motionY = vel.y;  // !up 또는 noVertical 시 default 유지
-        if (up && !noVertical) {
-            motionY = verticalMotion;
-            player.incrementStat(Stats.JUMP);
-            sm.isSprintJump = sm.isFast;
-        }
-
-        // === D-14 — SKIP (§7-1 근사) ===
-        // 원본 L2120-L2124 점프 후 exhaustion 누적: D-5 와 동일 dead.
-
-        // === D-15 (원본 L2126-L2130) — head → isHeadJumping + setPoseSmall + heightOffset ===
-        if (head) {
-            sm.isHeadJumping = true;
-            setPoseSmall(player);
-            sm.heightOffset = -1F;
-        }
-
-        // === D-16 (원본 L2131-L2134) — setVelocity + isJumping ===
-        player.setVelocity(motionX, noVertical ? vel.y : motionY, motionZ);
-        // sp.isAirBorne = true — vanilla 자동 (velocityDirty + fallDistance)
-        sm.isJumping = true;
-        // onLivingJump() — vanilla PlayerEntity 자동 점프 이벤트 처리
 
         // === D-18 (1.21.1 동작 유지) — 호출 측 상태 클리어를 내부 처리 ===
         //   원본은 호출 측 (handleJumping 등) 에서 jumpCharge=0 등 처리. 1.21.1 은 모든 호출처

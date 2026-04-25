@@ -644,28 +644,50 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ### Phase F. 감사 + 플레이테스트
 
-**F-1. 원본 tryJump L1999-L2136 side-by-side 비교**
-- [ ] F-1. 1.21.1 `SmartMovingJumper.tryJump` 와 원본 L1999-L2136 각 줄 대조 감사 — 누락 라인
-     / 조건 / 상수 / 분기 / motionY 적용 순서 / isAirBorne 시멘틱 전수 확인.
+**F-1. 원본 tryJump L1999-L2136 side-by-side 비교** — 세션 21 완료
+- [x] F-1. 138줄 line-by-line 감사 → **회귀 버그 2건 발견 + 즉시 정정**:
+     1. **enabled 게이트 누락**: 원본 L2016 `if (enabled) { ... }` 가 D-5~D-16 전체를
+        감싸지만 1.21.1 새 tryJump 는 enabled 게이트 없이 모두 실행. 사용자가 sub-jump 비활성
+        (예: `walkJump=false`) 시에도 점프 처리됨. → enabled 안쪽으로 D-6~D-16 이동.
+     2. **D-9 if/else 누락**: 원본 L2047-L2111 은 `if (Up && vanilla) {...} else {head/angle/scale}`
+        구조. 1.21.1 은 if/else 없이 모든 블록 if. → 일반 Up 점프 (vanilla 경로) 시 D-12 스케일이
+        추가 적용되어 sprint 점프 수평 속도 2배 증폭. → if/else 구조 복원.
+     세션 21 정정 완료. 빌드 통과.
 
-**F-2. 원본 getJumpHorizontalFactor L465-L505 side-by-side 비교**
-- [ ] F-2. `SmartMovingConfig.getJumpHorizontalFactor` 와 원본 대조. 특히 L501 `speed==Standing
-     && type!=ClimbBack*` → `*0F` 엣지 케이스 확인.
+**F-2. 원본 getJumpHorizontalFactor L465-L505 side-by-side 비교** — 세션 14 완료 / 세션 21 재확인
+- [x] F-2. 세션 14 line-by-line 이식 + L501 `speed==Standing && type!=ClimbBack*` → `*0F`
+     엣지 케이스 정확 반영 확인. 세션 21 추가 검증 — 원본 ↔ 1.21.1 1:1 일치.
 
-**F-3. 원본 getJumpVerticalFactor L418-L463 비교**
-- [ ] F-3. 동일 감사.
+**F-3. 원본 getJumpVerticalFactor L418-L463 비교** — 세션 15 완료 / 세션 21 재확인
+- [x] F-3. 세션 15 line-by-line 이식 + WallHead 누적 곱셈 (`base × wallUp × wallHead`) 특수
+     반영 확인. Angle 즉시 early return + 9 type early return 모두 보존. 세션 21 추가 검증 1:1.
 
-**F-4. Exhaustion 3-메서드 감사**
-- [ ] F-4. `isJumpExhaustionEnabled` / `getJumpExhaustionGain` / `getJumpExhaustionStop`
-     원본 L244-L399 전수 대조.
+**F-4. Exhaustion 3-메서드 감사** — 세션 18: SKIP (Phase C 일관)
+- [~] F-4. Phase C skip 결정으로 isJumpExhaustionEnabled / getJumpExhaustionGain /
+     getJumpExhaustionStop 미이식 → 감사 대상 없음. §7-1 영구 등록.
 
-**F-5. 빌드 + 회귀 감사**
-- [ ] F-5. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL. 기존 테스트
-     (있다면) 통과. 포커스 #2 Extended 회귀 없음 확인.
+**F-5. 빌드 + 회귀 감사** — 세션 21 완료
+- [x] F-5. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s).
+     `grep "// TODO\|// \[미확인\]\|// 아마\|// 추정"` in `src/` — **0건**.
+     포커스 #2 Extended 회귀 0건. F-1 회귀 정정 후에도 빌드 통과.
 
-**F-6. 사용자 인게임 플레이테스트**
+**F-6. 사용자 인게임 플레이테스트** — 사용자 작업 (대기)
 - [ ] F-6. 점프 모든 타입 (일반/스프린트/헤드/벽점프/벽점프슬라이드/사이드/백/슬라이드다운/
-     클라이밍점프/클라이밍백점프) × Config 수정 시 배율 반영 확인.
+     클라이밍점프/클라이밍백점프) × Config 수정 시 배율 반영 확인. **인게임 테스트 체크리스트
+     (세션 21 제공)**:
+   - **일반 점프**: walking/sprinting 시 수평·수직 속도 정상 (`sprintJumpHorizontalFactor=2F` 반영).
+   - **차징 점프 (Sneak 홀드 → 릴리즈)**: 차징 시간 비례 수직 속도 증가 (`jumpChargeFactor=1.3F` 반영).
+   - **헤드 점프 (Grab 홀드 → 릴리즈)**: 차징 시간 비례 수평/수직 회전 (D-10).
+   - **벽 점프 (수직 벽 → Jump 더블클릭)**: WallUp/WallHead 시 반사 각도 정상 (0.4F/0.3F V).
+   - **벽 점프 슬라이드 (벽 닿은 채 Jump)**: WallUpSlide/WallHeadSlide 시 수직 속도 유지.
+   - **사이드/백 점프 (방향키 더블클릭)**: ★ **세션 20 정정 — angleJumpVerticalFactor=0.2F 기반**.
+     이전보다 수직 속도 약 5분의 1 감소. 의도된 원본 동작.
+   - **슬라이드 다운 점프 (sprint + grab + sneak)**: 수평 속도 증폭 (vanilla 1F base + jumpFactor).
+   - **사용자 Config 수정 테스트**: `sprintJumpHorizontalFactor=3F` 로 변경 → sprint 점프 수평
+     속도 50% 증가 확인 (Phase A 인프라 활성).
+   - **JUMP_BOOST 포션 테스트**: amplifier 별 수직 속도 증가 (`jumpFactor` D-6 + vanilla bonus D-9).
+   - **Creative 모드 테스트**: vanilla() = `!enabled || vanillaStyle` → SM 활성/Creative 분기.
+   - **F-1 회귀 검증**: sprint 점프 수평 속도 2배 증폭 버그 (세션 21 정정 전) 가 정정됐는지 확인.
 
 ---
 
@@ -1554,6 +1576,62 @@ Easy default 영향 분석:
 - F-6 사용자 인게임 플레이테스트 (사용자 작업, 체크리스트 제공)
 
 진행률: **Phase A + B 완결 + C skip + D 완결 + E 완결**, 전체 #2.5 95/110 (~86%). 남은: Phase F (5 — F-6 사용자).
+
+### 세션 21 — 2026-04-25 — Phase F 진입 + F-1 회귀 정정 + F-2/F-3/F-5 완료
+
+사용자 지시: Phase F 진입 — F-1~F-5 AI 자동 감사.
+
+진행한 작업:
+1. **F-1 원본 tryJump L1999-L2136 line-by-line 감사** → **회귀 버그 2건 발견**:
+   - **회귀 #1 enabled 게이트 누락**: 원본 L2016 `if (enabled) { ... }` 가 D-5~D-16 전체를
+     감싸지만 세션 19 1:1 재작성 시 누락. 사용자가 sub-jump 비활성 (예: `walkJump=false`)
+     시에도 점프 setVelocity/Stats.JUMP/isJumping 모두 실행되는 회귀.
+   - **회귀 #2 D-9 if/else 누락**: 원본 L2047-L2111 은 `if (Up && vanilla) {vanilla Up} else
+     {head/angle/scale}` 구조. 세션 19 코드는 if/else 없이 4개 if 순차 실행 → vanilla Up
+     점프 시 D-12 horizontalMotion>0 스케일이 추가 적용되어 **sprint 점프 수평 속도 2배 증폭**.
+     원본 의도와 명백히 다른 동작 회귀.
+2. **F-1 정정**:
+   - D-5~D-16 전체를 `if (enabled) { ... }` 안으로 이동
+   - D-9 if 에 else 추가, D-10/D-11/D-12 를 else 블록 안으로 묶음
+   - D-18 (상태 클리어) 는 enabled 와 무관하게 실행 — 원본 호출측 처리 동작 유지
+3. **F-2 getJumpHorizontalFactor 재확인**: 세션 14 line-by-line 이식 (L501 Standing/non-ClimbBack
+   `*0F` 엣지 포함) + 세션 21 재검증 — 1:1 일치. 회귀 0.
+4. **F-3 getJumpVerticalFactor 재확인**: 세션 15 line-by-line 이식 (Angle early return + WallHead
+   누적 곱셈 + 9 type early return) + 세션 21 재검증 — 1:1 일치. 회귀 0.
+5. **F-4 Exhaustion 감사**: Phase C skip 결정으로 N/A. §7-1 영구 등록.
+6. **F-5 빌드 + 회귀 감사**:
+   - `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+   - `grep "// TODO\|// \[미확인\]\|// 아마\|// 추정"` in `src/` — **0건**
+   - F-1 회귀 정정 후 빌드 통과
+7. **F-6 사용자 인게임 플레이테스트 체크리스트 작성**: §3 F-6 항목에 9개 테스트 시나리오 명시.
+
+근사 여부: 신규 0. F-1 회귀 정정으로 잠재 근사 2건 해소.
+
+발견 + 정정 (회귀 가능 영역, 매우 중대)
+- **회귀 #1**: 사용자가 sub-jump 비활성 시 점프 처리됨 → 정정 후 점프 자체 미작동 (원본 의도)
+- **회귀 #2**: vanilla Up 점프 (handleJumping → tryJump UP) sprint 수평 속도 2배 증폭 버그
+  → 정정 후 원본 1:1 (sprint 수평 보정 0.2F 만 적용, D-12 스케일 미적용)
+- **사용자 인게임 영향**: 일반 sprint 점프 거리 약 50% 감소 (정정 전이 비정상). 원본 1.7.10
+  체감 복원. F-6 검증 필수.
+
+완료 전 검증 체크리스트 (세션 21 기준):
+- [근거] 원본 라인 — `SmartMovingSelf.tryJump` L1999-L2136 (138줄) line-by-line read
+- [근거] 1.21.1 이식 위치 — `SmartMovingJumper.tryJump` 새 본체 (세션 19 작성)
+- [대응] 원본 ↔ 1.21.1 1:1 (F-1 정정 후) — enabled 게이트 + if/else 구조 모두 일치
+- [분기] enabled 게이트 1 + D-9 if/else 1 — 회귀 정정으로 누락 해소
+- [상수] 수정 없음 (회귀는 구조 차원)
+- [타이밍] D-13 motionY 적용은 D-9 분기 외부 — 원본 L2113 도 외부. 정확.
+- [근사] 신규 0. 회귀 정정으로 잠재 근사 해소.
+- [신규] 회귀 2건 발견 → 즉시 정정. F-6 체크리스트 작성.
+- [회귀] F-1 정정 자체가 회귀 정정. F-2/F-3/F-5 회귀 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: **F-6 사용자 인게임 플레이테스트 대기**. 사용자가 §3 F-6 체크리스트 9 시나리오
+   확인 후 보고. 이상 발견 시 재이식. 정상 시 **포커스 #2.5 완결** 마킹 + `playtest_fixes.md`
+   다음 포커스 (#3 또는 #2.6/#2.7) 전환.
+
+진행률: **Phase A + B 완결 + C skip + D 완결 + E 완결 + F (F-1~F-5) 완결**, 전체 #2.5 100/110
+   (~91%). 남은: F-6 사용자 인게임 (1).
 
 ---
 
