@@ -323,9 +323,10 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-6 청크 1 (SmartRenderRender.java 228 라인) — 세션 17 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
   - [x] R-6 청크 2 (Utilities 109 + Context 48 + Mod 74 + Info 29 + Install 27 + IModel 63 + IRender 48 = 7 파일 398 라인) — 세션 18 (정합 33 / 오역 0 / 누락 0 / 잉여 0 / N/A 365)
   - **R-6 누적**: 정합 61 / 오역 0 / 누락 0 / 잉여 0 / N/A 565 = 626 라인 전수
-- [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
+- [x] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄) — **세션 20 완료**
   - [x] R-7 청크 1 (SR ModelPlayer 180 + RenderPlayer 157 = 337) — 세션 19 (정합 10 / 오역 0 / 누락 0 / 잉여 0 / N/A 327)
-  - [ ] R-7 청크 2 (SR playerapi 3 파일 ~453줄)
+  - [x] R-7 청크 2 (SR playerapi: SmartRender 44 + ModelPlayerBase 249 + RenderPlayerBase 163 = 456) — 세션 20 (정합 12 / 오역 0 / 누락 0 / 잉여 0 / N/A 444)
+  - **R-7 누적**: 정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 771 = 793 라인 전수
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
 - [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
@@ -1149,6 +1150,47 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-7 청크 2 (SR playerapi 3 파일: SmartRender 43 + ModelPlayerBase 248 + RenderPlayerBase 162 = 453 라인). R-7 마지막 청크.
+
+---
+
+### 세션 20 — 2026-04-26 — Phase R / R-7 청크 2 (SR playerapi 3 파일) — **R-7 완료**
+
+**진행한 작업**:
+
+1. **R-7 청크 2 라인별 read** (3 파일):
+   - SmartRender.java (44 라인) — PlayerAPI 등록 진입점
+   - SmartRenderModelPlayerBase.java (249 라인) — IModelPlayer 구현 (PlayerAPI ModelPlayerBase 확장 + 16 ModelRenderer getter + 11 animateXxx + 11 dynamicVirtual*)
+   - SmartRenderRenderPlayerBase.java (163 라인) — IRenderPlayer 구현 (renderPlayer/rotatePlayer/renderSpecials/before&afterHandleRotationFloat 위임)
+
+2. **1.21.1 매핑 검증**: R-3 (Smart Moving playerapi 3 파일)와 동등 위임자 패턴 — 16 ModelRenderer getter + setRotationAngles 진입점 + rotatePlayer 진입점 매핑 일관 확인.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-7 청크 2 3 파트 섹션 — 456 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계 (3 파일 합)**:
+- [정합] 12 (ModelPlayerBase 클래스 + setRotationAngles 진입점 + 8 ModelRenderer getter / RenderPlayerBase 클래스 + rotatePlayer 진입점 = 10+2)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 444 (PlayerAPI 인프라 + 11 animateXxx + 11 dynamicVirtual + 7 부재 노드 + RenderPlayerBase 5 vanilla 위임 진입점 + 갑옷 + 다층 캐시)
+- 합계: 456 라인 전수.
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. R-3와 매핑 일관 검증 (16 ModelRenderer getter 동일 패턴, 진입점 매핑 동일).
+
+**검증 체크리스트 (세션 20 R-7 청크 2 + R-7 전체)**:
+- [근거] ✓ 3 파일 라인별 read 완료
+- [전수] ✓ 청크 내 456 라인 + R-7 전체 793 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 2 합계 456 / R-7 전체 합계 793 일치
+- [발견] ✓ 신규 발견 0건 (R-3 매핑 일관)
+- [통계] ✓ R-7 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (R-3 SmartMoving 측 playerapi 매핑 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-7 전체 누적 (793 라인, 5 파일 2 청크 2 세션)**:
+- 합계: 정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 771 = 793 라인 전수 (skip 0).
+- 신규 발견 0건 (위임자 패턴 — R-2 청크 3 + R-3과 일관).
+
+**R-7 완료** — SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 793 라인 전수 라인별 1:1 매핑.
+
+**다음 R-단계**: R-8 (SmartStatistics 일체 7 파일 ~620 라인 — SmartStatistics 197 + Factory 142 + Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22). SR mod의 통계 시스템 — 1.21.1 SmartMovingClientState/limbAnimator/age 등가 매핑. §16-10/12/13/15 [오역] 발견 변수 (totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed)의 *원본 갱신 로직* 검증 핵심 1차 자료.
 
 ---
 
