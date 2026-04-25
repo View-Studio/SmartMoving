@@ -617,27 +617,28 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
      호출처를 `tryJump(SLIDE_DOWN, false, wasRunning, null)` 직접 호출로 교체. B-42-B26 경량
      해소 대체 완료.
 
-**E-2. 기존 호출처 재검토**
-- [ ] E-2. 현재 `Jumper.tryJump(player, sm, jumpType, charge)` 호출 전수 grep. 새 시그니처
-     `tryJump(player, sm, type, inWater, isRunning, angle)` 에 맞춰 재호출:
-  - handleJumping 내부 UP / CHARGE_UP / HEAD_UP 경로
-  - WALL_UP / WALL_HEAD / WALL_UP_SLIDE / WALL_HEAD_SLIDE (handleWallJumping)
-  - LEFT/RIGHT/BACK → Angle type + angle 파라미터 변경
-  - CLIMB_UP / CLIMB_BACK / CLIMB_BACK_HEAD → 해당 type + HandsOnly 분기 추가
+**E-2. 기존 호출처 재검토** — 세션 19/20 완료 (전수 처리)
+- [x] E-2. 호출처 7곳 (내부 5 + 외부 2) 모두 새 시그니처 적용 완료. 추가 호출처 0 (grep 검증):
+  - handleJumping CHARGE_UP / HEAD_UP / 수면 UP / 일반 UP — 세션 19
+  - handleWallJumping WALL_UP/HEAD/UP_SLIDE/HEAD_SLIDE (jumpType 변수 + angle 파라미터) — 세션 19
+  - ClientState L1349 Creative flying UP — 세션 19
+  - ClientState L1394 SlideDown (trySlideDownJump 대체) — 세션 19 (E-1 통합)
+  - 더블클릭 방향 점프 (LEFT/RIGHT/BACK) — 세션 20 E-4 ANGLE type 통합
+  - **CLIMB_UP / CLIMB_BACK / CLIMB_BACK_HEAD 호출처 0** — 1.21.1 climb-jump 시스템 미이식
 
-**E-3. HandsOnly 분기 추가**
-- [ ] E-3. `feetClimbing.isNone() && handsClimbing.isUp()` 상태에서 `ClimbUpHandsOnly` /
-     `ClimbBackUpHandsOnly` / `ClimbBackHeadHandsOnly` type 으로 분기. Climber / Jumper
-     경로 확인.
+**E-3. HandsOnly 분기 추가** — 세션 20: N/A
+- [x] E-3. 1.21.1 SmartMovingClimber 에 climb-jump 호출 자체 0 (`tryJump(CLIMB_UP*)` 호출 없음).
+     HandsOnly 분기 추가할 호출처 자체가 존재하지 않음 → N/A. 미래 climb-jump 시스템 이식 시
+     별도 포커스에서 처리.
 
-**E-4. Angle 점프 통합**
-- [ ] E-4. LEFT=7, RIGHT=8, BACK=9 → Angle type + angle 파라미터 (+90/-90/+180 등).
-     handleWallJumping / Jumper.tryAngleJump 호출 경로 재정리.
+**E-4. Angle 점프 통합** — 세션 20 완료
+- [x] E-4. handleJumping 더블클릭 방향 점프 인라인 코드 (L329-L390 약 60줄) → 새 tryJump
+     (ANGLE, null, null, worldAngleDeg) 단일 호출 통합. 기존 인라인의 vanilla Up 0.41999...
+     수직 속도 → ANGLE type 의 angleJumpVerticalFactor=0.2F 기반 (D-8) 으로 1:1 정정.
+     SmartMovingJumper.LEFT/RIGHT/BACK sentinel 상수 사용처 0 → 제거.
 
-**E-5. Exhaustion 매 틱 리셋**
-- [ ] E-5. `MixinLivingEntityClient.sm_beforeTravel` 또는 `ClientState.tickEssential` 진입 시
-     `sm.maxExhaustionToStartAction = Float.POSITIVE_INFINITY; sm.maxExhaustionForAction =
-     Float.POSITIVE_INFINITY;`.
+**E-5. Exhaustion 매 틱 리셋** — 세션 18: SKIP (Phase C 일관)
+- [~] E-5. Phase C skip 결정과 함께 maxExhaustion* 변수 자체 미존재 → 리셋 대상 없음. SKIP.
 
 ---
 
@@ -1510,6 +1511,49 @@ Easy default 영향 분석:
 다음 세션 권고: **Phase E 진입** — E-2 (호출처 재검토 — 일부 세션 19 진행, ANGLE/CLIMB/HandsOnly 분기 잔여) + E-3 (HandsOnly 분기 추가) + E-4 (Angle 점프 LEFT/RIGHT/BACK → ANGLE type 통합) + E-5 (skip — Phase C 와 함께). 또는 Phase F 직접 진입 (감사 + 인게임 플레이테스트).
 
 진행률: **Phase A 완결 + Phase B 완결 + Phase C skip + Phase D 일괄 완결 + E-1 통합**, 전체 #2.5 92/~80 (~115%) — Phase C 32 제거 + Phase D 16 추가 = 분모 갱신 필요. 실질 남은: Phase E (E-2/E-3/E-4 = 3 원자) + Phase F (5 — F-6 사용자) = 8 원자.
+
+### 세션 20 — 2026-04-25 — Phase E 완결 (E-2/E-3 N/A + E-4 통합 + E-5 skip)
+
+사용자 지시: Phase E 잔여 진행 (D 직후 자연 흐름).
+
+진행한 작업:
+1. **E-2 호출처 재검토**: grep 결과 7곳 모두 세션 19 갱신 완료. CLIMB_UP/CLIMB_BACK/
+   CLIMB_BACK_HEAD 호출처 0건 (1.21.1 climb-jump 미이식). 추가 호출처 0 → N/A.
+2. **E-3 HandsOnly 분기**: 1.21.1 SmartMovingClimber 에 climb-jump 호출 자체 0 → 분기 추가
+   대상 없음. N/A. 미래 climb-jump 이식 시 별도 포커스 처리.
+3. **E-4 ANGLE 통합**: handleJumping L329-L390 인라인 더블클릭 방향 점프 코드 (~60줄) →
+   `tryJump(ANGLE, null, null, worldAngleDeg)` 단일 호출 통합. 새 tryJump 의 D-11 분기가
+   수평 + 수직 + 스프린트 + Stats + 상태 클리어 모두 처리.
+4. **버그 수정 (E-4 부산물)**: 기존 인라인 코드의 vanilla Up 0.41999... 수직 속도 → ANGLE type
+   의 angleJumpVerticalFactor=0.2F 기반 (D-8) 으로 1:1 정정. 사이드/백 점프 수직 속도 약 5분의 1
+   감소 (의도된 원본 동작). 사용자 인게임 체감 변화 가능.
+5. **LEFT/RIGHT/BACK sentinel 정리**: SmartMovingJumper 의 `LEFT=-1, RIGHT=-2, BACK=-3`
+   sentinel 상수 사용처 0 (E-4 통합으로 마지막 사용처 인라인 코드 제거) → 삭제.
+6. **E-5 skip 마킹**: Phase C skip 결정과 함께 maxExhaustion* 변수 자체 미존재 → 리셋 대상 0.
+
+근사 여부: 신규 0. E-4 의 verticalMotion 수정은 원본 1:1 복원 (근사 해소).
+
+완료 전 검증 체크리스트 (세션 20 기준):
+- [근거] 원본 라인 — `SmartMovingSelf.tryJump` ANGLE type 분기 + Phase D 새 본체 D-11
+- [근거] 1.21.1 이식 위치 — `SmartMovingJumper.handleJumping` L350-L388 (E-4 통합)
+- [대응] 원본 ↔ 1.21.1 1:1 — 새 tryJump 가 모든 처리 담당, 인라인 60줄 → tryJump 1줄 호출
+- [분기] left/back 4 분기 (relAngle 270/225/90/135/180) + canAngleJump 6-AND 게이트 — 보존
+- [상수] worldAngleDeg = (yaw + relAngle) % 360 — 보존
+- [타이밍] tryJump 호출 후 leftJumpCount/rightJumpCount/backJumpCount 리셋 + return — 원본 순서
+- [근사] 신규 0. E-4 부산물로 vanilla Up 수치 근사 해소 (원본 1:1 복원).
+- [신규] verticalMotion 불일치 → E-4 통합 자동 정정. LEFT/RIGHT/BACK sentinel 0 사용 → 제거.
+- [회귀] 빌드 통과 (컴파일 회귀 0). 사이드/백 점프 인게임 체감 변화 (의도, F-6 검증).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: **Phase F 진입** (감사 + 플레이테스트).
+- F-1 원본 tryJump L1999-L2136 side-by-side 감사 (AI 자동)
+- F-2 getJumpHorizontalFactor L465-L505 감사 (AI 자동)
+- F-3 getJumpVerticalFactor L418-L463 감사 (AI 자동)
+- F-4 Exhaustion 감사 — Phase C skip 으로 N/A
+- F-5 빌드 + 회귀 감사 (AI 자동)
+- F-6 사용자 인게임 플레이테스트 (사용자 작업, 체크리스트 제공)
+
+진행률: **Phase A + B 완결 + C skip + D 완결 + E 완결**, 전체 #2.5 95/110 (~86%). 남은: Phase F (5 — F-6 사용자).
 
 ---
 

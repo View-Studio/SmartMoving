@@ -51,9 +51,8 @@ public final class SmartMovingJumper {
     public static final int WALL_HEAD                   = SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
     public static final int WALL_UP_SLIDE               = SmartMovingConfig.JUMP_TYPE_WALL_UP_SLIDE;
     public static final int WALL_HEAD_SLIDE             = SmartMovingConfig.JUMP_TYPE_WALL_HEAD_SLIDE;
-    // LEFT/RIGHT/BACK: handleJumping 더블클릭 방향 점프 인라인 처리 — tryJump 호출 없음.
-    //   Phase E-4 에서 ANGLE type + angle 파라미터로 통합 예정. 현재는 미사용 sentinel.
-    public static final int LEFT = -1, RIGHT = -2, BACK = -3;
+    // Phase E-4 (세션 20) 통합 완료: 더블클릭 방향 점프 → tryJump(ANGLE, ..., worldAngleDeg).
+    //   기존 LEFT/RIGHT/BACK sentinel 상수는 사용처 0 → 제거.
 
     // ── [10-3] getJumpMoving ─────────────────────────────────────────────────
 
@@ -347,7 +346,13 @@ public final class SmartMovingJumper {
             sm.jumpMotionZ = cv.z;
         }
 
-        // ── [IMPL-03] 더블클릭 방향 점프 (원본: handleJumping 내 count==-1 분기)
+        // ── [IMPL-03] 더블클릭 방향 점프 → tryJump(ANGLE) 통합 (Phase E-4, 세션 20) ──
+        //   원본 SmartMovingSelf.handleJumping 의 count==-1 분기 → tryJump(Angle, ..., angle 도)
+        //   호출. 새 tryJump (Phase D, 세션 19) 의 D-11 (angle != null) 분기가 수평 속도
+        //   재방향 + 수직 속도 (D-8 의 angleJumpVerticalFactor=0.2F 기반) + 스프린트 보정
+        //   (D-9 vanilla 진입 안 됨, D-12 스케일 처리) + Stats.JUMP (D-13) + 상태 클리어 (D-18)
+        //   모두 통합 처리. 기존 인라인 코드의 vanilla Up 0.41999... 수직 속도는 ANGLE type
+        //   에 부적합 — D-8/D-11 의 angleJumpVerticalFactor 기반으로 1:1 정정.
         {
             int left = 0, back = 0;
             if (sm.leftJumpCount  == -1) left++;
@@ -367,41 +372,12 @@ public final class SmartMovingJumper {
                     // 애니메이션 타입 (원본: ((360 - relAngle) / 45) % 8)
                     sm.angleJumpType = ((360 - relAngle) / 45) % 8;
 
-                    // 세계 공간 점프 방향 (rotationYaw + 상대 각도)
-                    double worldAngleDeg = (player.getYaw() + relAngle) % 360.0;
-                    if (worldAngleDeg < 0) worldAngleDeg += 360.0;
-                    double worldAngleRad = Math.toRadians(worldAngleDeg);
-                    double jumpDirX = -Math.sin(worldAngleRad);
-                    double jumpDirZ =  Math.cos(worldAngleRad);
+                    // 세계 공간 점프 방향 (rotationYaw + 상대 각도) — tryJump angle 파라미터로 전달
+                    float worldAngleDeg = (float) ((player.getYaw() + relAngle) % 360.0);
+                    if (worldAngleDeg < 0F) worldAngleDeg += 360F;
 
-                    // 수평 속도 (getJumpMoving, 원본: motionX = getJumpMoving(jumpMotionX, moveX, reset=true, ...))
-                    double newVx = getJumpMoving(sm.jumpMotionX,
-                            jumpDirX * cfg.angleJumpHorizontalFactor, true,
-                            cfg.angleJumpHorizontalFactor, cfg.angleJumpVerticalFactor);
-                    double newVz = getJumpMoving(sm.jumpMotionZ,
-                            jumpDirZ * cfg.angleJumpHorizontalFactor, true,
-                            cfg.angleJumpHorizontalFactor, cfg.angleJumpVerticalFactor);
-
-                    // 수직 속도 (vanilla Up 점프)
-                    StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
-                    int potionJump = (jumpBoost != null) ? jumpBoost.getAmplifier() : 0;
-                    double verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
-
-                    // 스프린트 수평 보정 (원본 tryJump와 동일)
-                    boolean fast = player.isSprinting();
-                    if (fast) {
-                        double yawRad = Math.toRadians(player.getYaw());
-                        newVx -= Math.sin(yawRad) * 0.2F;
-                        newVz += Math.cos(yawRad) * 0.2F;
-                    }
-
-                    player.setVelocity(newVx, verticalMotion, newVz);
-                    sm.isSprintJump = fast;
-                    player.incrementStat(Stats.JUMP);
-                    sm.jumpCharge = 0F;
-                    sm.headJumpCharge = 0F;
-                    sm.blockJumpTillButtonRelease = true;
-                    sm.jumpPending = false;
+                    // Phase E-4 통합: 새 tryJump(ANGLE, null, null, worldAngleDeg) 단일 호출
+                    tryJump(player, sm, ANGLE, null, null, worldAngleDeg);
                 }
 
                 sm.leftJumpCount  = 0;
