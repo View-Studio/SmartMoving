@@ -251,9 +251,15 @@ public class SmartMovingConfig {
     public boolean headJump = true;
     public float headJumpControlFactor = 0.2F;
     public float headJumpChargeMaximum = 10F;
+    // === Angle (Side/Back) 점프 (원본 SmartMovingConfig L268-L271) ===
+    // 원본 L268: _angleJumpSide = Unmodified("move.jump.angle.side") → 기본 true
     public boolean angleJumpSide = true;
+    // 원본 L269: _angleJumpBack = Unmodified("move.jump.angle.back") → 기본 true
     public boolean angleJumpBack = true;
-    public float angleJumpHorizontalFactor = 0.3F;
+    // 원본 L270: _angleJumpHorizontalFactor = PositiveFactor(...).defaults(0.3F).defaults(0.4F, _sm_1_3)
+    //   ★ _sm_1_3 이상 오버라이드 = 0.4F (이전 0.3F 는 sm_1_3 미만 — 1.7.10 은 sm_1_3 이후라 0.4F 채택).
+    public float angleJumpHorizontalFactor = 0.4F;
+    // 원본 L271: _angleJumpVerticalFactor = PositiveFactor(...).defaults(0.2F)
     public float angleJumpVerticalFactor = 0.2F;
     /**
      * 원본: _angleJumpDoubleClickTicks = Positive("move.jump.angle.double.click.ticks").singular().up(3F, 2F)

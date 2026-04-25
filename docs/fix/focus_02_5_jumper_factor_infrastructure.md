@@ -47,7 +47,7 @@
 | `_runJumpVerticalFactor` | 1F | Running 점프 vertical |
 | `_sprintJumpHorizontalFactor` | **2F** | Sprinting 점프 horizontal (오버라이드) |
 | `_sprintJumpVerticalFactor` | 1F | Sprinting 점프 vertical |
-| `_angleJumpHorizontalFactor` | **0.3-0.4F** | Side/Back 점프 horizontal |
+| `_angleJumpHorizontalFactor` | **0.4F** (sm_1_3 이상 오버라이드, 이전 0.3F) | Side/Back 점프 horizontal |
 | `_angleJumpVerticalFactor` | **0.2F** | Side/Back 점프 vertical |
 | `_climbUpJumpVerticalFactor` | 1F | ClimbUp 점프 vertical |
 | `_climbUpJumpHandsOnlyVerticalFactor` | **0.8F** | ClimbUp Hands-only 추가 |
@@ -235,10 +235,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-5e. `headFallDamageFactor = 2F` ★ (원본 L265, IncreasingFactor.defaults(2F) 오버라이드) — 세션 5 (필드 이미 이식 + IO 신규 + 주석 라인 정정)
 
 **A-6. Angle 필드 4건**
-- [ ] A-6a. `angleJumpSide = true` (원본 L268)
-- [ ] A-6b. `angleJumpBack = true` (원본 L269)
-- [ ] A-6c. `angleJumpHorizontalFactor = 0.4F` ★ (원본 L270, 최신 기본값)
-- [ ] A-6d. `angleJumpVerticalFactor = 0.2F` ★ (원본 L271)
+- [x] A-6a. `angleJumpSide = true` (원본 L268) — 세션 6 (이미 이식 + IO 확인)
+- [x] A-6b. `angleJumpBack = true` (원본 L269) — 세션 6 (이미 이식 + IO 확인)
+- [x] A-6c. `angleJumpHorizontalFactor = 0.4F` ★ (원본 L270, sm_1_3 오버라이드) — 세션 6 (**값 오역 정정** 0.3F → 0.4F + 주석 정비)
+- [x] A-6d. `angleJumpVerticalFactor = 0.2F` ★ (원본 L271) — 세션 6 (이미 이식 + IO 확인 + 주석 정비)
 
 **A-7. ClimbUp 필드 3건**
 - [ ] A-7a. `climbUpJump = true` (원본 L274)
@@ -875,6 +875,45 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-6 (Angle 4건 — A-6a `angleJumpSide=true` + A-6b `angleJumpBack=true` 이미 이식 확인 + A-6c `angleJumpHorizontalFactor=0.4F` ★ + A-6d `angleJumpVerticalFactor=0.2F` ★ 이미 이식 확인). 원본 L268-L271. (1.21.1 기존 값 0.3F vs 원본 최신 0.4F 검증 필요 — `_sm_1_3` 오버라이드 적용 여부.)
 
 진행률: Phase A 26/40+ (~65%), 전체 #2.5 26/~110 (~23.6%).
+
+### 세션 6 — 2026-04-25 — Phase A-6 (Angle 4건: 값 오역 정정 1 + 확인 3 + 주석 정비)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-6 4건 (A-6a~A-6d) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L268-L271):
+   - L268 `_angleJumpSide = Unmodified("move.jump.angle.side")` → 기본 true
+   - L269 `_angleJumpBack = Unmodified("move.jump.angle.back")` → 기본 true
+   - L270 `_angleJumpHorizontalFactor = PositiveFactor(...).defaults(0.3F).defaults(0.4F, _sm_1_3)` ★ → **0.4F** (sm_1_3 이상 오버라이드. 1.7.10 은 sm_1_3 이후라 0.4F 채택)
+   - L271 `_angleJumpVerticalFactor = PositiveFactor(...).defaults(0.2F)` ★ → 0.2F
+2. 1.21.1 이식 위치 확인 (변경 전):
+   - A-6a 필드 L254 = true ✅ + IO L1048 ✅ + save L1194 ✅
+   - A-6b 필드 L255 = true ✅ + IO L1049 ✅ + save L1195 ✅
+   - A-6c 필드 L256 = **0.3F** ❌ — sm_1_3 오버라이드 미적용 오역 / IO L1050 ✅ + save L1196 ✅
+   - A-6d 필드 L257 = 0.2F ✅ + IO L1051 ✅ + save L1197 ✅
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 L254-L262 — 그룹 헤더 주석 + 4 항목 주석 정비 + **A-6c 값 0.3F → 0.4F 정정**
+   - load/save IO 변경 없음 (이미 ✅)
+4. 근사 여부: 없음. 1:1.
+
+발견 + 정정 (회귀 가능 영역)
+- A-6c `angleJumpHorizontalFactor` 가 0.3F 로 이식되어 있어 사이드/백 점프 수평 배율이 ~25% 작은 상태였음. 0.4F 정정으로 원본 1.7.10 기본 동작 복구. 사용자 인게임 체감 변화 가능 (의도된 정정).
+
+완료 전 검증 체크리스트 (세션 6 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L268-L271 + Properties.java L185-L186 (PositiveFactor 기본 1F)
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 L254-L262 / load L1048-L1051 / save L1194-L1197
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/기본값/오버라이드 모두 일치 후)
+- [분기] 분기 없음 (단순 boolean/float 4개)
+- [상수] true / true / **0.4F** ★ (오버라이드) / 0.2F ★ — 모두 정확
+- [타이밍] 필드 선언만 — 호출 타이밍 없음. Phase B isJumpingEnabled (Side/Back 분기) + Phase D Angle 분기에 사용.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 발견: A-6c 값 오역 (0.3F → 0.4F). §0 미이식 표 "0.3-0.4F" 모호 표기 → "0.4F (sm_1_3 이상 오버라이드)" 명확화.
+- [회귀] 값 정정 (0.3F → 0.4F) — 이전 경량 tryJump (`Jumper.tryAngleJump`) 가 이 값을 사용 중이면 인게임 동작 변화 (수평 ~33% 증가). 의도된 정정 (원본 일치).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase A-7 (ClimbUp 3건 — A-7a `climbUpJump=true` + A-7b `climbUpJumpVerticalFactor=1F` (DecreasingFactor 기본 1F) + A-7c `climbUpJumpHandsOnlyVerticalFactor=0.8F` ★ 신규). 원본 L274-L276.
+
+진행률: Phase A 30/40+ (~75%), 전체 #2.5 30/~110 (~27.3%).
 
 ---
 
