@@ -2982,3 +2982,293 @@
 - L189/L200 `ticksExisted += statistics.ticksRiding` — 라이딩 흔들림 ticks 동기화. 1.21.1 vanilla RidingPose 자동 처리 (별도 ticksRiding 변수 부재) → 미이식이지만 vanilla 자동 처리로 영향 약함.
 
 **다음 청크**: R-6 청크 2 (SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 7 파일 ~391 라인). R-6 마지막 청크.
+
+### 청크 2 (Utilities 109 + Context 48 + Mod 74 + Info 29 + Install 27 + IModel 63 + IRender 48 = 7 파일 398 라인) — R-6 마지막 청크
+
+**파트 A — SmartRenderUtilities.java (109 라인)** — 라디안 상수 + 충돌 각도 + getAngle (atan2 등가)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | (빈 줄) | — | [N/A] | |
+| L21 | `public abstract class SmartRenderUtilities` | (1.21.1: SmartmovingMath / 별도 유틸 분산) | [N/A] | |
+| L22 | `public static final float Whole = (float)Math.PI * 2F;` | `WHOLE = (float)(Math.PI * 2)` 또는 `MathHelper.TAU` 등가 | [정합] | 2π |
+| L23 | `public static final float Half = (float)Math.PI;` | `HALF = (float)Math.PI` | [정합] | π |
+| L24 | `public static final float Quarter = Half / 2F;` | `QUARTER = HALF / 2f` (= π/2) | [정합] | |
+| L25 | `public static final float Eighth = Quarter / 2F;` | `EIGHTH = QUARTER / 2f` (= π/4) | [정합] | |
+| L26 | `public static final float Sixteenth = Eighth / 2F;` | `SIXTEENTH = EIGHTH / 2f` | [정합] | |
+| L27 | `public static final float Thirtytwoth = Sixteenth / 2F;` | `THIRTYTWOTH = SIXTEENTH / 2f` | [정합] | |
+| L28 | `public static final float Sixtyfourth = Thirtytwoth / 2F;` | `SIXTYFOURTH = THIRTYTWOTH / 2f` | [정합] | |
+| L29 | (빈 줄) | — | [N/A] | |
+| L30 | `public static final float RadiantToAngle = 360F / Whole;` | `MathHelper.DEGREES_PER_RADIAN` 또는 `DEG_TO_RAD` 역수 (180/π) | [정합] | 라디안↔도 변환 |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32-L82 | `getHorizontalCollisionangle(boolean isCollidedPositiveX, ...)` 51 라인 (충돌 방향 → 8방향 각도 0/45/90/135/180/225/270/315) | (1.21.1: PlayerAPI 충돌 시스템 부재 — VoxelShape 직접 사용, 본 메서드 미이식) | [N/A] | SR mod 전용 충돌 각도 산출 — 본 포커스 #1 외 |
+| L83 | (빈 줄) | — | [N/A] | |
+| L84 | `public static float getAngle(double x, double y)` | (1.21.1: `Math.atan2(y, x) * RadiantToAngle` 등가) | [정합] | atan2 등가 — sm_captureBodyYaw atan2 활용 |
+| L85 | `{` | — | [N/A] | |
+| L86 | `if(x == 0)` | (atan2 자동 처리) | [정합] | x=0 quadrant |
+| L87 | `{` | — | [N/A] | |
+| L88 | `if(y == 0)` | — | [정합] | |
+| L89 | `return Float.NaN;` | (atan2(0,0) = NaN 등가) | [정합] | |
+| L90 | `if(y < 0)` | — | [정합] | |
+| L91 | `return 270;` | (atan2 등가) | [정합] | |
+| L92 | `return 90;` | (atan2 등가) | [정합] | |
+| L93 | `}` | — | [N/A] | |
+| L94 | (빈 줄) | — | [N/A] | |
+| L95 | `if(y == 0)` | — | [정합] | |
+| L96 | `{` | — | [N/A] | |
+| L97 | `if(x < 0)` | — | [정합] | |
+| L98 | `return 180;` | — | [정합] | |
+| L99 | `return 0;` | — | [정합] | |
+| L100 | `}` | — | [N/A] | |
+| L101 | (빈 줄) | — | [N/A] | |
+| L102 | `float angle = (float)Math.atan(y / x) * RadiantToAngle;` | (atan2 자동 quadrant) | [정합] | |
+| L103 | `if(x < 0)` | — | [정합] | |
+| L104 | `return 180F + angle;` | — | [정합] | |
+| L105 | `if(y < 0 && x > 0)` | — | [정합] | |
+| L106 | `return 360F + angle;` | — | [정합] | |
+| L107 | `return angle;` | — | [정합] | |
+| L108 | `}` | — | [N/A] | |
+| L109 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 A 통계: 정합 24 / 오역 0 / 누락 0 / 잉여 0 / N/A 85 = 109 라인 전수.** 7 라디안 상수 + RadiantToAngle + getAngle (atan2 등가) [정합]. getHorizontalCollisionangle은 SR mod 전용 (본 포커스 외).
+
+**파트 B — SmartRenderContext.java (48 라인)** — Forge RenderingRegistry 등록
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import cpw.mods.fml.client.registry.RenderingRegistry;` | (1.21.1: Fabric Mixin 자동) | [N/A] | Forge 인프라 |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L23 | `import net.minecraft.client.renderer.entity.*;` | — | [N/A] | |
+| L24 | (빈 줄) | — | [N/A] | |
+| L25 | `public abstract class SmartRenderContext extends SmartRenderUtilities` | (1.21.1: ModInitializer + Mixin 등가) | [N/A] | |
+| L26 | `{` | — | [N/A] | |
+| L27 | `public static void registerRenderers()` | (Mixin 자동 등록) | [N/A] | |
+| L28 | `{` | — | [N/A] | |
+| L29 | `registerRenderers(net.smart.render.RenderPlayer.class);` | — | [N/A] | |
+| L30 | `}` | — | [N/A] | |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `public static void registerRenderers(Class<?> type)` | (Mixin 자동) | [N/A] | |
+| L33 | `{` | — | [N/A] | |
+| L34 | `Render render;` | — | [N/A] | |
+| L35 | `try` | — | [N/A] | |
+| L36 | `{` | — | [N/A] | |
+| L37 | `render = (Render)type.newInstance();` | — | [N/A] | |
+| L38 | `}` | — | [N/A] | |
+| L39 | `catch (Exception e)` | — | [N/A] | |
+| L40 | `{` | — | [N/A] | |
+| L41 | `return;` | — | [N/A] | |
+| L42 | `}` | — | [N/A] | |
+| L43 | (빈 줄) | — | [N/A] | |
+| L44 | `RenderingRegistry.registerEntityRenderingHandler(EntityPlayerSP.class, render);` | (1.21.1: EntityRendererRegistry — Mixin 자동) | [N/A] | |
+| L45 | `RenderingRegistry.registerEntityRenderingHandler(EntityOtherPlayerMP.class, render);` | (1.21.1: 모든 플레이어 동일 dispatcher) | [N/A] | |
+| L46 | `render.setRenderManager(RenderManager.instance);` | (vanilla EntityRenderDispatcher 자동) | [N/A] | |
+| L47 | `}` | — | [N/A] | |
+| L48 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 B 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 48 = 48 라인 전수.** Forge RenderingRegistry — 1.21.1 Fabric Mixin 등가, 본 포커스 외.
+
+**파트 C — SmartRenderMod.java (74 라인)** — Forge @Mod 진입점
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import java.lang.reflect.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22-L26 | 5 imports (cpw.mods.fml + smart.render.statistics + utilities) | — | [N/A] | Forge FML |
+| L27 | `import net.smart.utilities.*;` | — | [N/A] | |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | (빈 줄) | — | [N/A] | |
+| L30 | `@Mod(modid = "SmartRender", name = "Smart Render", version = "@VERSION@", dependencies = "required-after:PlayerAPI@[1.3,)")` | (1.21.1: fabric.mod.json) | [N/A] | mod metadata |
+| L31 | `public class SmartRenderMod` | (1.21.1: ModInitializer 또는 Smartmoving.java) | [N/A] | |
+| L32 | `{` | — | [N/A] | |
+| L33 | `private static boolean addRenderer = true;` | — | [N/A] | |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `private boolean hasRenderer = false;` | — | [N/A] | |
+| L36 | (빈 줄) | — | [N/A] | |
+| L37-L40 | `doNotAddRenderer()` 4 라인 | — | [N/A] | |
+| L41 | (빈 줄) | — | [N/A] | |
+| L42 | `@EventHandler` | — | [N/A] | |
+| L43 | `@SuppressWarnings("unused")` | — | [N/A] | |
+| L44 | `public void init(FMLInitializationEvent event)` | (1.21.1: Smartmoving.onInitializeClient()) | [N/A] | mod init |
+| L45 | `{` | — | [N/A] | |
+| L46 | `if(!FMLCommonHandler.instance().getSide().isClient()) return;` | (1.21.1: ClientModInitializer 자동) | [N/A] | |
+| L47 | `return;` | — | [N/A] | |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49 | `hasRenderer = Loader.isModLoaded("RenderPlayerAPI");` | (1.21.1: 의존성 체크 부재 — Mixin 자동) | [N/A] | |
+| L50 | (빈 줄) | — | [N/A] | |
+| L51 | `net.smart.render.statistics.playerapi.SmartStatistics.register();` | (SmartStatistics 부재 — vanilla 등가) | [N/A] | R-8 검토 |
+| L52 | (빈 줄) | — | [N/A] | |
+| L53-L58 | `if(hasRenderer) { ... reflection register ... }` 6 라인 | (PlayerAPI 부재) | [N/A] | |
+| L59 | (빈 줄) | — | [N/A] | |
+| L60-L61 | `if(!hasRenderer && addRenderer) registerRenderers(null);` | (Mixin 자동) | [N/A] | |
+| L62 | (빈 줄) | — | [N/A] | |
+| L63 | `net.smart.render.statistics.playerapi.SmartStatisticsFactory.initialize();` | (SmartStatistics 부재) | [N/A] | R-8 |
+| L64 | (빈 줄) | — | [N/A] | |
+| L65 | `FMLCommonHandler.instance().bus().register(this);` | (1.21.1: ClientTickEvents.END_CLIENT_TICK 등) | [N/A] | |
+| L66 | `}` | — | [N/A] | init 종료 |
+| L67 | (빈 줄) | — | [N/A] | |
+| L68 | `@SubscribeEvent` | — | [N/A] | |
+| L69 | `@SuppressWarnings({ "static-method", "unused" })` | — | [N/A] | |
+| L70 | `public void tickStart(ClientTickEvent event)` | (1.21.1: ClientTickEvents.END_CLIENT_TICK or SmartMovingClientStateUpdater) | [N/A] | tick 갱신 |
+| L71 | `{` | — | [N/A] | |
+| L72 | `SmartStatisticsContext.onTickInGame();` | (1.21.1: SmartMovingClientStateUpdater 자동) | [N/A] | R-8 |
+| L73 | `}` | — | [N/A] | |
+| L74 | `}` | — | [N/A] | 클래스 종료 |
+
+**파트 C 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 74 = 74 라인 전수.** Forge mod 진입점 — 1.21.1 Fabric ClientModInitializer 등가, 본 포커스 외.
+
+**파트 D — SmartRenderInfo.java (29 라인)** — mod metadata reflection
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import cpw.mods.fml.common.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `public class SmartRenderInfo` | (1.21.1: fabric.mod.json 직접 읽기) | [N/A] | |
+| L23 | `{` | — | [N/A] | |
+| L24 | `private static final Mod Mod = SmartRenderMod.class.getAnnotation(Mod.class);` | — | [N/A] | |
+| L25 | (빈 줄) | — | [N/A] | |
+| L26 | `public static final String ModId = Mod.modid();` | — | [N/A] | |
+| L27 | `public static final String ModName = Mod.name();` | — | [N/A] | |
+| L28 | `public static final String ModVersion = Mod.version();` | — | [N/A] | |
+| L29 | `}` | — | [N/A] | |
+
+**파트 D 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 29 = 29 라인 전수.** mod metadata — 본 포커스 외.
+
+**파트 E — SmartRenderInstall.java (27 라인)** — ModelRenderer reflection 이름
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import net.smart.utilities.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `public class SmartRenderInstall` | (1.21.1: ModelPart 자동 처리 — reflection 부재) | [N/A] | |
+| L23 | `{` | — | [N/A] | |
+| L24 | `public final static Name ModelRenderer_compiled = new Name("compiled", "field_78812_q", "t");` | — | [N/A] | obfuscated 이름 |
+| L25 | `public final static Name ModelRenderer_compileDisplayList = new Name("compileDisplayList", "func_78788_d", "d");` | — | [N/A] | |
+| L26 | `public final static Name ModelRenderer_displayList = new Name("displayList", "field_78811_r", "u");` | — | [N/A] | |
+| L27 | `}` | — | [N/A] | |
+
+**파트 E 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 27 = 27 라인 전수.** ModelRenderer reflection — 1.21.1 ModelPart 자동, 본 포커스 외.
+
+**파트 F — IModelPlayer.java (63 라인)** — IModelPlayer 인터페이스
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L22 | (빈 줄) | — | [N/A] | |
+| L23 | `public interface IModelPlayer` | (1.21.1: 단일 PlayerEntityModel — 인터페이스 부재) | [N/A] | |
+| L24 | `{` | — | [N/A] | |
+| L25 | `SmartRenderModel getRenderModel();` | (단일 모델 — getter 부재) | [N/A] | |
+| L26 | (빈 줄) | — | [N/A] | |
+| L27 | `void initialize(ModelRenderer bipedBody, bipedCloak, bipedHead, bipedEars, bipedHeadwear, bipedRightArm, bipedLeftArm, bipedRightLeg, bipedLeftLeg);` | (vanilla PlayerEntityModel 자동 초기화) | [N/A] | |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | `void superRender(Entity entity, ...)` | (vanilla render 자동) | [N/A] | |
+| L30 | (빈 줄) | — | [N/A] | |
+| L31 | `void superSetRotationAngles(...)` | (vanilla setAngles 자동 — sm_setAngles TAIL inject) | [N/A] | |
+| L32 | (빈 줄) | — | [N/A] | |
+| L33 | `void superRenderCloak(float f);` | (vanilla CapeFeatureRenderer 자동) | [N/A] | |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `ModelRenderer getOuter();` | (Outer 부재) | [N/A] | §16-2 |
+| L36 | `ModelRenderer getTorso();` | (Torso 부재) | [N/A] | §16-2 |
+| L37 | `ModelRenderer getBody();` | `body` (PlayerEntityModel) | [정합] | 표면 매핑 |
+| L38 | `ModelRenderer getBreast();` | (Breast 부재) | [N/A] | |
+| L39 | `ModelRenderer getNeck();` | (Neck 부재) | [N/A] | |
+| L40 | `ModelRenderer getHead();` | `head` | [정합] | |
+| L41 | `ModelRenderer getHeadwear();` | `hat` | [정합] | |
+| L42 | `ModelRenderer getRightShoulder();` | (Shoulder 부재) | [N/A] | §16-5 |
+| L43 | `ModelRenderer getRightArm();` | `rightArm` | [정합] | |
+| L44 | `ModelRenderer getLeftShoulder();` | (Shoulder 부재) | [N/A] | §16-5 |
+| L45 | `ModelRenderer getLeftArm();` | `leftArm` | [정합] | |
+| L46 | `ModelRenderer getPelvic();` | (Pelvic 부재) | [N/A] | §16-3 |
+| L47 | `ModelRenderer getRightLeg();` | `rightLeg` | [정합] | |
+| L48 | `ModelRenderer getLeftLeg();` | `leftLeg` | [정합] | |
+| L49 | `ModelRenderer getEars();` | (Ears 부재) | [N/A] | |
+| L50 | `ModelRenderer getCloak();` | `cloak` | [정합] | |
+| L51 | (빈 줄) | — | [N/A] | |
+| L52-L62 | 11 `void animateXxx(...)` 시그니처 (HeadRotation/Sleeping/ArmSwinging/Riding/LeftArm/RightArm/WorkingBody/WorkingArms/Sneaking/Arms/BowAiming) | (vanilla 자동) | [N/A] | R-2 IModelPlayer 매핑과 일관 |
+| L63 | `}` | — | [N/A] | |
+
+**파트 F 통계: 정합 8 / 오역 0 / 누락 0 / 잉여 0 / N/A 55 = 63 라인 전수.** 16 ModelRenderer getter 중 8 [정합] (Body/Head/Headwear→hat/RightArm/LeftArm/RightLeg/LeftLeg/Cloak), 7 [N/A] (Outer/Torso/Breast/Neck/Shoulder×2/Pelvic/Ears 부재 §16-2/3/5).
+
+**파트 G — IRenderPlayer.java (48 라인)** — IRenderPlayer 인터페이스
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L22 | `import net.minecraft.client.renderer.entity.*;` | — | [N/A] | |
+| L23 | `import net.minecraft.entity.player.*;` | — | [N/A] | |
+| L24 | (빈 줄) | — | [N/A] | |
+| L25 | `public interface IRenderPlayer` | (1.21.1: PlayerEntityRenderer 직접 Mixin) | [N/A] | |
+| L26 | `{` | — | [N/A] | |
+| L27 | `IModelPlayer createModel(ModelBiped existing, float f);` | (단일 모델) | [N/A] | |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | `void initialize(ModelBiped modelBipedMain, modelArmorChestplate, modelArmor, float shadowSize);` | (vanilla 자동) | [N/A] | |
+| L30 | (빈 줄) | — | [N/A] | |
+| L31 | `void superRenderPlayer(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks);` | (vanilla render 자동) | [N/A] | |
+| L32 | (빈 줄) | — | [N/A] | |
+| L33 | `void superDrawFirstPersonHand(EntityPlayer entityPlayer);` | (vanilla 1인칭 자동) | [N/A] | |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `void superRotatePlayer(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2);` | sm_captureBodyYaw HEAD + @ModifyArg index=3 (R-2 청크 1) | [정합] | rotatePlayer = setupTransforms 진입점 |
+| L36 | (빈 줄) | — | [N/A] | |
+| L37 | `void superRenderSpecials(AbstractClientPlayer entityplayer, float f);` | (vanilla 자동) | [N/A] | |
+| L38 | (빈 줄) | — | [N/A] | |
+| L39 | `RenderManager getRenderManager();` | (vanilla EntityRenderDispatcher 자동) | [N/A] | |
+| L40 | (빈 줄) | — | [N/A] | |
+| L41 | `ModelBiped getModelBipedMain();` | (단일 모델 — this) | [N/A] | |
+| L42 | (빈 줄) | — | [N/A] | |
+| L43 | `ModelBiped getModelArmorChestplate();` | (갑옷 §17 잔여) | [N/A] | |
+| L44 | (빈 줄) | — | [N/A] | |
+| L45 | `ModelBiped getModelArmor();` | (갑옷) | [N/A] | |
+| L46 | (빈 줄) | — | [N/A] | |
+| L47 | `IModelPlayer[] getRenderModels();` | (다층 모델 부재) | [N/A] | |
+| L48 | `}` | — | [N/A] | |
+
+**파트 G 통계: 정합 1 / 오역 0 / 누락 0 / 잉여 0 / N/A 47 = 48 라인 전수.** superRotatePlayer 진입점 [정합].
+
+**R-6 청크 2 통계 (7 파일 합)**:
+- 파트 A (Utilities): 24 / 0 / 0 / 0 / 85 = 109 라인
+- 파트 B (Context): 0 / 0 / 0 / 0 / 48 = 48 라인
+- 파트 C (Mod): 0 / 0 / 0 / 0 / 74 = 74 라인
+- 파트 D (Info): 0 / 0 / 0 / 0 / 29 = 29 라인
+- 파트 E (Install): 0 / 0 / 0 / 0 / 27 = 27 라인
+- 파트 F (IModel): 8 / 0 / 0 / 0 / 55 = 63 라인
+- 파트 G (IRender): 1 / 0 / 0 / 0 / 47 = 48 라인
+- **합계: 정합 33 / 오역 0 / 누락 0 / 잉여 0 / N/A 365 = 398 라인 전수**
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 핵심 검증:
+- SmartRenderUtilities 7 라디안 상수 + RadiantToAngle — 1.21.1 동등 상수 일치.
+- getAngle (atan + quadrant 보정) = atan2 등가 — sm_captureBodyYaw atan2(-vel.x, vel.z) 일치.
+- IModelPlayer 16 ModelRenderer getter — R-3 SmartMovingModelPlayerBase 16 @Deprecated getter와 정확히 일치 (8 [정합] / 7 [N/A] 일관).
+- IRenderPlayer superRotatePlayer — sm_captureBodyYaw 진입점.
+- SmartRenderContext/Mod/Info/Install: Forge 인프라 (RenderingRegistry/FMLInitializationEvent/PlayerAPI/reflection) — 1.21.1 Fabric Mixin 자동, 본 포커스 외.
+
+**R-6 전체 누적 (228 + 398 = 626 라인, 8 파일 2 청크 2 세션) — R-6 완료**:
+| 청크 | 파일 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A |
+|-----|-----|-----|------|------|------|------|------|
+| 1 | SmartRenderRender | 228 | 28 | 0 | 0 | 0 | 200 |
+| 2 | Utilities + Context + Mod + Info + Install + IModel + IRender 7 파일 | 398 | 33 | 0 | 0 | 0 | 365 |
+| **합계** | **8 파일** | **626** | **61** | **0** | **0** | **0** | **565** |
+
+**R-6 완료**. 다음 R-단계: **R-7 (SR ModelPlayer 179 + RenderPlayer 156 + SR playerapi 3 파일 (SmartRender 43 + ModelPlayerBase 248 + RenderPlayerBase 162) = 5 파일 ~788 라인)**.

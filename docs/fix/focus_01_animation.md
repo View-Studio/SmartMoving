@@ -319,9 +319,10 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-5 청크 2 (ModelRotationRenderer L185-L368) — 세션 15 (정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 162)
   - [x] R-5 청크 3 (RendererData 32 + Cape 90 + Ears 61 + Special 56 = 239) — 세션 16 (정합 28 / 오역 0 / 누락 2 / 잉여 0 / N/A 209)
   - **R-5 누적**: 정합 71 / 오역 0 / 누락 2 / 잉여 0 / N/A 534 = 607 라인 전수
-- [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
+- [x] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄) — **세션 18 완료**
   - [x] R-6 청크 1 (SmartRenderRender.java 228 라인) — 세션 17 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
-  - [ ] R-6 청크 2 (SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender 7 파일 ~391줄)
+  - [x] R-6 청크 2 (Utilities 109 + Context 48 + Mod 74 + Info 29 + Install 27 + IModel 63 + IRender 48 = 7 파일 398 라인) — 세션 18 (정합 33 / 오역 0 / 누락 0 / 잉여 0 / N/A 365)
+  - **R-6 누적**: 정합 61 / 오역 0 / 누락 0 / 잉여 0 / N/A 565 = 626 라인 전수
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
@@ -1063,6 +1064,55 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-6 청크 2 (SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 7 파일 ~391 라인). R-6 마지막 청크.
+
+---
+
+### 세션 18 — 2026-04-26 — Phase R / R-6 청크 2 (7 파일) — **R-6 완료**
+
+**진행한 작업**:
+
+1. **R-6 청크 2 라인별 read** (7 파일):
+   - SmartRenderUtilities.java (109 라인) — 7 라디안 상수 + RadiantToAngle + getHorizontalCollisionangle + getAngle (atan2 등가)
+   - SmartRenderContext.java (48 라인) — Forge RenderingRegistry 등록
+   - SmartRenderMod.java (74 라인) — Forge @Mod 진입점
+   - SmartRenderInfo.java (29 라인) — mod metadata reflection
+   - SmartRenderInstall.java (27 라인) — ModelRenderer reflection 이름
+   - IModelPlayer.java (63 라인) — IModelPlayer 인터페이스 (16 ModelRenderer getter + 11 animateXxx)
+   - IRenderPlayer.java (48 라인) — IRenderPlayer 인터페이스
+
+2. **1.21.1 매핑 검증**: 7 라디안 상수 (Whole/Half/Quarter/Eighth/Sixteenth/Thirtytwoth/Sixtyfourth) + RadiantToAngle + atan2 등가 + 16 ModelRenderer getter R-3 일관 매핑 비교.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-6 청크 2 7 파트 섹션 — 398 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계 (7 파일 합)**:
+- [정합] 33 (Utilities 7 라디안 상수 + RadiantToAngle + getAngle atan2 등가 16 = 24 / IModel 8 ModelRenderer getter / IRender superRotatePlayer 1 = 9)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 365 (Forge RenderingRegistry/FMLInitializationEvent/PlayerAPI 인프라 + ModelRenderer reflection + 다층 모델 부재 + 인터페이스 vanilla 자동 + 빈 줄)
+- 합계: 398 라인 전수.
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 핵심 검증:
+- SmartRenderUtilities 7 라디안 상수 (Whole=2π / Half=π / Quarter=π/2 / Eighth=π/4 / Sixteenth=π/8 / Thirtytwoth=π/16 / Sixtyfourth=π/32) + RadiantToAngle (180/π) — 1.21.1 동등 상수 일치 검증.
+- getAngle(x, y) atan + quadrant 보정 = `Math.atan2(y, x) * RadiantToAngle` 등가 — sm_captureBodyYaw `atan2(-vel.x, vel.z)` 일치.
+- IModelPlayer 16 ModelRenderer getter — R-3 SmartMovingModelPlayerBase 16 @Deprecated getter와 정확히 일치 (8 [정합] / 7 [N/A] 일관).
+- IRenderPlayer superRotatePlayer — sm_captureBodyYaw + @ModifyArg index=3 진입점 [정합].
+
+**검증 체크리스트 (세션 18 R-6 청크 2 + R-6 전체)**:
+- [근거] ✓ 7 파일 라인별 read 완료
+- [전수] ✓ 청크 내 398 라인 + R-6 전체 626 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 2 합계 398 / R-6 전체 합계 626 일치
+- [발견] ✓ 청크 2 신규 발견 0건
+- [통계] ✓ R-6 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (라디안 상수 + atan2 + R-3 16 getter 매핑 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-6 전체 누적 (626 라인, 8 파일 2 청크 2 세션)**:
+- 합계: 정합 61 / 오역 0 / 누락 0 / 잉여 0 / N/A 565 = 626 라인 전수 (skip 0).
+- 신규 발견 0건 (인프라 + 인터페이스 위주).
+
+**R-6 완료** — SmartRenderRender + SR utility/Forge mod/인터페이스 8 파일 626 라인 전수 라인별 1:1 매핑.
+
+**다음 R-단계**: R-7 (SR ModelPlayer 179 + RenderPlayer 156 + SR playerapi 3 파일 (SmartRender 43 + ModelPlayerBase 248 + RenderPlayerBase 162) = 5 파일 ~788 라인). SR mod 측 ModelPlayer/RenderPlayer + PlayerAPI 인프라 — R-2/R-3과 유사 구조 위임자 패턴.
 
 ---
 
