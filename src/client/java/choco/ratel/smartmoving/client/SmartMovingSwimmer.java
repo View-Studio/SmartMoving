@@ -7,6 +7,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -659,6 +660,127 @@ public final class SmartMovingSwimmer {
     /** 4-인자 wrapper (수평 전용) — moveUpward=0, treeDimensional=false. */
     private static Vec3d moveFlying(ClientPlayerEntity player, float strafe, float forward, float speed) {
         return moveFlying(player, 0F, strafe, forward, speed, false);
+    }
+
+    // ── [Phase C-3] handleLava (포커스 #2.6 세션 4) ───────────────────────────
+
+    /**
+     * Phase C-3 (포커스 #2.6 세션 4) — handleLava 본체 1:1 이식.
+     *
+     * 원본 `SmartMovingSelf.handleLava()` L578-L600 (③ 리서치 §2 발췌):
+     * <pre>
+     * private boolean handleLava(float moveForward, float moveStrafing,
+     *                            boolean handledSwimming, boolean isLiquidClimbing) {
+     *     boolean handleLava = !isFlying && !handledSwimming && !isLiquidClimbing
+     *                       && sp.handleLavaMovement();
+     *     if (handleLava) {
+     *         standupIfPossible();
+     *         resetClimbing();
+     *         resetSwimming();
+     *         double d1 = sp.posY;
+     *         sp.moveFlying(moveStrafing, moveForward, 0.02F);
+     *         sp.moveEntity(sp.motionX, sp.motionY, sp.motionZ);
+     *         sp.motionX *= 0.5D;
+     *         sp.motionY *= 0.5D;
+     *         sp.motionZ *= 0.5D;
+     *         sp.motionY -= 0.02D;
+     *         if (sp.isCollidedHorizontally && sp.isOffsetPositionInLiquid(
+     *                 sp.motionX, ((sp.motionY + 0.60000002384185791D) - sp.posY) + d1, sp.motionZ)) {
+     *             sp.motionY = 0.30000001192092896D;
+     *         }
+     *     }
+     *     return handleLava;
+     * }
+     * </pre>
+     *
+     * <p><b>호출 위치</b>: {@link choco.ratel.smartmoving.mixin.client.MixinLivingEntityClient}
+     * 의 {@code sm_travel_client} 에서 handleSwimming 직후 (handledSwimming=false 분기).
+     * 진입 시 ci.cancel() 로 vanilla travel 차단.
+     *
+     * <p><b>진입 조건 (4-AND)</b>:
+     * <ul>
+     *   <li>{@code !sm.isFlying} (SM 비행 X)</li>
+     *   <li>{@code !handledSwimming} — 호출 위치 보장 (handleSwimming false 후 진입)</li>
+     *   <li>{@code !sm.isLiquidClimbing} (액체 클라이밍 X)</li>
+     *   <li>{@code player.isInLava()} (lava 안)</li>
+     * </ul>
+     *
+     * <p><b>부작용 평가</b> (포커스 #2.6 세션 4 전수 조사):
+     * <ul>
+     *   <li>swimUpward (점프 +0.04F): tickMovement L2649 외부 → vanilla 자동 처리 ✅</li>
+     *   <li>lava damage (setOnFireFromLava): {@code Entity.tick} 별개 → 차단 안 됨 ✅</li>
+     *   <li>lava sound / particle: 별개 시스템 → 차단 안 됨 ✅</li>
+     *   <li>vanilla travel() lava 분기 (L2123-L2142): SM 이 동등 처리 (벽 점프 motionY=0.3 포함)</li>
+     * </ul>
+     *
+     * <p><b>vanilla 와의 미세 차이 (원본 1.7.10 충실)</b>:
+     * <ul>
+     *   <li>damping Y: 원본 {@code 0.5D} vs vanilla {@code 0.8F} (SM 가 더 빠른 낙하)</li>
+     *   <li>중력: 원본 {@code -0.02D} 고정 vs vanilla {@code -d/4} (gravity attribute, slow_falling 영향)</li>
+     * </ul>
+     *
+     * <p><b>호출 컨텍스트</b>:
+     * <ul>
+     *   <li>{@code lavaLikeWater = true} (Creative): handleSwimming 가 lava 처리 →
+     *     handledSwimming=true → 본 메서드 진입 X</li>
+     *   <li>{@code lavaLikeWater = false} (Survival 기본): handleSwimming false →
+     *     본 메서드 진입 → SM 자체 lava 이동 (즉사 전 짧은 motion)</li>
+     * </ul>
+     *
+     * @return true 시 호출 측에서 ci.cancel() 처리하여 vanilla travel 차단
+     */
+    public static boolean handleLava(ClientPlayerEntity player, SmartMovingClientState sm,
+                                      Vec3d movementInput) {
+        // 진입 조건 (원본 L580): handledSwimming 은 호출 위치에서 보장
+        boolean handleLavaFlag = !sm.isFlying && !sm.isLiquidClimbing && player.isInLava();
+        if (!handleLavaFlag) return false;
+
+        // 원본 L582 standupIfPossible — heightOffset >= 0 확인 후 -1F 인 경우 복원
+        sm.standupIfPossible(player);
+        // 원본 L583 resetClimbing — 클라이밍 상태 리셋
+        sm.resetClimbing();
+        // 원본 L584 resetSwimming — 수영 8 필드 리셋 (private static, 같은 클래스)
+        resetSwimming(sm);
+
+        // 원본 L586: d1 = posY 저장 (벽 점프 isOffsetPositionInLiquid 체크용 prev posY)
+        double d1 = player.getY();
+
+        // 원본 L587: moveFlying(strafe=movementInput.x, forward=movementInput.z, 0.02F)
+        Vec3d moved = moveFlying(player, (float) movementInput.x, (float) movementInput.z, 0.02F);
+        player.setVelocity(moved);
+
+        // 원본 L588: moveEntity(motionX, motionY, motionZ) — 실제 이동
+        player.move(MovementType.SELF, player.getVelocity());
+
+        // 원본 L589-L591: damping 0.5 (X/Y/Z 모두)
+        Vec3d vel = player.getVelocity();
+        double mx = vel.x * 0.5D;
+        double my = vel.y * 0.5D;
+        double mz = vel.z * 0.5D;
+
+        // 원본 L592: 중력 -0.02D (vanilla 의 -gravity/4 와 미세 차이 — 원본 충실)
+        my -= 0.02D;
+
+        // 원본 L594-L597: lava 벽 점프
+        //   isCollidedHorizontally && isOffsetPositionInLiquid(motionX,
+        //       ((motionY + 0.60000002384185791D) - posY) + d1, motionZ)
+        //   → motionY = 0.30000001192092896D
+        // 1.21.1 매핑: isOffsetPositionInLiquid → BoundingBox.offset() + world.containsFluid()
+        if (player.horizontalCollision) {
+            Box bb = player.getBoundingBox().offset(
+                    mx,
+                    ((my + 0.60000002384185791D) - player.getY()) + d1,
+                    mz);
+            if (player.getWorld().containsFluid(bb)) {
+                my = 0.30000001192092896D;
+            }
+        }
+
+        // 최종 setVelocity (원본은 motionX/Y/Z 직접 변경, 1.21.1 은 setVelocity 일괄)
+        player.setVelocity(mx, my, mz);
+
+        // 원본 L599 return handleLava
+        return true;
     }
 
     /**

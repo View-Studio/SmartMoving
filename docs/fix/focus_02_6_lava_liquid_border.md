@@ -327,8 +327,8 @@ vanilla 위임.
 
 ### Phase C. `handleLava` SM 자체 처리 이식 결정
 
-**C-1. 이식 필요성 판단**
-- [ ] C-1. 원본 `handleLava` L578-L600 은 `lavaLikeWater=false` 시 lava 에서 SM 자체 이동
+**C-1. 이식 필요성 판단** — 세션 4 완료
+- [x] C-1. 원본 `handleLava` L578-L600 은 `lavaLikeWater=false` 시 lava 에서 SM 자체 이동
   처리 (moveFlying + damping 0.5 + motionY -= 0.02 + 벽 점프 특수). 1.21.1 은 vanilla
   `LivingEntity.travel()` 이 lava 수영을 처리하므로 **이식 불필요 확인** 또는 **vanilla 와
   차이 확인**.
@@ -338,14 +338,14 @@ vanilla 위임.
   - 차이: 원본 L594-L597 `isCollidedHorizontally + isOffsetPositionInLiquid → motionY=0.3`
     (lava 벽 점프) — vanilla `LivingEntity.swimUpward` 유사 처리 있음.
 
-**C-2. 결정: 미이식 유지 + 근사 기록**
-- [ ] C-2. `handleLava` SM 자체 이식은 **불필요** 결정 (vanilla 동치). §7 근사 기록 (B-42c
+**C-2. 결정: 미이식 유지 + 근사 기록** — 세션 4 미선택 (C-3 채택)
+- [~] C-2. `handleLava` SM 자체 이식은 **불필요** 결정 (vanilla 동치). §7 근사 기록 (B-42c
   관련 잔존):
   - lava 기본 이동 vanilla 위임 — 시멘틱 동치
   - 미세 상수 차이 (motionY -= 0.02D vs vanilla 0.05 중력): 체감 영향 낮음
 
-**C-3. 대안: 이식 진행 (엄격 1:1 원칙)**
-- [ ] C-3. 사용자 지시가 "엄격 1:1" 이므로 C-2 대신 `handleLava` 도 이식 선택 가능:
+**C-3. 대안: 이식 진행 (엄격 1:1 원칙)** — 세션 4 완료 (채택 + 이식 완결)
+- [x] C-3. 사용자 지시가 "엄격 1:1" 이므로 C-2 대신 `handleLava` 도 이식 선택 가능:
   - `SmartMovingSwimmer.handleLava(player, sm, movementInput)` 별도 메서드
   - `MixinLivingEntityClient.sm_beforeTravel` 에서 `handleSwimming` 반환 false + lava
     + !isLiquidClimbing + !isFlying 시 호출
@@ -353,12 +353,14 @@ vanilla 위임.
     motionY -= 0.02 + 벽 점프 motionY=0.3
   - `ci.cancel()` 로 vanilla travel() 취소
 
-**C-4. 선택 권고**
-- [ ] C-4. **C-3 (엄격 이식) 권고** — Extended #2 방침 따름. 단 플레이테스트에서 체감 차이
+**C-4. 선택 권고** — 세션 4 채택
+- [x] C-4. **C-3 (엄격 이식) 권고** — Extended #2 방침 따름. 단 플레이테스트에서 체감 차이
   없으면 C-2 (근사 유지) 로 후퇴 가능.
 
-**C-5. `handleAlternativeFlying` / `handleLand` 의 handledLava 필터 검증** (세션 1 신규 발견)
-- [ ] C-5. 원본 L602-L604 `handleAlternativeFlying(...handledLava)` + L633-L643
+**C-5. `handleAlternativeFlying` / `handleLand` 의 handledLava 필터 검증** (세션 1 신규 발견) — 세션 4 N/A
+- [x] C-5. 1.21.1 에는 `handleAlternativeFlying` / `handleLand` 동등 메서드 없음 (vanilla travel
+     위임). C-3 의 `ci.cancel()` 이 vanilla travel 통째 차단 → 자연스럽게 동등 효과 (lava 처리
+     후 vanilla 의 swim/walk/fall 분기 진입 안 됨). N/A. 원본 L602-L604 `handleAlternativeFlying(...handledLava)` + L633-L643
   `handleLand(...handledLava...)` 가 `!handledLava` 필터로 lava 처리 후 다른 처리 차단.
   1.21.1 에는 동등 메서드 없음 (vanilla `LivingEntity.travel()` 위임). Phase C-3 채택 시
   `MixinLivingEntityClient.sm_beforeTravel` 에서 `handleLava` 호출 후 `ci.cancel()` 로 vanilla
@@ -607,6 +609,76 @@ Phase D 4 + Phase E 3 = **약 21 원자 / 예상 3-4 세션**. 단 다수 검증
    사용자 결정 후 진행.
 
 진행률: Phase B 완결 (4/4 = 100%), 전체 #2.6 10/21 (~48%).
+
+### 세션 4 — 2026-04-25 — Phase C 일괄 (C-3 엄격 이식 채택)
+
+사용자 지시: "엄격 1:1" 유지 + Phase C 진입 결정. ci.cancel() 부작용 전수 조사 후
+   사용자 OK ("부작용 없이 계속 진행") → C-3 엄격 이식 채택.
+
+진행한 작업:
+1. **vanilla LivingEntity.travel 디컴파일 + 부작용 전수 조사** (사용자 요청):
+   - vineflower 1.11.1 로 `LivingEntity.class` 디컴파일 (3501 줄, .tmp_research 보관)
+   - vanilla L2083-L2142 travel() lava 분기 분석:
+     * lava 이동: `updateVelocity(0.02F) + move + multiply(0.5, 0.8F, 0.5) + applyFluidMovingSpeed + d/4 중력`
+     * **lava 벽 점프 자체 처리** (L2140-L2141, motionY=0.3F) ← 이전 분석 정정
+   - vanilla L2632-L2653 tickMovement() jump 분기:
+     * `swimUpward(LAVA)` (L2649) — travel() **외부** → ci.cancel() 영향 없음 ✅
+   - lava damage / sound / particle 모두 별개 시스템 → ci.cancel() 영향 없음 ✅
+   - 부작용 평가 결과: **0건**
+2. **handleLava 메서드 신설** (`SmartMovingSwimmer.java` L660-L770, ~110줄 본문 + 주석):
+   - 진입 조건 (4-AND, 원본 L580): !isFlying && !handledSwimming(호출 위치 보장) && !isLiquidClimbing && isInLava
+   - 처리: standupIfPossible / resetClimbing / resetSwimming / moveFlying 0.02F / move /
+     damping 0.5/0.5/0.5 / 중력 -0.02D / 벽 점프 motionY=0.30000001192092896D
+   - `Box bb = player.getBoundingBox().offset(...)` + `world.containsFluid(bb)` 로
+     원본 `isOffsetPositionInLiquid` 매핑 (vanilla L3180 패턴 활용)
+3. **Mixin 호출 추가** (`MixinLivingEntityClient.java` sm_travel_client L100-L110):
+   - handleSwimming false 분기 직후 `handleLava` 호출 + ci.cancel()
+   - 기존 4 ci.cancel() 사용처 (swim/slide/fly/climb) 와 동일 패턴
+4. **의존 확인**:
+   - `sm.standupIfPossible(player)` ✅ (ClientState L2464)
+   - `sm.resetClimbing()` ✅ (ClientState L2596)
+   - `Swimmer.resetSwimming(sm)` ✅ (private static, 같은 클래스)
+   - `Swimmer.moveFlying(player, strafe, forward, speed)` ✅ (private static)
+   - `world.containsFluid(box)` ✅ (vanilla 1.21.1)
+5. **결정 마킹**:
+   - C-1 ✅ 이식 필요성 판단 완료
+   - C-2 [~] 미선택 (C-3 채택)
+   - C-3 ✅ 엄격 이식 채택 + 완결
+   - C-4 ✅ 권고 채택
+   - C-5 N/A (1.21.1 vanilla 위임, ci.cancel() 가 동등 효과)
+
+근사 여부: 신규 0. **damping Y / 중력 미세 차이는 원본 1.7.10 충실** (vanilla 0.8F vs SM 0.5D /
+   vanilla -d/4 vs SM -0.02D) — §7 영구 후보 1건 추가 가능 (slow_falling 시 원본 -0.02 고정 vs
+   vanilla 가변). 단 원본 자체가 -0.02D 고정이라 1:1 이식 — 근사 아님.
+
+vanilla 부작용 평가 (사용자 요청 전수 조사 결과)
+| 항목 | 위치 | ci.cancel() 영향 |
+|---|---|---|
+| swimUpward (점프 +0.04F) | tickMovement L2649 | ✅ 차단 안 됨 (travel 외부) |
+| lava damage (setOnFireFromLava) | Entity.tick 외부 | ✅ 차단 안 됨 |
+| lava sound (ambient) | LivingSoundManager 별개 | ✅ 차단 안 됨 |
+| lava particle (bubble) | tickMovement 외부 | ✅ 차단 안 됨 |
+| vanilla lava 이동 | travel L2123-L2142 | ⚠️ 차단됨 — SM 동등 처리 |
+| vanilla lava 벽 점프 | travel L2140-L2141 | ⚠️ 차단됨 — SM 동등 처리 (motionY=0.3) |
+
+완료 전 검증 체크리스트 (세션 4 기준):
+- [근거] 원본 SmartMovingSelf L578-L600 (③ 리서치 §2 발췌)
+- [근거] vanilla LivingEntity.travel L2083-L2142 디컴파일 (vineflower 1.11.1, .tmp_research)
+- [근거] 1.21.1 이식 위치 — Swimmer L660-L770 (handleLava) + Mixin L100-L110 (호출)
+- [대응] 원본 ↔ 1.21.1 1:1 (진입 조건 + 처리 9 단계 + 벽 점프)
+- [분기] 진입 4-AND + 벽 점프 isCollidedHorizontally && isOffsetPositionInLiquid 보존
+- [상수] 0.02F / 0.5D / -0.02D / 0.60000002384185791D / 0.30000001192092896D 정확 보존
+- [타이밍] 원본 L582-L597 절대 순서 보존 (standup → reset → moveFlying → move → damping → 중력 → 벽 점프 → setVelocity)
+- [근사] 신규 0. vanilla 차이는 원본 1.7.10 충실 (근사 아님).
+- [신규] handleSwimming/handleLand handledLava 필터 — 1.21.1 vanilla 위임으로 N/A 결정 (C-5)
+- [회귀] 빌드 통과. handleSwimming 가 lava 처리 (lavaLikeWater=true) 시 진입 X 보장.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s)
+
+다음 세션 권고: **Phase D 진입** — lava 점프 조건 grep + 보완. D-1 jump 회피 (원본 L1852) +
+   D-2 isHeadJumping 해제 (L2530) + D-3 isGroundSprinting (L2679) + D-4 isSprintJump (L2643).
+   1.21.1 grep 후 누락 시 추가.
+
+진행률: Phase C 완결 (5/5 = 100%), 전체 #2.6 15/21 (~71%).
 
 ---
 

@@ -98,6 +98,17 @@ public abstract class MixinLivingEntityClient {
             return;
         }
 
+        // [8-2b] lava 이동 처리 (Phase C-3, 포커스 #2.6 세션 4) — handleSwimming false 분기.
+        //   원본 SmartMovingSelf L578-L600 `handleLava` 1:1 이식.
+        //   진입 조건 (원본 L580): !isFlying && !handledSwimming && !isLiquidClimbing && isInLava
+        //   - lavaLikeWater=true (Creative): handleSwimming 이 lava 처리 → 여기 진입 X
+        //   - lavaLikeWater=false (Survival): handleSwimming 통과 → 여기 진입 → SM 자체 lava motion
+        //   부작용 0 (전수 조사 완료): swimUpward / damage / sound / particle 모두 travel() 외부
+        if (SmartMovingSwimmer.handleLava(player, sm, movementInput)) {
+            ci.cancel();
+            return;
+        }
+
         // 원본 handleLand L648: `!handledSwimming && !grabButton.Pressed` 조건에서 호출.
         // 1.21.1 은 handleSwimming=false 도달 시점이 원본 `!handledSwimming` 대응 — 여기서 호출.
         // grab 분기(원본 L1354 landMotionPost)는 현재 단일 호출 지점으로 통합(효과 동일).
