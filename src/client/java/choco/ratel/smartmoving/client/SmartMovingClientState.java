@@ -1531,8 +1531,12 @@ public final class SmartMovingClientState {
             //                    && (sneakButton.Pressed || crawlToggled)
             //                    && esp.movementInput.moveForward > 0F;
             // B-17b1 (세션 48): canStandUp 분기 이식 (원본 L2738-L2754).
-            // ※ isNeighborClimbing 갱신 로직 (B-19) 미이식 → 항상 false → 이 공식 결과도
-            //   항상 false. B-19 완료 후 자동 활성화.
+            // **포커스 #3 B-1 (세션 2 검증)**: B-19 (isNeighborClimbing 갱신) 이미 완전 이식됨
+            //   확인 — SmartMovingClimber.handleClimbing L385-L455 (B-19a4 세션 108) 에서
+            //   8방향 seekClimbGap 결과로 매 tick 갱신. 호출: sm_travel_client L177.
+            //   진입 조건: cfg.freeClimb || cfg.simpleClimb || cfg.smartClimb (3 클라이밍
+            //   모드 중 1개 활성 시). 따라서 본 5-AND 공식 결과도 cfg 활성 시 정상 평가됨.
+            //   이전 stale 주석 ("미이식 → 항상 false") 정정.
             {
                 boolean _sneakPressed17 = net.minecraft.client.MinecraftClient.getInstance()
                         .options.sneakKey.isPressed();
