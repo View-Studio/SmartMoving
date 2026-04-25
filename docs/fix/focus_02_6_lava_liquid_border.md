@@ -296,27 +296,32 @@ vanilla 위임.
 
 ### Phase B. `isInLiquid` + `getMax/MinPlayerLiquidBetween` 검증
 
-**B-1. `isInLiquid` 자동 반영 확인**
-- [ ] B-1. Phase A 완료 후 `isInLiquid(player)` 는 자동으로 lava + modded liquid 포함. 코드
-  수정 불필요. **검증만** — `getLiquidBorder` lava 반환 시 `getMaxPlayerLiquidBetween !=
-  minY` 만족 → `isInLiquid = true`.
+**B-1. `isInLiquid` 자동 반영 확인** — 세션 3 완료
+- [x] B-1. `ClientState.isInLiquid` L2209-L2213 = `getMax + getMin` 호출. Phase A 후 lava
+  자동 반영. **검증 통과** (코드 변경 0).
 
-**B-2. `getMax/MinPlayerLiquidBetween` 자동 반영 확인**
-- [ ] B-2. 내부적으로 `getLiquidBorder` 호출. Phase A 완료 후 lava 반영 자동. **검증만**.
+**B-2. `getMax/MinPlayerLiquidBetween` 자동 반영 확인** — 세션 3 완료
+- [x] B-2. 두 메서드 모두 내부적으로 `getLiquidBorder` 호출. Phase A 후 lava 반환 자동 반영.
+  **검증 통과** (코드 변경 0).
 
-**B-3. 소비처 전수 감사**
-- [ ] B-3. `isInLiquid` / `getMaxPlayerLiquidBetween` / `getMinPlayerLiquidBetween` 모든
-  소비처 검토 — lava 가 water 와 동일 처리되는지:
-  - `Swimmer.updateSwimState` L98-L114 (B-7c)
-  - `ClientState.fromSwimmingOrDiving` (B-42-B39) — crawlStandUpLiquidCeiling
-  - `ClientState.SwimBorderValues` computeSwimBorderValues — totalSwimWaterBorder
-  - `handleSwimming` motion 계산 (이미 lavaLikeWater 활성 시 진입)
+**B-3. 소비처 전수 감사** — 세션 3 완료
+- [x] B-3. 4 소비처 모두 grep 검증 통과:
+  - **Swimmer.updateSwimState** L98-L114 (B-7c): B-4 와 동일 — 1:1 일치 확인
+  - **ClientState.fromSwimmingOrDiving** L2737 (crawlStandUpLiquidCeiling): `getMinPlayerLiquidBetween(maxY, maxY+1.1)` → Phase A 자동 lava 천장 판정
+  - **ClientState.SwimBorderValues** L2277 (computeSwimBorderValues): `getMaxPlayerLiquidBetween(maxY-1.8, maxY+1.2)` → Phase A 자동 lava 수심
+  - **handleSwimming motion 계산**: 진입 조건 (B-4) 통과 시 자동 처리 — 별도 검증 0
 
-**B-4. `handleSwimming` 진입 조건 검증** (세션 1 신규 발견, 원본 L232 기준)
-- [ ] B-4. 원본 L232 `handleSwimming = !isFlying && !isLiquidClimbing && (sp.isInWater()
-  || (wasSwimming && isInLiquid()) || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()))`
-  3-OR 조건이 1.21.1 `SmartMovingSwimmer.updateSwimState` L98-L114 (B-7c) 에 정확히 보존
-  되는지 line-by-line 비교. 누락 분기 발견 시 정정.
+**B-4. `handleSwimming` 진입 조건 검증** (세션 1 신규 발견, 원본 L232) — 세션 3 완료
+- [x] B-4. **원본 ↔ 1.21.1 1:1 일치 검증 통과**:
+  ```
+  원본 L232:        !isFlying && !isLiquidClimbing && (isInWater() || (wasSwimming && isInLiquid())
+                                                       || (lavaLikeWater && handleLavaMovement()))
+  1.21.1 Swimmer L109-L113: !sm.isFlying && !sm.isLiquidClimbing && (player.isTouchingWater()
+                                || (sm.isSwimming_sm && ClientState.isInLiquid(player))
+                                || (cfg.isLavaLikeWaterEnabled() && player.isInLava()))
+  ```
+  표면 매핑만 (sp.isInWater→player.isTouchingWater / wasSwimming→sm.isSwimming_sm 스냅샷 /
+  Config→cfg / sp.handleLavaMovement→player.isInLava). 분기/조건/순서 전수 보존.
 
 ---
 
@@ -560,6 +565,48 @@ Phase D 4 + Phase E 3 = **약 21 원자 / 예상 3-4 세션**. 단 다수 검증
    진입 조건 검증 (원본 L232 의 3-OR 조건이 1.21.1 SmartMovingSwimmer.updateSwimState 에 보존?).
 
 진행률: Phase A 완결 (5/5 = 100%), 전체 #2.6 6/21 (~29%).
+
+### 세션 3 — 2026-04-25 — Phase B 일괄 검증 (B-1~B-4)
+
+사용자 지시: "엄격 1:1" 유지 + Phase B 일괄. 검증만 (코드 변경 0).
+
+진행한 작업:
+1. **B-4 handleSwimming 진입 조건 1:1 검증** (③ 리서치 §2.2.5 + 1.21.1 Swimmer L109-L113):
+   - 원본 L232: `!isFlying && !isLiquidClimbing && (isInWater() || (wasSwimming && isInLiquid())
+     || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()))`
+   - 1.21.1 SmartMovingSwimmer.updateSwimState L109-L113: 표면 매핑만 (sp→player /
+     Config→cfg / handleLavaMovement→isInLava). 3-OR 분기/조건/순서 전수 보존 ✅
+2. **B-1/B-2/B-3 grep 검증** (모두 자동 lava 반영, 코드 변경 0):
+   - `ClientState.isInLiquid` L2209-L2213 = `getMax + getMin`
+   - `ClientState.getMaxPlayerLiquidBetween` L2142 / `getMinPlayerLiquidBetween` L2173 →
+     내부 `getLiquidBorder` 호출 (Phase A 결과 자동 lava 반환)
+   - `ClientState.fromSwimmingOrDiving` L2737 (crawlStandUpLiquidCeiling) → `getMin(maxY, maxY+1.1)`
+   - `ClientState.SwimBorderValues.computeSwimBorderValues` L2277 (totalSwimWaterBorder) →
+     `getMax(maxY-1.8, maxY+1.2)`
+   - **handleSwimming motion 계산**: 진입 조건 (B-4) 통과 시 자동 처리 — 별도 검증 0
+
+근사 여부: 신규 0. §7 영구 후보 3건 유지 (FiniteLiquid mod / isInsideOfMaterial / reverseHandleAcc).
+
+완료 전 검증 체크리스트 (세션 3 기준):
+- [근거] ③ 리서치 §2.2.5 (handleSwimming 진입 조건) + 1.21.1 Swimmer L109-L113 line-by-line
+- [근거] 1.21.1 grep 결과 — 4 소비처 모두 getLiquidBorder 의존 확인
+- [대응] 원본 L232 ↔ 1.21.1 Swimmer 3-OR 1:1 (표면 매핑만)
+- [분기] 3-OR 모두 보존 + isFlying/isLiquidClimbing 게이트
+- [상수] N/A (검증)
+- [타이밍] handleSwim 진입 → 후속 motion 계산 순서 보존
+- [근사] 신규 0
+- [신규] 추가 의존 발견 없음
+- [회귀] 코드 변경 0 → 회귀 0
+- [빌드] 코드 변경 0 — 직전 세션 빌드 통과 상태 유지
+
+다음 세션 권고: **Phase C 진입 결정 필요**.
+   - **C-2 미이식**: vanilla `LivingEntity.travelInFluid` 위임 + §7 등록 (motionY -= 0.02 vs
+     vanilla 0.05 미세 차이). lava 벽 점프 (motionY=0.3 특수) 미작동.
+   - **C-3 엄격 이식 (권고)**: SmartMovingSwimmer.handleLava 신설 + Mixin 호출 + ci.cancel().
+     원본 L578-L600 1:1 (~30 줄 + 호출 통합).
+   사용자 결정 후 진행.
+
+진행률: Phase B 완결 (4/4 = 100%), 전체 #2.6 10/21 (~48%).
 
 ---
 
