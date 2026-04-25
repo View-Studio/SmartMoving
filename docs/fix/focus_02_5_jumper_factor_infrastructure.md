@@ -326,10 +326,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   early return (9 type) → speed 분기 (Sprint/Run/Walk/Sneak/Stand). L501 의 `speed==Standing && type!=ClimbBack*`
   → `* 0F` 특수 처리 포함.
 
-**B-5. `getJumpVerticalFactor(speed, type)`** (원본 L418-L463)
-- [ ] B-5. SmartMovingConfig 에 메서드 신설 — base `_jumpVerticalFactor` × type 분기
-  (Angle/ClimbUp/ClimbUpHandsOnly/ClimbBackUp/ClimbBackUpHandsOnly/ClimbBackHead/
-  ClimbBackHeadHandsOnly/WallUp/WallHead) × speed 분기 (Sprint/Run/Walk/Sneak/Stand).
+**B-5. `getJumpVerticalFactor(speed, type)`** (원본 L418-L463) — 세션 15 완료
+- [x] B-5. SmartMovingConfig 에 instance 메서드 신설. base `jumpVerticalFactor` × type 분기
+  (Angle 즉시 early return / ClimbUp×2 / ClimbBackUp×2 / ClimbBackHead×2 / WallUp+WallHead 누적) +
+  9 type early return → speed 분기 (Sprint/Run/Walk/Sneak/Stand). WallHead = base × wallUp × wallHead 특수.
 
 **B-6. `getMaxHorizontalMotion(speed, type, inWater)`** (원본 L508-L525)
 - [ ] B-6. SmartMovingConfig 에 메서드 신설 — baseMaxMotion = `0.117852041920949F`
@@ -1226,6 +1226,48 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase B-5 `getJumpVerticalFactor(speed, type)` 신설 (원본 `SmartMovingClientConfig.java` L418-L463). 구조는 B-4 와 유사 — base × type 분기 (Angle/ClimbUp×2/ClimbBackUp×2/ClimbBackHead×2/WallUp/WallHead) × speed 분기.
 
 진행률: Phase B 5/9 (~56%), 전체 #2.5 71/~110 (~64.5%).
+
+### 세션 15 — 2026-04-25 — Phase B-5 (getJumpVerticalFactor)
+
+사용자 지시: "엄격 1:1" 유지 + Phase B-5 이식.
+
+진행한 작업:
+1. 원본 라인 + 본체 확보 (`SmartMovingClientConfig.java` L418-L463):
+   - L420-L421: `!enabled` → return 1F
+   - L423: base = jumpVerticalFactor
+   - L425-L426: type==Angle → **return result × angleJumpVerticalFactor (즉시 early return)**
+   - L428-L431: ClimbUp/ClimbUpHandsOnly + ClimbUpHandsOnly 추가 — climbUp 그룹
+   - L433-L436: ClimbBackUp 그룹 (동일 패턴)
+   - L438-L441: ClimbBackHead 그룹 (동일 패턴)
+   - L443-L446: WallUp/WallHead → ×= wallUp + WallHead 추가 → **WallHead = base × wallUp × wallHead 누적**
+   - L448-L449: 9 type (Angle 포함) early return — Angle 은 위에서 이미 처리됨
+   - L451-L460: speed 분기 (Sprint/Run/Walk/Sneak/Stand) — Standing 도 정상 곱셈 (B-4 와 달리 0F 특수 없음)
+2. 1.21.1 의존 grep 확인:
+   - 모든 V factor 필드 (jump/angle/climbUp×2/climbBackUp×2/climbBackHead×2/wall×2/sprint/run/walk/sneak/stand Jump V) Phase A 에서 추가 ✅
+3. 1.21.1 이식 (`SmartMovingConfig.java`, getJumpHorizontalFactor 직전):
+   - instance 메서드 신설 (Phase B 인프라 그룹)
+   - 원본 L418-L463 절대 순서 보존 (1:1)
+4. 근사 여부: 없음. 1:1.
+
+WallHead 특이점 (현 1.21.1 주석에도 명시됨):
+- `verticalMotion = -0.078 + 0.498 × (wallUpJumpVerticalFactor + wallHeadJumpVerticalFactor)` — 이는 tryJump 출구 공식 (Phase D)
+- getJumpVerticalFactor 단계에서는 `result = base × wallUp × wallHead` (곱셈 누적). 별개 공식.
+
+완료 전 검증 체크리스트 (세션 15 기준):
+- [근거] 원본 라인 확보 — `SmartMovingClientConfig.java` L418-L463 (전체)
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` Phase B 인프라 그룹 (getJumpHorizontalFactor 직전)
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (분기/순서/연산자/early return/누적 곱셈 모두 일치)
+- [분기] `!enabled` + Angle early return + 8 type-pair if + 9 type early return + 5-way speed — 전수
+- [상수] base 1F (jumpVerticalFactor) + 모든 V factor 곱셈
+- [타이밍] instance 메서드 — Phase D-6 호출 (`verticalJumpFactor = cfg.getJumpVerticalFactor(...) * jumpFactor`).
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음.
+- [회귀] 신규 instance 메서드 추가 — 기존 코드 영향 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase B-6 `getMaxHorizontalMotion(speed, type, inWater)` 신설 (원본 L508-L525). baseMaxMotion = 0.117852041920949F (육상) / 0.07839602977037292F (수중) × speed 분기 (Sprint→sprintFactor / Run→runFactor / Sneak→sneakFactor). `!enabled` 시 speed==Running → baseMaxMotion × 1.3F.
+
+진행률: Phase B 6/9 (~67%), 전체 #2.5 72/~110 (~65.5%).
 
 ---
 

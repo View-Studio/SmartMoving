@@ -151,6 +151,85 @@ public class SmartMovingConfig {
     }
 
     /**
+     * Phase B-5 — getJumpVerticalFactor(speed, type).
+     *
+     * 원본 `SmartMovingClientConfig.java` L418-L463 (1:1 번역):
+     * <pre>
+     * public float getJumpVerticalFactor(int speed, int type) {
+     *     if (!enabled) return 1F;
+     *     float result = _jumpVerticalFactor.value;
+     *     if (type == Angle)                                              return result * _angleJumpVerticalFactor.value;   // 즉시 early return
+     *     if (type == ClimbUp || type == ClimbUpHandsOnly)                result *= _climbUpJumpVerticalFactor.value;
+     *     if (type == ClimbUpHandsOnly)                                   result *= _climbUpJumpHandsOnlyVerticalFactor.value;
+     *     if (type == ClimbBackUp || type == ClimbBackUpHandsOnly)        result *= _climbBackUpJumpVerticalFactor.value;
+     *     if (type == ClimbBackUpHandsOnly)                               result *= _climbBackUpJumpHandsOnlyVerticalFactor.value;
+     *     if (type == ClimbBackHead || type == ClimbBackHeadHandsOnly)    result *= _climbBackHeadJumpVerticalFactor.value;
+     *     if (type == ClimbBackHeadHandsOnly)                             result *= _climbBackHeadJumpHandsOnlyVerticalFactor.value;
+     *     if (type == WallUp || type == WallHead)                         result *= _wallUpJumpVerticalFactor.value;        // ※ 둘 다 wallUp 사용
+     *     if (type == WallHead)                                           result *= _wallHeadJumpVerticalFactor.value;       // ※ WallHead = base × wallUp × wallHead 누적
+     *     if (type == Angle || type == ClimbUp || ... || type == WallHead) return result;   // type 매칭 시 speed 분기 skip
+     *     if (speed == Sprinting)  result *= _sprintJumpVerticalFactor.value;
+     *     else if (speed == Running)  result *= _runJumpVerticalFactor.value;
+     *     else if (speed == Walking)  result *= _walkJumpVerticalFactor.value;
+     *     else if (speed == Sneaking) result *= _sneakJumpVerticalFactor.value;
+     *     else if (speed == Standing) result *= _standJumpVerticalFactor.value;
+     *     return result;
+     * }
+     * </pre>
+     *
+     * 호출처: tryJump (Phase D-6) — `float verticalJumpFactor = cfg.getJumpVerticalFactor(speed, type) * jumpFactor;`
+     */
+    public float getJumpVerticalFactor(int speed, int type) {
+        if (!enabled)
+            return 1F;
+
+        float result = jumpVerticalFactor;
+
+        if (type == JUMP_TYPE_ANGLE)
+            return result * angleJumpVerticalFactor;
+
+        if (type == JUMP_TYPE_CLIMB_UP || type == JUMP_TYPE_CLIMB_UP_HANDS_ONLY)
+            result *= climbUpJumpVerticalFactor;
+        if (type == JUMP_TYPE_CLIMB_UP_HANDS_ONLY)
+            result *= climbUpJumpHandsOnlyVerticalFactor;
+
+        if (type == JUMP_TYPE_CLIMB_BACK_UP || type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY)
+            result *= climbBackUpJumpVerticalFactor;
+        if (type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY)
+            result *= climbBackUpJumpHandsOnlyVerticalFactor;
+
+        if (type == JUMP_TYPE_CLIMB_BACK_HEAD || type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            result *= climbBackHeadJumpVerticalFactor;
+        if (type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            result *= climbBackHeadJumpHandsOnlyVerticalFactor;
+
+        if (type == JUMP_TYPE_WALL_UP || type == JUMP_TYPE_WALL_HEAD)
+            result *= wallUpJumpVerticalFactor;
+        if (type == JUMP_TYPE_WALL_HEAD)
+            result *= wallHeadJumpVerticalFactor;
+
+        if (type == JUMP_TYPE_ANGLE
+            || type == JUMP_TYPE_CLIMB_UP || type == JUMP_TYPE_CLIMB_UP_HANDS_ONLY
+            || type == JUMP_TYPE_CLIMB_BACK_UP || type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY
+            || type == JUMP_TYPE_CLIMB_BACK_HEAD || type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY
+            || type == JUMP_TYPE_WALL_UP || type == JUMP_TYPE_WALL_HEAD)
+            return result;
+
+        if (speed == SPEED_SPRINTING)
+            result *= sprintJumpVerticalFactor;
+        else if (speed == SPEED_RUNNING)
+            result *= runJumpVerticalFactor;
+        else if (speed == SPEED_WALKING)
+            result *= walkJumpVerticalFactor;
+        else if (speed == SPEED_SNEAKING)
+            result *= sneakJumpVerticalFactor;
+        else if (speed == SPEED_STANDING)
+            result *= standJumpVerticalFactor;
+
+        return result;
+    }
+
+    /**
      * Phase B-4 — getJumpHorizontalFactor(speed, type).
      *
      * 원본 `SmartMovingClientConfig.java` L465-L505 (1:1 번역):
