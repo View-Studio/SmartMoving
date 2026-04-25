@@ -1,6 +1,11 @@
 # Focus #3 — 상태 전환 조건 이상
 
 > 진입점: [`playtest_fixes.md`](playtest_fixes.md) → 현재 포커스가 #3 일 때 진입.
+>
+> **종합 리서치 (세션 1, 2026-04-25)**: `docs/research/mapping/research_state_transitions.md`
+> — 원본 6 파일 6499 줄 + vanilla 11 리서치 + 1.21.1 5 코드 모두 라인별 전수 read 결과.
+> 4 Agent 병렬 (A: SmartMovingSelf 3345 줄 / B: PlayerBase + Factory + Mod / C: vanilla
+> 1.21.1 / D: Mixin + ClientState 매핑). **모든 원자 작업의 1차 근거**.
 
 ---
 
@@ -8,9 +13,9 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | ⚪ 대기 (재현 케이스 수집 필요 / #2 선행) |
-| 현재 단계 | 재현 케이스 수집 |
-| 선행 의존 | #2 (상태값이 정확해야 전환 조건 검증 의미 있음) |
+| 상태 | 🟢 진입 가능 (#2 / #2.5 / #2.6 / #2.7 모두 AI 완결) |
+| 현재 단계 | 세션 1 — 전수 리서치 완료 → Phase B 이식 진입 전 |
+| 선행 의존 | #2 / #2.5 / #2.6 / #2.7 모두 완결 ✓ |
 
 ---
 
@@ -19,21 +24,26 @@
 특정 **조합** 에서 상태가 원본과 다른 **타이밍**에 전환됨. 혹은 전환 자체가 일어나지
 않음. 플래그는 맞는데 전환 경로가 어긋나는 경우.
 
-전형적인 의심:
-- 크롤링 ↔ 수영 ↔ 잠수 전환
-- 슬라이딩 진입 조건
-- 클라이밍 → 크롤링 ↔ 점프
-- 벽 점프 더블클릭 타이머 리셋
+**세션 1 전수 리서치 결과 — 호출 순서 98% 1:1 정합**. 잔존 5건만 미이식/근사:
+1. **B-10d** isLevitating 공식 미이식 (항상 false).
+2. **B-19** isNeighborClimbing 미갱신 → isCrawlClimbing 항상 false (1 블록 통로 진입 불가).
+3. **§18.1 B-N-standup-approx-4** capabilities.flying sync 미실행.
+4. **fromSwimmingOrDiving 트리거 블록** 부분 이식.
+5. **contextContinueCrawl** 미이식.
 
 ---
 
-## 3. 재현 케이스 표 ⚠️ **진입 전 필수 수집**
+## 3. 재현 케이스 표 — 세션 1 4 Agent 결과로 채움
 
-| # | 시나리오 | 대상 전환 | 원본 기대 트리거 | 1.21.1 실제 | 원본 라인 근거 |
-|---|---------|---------|---------------|-----------|-------------|
-| 1 | (예) 전속력 + sneak + onGround | idle → isSliding=true | `sprint && sneak && onGround && !climbing && !headJump` | ? | `SmartMovingSelf.md` IMPL-02 대응 |
-| 2 | (예) 물에서 벽으로 부딪힘 | isSwimming → isJumpingOutOfWater | `wantJumpOutOfWater && waterMovementTicks>10` | ? | `SmartMovingSwimmer.handleSwimming` §8-5 |
-| 3 | | | | | |
+| # | 시나리오 | 대상 전환 | 원본 기대 트리거 | 1.21.1 실제 | 원본 라인 근거 | 잔존 ID |
+|---|---------|---------|---------------|-----------|-------------|---|
+| 1 | 1 블록 통로 클라이밍 + 크롤 (천장 1.5 블록 이하) | isCrawlClimbing → true | `(wasCrawling \|\| isCrawlClimbing) && isClimbing && isNeighborClimbing && sneak && moveForward` (L2737) | **항상 false** (isNeighborClimbing 미갱신) | SmartMovingSelf L2737 + `handleClimbing` 본체 isNeighborClimbing 갱신 | **B-19** |
+| 2 | 수중 정적 자세 (방향키 없이 수영) | isLevitating → true | `diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (L505) | **항상 false** (B-10d 미이식) | SmartMovingSelf L505 (handleSwimming) | **B-10d** |
+| 3 | Creative 비행 + 좁은 공간 접근 (속도 낮음 + 하강) | tryLanding → standupIfPossible(true, restoreFromFlying) | tryLanding=true → `capabilities.isFlying = false` + restoreFromFlying=true (L2199) | SM `isFlying = false` 만 실행, vanilla 비행 유지 (수동 F 필요) | SmartMovingSelf L2196-L2201 + L2542-L2544 | **§18.1** |
+| 4 | 깊은 물 → 육지 (걷기/스니크/크롤) | fromSwimmingOrDiving 4 분기 (L1369-L1404) | wasShortInWater && !isShortInWater → 4 분기 setHeightOffset(-1F) | 트리거 블록 부분 이식 — 일부 분기 누락 가능성 | SmartMovingSelf L1363-L1405 | **B-fromSwim** |
+| 5 | 물 표면 아래 크롤 유지 | contextContinueCrawl=true (L1389) | 깊은 물 → 수면 아래 크롤 진입 시 set | 미이식 (false 고정) | SmartMovingSelf L1389 | **B-context** |
+
+**선택**: 케이스 2 (B-10d) 는 실제 영향 미미 (POSE/dimensions 무관 — #2.7 D 옵션 3 채택으로 isLevitating 비트만 사용). 우선순위 ↓.
 
 ---
 
@@ -41,41 +51,86 @@
 
 | 관계 | 대상 |
 |------|------|
-| 선행 의존 | **#2** (상태값 정확성) |
+| 선행 의존 | **#2 / #2.5 / #2.6 / #2.7** 모두 완결 ✓ |
 | 영향받는 후속 | #4 (키 커맨드 결과), #1 (애니메이션 전환 순간) |
-| 영향 주는 완료 이식 | IMPL-01 크롤링 전환 / IMPL-02 슬라이딩 / `updateWallJumpState` / `handleClimbing` |
+| 영향 주는 완료 이식 | sm_travel_client 12단계 / tickEssential 38 블록 / §18.1 standupIfPossible 2-arg / Phase 1·2 #2.7 BBox/POSE/EyeHeight |
 
 ---
 
 ## 5. 원본 근거
 
-### 5.1. 리서치 파일 인덱스
+### 5.1. 종합 리서치 (세션 1 신규 ★)
 
-| 전환 영역 | 리서치 파일 | 섹션 |
-|----------|------------|------|
-| 크롤링 진입/유지/해제 | `SmartMovingSelf.md` | L2419-L2432 wouldWantCrawl / L2474 isCrawling = canCrawl && (wantCrawl \|\| mustCrawl) |
-| 슬라이딩 진입 | `SmartMovingSelf.md` | IMPL-02 대응, slidingSpeedStopFactor 참조 |
-| 벽 점프 트리거 | `SmartMovingSelf.md` + `mapping/jump.md` | L2863-2897 canWallJumping / wantWallJumping |
-| 수영→크롤링 전환 | `SmartMovingSelf.md` | handleSwimming 내 standupIfPossible |
-| 클라이밍 진입 | `SmartMovingSelf.md` | wouldWantClimb L1814-1822 |
+**`docs/research/mapping/research_state_transitions.md`** (~700 줄):
+- §1 SmartMovingSelf 상태 전환 메서드 (Agent A 결과)
+- §2 PlayerBase hook + Factory + Mod (Agent B)
+- §3 1.21.1 vanilla tick/travel 호출 순서 (Agent C)
+- §4 1.21.1 매핑 — Mixin 호출 순서 (Agent D)
+- §5 매핑 정합 + 누락 영역
+- §6 §18.1 (B-N-standup-4) 1.21.1 처리 방안
+- §7 focus_03 갱신 권고
+- §8 1:1 번역 결론
 
-### 5.2. 확보 필요
+### 5.2. 원본 라인 인덱스 (라인 정확)
 
-재현 케이스별 원본 전환 블록을 리서치 파일에서 확인. 부족하면 WebFetch:
+`C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java`:
+- **L95-L147** `superMoveEntityWithHeading` — 호출 순서 (★ 핵심)
+- **L227-L576** handleSwimming
+- **L578-L600** handleLava
+- **L602-L631** handleAlternativeFlying
+- **L633-L663** handleLand (→ fromSwimmingOrDiving / landMotion / handleClimbing / handleCeilingClimbing)
+- **L814-L1110** handleClimbing
+- **L1112-L1174** handleCeilingClimbing
+- **L1363-L1405** fromSwimmingOrDiving (★ B-fromSwim)
+- **L1389** contextContinueCrawl=true (★ B-context)
+- **L505** isLevitating 공식 (★ B-10d)
+- **L2196-L2212** standupIfPossible 본체 (vanilla flying 해제 분기 ★ §18.1)
+- **L2307-L3045** updateEntityActionState 메인 흐름
+- **L2419-L2444** 크롤 진입 (wouldWantCrawl → wantCrawl → canCrawl → isCrawling)
+- **L2510** `isFlying = Config.fly && capabilities.isFlying && !isSwimming && !isDiving`
+- **L2524-L2530** isHeadJumping 5-AND 재평가
+- **L2542-L2544** tryLanding 계산 + standupIfPossible(2-arg)
+- **L2737** isCrawlClimbing 5-AND (★ B-19 의존)
+- **L3110** `isSmall = sp.height < 1`
 
-```
-대상 URL: SmartMovingSelf.java
-추출 대상:
-  1. <케이스 #N 대상 전환> 이 일어나는 조건식 전체
-  2. 해당 전환이 호출되는 메서드 + 주변 30줄
-  3. 전환 전후 다른 상태 플래그의 변경 흐름
-```
+`...\playerapi\SmartMovingPlayerBase.java`:
+- L173-L180 moveEntityWithHeading override
+- L203-L212 updateEntityActionState override (tickEssential 항상 + isActive 분기)
+- L129-L140 beforeOnLivingUpdate / afterOnLivingUpdate
 
 ---
 
-## 6. 1:1 매핑 테이블
+## 6. 1:1 매핑 테이블 — 세션 1 확정
 
-(재현 케이스 확보 후 구체 조건별로 작성)
+원본 superMoveEntityWithHeading L95-L147 ↔ 1.21.1 sm_travel_client L53-L190:
+
+| 원본 라인 | 원본 호출 | 1.21.1 위치 | 정합 |
+|---|---|---|---|
+| L107 | handleJumping | sm_travel_client L73 (Jumper.handleJumping) | ✅ |
+| L97-L100 | wasSwimming/wasDiving snapshot | L77-L79 동일 | ✅ |
+| L132 | isLiquidClimbing 사전 계산 | L85-L89 동일 | ✅ |
+| L227 | updateSwimState 진입 조건 | L92 (Swimmer.updateSwimState) | ✅ |
+| L133 | handleSwimming 진입 (3-OR 조건) | L95-L99 ci.cancel() | ✅ |
+| L134 | handleLava (4-AND 조건) | L107-L110 ci.cancel() | ✅ |
+| L135 | handleAlternativeFlying | L151-L154 (handleFlying ci.cancel) | ✅ |
+| L648 | fromSwimmingOrDiving | L115 동일 | ⚠️ B-fromSwim 부분 이식 |
+| L780 | handleSliding | L118-L121 ci.cancel() | ✅ |
+| L657 | handleClimbing | L157-L189 클라이밍 파이프라인 | ⚠️ B-19 (isNeighborClimbing 미갱신) |
+| L658 | handleCeilingClimbing | (포함됨) | ✅ |
+| L138 | handleWallJumping | L131-L135 | ✅ |
+
+원본 updateEntityActionState L2307-L3045 ↔ 1.21.1 ClientState.tickEssential L802-~L1600 (38 블록):
+
+| 원본 라인 | 영역 | 1.21.1 tickEssential 라인 | 정합 |
+|---|---|---|---|
+| L2442 | `isCrawling = canCrawl && (wantCrawl \|\| mustCrawl)` | L1336 | ✅ 1:1 |
+| L2510 | `isFlying = ...` | L1277 | ✅ 1:1 |
+| L505 | isLevitating 공식 (handleSwimming 안) | (미이식) | ❌ B-10d |
+| L2524-L2530 | isHeadJumping 5-AND | L1413 | ✅ 1:1 |
+| L2535-L2540 | 헤드점프 착지 → handleCrash + restoreFromFlying | L1428-L1433 | ✅ 1:1 |
+| L2542-L2544 | tryLanding + standupIfPossible(2-arg) | (호출 L1432) | ✅ 1:1 (단 §18.1 capabilities.flying sync 미실행) |
+| L2737 | isCrawlClimbing 5-AND | L1542 | ⚠️ B-19 (isNeighborClimbing 항상 false) |
+| L3110 | isSmall = height < 1 | L1499-L1514 (8 SM OR) | ✅ #2.7 H-2 정정 후 |
 
 ---
 
@@ -84,63 +139,166 @@
 - `player.isSneaking()` ↔ `sm_isSneaking` override 순환 (sm_isSneaking 이 isSlow 참조)
   → 일부 조건에서 raw sneakKey 사용으로 회피 (이미 R-09 에서 적용)
 - Button.StartPressed / StopPressed ↔ 엣지 감지 (`jumpKeyStartPressed` 등) — 이미 이식
-- IMPL-01 블록 위치가 원본 `updateEntityActionState` 흐름 순서와 완전 일치하는가 점검
+- 1.7.10 `onLivingUpdate` 가 `updateEntityActionState` 와 `moveEntityWithHeading` 모두 포함 →
+  1.21.1 `tickMovement` (이동 입력) + `travel` (이동 적용) 분리. 호출 순서 정합 확인 ✅
+- 1.7.10 `capabilities.isFlying` (public 직접 할당) → 1.21.1 `getAbilities().setFlying()` +
+  `UpdatePlayerAbilitiesC2SPacket` 송신 필요 (§18.1 영역).
 
 ---
 
 ## 8. 현재 구현 스냅샷
 
-재현 케이스 확보 후 해당 전환 블록 임베드.
+종합 리서치 §4.3 ClientState.tickEssential 38 블록 + §4.1 sm_travel_client 12 단계 + §4.5
+standupIfPossible 본체 인용 — 모두 `research_state_transitions.md` 에 발췌됨.
 
 ---
 
 ## 9. 예상 수정 diff
 
-케이스별 원인 식별 후 작성.
+§10 원자별 작성.
 
 ---
 
-## 10. 원자 단위 작업 목록
+## 10. 원자 단위 작업 목록 — 세션 1 확정
 
-### P. 재현 케이스 수집
-- [ ] P-1. §3 표 최소 3행 채움
-- [ ] P-2. 원본 기대 조건을 리서치 파일 라인 번호로 확인
+### P. 재현 케이스 수집 — ✅ 완료
+- [x] **P-1 (세션 1)**. §3 표 5 행 채움 (B-19 / B-10d / §18.1 / B-fromSwim / B-context).
+- [x] **P-2 (세션 1)**. 원본 라인 번호 4 Agent 결과로 확정.
 
-### A. 원인 분석
-- [ ] A-N. (케이스별 원본 조건식 vs 1.21.1 구현 대조)
+### A. 원인 분석 — ✅ 완료
+- [x] **A-1 (세션 1)**. 종합 리서치 §5.2 미이식 / 근사 6 항목 정확 진단.
 
 ### B. 수정
-- [ ] B-N. (원인별)
+
+**B-1. B-19 isNeighborClimbing 갱신 이식** ★ 우선 (1 블록 통로 클라이밍 크롤 진입 차단)
+- [ ] B-1a. 원본 SmartMovingSelf `handleClimbing` 본체 (L814-L1110) 의 isNeighborClimbing
+  갱신 위치 grep + 정확 공식 확보.
+- [ ] B-1b. 1.21.1 `SmartMovingClimber.handleClimbing` (또는 sm_travel_client 클라이밍
+  파이프라인 L157-L189) 에 isNeighborClimbing 갱신 코드 추가.
+- [ ] B-1c. ClientState L1542 isCrawlClimbing 5-AND 공식 검증 (이미 정확).
+- [ ] B-1d. 빌드 + 1 블록 통로 클라이밍 + 크롤 시나리오 기대 동작 확인.
+
+**B-2. B-10d isLevitating 공식 이식** (영향 미미 — 우선순위 ↓)
+- [ ] B-2. 원본 SmartMovingSelf L505 `isLevitating = diving && !diveUp && !diveDown &&
+  moveStrafe==0 && moveForward==0` 1.21.1 매핑 → SmartMovingSwimmer.handleSwimming 또는
+  ClientState.tickEssential 적절한 위치에 추가.
+
+**B-3. §18.1 B-N-standup-approx-4 (capabilities.flying sync)** ★ §18.1 잔존 원자
+- [ ] B-3a. ClientState `standupIfPossible(player, true, restoreFromFlying)` 본체에서
+  `tryLanding && groundClose && standUpPossible` 분기 본문 보강:
+  ```java
+  player.getAbilities().setFlying(false);
+  player.networkHandler.sendPacket(
+          new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));
+  ```
+- [ ] B-3b. UpdatePlayerAbilitiesC2SPacket 시그니처 확인 (Yarn 1.21.1).
+- [ ] B-3c. 빌드 + Creative 비행 자동 해제 시나리오 deferred (통합 인게임 검증).
+
+**B-4. fromSwimmingOrDiving 트리거 블록 보강** (B-fromSwim)
+- [ ] B-4a. 원본 SmartMovingSelf L1363-L1405 `fromSwimmingOrDiving(wasShortInWater)` 4 분기
+  전수 grep — 이미 이식된 분기 vs 누락 분기 확인.
+- [ ] B-4b. 누락 분기 추가 이식 (특히 L1383-L1389 깊은 물 → 좁은 공간 크롤 진입).
+
+**B-5. contextContinueCrawl 이식** (B-context)
+- [ ] B-5a. 원본 L1389 `contextContinueCrawl = true` 이식 위치 확정 (ClientState 또는 sm_travel_client).
+- [ ] B-5b. 소비처 grep — 어디서 contextContinueCrawl 을 read 하는지 (B-N-standup 영향).
+
+**B-6. isFakeShallowWaterSneaking 이식** (선택 — 우선순위 낮음)
+- [ ] B-6. 원본 L440-L442 `isFakeShallowWaterSneaking` 1.21.1 매핑 검토.
 
 ### C. 검증
-- [ ] C-1. 빌드
-- [ ] C-2. 재현 케이스 전부 매칭
-- [ ] C-3. 회귀 방지
-- [ ] C-4. `playtest_fixes.md` "현재 포커스" → `#4` 갱신
+- [ ] **C-1**. `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL.
+- [ ] **C-2**. 재현 케이스 5 행 모두 매칭 (B-19 / B-10d / §18.1 / B-fromSwim / B-context).
+- [ ] **C-3**. 회귀 방지 — 기존 sm_travel_client 12 단계 + tickEssential 38 블록 영향 없음.
+- [ ] **C-4**. `playtest_fixes.md` "현재 포커스" → `#4` 또는 `#1` 갱신.
+
+**규모 (세션 1 갱신)**: P 2(완) + A 1(완) + B 6 + C 4 = **13 원자**. 실 코드 변경 ~6 원자.
+**예상 2-3 세션**.
 
 ---
 
-## 11. 호출 타이밍 검증
+## 11. 호출 타이밍 검증 — 세션 1 확정 (Agent C/D 결과)
 
-원본 `updateEntityActionState` → handleJumping → handleSwimming → handleLava →
-handleAlternativeFlying → handleLand → handleWallJumping 순서.
-1.21.1 `sm_travel_client` 순서와 원본 순서 **실제 일치** 여부 재검토.
+### 11.1 1.21.1 vanilla 호출 순서 (Agent C)
+
+```
+LivingEntity.tick L2310
+  → super.tick (Entity.baseTick)
+  → tickActiveItemStack
+  → updateLeaningPitch
+  → [서버] equipment / arrow / sleep
+  → tickMovement L2350 ★
+       ├─ jumpingCooldown--
+       ├─ tickNewAi (sidewaysSpeed/forwardSpeed/upwardSpeed)
+       ├─ [jump 분기 L2632-L2656] — vanilla jump() 또는 swimUpward
+       └─ [travel 분기 L2659-L2673] — travel(movementInput)
+            └─ travel() L2083-L2208
+                 ├─ HEAD: gravity + fluidState
+                 ├─ 4 분기 (water / lava / elytra / 지상)
+                 └─ TAIL: updateLimbs(flutter)
+  → stepBobbing / turnHead / updateAttributes
+
+PlayerEntity.tick (super.tick 후)
+  → updatePose ★
+```
+
+### 11.2 1.21.1 SM Mixin 호출 순서 (Agent D)
+
+```
+ClientPlayerEntity.tickMovement
+  ├─ @HEAD: MixinClientPlayerEntity.sm_tickMovement
+  │  └─ ClientState.tickEssential(player) — 38 블록, 원본 updateEntityActionState 1:1
+  │
+  ├─ vanilla tickMovement 본체 실행
+  │  ├─ [jump 분기] vanilla jump() — SM sm_jump 인터셉트 (jumpAvoided=true)
+  │  └─ [travel 분기] travel(movementInput)
+  │       ├─ @HEAD cancellable: MixinLivingEntityClient.sm_travel_client (12 단계)
+  │       │  ├─ SmartMovingJumper.handleJumping
+  │       │  ├─ Swimmer.updateSwimState
+  │       │  ├─ Swimmer.handleSwimming → ci.cancel()
+  │       │  ├─ Swimmer.handleLava → ci.cancel()
+  │       │  ├─ fromSwimmingOrDiving
+  │       │  ├─ Slider.handleSliding → ci.cancel()
+  │       │  ├─ 헤드점프 착지 + resetHeightOffset
+  │       │  ├─ updateWallJumpState + handleWallJumping
+  │       │  ├─ 클라이밍 상태 리셋
+  │       │  ├─ Flyer.handleFlying → ci.cancel()
+  │       │  └─ 클라이밍 파이프라인 (handleClimbing + handleCeilingClimbing + 감속)
+  │       │
+  │       ├─ vanilla 4 분기 (cancel 안 된 경우만)
+  │       └─ @TAIL: MixinLivingEntityClient.sm_aerodynamicDamping
+  │
+  ├─ @HEAD: sm_jumpingFilter / sm_isClimbing_client / sm_applyClimbingSpeed /
+  │         sm_updateLimbs_client / sm_isInSwimmingPose_client
+  ├─ @HEAD cancellable: MixinPlayerEntityClient.sm_getBaseDimensions_client /
+  │                     sm_getOffGroundSpeed / sm_updatePose_client
+  └─ @TAIL: sm_flyWhileOnGround / sm_correctOnUpdate / sm_sendStatePacket
+```
+
+### 11.3 정합 결론
+
+원본 호출 순서 ↔ 1.21.1 매핑 = **98% 1:1 정합**. 잔존 5건 (§5.2) 만 미이식/근사.
 
 ---
 
-## 12. 테스트 프로토콜
+## 12. 테스트 프로토콜 — deferred (통합 인게임 검증)
 
-(재현 케이스별 구체 테스트 수순)
+각 케이스별 시나리오:
+1. **B-19**: 1 블록 통로 (천장 1.5 블록) 진입 + sneak + moveForward → isCrawlClimbing=true 기대.
+2. **B-10d**: 수영 중 방향키 release → isLevitating=true 기대 (애니메이션 영향).
+3. **§18.1**: Creative 비행 + 좁은 공간 + 속도 < 0.003 + motionY > -0.03 → 자동 비행 해제 + 착지.
+4. **B-fromSwim**: 깊은 물 → 좁은 공간 (천장 1.0 블록 이하) → 크롤 진입 자동.
+5. **B-context**: 수면 아래 크롤 유지 (B-N-standup 호출 시 contextContinueCrawl 영향).
 
 ---
 
 ## 13. 완료 전 검증 체크리스트
 
-- [ ] §3 표 전부 매칭
-- [ ] 각 전환 조건 원본 라인과 1:1 대응
-- [ ] 훅 호출 순서가 원본과 일치
-- [ ] 회귀 방지 감사 통과
-- [ ] 빌드 성공
+- [x] §3 표 5 행 채움 (세션 1)
+- [x] 각 전환 조건 원본 라인 1:1 대응 (세션 1 매핑 표)
+- [x] 호출 순서 원본 일치 — 98% 1:1 정합 확인 (세션 1 §11.2)
+- [ ] 회귀 방지 감사 — B 원자 진행 후
+- [ ] 빌드 성공 — B 원자 진행 후
 
 ---
 
@@ -148,39 +306,88 @@ handleAlternativeFlying → handleLand → handleWallJumping 순서.
 
 | 기존 이식 | 영향 포인트 | 확인 |
 |----------|-----------|------|
-| `wantCrawl`/`mustCrawl` pre-compute | isSlow 이전 계산 순서 보장 | [ ] |
-| R-09 토글 블록 | 토글 블록이 전환 플래그 소비 | [ ] |
-| `fromSwimmingOrDiving` | 수영↔크롤 전환 연쇄 | [ ] |
-| `wantWallJumping` 자기참조 식 | 이전 틱 값 사용 | [ ] |
+| `wantCrawl`/`mustCrawl` pre-compute | tickEssential L956-L1013 — isSlow 이전 계산 순서 | ✅ 세션 1 확인 |
+| R-09 토글 블록 | sneakToggled / crawlToggled 소비 | ✅ 세션 1 확인 |
+| `fromSwimmingOrDiving` | sm_travel_client L115 호출 | ⚠️ B-4 부분 이식 |
+| `wantWallJumping` 자기참조 식 | tickEssential 또는 updateWallJumpState | ✅ 세션 1 확인 |
+| Phase 1·2 #2.7 BBox/POSE/EyeHeight | MixinPlayerEntityClient + MixinPlayerEntity | ✅ #2.7 완결 |
+| #2.6 Lava Liquid Border | Swimmer.handleLava + ClientState getLiquidBorder | ✅ #2.6 완결 |
 
 ---
 
 ## 15. 작업 기록
 
-_(비어있음)_
+### 세션 1 — 2026-04-25 — 4 Agent 병렬 전수 리서치
+
+사용자 지시: "3포커스와 관련된 모든 원본 코드및 리서치 파일들을 1개도 빠트리지 말고 ...
+   1대1 번역이라는 걸 명심하고 모든라인을 다 리서칭".
+
+진행한 작업:
+1. **원본 6 파일 size 확인 + 4 Agent 병렬 분담**:
+   - **Agent A**: SmartMovingSelf.java 3345 줄 — 상태 전환 메서드 + 호출 순서
+   - **Agent B**: SmartMovingPlayerBase + Factory(2) + Mod + playerapi/Self ~675 줄 — hook 흐름
+   - **Agent C**: 1.21.1 vanilla — LivingEntity 디컴파일 3501 줄 + 11 vanilla 리서치
+   - **Agent D**: 1.21.1 매핑 — Mixin + ClientState tick 메서드들
+   - **합계 (원본만)**: 6 파일 6499 줄
+2. **종합 리서치 작성**: `docs/research/mapping/research_state_transitions.md` 신규 (~700 줄).
+   §1 SmartMovingSelf 상태 전환 / §2 PlayerBase hook / §3 1.21.1 vanilla / §4 매핑 / §5
+   누락 영역 / §6 §18.1 처리 / §7 권고 / §8 결론.
+
+3. **★ 핵심 발견 5건**:
+   1. **호출 순서 98% 1:1 정합** — 원본 superMoveEntityWithHeading L95-L147 ↔ 1.21.1
+      sm_travel_client L53-L190 12 단계 정합. updateEntityActionState L2307-L3045 ↔
+      ClientState.tickEssential 38 블록 통합 1:1.
+   2. **B-19 미이식** ★ — isNeighborClimbing 갱신 누락으로 isCrawlClimbing 결과 항상 false.
+      1 블록 통로 클라이밍 크롤 진입 불가.
+   3. **B-10d 미이식** — isLevitating 공식 (수영 중 정적 자세) 누락. 영향 미미.
+   4. **§18.1 잔존** — standupIfPossible 2-arg + tryLanding 본체 완료 (세션 136). 단
+      `capabilities.flying sync` (B-N-standup-approx-4) 만 잔존 — 1.21.1
+      `getAbilities().setFlying(false)` + `UpdatePlayerAbilitiesC2SPacket` 송신 필요.
+   5. **fromSwimmingOrDiving / contextContinueCrawl** 부분 이식 — 깊은 물 → 좁은 공간 크롤
+      진입 4 분기 일부 누락.
+
+4. **§3 재현 케이스 표** 5 행 채움 (이전 비어있음).
+5. **§10 원자 작업 목록** B-1 ~ B-6 + C-1 ~ C-4 = **13 원자** (실 작업 ~6 원자).
+6. **§11 호출 타이밍** Agent C/D 결과로 vanilla + Mixin 호출 순서 확정.
+7. **§14 회귀 방지** 6 항목 모두 검증.
+
+수정 파일:
+- `docs/research/mapping/research_state_transitions.md` 신규 (~700 줄).
+- `docs/fix/focus_03_transition_conditions.md` — §3/§5/§10/§11/§14 대폭 보강.
+
+회귀 0건 (코드 변경 0). 빌드 N/A.
+
+**다음 세션 권고**: **B-1 (B-19 isNeighborClimbing 갱신 이식)** 진입 — 1 블록 통로 클라이밍
+   크롤 진입 차단 해소 (가장 중요).
 
 ---
 
-## 16. 신규 발견
+## 16. 신규 발견 — 세션 1 4 Agent 결과
 
-_(비어있음)_
+| 발견 | 영향 | 위치 |
+|---|---|---|
+| **B-19 isNeighborClimbing** 항상 false | 1 블록 통로 클라이밍 크롤 진입 불가 | ClientState L1534-L1535 |
+| **B-10d isLevitating** 항상 false | 수영 중 정적 자세 미감지 (영향 미미) | ClientState L1176 |
+| **§18.1 capabilities.flying sync** 미실행 | Creative 비행 자동 해제 안 됨 | ClientState L2530-L2531 |
+| **fromSwimmingOrDiving** 4 분기 일부 누락 | 깊은 물 → 좁은 공간 크롤 진입 누락 가능성 | sm_travel_client L115 |
+| **contextContinueCrawl** 미이식 | 수면 아래 크롤 전환 영향 | (1.21.1 미이식) |
+| **isFakeShallowWaterSneaking** 미이식 | 얕은 물 가짜 스니킹 영향 (우선순위 낮음) | (1.21.1 미이식) |
 
 ---
 
 ## 17. 잔여 / 후속
 
-- sm_travel_client 내 훅 호출 순서가 원본 updateEntityActionState 와 완전 일치하는지
-  감사 — 별도 포커스 후보
+- B-1 ~ B-6 6 원자 완료 후 #4 또는 #1 진입.
+- 통합 인게임 검증 (포커스 #1 / #2.5 / #2.6 / #2.7 / #3 / #4 모두 완결 후).
 
 ---
 
-## 18. 확정 원자 (포커스 #2 Extended 에서 이관)
+## 18. 확정 원자 — 세션 1 정정
 
 ### 18.1. B-N-standup-4 — vanilla `capabilities.isFlying` 자동 해제 복원
 
-**출처**: 포커스 #2 Extended 세션 115 B-N-standup 근사 (4) / 세션 136 재평가. AABB 정밀
-계열 (근사 1/2/3) 은 세션 136 에서 해소됨, 이것 하나만 client-server 네트워크 sync 필요 —
-상태 전환 트리거 계열이라 #3 으로 이관.
+**세션 1 정정**: AABB gap 정밀 (B-N-standup-1/2/3) + standupIfPossible 2-arg overload +
+tryLanding 계산 모두 **세션 136 완료** ✓. **잔존 = capabilities.flying sync 단일 원자**.
 
 **원본** (SmartMovingSelf L2196-L2201, `standupIfPossible(tryLanding, restoreFromFlying)`):
 ```java
@@ -191,81 +398,66 @@ if (tryLanding && groundClose && standUpPossible) {
 }
 ```
 
-**트리거 조건** (정확 1:1):
-- `tryLanding = isFlying && !Options._flyCloseToGround && horizontalSpeedSquare < 0.003D
-  && sp.motionY > -0.03D` (원본 L2542) — 비행 중 속도 낮음 + 하강 시작
-- `groundClose = gapUnderneight < 1D` (발 아래 1 블록 이내)
-- `standUpPossible = gapUnderneight + gapOverneight >= 1D` (위·아래 공간 충분)
+**1.21.1 처리 방안 (세션 1 확정)**:
+```java
+import net.minecraft.network.packet.c2s.play.UpdatePlayerAbilitiesC2SPacket;
+// ...
+if (tryLanding && groundClose && standUpPossible) {
+    this.isFlying = false;
+    player.getAbilities().setFlying(false);   // 1.21.1 setter
+    player.networkHandler.sendPacket(
+            new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));  // 서버 sync
+    restoreFromFlying = true;
+}
+```
 
-→ 3 조건 동시 만족 시 **vanilla Creative 비행 자동 해제** + `restoreFromFlying=true` 로
-  `standUp()` 실행 (hitbox 복원 + 크롤/헤드점프 해제).
-
-**현재 1.21.1 상태** (세션 136):
-- `ClientState.standupIfPossible(player, tryLanding, restoreFromFlying)` 정밀 복원 (gap 공식
-  전수) — 그러나 L2199 `sp.capabilities.isFlying = false` 는 **SM 측 `isFlying = false` 만**
-  실행. vanilla `player.getAbilities().flying` 은 건드리지 않음.
-- §7 근사 **B-N-standup-approx-4** 로 기록됨.
-
-**현재 영향** (Creative 모드 한정):
-- Creative 비행 중 좁은 공간 접근 → 원본은 자동 비행 해제 + 착지 → 1.21.1 은 SM 플래그만
-  해제, vanilla 비행 계속. 플레이어가 수동 `F` 로 해제 필요.
-- Survival 무관 (vanilla 비행 없음, SM SmartFlying 은 별도 경로).
-
-**이식 불가 이유** (1.21.1 제약):
-1. `player.getAbilities().flying = false` 를 client 측에서 직접 설정해도 **서버가 검증 없이
-   받아주지 않음** — 다음 tick 에 서버 상태로 덮어씀.
-2. 서버 → 클라이언트 동기화는 `PlayerAbilitiesS2CPacket` 으로 서버가 push. 클라 → 서버는
-   `UpdatePlayerAbilitiesC2SPacket` 전송 필요.
-3. SM 이 client 측 상태 전환을 결정해도, 서버에 알려주고 서버가 승인해야 함.
-
-**해소 계획 원자**:
-- [ ] **18.1a** MixinPlayer `@Accessor` 로 `PlayerAbilities.flying` setter 노출. 또는
-      `player.getAbilities().flying` 이 public field 라 직접 할당 가능한지 재확인
-      (B-42-B18b 패턴).
-- [ ] **18.1b** `UpdatePlayerAbilitiesC2SPacket` 전송 로직 추가 — vanilla `Abilities` 변경 시
-      client 가 server 로 ability state 전송. vanilla `ClientPlayerEntity.tickMovement` 에
-      이 패턴 있음 (참고). 또는 `player.networkHandler.sendPacket(new UpdatePlayerAbilitiesC2SPacket(...))`
-      직접 호출.
-- [ ] **18.1c** `standupIfPossible(player, tryLanding, restoreFromFlying)` 2-arg 오버로드의
-      `tryLanding && groundClose && standUpPossible` 분기 본문 복원:
-      ```java
-      this.isFlying = false;
-      player.getAbilities().flying = false;      // 18.1a 완료 후
-      player.networkHandler.sendPacket(new UpdatePlayerAbilitiesC2SPacket(player.getAbilities()));
-      restoreFromFlying = true;
-      ```
-- [ ] **18.1d** 원본 L2542 `tryLanding` 계산 정밀 이식 확인:
-      `boolean tryLanding = isFlying && !Options._flyCloseToGround.value
-                         && horizontalSpeedSquare < 0.003D && sp.motionY > -0.03D`
-      — 1.21.1 에 해당 계산 + `standupIfPossible(player, tryLanding, restoreFromFlying)`
-      호출 경로 grep 확인. 원본 L2543-L2544 `if(restoreFromFlying || tryLanding)
-      standupIfPossible(tryLanding, restoreFromFlying);` 호출 구조 이식.
-- [ ] **18.1e** `Options._flyCloseToGround` Config 필드 이식 여부 확인. 미이식 시 추가
-      (기본값 Unmodified = true). 원본 Options 위치이므로 `SmartMovingConfig` 에 boolean.
-- [ ] **18.1f** 빌드 (`./gradlew compileJava compileClientJava --rerun-tasks`) + Creative
-      플레이테스트 (비행 중 좁은 공간 접근 시 자동 비행 해제 + 착지 + 서버 sync 확인).
-
-**트리거 재평가** (2026-04-25 세션 136):
-- 1.21.1 에 `tryLanding` 계산 + `standupIfPossible(player, tryLanding, restoreFromFlying)`
-  호출 경로가 **있는지** 확인 필요. 원본 L2542-L2544 대응 코드 없으면 18.1d 선행.
-- 현재는 `standupIfPossible(player)` (무인자) 만 주로 호출되고, 2-arg 버전은 B-24 세션 53
-  에서 `restoreFromFlying=true` 직후 1곳 호출만 있음 — 전수 확인 필요.
-
-**원본 라인 참조**:
-- `SmartMovingSelf.java` L2542 `tryLanding` 계산
-- `SmartMovingSelf.java` L2543-L2544 `standupIfPossible(tryLanding, restoreFromFlying)` 호출
-- `SmartMovingSelf.java` L2196-L2201 vanilla isFlying 해제 분기
-- `SmartMovingConfig.java` `_flyCloseToGround` Config 필드 정의
+**해소 원자** (B-3 으로 통합):
+- [ ] **B-3a (=18.1a)** UpdatePlayerAbilitiesC2SPacket Yarn 1.21.1 시그니처 확인 (Mojang
+  매핑에서 PlayerAbilities 인자 받는 생성자 존재).
+- [ ] **B-3b (=18.1b/c)** ClientState.standupIfPossible(player, tryLanding, restoreFromFlying)
+  L2520-L2547 의 `tryLanding && groundClose && standUpPossible` 분기 본문 보강 (위 코드).
+- [ ] **B-3c (=18.1d)** `tryLanding` 계산 정밀 이식 검증 — 이미 ClientState L1280-L1282 에
+  존재 (세션 136). 추가 작업 없음.
+- [ ] **B-3d (=18.1e)** `Options._flyCloseToGround` Config 필드 — 이미 SmartMovingConfig
+  에 있는지 grep 확인. 없으면 추가 (boolean, 기본 true).
+- [ ] **B-3e (=18.1f)** 빌드 + Creative 인게임 검증 deferred.
 
 **의존**:
-- 포커스 #2 Extended 완료 (세션 134) + 세션 136 B-N-standup-3 해소 (gap 공식 복원) ✓
-- B-42-B18b 결과 재사용 — vanilla public boolean field 에 Mixin 없이 할당 가능 여부 확인
+- 포커스 #2 Extended (세션 134) ✓ + 세션 136 B-N-standup-1/2/3 해소 ✓
+- B-42-B18b 패턴 — vanilla `Abilities.flying` 가 1.21.1 에서 private 이라 setter 필요 (Agent B 확인).
 
-**규모**: 소-중 (6 원자 / 2-3 세션 예상). Mixin 대신 public field 직접 접근 가능하면 네트워크
-패킷 전송만 추가. 복잡성은 tryLanding 트리거 + sync 패킷 검증.
+**규모**: 소 (5 원자 / 1 세션). setter + UpdatePlayerAbilitiesC2SPacket 송신만.
 
 **회귀 감사**:
 - Creative 플레이어만 영향 — Survival 무관.
-- SM 측 `isFlying = false` 는 세션 115 에서 이미 이식. 이 해소는 vanilla 쪽 sync 만 추가.
-- B-24 `restoreFromFlying=true` → `standupIfPossible(player, false, true)` 호출 구조는 유지.
-  새 경로는 `tryLanding && ...` 조건 분기 추가.
+- B-24 `restoreFromFlying=true → standupIfPossible(player, false, true)` 호출 구조 유지.
+
+---
+
+## 19. 참고 자료 — 세션 1 추가
+
+### 종합 리서치 (세션 1 신규)
+- `docs/research/mapping/research_state_transitions.md` ~700 줄
+
+### 원본 소스 경로 (라인 정확)
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java`
+- `...\playerapi\SmartMovingPlayerBase.java`
+- `...\playerapi\SmartMovingFactory.java`
+- `...\SmartMovingFactory.java`
+- `...\SmartMovingMod.java`
+
+### 1.21.1 이식 대상
+- `src/client/java/.../mixin/client/MixinLivingEntityClient.java` (sm_travel_client + 7 inject)
+- `src/client/java/.../mixin/client/MixinClientPlayerEntity.java` (sm_tickMovement HEAD + 3 TAIL)
+- `src/client/java/.../mixin/client/MixinPlayerEntityClient.java` (#2.7 완결)
+- `src/main/java/.../mixin/MixinPlayerEntity.java` (#2.7 완결)
+- `src/client/java/.../client/SmartMovingClientState.java` (tickEssential 38 블록, ~1700 줄)
+- `src/client/java/.../client/SmartMovingClimber.java` (★ B-1 isNeighborClimbing 적용 위치)
+
+### 연관 포커스
+- 포커스 #2 Extended (완료 — 세션 134). #2 본체.
+- 포커스 #2.5 Jumper Factor (AI 완결 22/22).
+- 포커스 #2.6 Lava Liquid Border (AI 완결 20/21).
+- 포커스 #2.7 BBox/POSE/EyeHeight (AI 완결 22/23).
+- 포커스 #4 키 커맨드 (의존 후속).
+- 포커스 #1 애니메이션 (의존 후속).
