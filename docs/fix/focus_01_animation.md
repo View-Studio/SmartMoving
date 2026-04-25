@@ -303,6 +303,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-1 청크 4 (L601-L797) — 세션 6 (정합 45 / 오역 0 / 누락 0 / 잉여 0 / N/A 152)
   - **R-1 누적**: 정합 346 / 오역 14 / 누락 14 / 잉여 0 / N/A 423 = 797 라인 전수
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
+  - [x] R-2 청크 1 (SmartMovingRender.java L1-L200) — 세션 7 (정합 51 / 오역 0 / 누락 3 / 잉여 0 / N/A 146)
+  - [ ] R-2 청크 2 (SmartMovingRender.java L201-L337 + SM render 5 파일 ~389줄)
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
@@ -628,6 +630,40 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 7 — 2026-04-26 — Phase R / R-2 청크 1 (SmartMovingRender.java L1-L200)
+
+**진행한 작업**:
+
+1. **R-2 청크 1 라인별 read**: 원본 SmartMovingRender.java L1-L200 (200 라인 전수 read).
+2. **1.21.1 매핑 검증**: MixinPlayerEntityRenderer (sm_getPositionOffset L46 / sm_captureBodyYaw L74 / setupTransforms @ModifyArg L164 / sm_setupTransforms L184 / smartmoving$adjustLabelY L249) + MixinPlayerEntityModelClient (state capture L60 + smallOverGroundHeight L94-L96 + isFalling L125-L128) + SmartMovingClientState/Updater (mutex 처리) read.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-2 청크 1 섹션 — 200 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계**:
+- [정합] 51 (class @Mixin 매핑 / Scale 가드 근거 / SM 19 상태 캡처 분배 / smallOverGroundHeight 가드+계산 / sm_captureBodyYaw 8 분기 / @ModifyArg index=3 / sm_getPositionOffset heightOffset / renderName 4 분기 (crawlNameTag/heightOffset/sneakNameTag/Y 보정))
+- [오역] 0
+- [누락] 3 (L124/L125 타인 플레이어 isSneaking+isCrawl 시 d1 += 0.125D / L132-L134 Levitate 후처리 currentHorizontalAngle = currentCameraAngle)
+- [잉여] 0
+- [N/A] 146 (라이선스 + 패키지/import + 다층 모델 분배 (CurrentMainModel/modelPlayers 배열) + ArmorChestplate/Armor 갑옷 분기 + isInventory detect + setSneaking toggle + renderGuiIngame HUD)
+- 합계: 200 라인 전수.
+
+**R-10+ B-N 후보 등록 (§16-22~23 참조)**:
+- B-N: 타인 플레이어 크롤링 자세 위치 보정 [누락] — L124/L125 d1 += 0.125D.
+- B-N: Levitate 후처리 [누락] — L132-L134 currentHorizontalAngle = currentCameraAngle.
+
+**검증 체크리스트 (세션 7 R-2 청크 1)**:
+- [근거] ✓ 원본 로컬 read (offset=1, limit=200 정확)
+- [전수] ✓ 청크 내 200 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 200 일치 (51+0+3+0+146)
+- [발견] ✓ §16-22~23 등재 + R-10+ B-N 후보 5 라인 식별
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (sm_captureBodyYaw / sm_getPositionOffset / sm_setupTransforms / @ModifyArg / smartmoving$adjustLabelY / state holder access)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-2 청크 2 (SmartMovingRender.java L201-L337 + SM render 5 파일 ~389줄).
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -712,6 +748,18 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 20. **[오역] isFlying 입력값 — totalDistance/currentSpeed → limbSwing/limbSwingAmount** (R-10+ B-N 후보). 원본 L477-L479. 청크 1/2의 climb/dive 동일 패턴. 1.21.1 sm_animateFlying L507-L509에서 `limbSwing`/`limbSwingAmount` 사용. 비행 위상은 walkFactor/standFactor 분기로 영향이 크므로 가시 영향 가능.
 
 21. **[정합 (근사)] isHeadJump overGroundBlock 단순화**. 원본 L521 `if(overGroundBlock != null && overGroundBlock.getMaterial().isSolid())` (머리 위 블록의 재질 검사) → 1.21.1 sm_animateHeadJumping L562 `if (sm.smallOverGroundHeight < 5f)` (단순 높이 검사). computeSmallOverGroundHeight 가 5블록 스캔 후 첫 고체 블록 거리 반환하므로 5f 미만 = 머리 위 고체 블록 존재 ≈ 등가. material 분류는 손실 (물·용암 등 비고체 콜리전이 다른 경우 차이 가능). R-10+ 정밀 검토 우선순위 낮음.
+
+### 세션 7 (2026-04-26) — Phase R / R-2 청크 1 (SmartMovingRender.java)
+
+22. **[누락] 타인 플레이어 크롤링 자세 위치 보정** (R-10+ B-N 후보). 원본 SmartMovingRender.java L124-L125: `if (!isInventory && entityplayer.isSneaking() && !(entityplayer instanceof EntityPlayerSP) && isCrawl) d1 += 0.125D;`. 다른 플레이어가 isSneaking + isCrawl 상태로 보일 때 렌더 Y 위치를 0.125 (1/8 블록) 위로 올림. 1.21.1 sm_getPositionOffset 미이식. 영향: 타인 플레이어가 크롤링 중 다리·발이 지면을 뚫고 보일 가능성. 자기 자신은 isSneaking 자동 false → 미적용 (영향 없음).
+
+    이식 방안: sm_getPositionOffset 분기 추가 — `else if (!isOwnPlayer && entity.isSneaking() && sm.isCrawling) cir.setReturnValue(new Vec3d(0, 0.125, 0))`.
+
+23. **[누락] Levitate 후처리 — currentHorizontalAngle = currentCameraAngle 강제 정렬** (R-10+ B-N 후보). 원본 SmartMovingRender.java L132-L134: `if (moving.isLevitating && modelPlayers != null) for(...) modelPlayers[i].getMovingModel().md.currentHorizontalAngle = modelPlayers[i].getMovingModel().md.currentCameraAngle;`. Levitating(공중부양 효과) 시 horizontal angle을 카메라 방향으로 강제 정렬 (= 플레이어가 카메라를 향해 떠 있게 보이도록). 1.21.1 sm_captureBodyYaw 본체 미이식.
+
+    영향: 공중부양 status effect 발동 중 isDive 분기로 렌더되지만, dive horizontal angle이 이동 방향 기반으로 계산됨 → 카메라 회전과 분리. 원본은 카메라 방향과 동기화. 영향: 공중부양 시 몸 방향 정합성 손실.
+
+    이식 방안: sm_captureBodyYaw 마지막에 `if (sm.isLevitating) smBodyYawOverride = MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw())` 추가 (카메라 = player yaw 등가).
 
 ---
 

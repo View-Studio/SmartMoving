@@ -879,3 +879,205 @@
 13. [정합 근사] isHeadJump overGroundBlock 단순화 (L521)
 
 **R-1 완료**. 다음 R-단계: **R-2 (SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer ~726줄)**.
+
+---
+
+## R-2: SmartMovingRender.java + SM render 5 파일 (~726줄)
+
+### 청크 1 (SmartMovingRender.java L1-L200) — 헤더 + 생성자(Scale 분류 4 모델) + renderPlayer 본체 (상태 캡처 + ModelPlayer 분배 + Levitate 보정) + rotatePlayer + renderPlayerAt + renderName 본체
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L16 | `// ==…== Smart Moving GPLv3 라이선스 헤더` | (라이선스 헤더 생략) | [N/A] | 16 라인 일괄 |
+| L17 | `// ==…==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | `package choco.ratel.smartmoving.mixin.client;` | [N/A] | |
+| L20 | `import org.lwjgl.opengl.GL11;` | (1.21.1: MatrixStack/RotationAxis 대체) | [N/A] | OpenGL → MatrixStack |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `import net.minecraft.block.*;` | (사용 시점 import) | [N/A] | |
+| L23 | `import net.minecraft.block.material.*;` | (1.21.1: Material 제거됨 — VoxelShape/BlockState 대체) | [N/A] | |
+| L24 | `import net.minecraft.client.*;` | — | [N/A] | |
+| L25 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L26 | `import net.minecraft.client.gui.*;` | — | [N/A] | |
+| L27 | `import net.minecraft.client.gui.inventory.*;` | (1.21.1: InventoryScreen) | [N/A] | |
+| L28 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L29 | `import net.minecraft.entity.player.*;` | — | [N/A] | |
+| L30 | `import net.minecraft.util.*;` | — | [N/A] | |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `import net.smart.moving.*;` | `import choco.ratel.smartmoving.client.SmartMovingClientState;` | [N/A] | |
+| L33 | `import net.smart.render.statistics.*;` | (1.21.1: vanilla limbAnimator/age 대체 — SmartStatistics 제거) | [N/A] | §16-21 등 |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `public class SmartMovingRender extends SmartRenderContext` | `@Mixin(PlayerEntityRenderer.class) public abstract class MixinPlayerEntityRenderer` | [정합] | 클래스 매핑 — 표면 |
+| L36 | `{` | `{` | [정합] | |
+| L37 | `public static SmartMovingModel CurrentMainModel;` | (1.21.1 단일 PlayerEntityModel — CurrentMainModel 불필요) | [N/A] | 다층 모델 부재 |
+| L38 | (빈 줄) | — | [N/A] | |
+| L39 | `public IRenderPlayer irp;` | (Mixin: this 직접 접근, 인터페이스 부재) | [N/A] | |
+| L40 | (빈 줄) | — | [N/A] | |
+| L41 | `public SmartMovingRender(IRenderPlayer irp)` | (Mixin — 생성자 부재) | [N/A] | |
+| L42 | `{` | — | [N/A] | |
+| L43 | `this.irp = irp;` | — | [N/A] | |
+| L44 | (빈 줄) | — | [N/A] | |
+| L45 | `modelBipedMain = irp.getPlayerModelBipedMain().getMovingModel();` | (1.21.1: PlayerEntityModel 단일 = 메인 모델 자동) | [N/A] | 다층 부재 |
+| L46 | `SmartMovingModel modelArmorChestplate = irp.getPlayerModelArmorChestplate().getMovingModel();` | (ArmorFeatureRenderer 영역 — §17 잔여) | [N/A] | 갑옷 흉갑 |
+| L47 | `SmartMovingModel modelArmor = irp.getPlayerModelArmor().getMovingModel();` | (ArmorFeatureRenderer 영역) | [N/A] | 갑옷 일반 |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49 | `modelBipedMain.scaleArmType = Scale;` | (메인 = Scale 가드 제거 시 묵시) | [정합] | §16-7 — setArmScales 가드 제거 근거 |
+| L50 | `modelBipedMain.scaleLegType = Scale;` | (메인 = Scale 묵시) | [정합] | §16-7 |
+| L51 | `modelArmorChestplate.scaleArmType = NoScaleStart;` | (갑옷 흉갑 — 1.21.1 미이식) | [N/A] | §16-8 |
+| L52 | `modelArmorChestplate.scaleLegType = NoScaleEnd;` | (갑옷 흉갑 — offsetY 보정 미이식) | [N/A] | §16-8 — §17 잔여 |
+| L53 | `modelArmor.scaleArmType = NoScaleStart;` | (갑옷 일반 — 미이식) | [N/A] | |
+| L54 | `modelArmor.scaleLegType = Scale;` | (갑옷 일반 leg = Scale, 미이식) | [N/A] | |
+| L55 | `}` | — | [N/A] | |
+| L56 | (빈 줄) | — | [N/A] | |
+| L57 | `public void renderPlayer(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks)` | (1.21.1: vanilla render 자체 + sm_setupTransforms TAIL + sm_captureBodyYaw HEAD 분리 처리) | [N/A] | renderPlayer 단일 메서드 분해됨 |
+| L58 | `{` | — | [N/A] | |
+| L59 | `IModelPlayer[] modelPlayers = null;` | (1.21.1 단일 모델 — modelPlayers 배열 불필요) | [N/A] | |
+| L60 | `SmartMoving moving = SmartMovingFactory.getInstance(entityplayer);` | `SmartMovingClientState sm = SmartMovingClientStateAccess.smartmoving$getState((Object)player);` (Mixin 본체에서 매번 access) | [정합] | factory → state holder |
+| L61 | `if(moving != null)` | (sm null check Mixin 본체) | [정합] | |
+| L62 | `{` | — | [N/A] | |
+| L63 | `boolean isInventory = d == 0.0F && d1 == 0.0F && d2 == 0.0F && f == 0.0F && renderPartialTicks == 1.0F;` | (1.21.1: InventoryScreen 별도 — sm_getPositionOffset 등 인벤토리 화면 자동 분리) | [N/A] | 인벤토리 detect 미이식 (vanilla 자동) |
+| L64 | (빈 줄) | — | [N/A] | |
+| L65 | `boolean isClimb = moving.isClimbing && !moving.isCrawling && !moving.isCrawlClimbing && !moving.isClimbJumping;` | `sm.isClimbing` (state holder는 이미 mutex 포함된 단일 isClimbing) | [정합] | SmartMovingClientStateUpdater 에서 mutex 처리 |
+| L66 | `boolean isClimbJump = moving.isClimbJumping;` | `sm.isClimbJumping` | [정합] | |
+| L67 | `int handsClimbType = moving.actualHandsClimbType;` | `sm.actualHandsClimbType` | [정합] | |
+| L68 | `int feetClimbType = moving.actualFeetClimbType;` | `sm.actualFeetClimbType` | [정합] | |
+| L69 | `boolean isHandsVineClimbing = moving.isHandsVineClimbing;` | `sm.isHandsVineClimbing` | [정합] | |
+| L70 | `boolean isFeetVineClimbing = moving.isFeetVineClimbing;` | `sm.isFeetVineClimbing` | [정합] | |
+| L71 | `boolean isCeilingClimb = moving.isCeilingClimbing;` | `sm.isCeilingClimbing` | [정합] | |
+| L72 | `boolean isSwim = moving.isSwimming && !moving.isDipping;` | `sm.isSwimming_sm` (mutex 포함) | [정합] | |
+| L73 | `boolean isDive = moving.isDiving;` | `sm.isDiving` | [정합] | |
+| L74 | `boolean isLevitate = moving.isLevitating;` | (vanilla LEVITATION StatusEffect 직접 검사) | [정합] | sm_setupTransforms dive 분기 |
+| L75 | `boolean isCrawl = moving.isCrawling && !moving.isClimbing;` | `sm.isCrawling` (mutex) | [정합] | |
+| L76 | `boolean isCrawlClimb = moving.isCrawlClimbing \|\| (moving.isClimbing && moving.isCrawling);` | `sm.isCrawlClimbing` | [정합] | mutex 합성 처리 |
+| L77 | `boolean isJump = moving.isJumping();` | (vanilla jumping detect — 11-state 체인 외) | [N/A] | isJump는 setupTransforms에서 직접 검사 |
+| L78 | `boolean isHeadJump = moving.isHeadJumping;` | `sm.isHeadJumping` | [정합] | |
+| L79 | `boolean isFlying = moving.doFlyingAnimation();` | `flyingCreative` (PlayerAbilities) — MixinPEMC L84-L86 검사 | [정합] | |
+| L80 | `boolean isSlide = moving.isSliding;` | `sm.isSliding` | [정합] | |
+| L81 | `boolean isFalling = moving.doFallingAnimation();` | (MixinPEMC L125-L128: isFalling 인라인 계산 — fallDistance > 1.5 + onGround false + 외 SM 상태 false + 물 외) | [정합] | |
+| L82 | `boolean isGenericSneaking = moving.isSlow;` | (vanilla isSneaking 또는 sm.isSlow) | [정합] | |
+| L83 | `boolean isAngleJumping = moving.isAngleJumping();` | `sm.isAngleJumping()` | [정합] | |
+| L84 | `int angleJumpType = moving.angleJumpType;` | `sm.angleJumpType` | [정합] | |
+| L85 | `boolean isRopeSliding = moving.isRopeSliding;` | `sm.isRopeSliding` | [정합] | |
+| L86 | (빈 줄) | — | [N/A] | |
+| L87 | `SmartStatistics statistics = SmartStatisticsFactory.getInstance(entityplayer);` | (1.21.1: vanilla limbAnimator/age 대체 — SmartStatistics 제거) | [N/A] | R-8 검토 |
+| L88 | `float currentHorizontalSpeedFlattened = statistics != null ? statistics.getCurrentHorizontalSpeedFlattened(renderPartialTicks, -1) : Float.NaN;` | (1.21.1: limbSwingAmount 직접 사용 — flattened 분리 미이식) | [정합 (근사)] | NaN 분기 가드 미이식 |
+| L89 | `float smallOverGroundHeight = isCrawlClimb \|\| isHeadJump ? (float)moving.getOverGroundHeight(5D) : 0F;` | MixinPEMC L94-L96: `if (sm.isCrawlClimbing \|\| sm.isHeadJumping) sm.smallOverGroundHeight = computeSmallOverGroundHeight(...)` | [정합] | 가드 + 계산 매핑 |
+| L90 | `Block overGroundBlock = isHeadJump && smallOverGroundHeight < 5F ? moving.getOverGroundBlockId(smallOverGroundHeight) : null;` | (1.21.1: smallOverGroundHeight < 5f 단순화 — material check 손실, §16-21) | [정합 (근사)] | block material → height 단순화 |
+| L91 | (빈 줄) | — | [N/A] | |
+| L92 | `modelPlayers = irp.getPlayerModels();` | (1.21.1 단일 모델 — 배열 부재) | [N/A] | |
+| L93 | (빈 줄) | — | [N/A] | |
+| L94 | `for(int i = 0; i < modelPlayers.length; i++)` | (단일 모델 — for 부재) | [N/A] | |
+| L95 | `{` | — | [N/A] | |
+| L96 | `SmartMovingModel modelPlayer = modelPlayers[i].getMovingModel();` | (단일 — 직접 this) | [N/A] | |
+| L97 | `modelPlayer.isClimb = isClimb;` | (state holder 일원화 — 분배 부재) | [N/A] | sm 객체 1개로 통합 |
+| L98 | `modelPlayer.isClimbJump = isClimbJump;` | — | [N/A] | |
+| L99 | `modelPlayer.handsClimbType = handsClimbType;` | — | [N/A] | |
+| L100 | `modelPlayer.feetClimbType = feetClimbType;` | — | [N/A] | |
+| L101 | `modelPlayer.isHandsVineClimbing = isHandsVineClimbing;` | — | [N/A] | |
+| L102 | `modelPlayer.isFeetVineClimbing = isFeetVineClimbing;` | — | [N/A] | |
+| L103 | `modelPlayer.isCeilingClimb = isCeilingClimb;` | — | [N/A] | |
+| L104 | `modelPlayer.isSwim = isSwim;` | — | [N/A] | |
+| L105 | `modelPlayer.isDive = isDive;` | — | [N/A] | |
+| L106 | `modelPlayer.isCrawl = isCrawl;` | — | [N/A] | |
+| L107 | `modelPlayer.isCrawlClimb = isCrawlClimb;` | — | [N/A] | |
+| L108 | `modelPlayer.isJump = isJump;` | — | [N/A] | |
+| L109 | `modelPlayer.isHeadJump = isHeadJump;` | — | [N/A] | |
+| L110 | `modelPlayer.isSlide = isSlide;` | — | [N/A] | |
+| L111 | `modelPlayer.isFlying = isFlying;` | — | [N/A] | |
+| L112 | `modelPlayer.isLevitate = isLevitate;` | — | [N/A] | |
+| L113 | `modelPlayer.isFalling = isFalling;` | — | [N/A] | |
+| L114 | `modelPlayer.isGenericSneaking = isGenericSneaking;` | — | [N/A] | |
+| L115 | `modelPlayer.isAngleJumping = isAngleJumping;` | — | [N/A] | |
+| L116 | `modelPlayer.angleJumpType = angleJumpType;` | — | [N/A] | |
+| L117 | `modelPlayer.isRopeSliding = isRopeSliding;` | — | [N/A] | |
+| L118 | (빈 줄) | — | [N/A] | |
+| L119 | `modelPlayer.currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened;` | (state holder 또는 직접 limbSwingAmount) | [N/A] | |
+| L120 | `modelPlayer.smallOverGroundHeight = smallOverGroundHeight;` | `sm.smallOverGroundHeight` (MixinPEMC L94-L96 직접 갱신) | [정합] | |
+| L121 | `modelPlayer.overGroundBlock = overGroundBlock;` | (1.21.1: smallOverGroundHeight < 5f 검사 단순화 — block 자체 미사용) | [N/A] | §16-21 |
+| L122 | `}` | — | [N/A] | |
+| L123 | (빈 줄) | — | [N/A] | |
+| L124 | `if (!isInventory && entityplayer.isSneaking() && !(entityplayer instanceof EntityPlayerSP) && isCrawl)` | (타인 플레이어 기어가는 자세 보정 — 1.21.1 sm_getPositionOffset 처리?) | [누락] | ⚠️ 타인 플레이어 isSneaking + isCrawl 시 d1 += 0.125D 미이식. R-10+ B-N 후보 |
+| L125 | `d1 += 0.125D;` | (해당 없음) | [누락] | ⚠️ 타인 플레이어 크롤링 자세 위치 보정. ModelPlayer Y +0.125 (= 1/8 블록) |
+| L126 | `}` (moving null check 종료) | — | [N/A] | |
+| L127 | (빈 줄) | — | [N/A] | |
+| L128 | `CurrentMainModel = modelBipedMain;` | (1.21.1: 다층 모델 부재 — 직접 this 접근) | [N/A] | |
+| L129 | `irp.superRenderRenderPlayer(entityplayer, d, d1, d2, f, renderPartialTicks);` | (vanilla render 본체 — Mixin TAIL inject 자동) | [N/A] | super 호출 == vanilla 자동 |
+| L130 | `CurrentMainModel = null;` | — | [N/A] | |
+| L131 | (빈 줄) | — | [N/A] | |
+| L132 | `if (moving != null && moving.isLevitating && modelPlayers != null)` | (Levitate 후처리 — 1.21.1 미이식) | [누락] | ⚠️ Levitating 시 currentHorizontalAngle = currentCameraAngle 보정 미이식. R-10+ B-N 후보 (Levitate 자세 정합) |
+| L133 | `for(int i = 0; i < modelPlayers.length; i++)` | (단일 모델) | [N/A] | |
+| L134 | `modelPlayers[i].getMovingModel().md.currentHorizontalAngle = modelPlayers[i].getMovingModel().md.currentCameraAngle;` | (Levitate 후 horizontal=camera 보정 미이식) | [누락] | ⚠️ §16-22 — sm_captureBodyYaw에 Levitate 분기 추가 검토 |
+| L135 | `}` | — | [N/A] | renderPlayer 종료 |
+| L136 | (빈 줄) | — | [N/A] | |
+| L137 | `public void rotatePlayer(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2)` | MixinPlayerEntityRenderer.sm_captureBodyYaw @Inject(HEAD) + @ModifyArg(index=3) bodyYaw 교체 | [정합] | rotatePlayer = setupTransforms 진입점 |
+| L138 | `{` | — | [N/A] | |
+| L139 | `SmartMoving moving = SmartMovingFactory.getInstance(entityplayer);` | (sm access) | [정합] | |
+| L140 | `if(moving != null)` | (sm null check) | [정합] | |
+| L141 | `{` | — | [N/A] | |
+| L142 | `boolean isInventory = f2 == 1.0F && moving.isp != null && moving.isp.getMcField().currentScreen instanceof GuiInventory;` | (1.21.1: InventoryScreen 자동 분리 — vanilla setupTransforms 가 인벤토리 화면 별도 처리) | [N/A] | |
+| L143 | `if(!isInventory)` | — | [N/A] | |
+| L144 | `{` | — | [N/A] | |
+| L145 | `float forwardRotation = entityplayer.prevRotationYaw + (entityplayer.rotationYaw - entityplayer.prevRotationYaw) * f2;` | `MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw())` (sm_captureBodyYaw 본체) | [정합] | |
+| L146 | `if(moving.isClimbing \|\| moving.isClimbCrawling \|\| moving.isCrawlClimbing \|\| moving.isFlying \|\| moving.isSwimming \|\| moving.isDiving \|\| moving.isCeilingClimbing \|\| moving.isHeadJumping \|\| moving.isSliding \|\| moving.isAngleJumping())` | sm_captureBodyYaw 8 분기 (climb/swim/dive/ceilingClimb/headJump/slide/angleJump/falling 등) — `smBodyYawActive=true; smBodyYawOverride=forwardRotation` | [정합] | 8 분기 §11 검증 완료 |
+| L147 | `entityplayer.renderYawOffset = forwardRotation;` | `@ModifyArg(method="setupTransforms", index=3)` 으로 bodyYaw 인자 교체 (smBodyYawActive 시) | [정합] | renderYawOffset 직접 설정 → ModifyArg 대체 |
+| L148 | `}` | — | [N/A] | |
+| L149 | `}` | — | [N/A] | |
+| L150 | `}` | (sm null check 종료) | [N/A] | |
+| L151 | `irp.superRenderRotatePlayer(entityplayer, totalTime, actualRotation, f2);` | (vanilla setupTransforms 호출 — @ModifyArg가 인자 변환) | [N/A] | |
+| L152 | `}` | — | [N/A] | rotatePlayer 종료 |
+| L153 | (빈 줄) | — | [N/A] | |
+| L154 | `public void renderPlayerAt(AbstractClientPlayer entityplayer, double d, double d1, double d2)` | MixinPlayerEntityRenderer.sm_getPositionOffset @Inject (cancellable) | [정합] | renderPlayerAt = getPositionOffset 진입점 |
+| L155 | `{` | — | [N/A] | |
+| L156 | `if(entityplayer instanceof EntityOtherPlayerMP)` | (1.21.1: AbstractClientPlayerEntity — 자기/타인 구분 없이 처리) | [N/A] | 1.21.1 Mixin은 모든 플레이어 동일 처리 (자기 자신 sm.heightOffset이 0이면 보정 없음) |
+| L157 | `{` | — | [N/A] | |
+| L158 | `SmartMoving moving = SmartMovingFactory.getOtherSmartMoving(entityplayer.getEntityId());` | `SmartMovingClientStateAccess.smartmoving$getState(player)` | [정합] | |
+| L159 | `if(moving != null && moving.heightOffset != 0)` | sm_getPositionOffset L54: `if (sm.isHeadJumping && sm.heightOffset != 0f)` | [정합] | (가드 — isHeadJumping 추가 — sm.heightOffset 자체가 isHeadJumping 시에만 -1로 설정되므로 등가) |
+| L160 | `d1 += moving.heightOffset;` | L55: `cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D))` | [정합] | Vec3d 반환 (=>vanilla 추가 적용) |
+| L161 | `}` | — | [N/A] | |
+| L162 | `irp.superRenderRenderPlayerAt(entityplayer, d, d1, d2);` | (vanilla render 본체 — @Inject TAIL 자동) | [N/A] | |
+| L163 | `}` | — | [N/A] | renderPlayerAt 종료 |
+| L164 | (빈 줄) | — | [N/A] | |
+| L165 | `public void renderName(EntityLivingBase entityPlayer, double d, double d1, double d2)` | MixinPlayerEntityRenderer.smartmoving$adjustLabelY @Inject(HEAD) + MixinLivingEntityRenderer.hasLabel @Redirect | [정합] | renderName = renderLabelIfPresent 진입점 |
+| L166 | `{` | — | [N/A] | |
+| L167 | `boolean changedIsSneaking = false, originalIsSneaking = false;` | (1.21.1: setSneaking toggle 미사용 — vanilla 자체 isSneaking 분기 직접 변경) | [N/A] | |
+| L168 | `if(Minecraft.isGuiEnabled() && entityPlayer != irp.getRenderManager().livingPlayer)` | (1.21.1: dispatcher 자동) | [N/A] | |
+| L169 | `{` | — | [N/A] | |
+| L170 | `SmartMoving moving = entityPlayer instanceof EntityPlayer ? SmartMovingFactory.getInstance((EntityPlayer)entityPlayer) : null;` | `SmartMovingClientStateAccess` (sm access) | [정합] | |
+| L171 | `if(moving != null)` | (sm null check) | [정합] | |
+| L172 | `{` | — | [N/A] | |
+| L173 | `originalIsSneaking = entityPlayer.isSneaking();` | (sneakNameTag 처리 — MixinLivingEntityRenderer.hasLabel @Redirect) | [정합] | |
+| L174 | `boolean temporaryIsSneaking = originalIsSneaking;` | — | [정합] | |
+| L175 | `if(moving.isCrawling && !moving.isClimbing)` | renderLabelIfPresent L260: `if (sm.isCrawling && !sm.isClimbing && !cfg.crawlNameTag)` | [정합] | |
+| L176 | `temporaryIsSneaking = !Config._crawlNameTag.value;` | L261: `cir.cancel()` (이름 태그 자체 차단) | [정합 (근사)] | toggle vs cancel — 효과 동일 (이름 표시 안함) |
+| L177 | `else if(originalIsSneaking)` | (vanilla sneak nametag 64 거리 vs sneakNameTag — MixinLivingEntityRenderer 별도) | [정합] | |
+| L178 | `temporaryIsSneaking = !Config._sneakNameTag.value;` | (sneakNameTag 처리 — MixinLivingEntityRenderer.hasLabel @Redirect) | [정합] | |
+| L179 | (빈 줄) | — | [N/A] | |
+| L180 | `changedIsSneaking = temporaryIsSneaking != originalIsSneaking;` | (toggle 미사용 — Mixin 분기 직접 처리) | [N/A] | |
+| L181 | `if(changedIsSneaking)` | — | [N/A] | |
+| L182 | `entityPlayer.setSneaking(temporaryIsSneaking);` | (toggle 미사용) | [N/A] | |
+| L183 | (빈 줄) | — | [N/A] | |
+| L184 | `if(moving.heightOffset == -1)` | renderLabelIfPresent L266: `if (sm.heightOffset == -1f)` | [정합] | 헤드점프 |
+| L185 | `d1 -= 0.2F;` | L267 (Y -0.2 보정) | [정합] | |
+| L186 | `else if(originalIsSneaking && !temporaryIsSneaking)` | renderLabelIfPresent L271: `else if (entity.isSneaking() && cfg.sneakNameTag)` | [정합] | sneakNameTag 시 비스니킹 취급 → Y 보정 |
+| L187 | `d1 -= 0.05F;` | L272 (Y -0.05 보정) | [정합] | |
+| L188 | `}` | — | [N/A] | |
+| L189 | `}` | — | [N/A] | |
+| L190 | (빈 줄) | — | [N/A] | |
+| L191 | `irp.superRenderRenderName(entityPlayer, d, d1, d2);` | (vanilla renderLabelIfPresent — @Inject HEAD 후 진행) | [N/A] | |
+| L192 | (빈 줄) | — | [N/A] | |
+| L193 | `if(changedIsSneaking)` | (toggle 미사용 — restore 불필요) | [N/A] | |
+| L194 | `entityPlayer.setSneaking(originalIsSneaking);` | — | [N/A] | |
+| L195 | `}` | — | [N/A] | renderName 종료 |
+| L196 | (빈 줄) | — | [N/A] | |
+| L197 | `public static void renderGuiIngame(Minecraft minecraft)` | (HUD 렌더 — 본 포커스 #1 외, 별도 포커스 영역) | [N/A] | UI/HUD — 애니메이션 무관 |
+| L198 | `{` | — | [N/A] | |
+| L199 | `if (!Client.getNativeUserInterfaceDrawing())` | (HUD UI 설정) | [N/A] | |
+| L200 | `return;` | (HUD 처리) | [N/A] | |
+
+**청크 1 (L1-L200) 통계: 정합 51 / 오역 0 / 누락 3 / 잉여 0 / N/A 146 = 200 라인 전수.**
+
+**청크 1 발견 (R-10+ B-N 후보)**:
+- B-N (타인 플레이어 isSneaking+isCrawl 위치 보정): L124/L125 — 타인 크롤링 자세에서 d1 += 0.125D 미이식. sm_getPositionOffset에 분기 추가 검토.
+- B-N (Levitate 후처리 — currentHorizontalAngle = currentCameraAngle): L132-L134 — Levitating 시 카메라 각도로 강제 정렬 미이식. sm_captureBodyYaw 에 Levitate 분기 추가 검토.
+
+**다음 청크**: R-2 청크 2 (SmartMovingRender.java L201-L337) — renderGuiIngame 본체 + 잔여 + SM render 하위 5 파일 (Context/IModel/IRender/ModelPlayer/RenderPlayer).
