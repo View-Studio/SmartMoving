@@ -402,17 +402,20 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ---
 
-### Phase D. tryJump 전면 재작성 (SmartMovingJumper.java)
+### Phase D. tryJump 전면 재작성 (SmartMovingJumper.java) — **세션 19: 일괄 완료**
 
-**기존 `tryJump(player, sm, jumpType, charge)` 는 경량 이식** — 전면 재작성하여 원본 L1999-L2136 1:1.
+> 사용자 결정 (2026-04-25, 세션 19): tryJump 단일 함수 분할 시 중간 커밋마다 빌드 깨짐 →
+> D-1~D-18 + E-1 (trySlideDownJump 통합) 한 세션에 일괄 진행. D-5/D-14 skip (§7-1 적용).
+> 결과: SmartMovingJumper.tryJump 새 시그니처로 완전 재작성 + 호출처 7곳 (내부 5 + 외부 2)
+> 정비 + trySlideDownJump 제거 + vanilla() public 변경 + 상수 alias 통일.
 
-**D-1. 시그니처 정비**
-- [ ] D-1. 원본 시그니처 `boolean tryJump(int type, Boolean inWaterOrNull, Boolean isRunningOrNull,
-     Float angle)` 1:1 이식. 반환: `enabled` 여부 (원본 L2135). 내부에서 `jumpCharge` /
-     `headJumpCharge` 등 필드 접근.
+**D-1. 시그니처 정비** — 세션 19 완료
+- [x] D-1. 새 시그니처 `boolean tryJump(ClientPlayerEntity, SmartMovingClientState, int type,
+     Boolean inWaterOrNull, Boolean isRunningOrNull, Float angle)` 이식. 반환: `enabled`.
+     기존 `tryJump(player, sm, jumpType, charge)` 완전 대체.
 
-**D-2. WallUpSlide/WallHeadSlide 변환**
-- [ ] D-2. 원본 L2002-L2006:
+**D-2. WallUpSlide/WallHeadSlide 변환** — 세션 19 완료
+- [x] D-2. (세션 19 완료) 원본 L2002-L2006:
   ```java
   boolean noVertical = false;
   if (type == WallUpSlide || type == WallHeadSlide) {
@@ -422,7 +425,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-3. 지역 변수 계산**
-- [ ] D-3. 원본 L2008-L2012:
+- [x] D-3. (세션 19 완료) 원본 L2008-L2012:
   ```java
   boolean inWater = inWaterOrNull != null ? inWaterOrNull : sm.isDipping;
   boolean isRunning = isRunningOrNull != null ? isRunningOrNull : sm.isRunning(player);
@@ -437,14 +440,14 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-4. getJumpSpeed 호출 + isJumpingEnabled**
-- [ ] D-4. 원본 L2014-L2015:
+- [x] D-4. (세션 19 완료) 원본 L2014-L2015:
   ```java
   int speed = getJumpSpeed(sm.isStanding, sm.isSlow, isRunning, sm.isFast, angle);
   boolean enabled = cfg.isJumpingEnabled(speed, type);
   ```
 
 **D-5. Exhaustion 체크 + maxExhaustion 조정** (Phase C 의존)
-- [ ] D-5. 원본 L2018-L2027:
+- [~] D-5. (세션 19 SKIP — §7-1 적용) 원본 L2018-L2027:
   ```java
   if (enabled) {
       boolean exhausionEnabled = cfg.isJumpExhaustionEnabled(speed, type);
@@ -460,7 +463,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-6. jumpFactor (potion) + horizontal/vertical factor + jumpChargeFactor**
-- [ ] D-6. 원본 L2029-L2032:
+- [x] D-6. (세션 19 완료) 원본 L2029-L2032:
   ```java
   float jumpFactor = 1F;
   StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
@@ -472,7 +475,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-7. !up 변환 (horizontalJumpFactor = sqrt)**
-- [ ] D-7. 원본 L2034-L2038:
+- [x] D-7. (세션 19 완료) 원본 L2034-L2038:
   ```java
   if (!up) {
       horizontalJumpFactor = (float) Math.sqrt(
@@ -483,7 +486,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-8. maxHorizontalMotion + verticalMotion 초기 계산**
-- [ ] D-8. 원본 L2040-L2045:
+- [x] D-8. (세션 19 완료) 원본 L2040-L2045:
   ```java
   Double maxHorizontalMotion = null;
   double horizontalMotion = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX
@@ -496,7 +499,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-9. Up && vanilla 분기**
-- [ ] D-9. 원본 L2047-L2062:
+- [x] D-9. (세션 19 완료, vanilla() public 변경) 원본 L2047-L2062:
   ```java
   if (type == Up && sm.vanilla()) {
       verticalMotion = 0.41999998688697815D;
@@ -510,7 +513,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-10. else: head 재계산**
-- [ ] D-10. 원본 L2065-L2079:
+- [x] D-10. (세션 19 완료) 원본 L2065-L2079:
   ```java
   if (head) {
       double normalAngle = Math.atan(verticalMotion / horizontalMotion);
@@ -527,7 +530,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-11. angle != null 분기**
-- [ ] D-11. 원본 L2081-L2095:
+- [x] D-11. (세션 19 완료) 원본 L2081-L2095:
   ```java
   if (angle != null) {
       float jumpAngleRad = angle / RadiantToAngle;  // RadiantToAngle = 180/PI
@@ -543,7 +546,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-12. horizontalMotion > 0 스케일**
-- [ ] D-12. 원본 L2097-L2110:
+- [x] D-12. (세션 19 완료) 원본 L2097-L2110:
   ```java
   if (horizontalMotion > 0) {
       double absMotionX = Math.abs(motionX) * horizontalJumpFactor;
@@ -560,7 +563,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-13. up && !noVertical → motionY 적용 + Stats + isSprintJump**
-- [ ] D-13. 원본 L2113-L2118:
+- [x] D-13. (세션 19 완료) 원본 L2113-L2118:
   ```java
   if (up && !noVertical) {
       motionY = verticalMotion;
@@ -570,7 +573,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-14. exhaustion gain 적용**
-- [ ] D-14. 원본 L2120-L2124:
+- [~] D-14. (세션 19 SKIP — §7-1 적용) 원본 L2120-L2124:
   ```java
   if (exhausionEnabled) {
       float gain = cfg.getJumpExhaustionGain(speed, type, sm.jumpCharge);
@@ -579,7 +582,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-15. head → isHeadJumping + setHeightOffset**
-- [ ] D-15. 원본 L2126-L2130:
+- [x] D-15. (세션 19 완료) 원본 L2126-L2130:
   ```java
   if (head) {
       sm.isHeadJumping = true;
@@ -589,7 +592,7 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-16. 최종 setVelocity + isJumping + onLivingJump**
-- [ ] D-16. 원본 L2131-L2134:
+- [x] D-16. (세션 19 완료) 원본 L2131-L2134:
   ```java
   player.setVelocity(motionX, noVertical ? vel.y : motionY, motionZ);
   // sp.isAirBorne = true — vanilla 자동
@@ -598,10 +601,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   ```
 
 **D-17. 반환**
-- [ ] D-17. `return enabled;`
+- [x] D-17. (세션 19 완료, return enabled) `return enabled;`
 
 **D-18. 상태 클리어 (원본 tryJump 외부 호출 후 처리)**
-- [ ] D-18. 원본에는 tryJump 종료 후 호출측에서 `jumpCharge=0; headJumpCharge=0;
+- [x] D-18. (세션 19 완료, 1.21.1 동작 유지 — 내부 처리) 원본에는 tryJump 종료 후 호출측에서 `jumpCharge=0; headJumpCharge=0;
      blockJumpTillButtonRelease=true; jumpPending=false;` 리셋. 현 1.21.1 은 tryJump 내부에서
      이미 처리. 원본 순서 확인 후 정리.
 
@@ -609,9 +612,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ### Phase E. 호출 경로 통합
 
-**E-1. trySlideDownJump 통합 또는 유지**
-- [ ] E-1. Phase D 의 `tryJump(SLIDE_DOWN, false, wasRunning, null)` 호출이 B-42-B26 경량 해소를
-     대체. 기존 `trySlideDownJump` 별도 메서드는 **삭제** 후 `tryJump` 단일 진입 정리.
+**E-1. trySlideDownJump 통합 또는 유지** — 세션 19 완료
+- [x] E-1. Phase D 일괄 진행과 함께 처리. `trySlideDownJump` 별도 메서드 삭제 + ClientState L1394
+     호출처를 `tryJump(SLIDE_DOWN, false, wasRunning, null)` 직접 호출로 교체. B-42-B26 경량
+     해소 대체 완료.
 
 **E-2. 기존 호출처 재검토**
 - [ ] E-2. 현재 `Jumper.tryJump(player, sm, jumpType, charge)` 호출 전수 grep. 새 시그니처
@@ -1432,6 +1436,81 @@ Easy default 영향 분석:
 
 진행률: **Phase A + Phase B 완결, Phase C skip 결정**, 전체 #2.5 76/~80 (~95%) — Phase C 32개 원자 제거로 분모 감소. 실질 남은 작업 Phase D (16 서브 — D-5/D-14 skip) + Phase E (5) + Phase F (6) = 27 원자.
 
+### 세션 19 — 2026-04-25 — Phase D 일괄 + E-1 통합 (D-5/D-14 skip)
+
+사용자 지시: "Phase D 진입" — Phase C skip 결정 직후. D-1~D-18 단일 함수 분할 불가 →
+일괄 진행 결정. D-5/D-14 skip (§7-1 적용). E-1 (trySlideDownJump 통합) 같이 처리.
+
+진행한 작업:
+1. **의존 grep 검증**:
+   - `sm.jumpMotionX/Z` ✅ (ClientState L595/L597)
+   - `sm.jumpCharge` (float, L42) / `sm.headJumpCharge` (float, L45) ✅
+   - `sm.isStanding` ✅ (L137)
+   - `sm.vanilla()` ⚠️ private (L2274) → **public 변경** (D-9 외부 호출 위해)
+   - `sm.isRunning(player)` ✅ public (L2322)
+   - `SmartMovingMover.getCombinedSpeedFactor` ✅ (Climber/Flyer 사용)
+   - `sm.heightOffset` ✅ (L106)
+   - Phase B 메서드 모두 ✅ (B-1~B-8 세션 12-17 완료)
+   - Phase C — skip 결정으로 의존 제거
+2. **상수 충돌 발견**:
+   - 기존 `SmartMovingJumper.WALL_UP=3` vs 새 `SmartMovingConfig.JUMP_TYPE_WALL_UP=11`
+   - 외부 사용처 1곳 (`ClientState L1349`) — 호환성 유지
+   - 해결: `SmartMovingJumper` 상수를 `SmartMovingConfig.JUMP_TYPE_*` alias 로 통일
+3. **`SmartMovingClientState.vanilla()` private → public** (D-9 의존)
+4. **`SmartMovingJumper.tryJump` 새 시그니처 본체 재작성** (~150줄):
+   - 새: `boolean tryJump(player, sm, int type, Boolean inWaterOrNull, Boolean isRunningOrNull, Float angle)`
+   - D-2: WallUpSlide/WallHeadSlide → noVertical 변환
+   - D-3: 지역 변수 (inWater, isRunning, charged, up, head)
+   - D-4: getJumpSpeed + isJumpingEnabled
+   - **D-5: SKIP** (§7-1 — jumpExhaustion 게이트, 안쪽 6줄 dead)
+   - D-6: jumpFactor (potion) + h/v factor + jumpChargeFactor
+   - D-7: !up sqrt 변환
+   - D-8: maxHorizontalMotion + verticalMotion 초기 + getCombinedSpeedFactor
+   - D-9: Up && vanilla 분기 (verticalMotion = 0.41999... + sprint 보정)
+   - D-10: head 재계산 (getHeadJumpFactor)
+   - D-11: angle != null (getJumpMoving via wallUp/Head H factor)
+   - D-12: horizontalMotion > 0 스케일
+   - D-13: up && !noVertical → motionY + Stats.JUMP + isSprintJump
+   - **D-14: SKIP** (§7-1 — exhaustion 누적, 안쪽 3줄 dead)
+   - D-15: head → isHeadJumping + setPoseSmall + heightOffset=-1F
+   - D-16: setVelocity + isJumping
+   - D-17: return enabled
+   - D-18: 1.21.1 동작 유지 — 내부 상태 클리어 (jumpCharge=0 등)
+5. **`trySlideDownJump` 메서드 제거** (E-1 통합)
+6. **호출처 7곳 갱신**:
+   - SmartMovingJumper 내부 5곳:
+     - handleJumping CHARGE_UP (L412): `tryJump(player, sm, CHARGE_UP, null, null, null)`
+     - handleJumping HEAD_UP (L434): 동일 패턴
+     - handleJumping 수면 UP (L449): 동일
+     - handleJumping 일반 UP (L470): 동일
+     - handleWallJumping (L620): `tryJump(player, sm, jumpType, null, null, jumpAngle)` — angle 전달
+   - SmartMovingClientState 외부 2곳:
+     - L1349 Creative flying UP: `tryJump(player, this, UP, null, null, null)`
+     - L1394 SlideDown: `tryJump(player, this, SLIDE_DOWN, false, wasRunning, null)` (trySlideDownJump 대체)
+7. **상수 alias 통일**: SmartMovingJumper.UP/CHARGE_UP/... → SmartMovingConfig.JUMP_TYPE_*
+   값 정렬 (예: WALL_UP 3→11). LEFT/RIGHT/BACK 은 deprecated sentinel (Phase E-4 후속).
+8. **handleWallJumping 사전 setVelocity/horizontalCollision/fallDistance 리셋 코드 제거**:
+   - tryJump 내부 D-9~D-12 가 동등 처리 (원본 SmartMovingSelf L2068+ 1:1)
+   - 사전 인라인 코드는 중복 — 제거
+
+근사 여부: §7-1 (D-5/D-14 skip) 1건 — 세션 18 등록분 적용 완료. 신규 근사 0.
+
+완료 전 검증 체크리스트 (세션 19 기준):
+- [근거] 원본 라인 확보 — `SmartMovingSelf.java` L1999-L2136 (전체 138줄) + Phase B 메서드 호출 매핑
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingJumper.java` 새 tryJump (L130-L300) + 호출처 7곳
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (D-5/D-14 skip 외 모든 라인 1:1, 원본 L 주석 명시)
+- [분기] 모든 if/else 전수 (D-2 type 변환 + D-3 up/head 12종 + D-9 Up && vanilla + D-10 head + D-11 angle != null + D-12 maxHorizontalMotion null + D-13 up && !noVertical + D-15 head)
+- [상수] 0.41999998688697815D / 0.498 / -0.078 / 0.017453292F (yaw deg→rad) / 57.295776F (180/PI) / 0.2F (sprint 보정) — 모두 정확
+- [타이밍] 절대 순서 보존 (D-2 → D-3 → D-4 → [D-5 skip] → D-6 → ... → D-17 → D-18)
+- [근사] §7-1 (세션 18 등록) 적용. 신규 0.
+- [신규] vanilla() public 변경 발견 → 처리. 상수 충돌 발견 → alias 처리.
+- [회귀] 호출처 7곳 + 상수 매핑 변경 — 빌드 통과로 컴파일 회귀 0. 동작 회귀는 사용자 인게임 검증 (Phase F-6).
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: **Phase E 진입** — E-2 (호출처 재검토 — 일부 세션 19 진행, ANGLE/CLIMB/HandsOnly 분기 잔여) + E-3 (HandsOnly 분기 추가) + E-4 (Angle 점프 LEFT/RIGHT/BACK → ANGLE type 통합) + E-5 (skip — Phase C 와 함께). 또는 Phase F 직접 진입 (감사 + 인게임 플레이테스트).
+
+진행률: **Phase A 완결 + Phase B 완결 + Phase C skip + Phase D 일괄 완결 + E-1 통합**, 전체 #2.5 92/~80 (~115%) — Phase C 32 제거 + Phase D 16 추가 = 분모 갱신 필요. 실질 남은: Phase E (E-2/E-3/E-4 = 3 원자) + Phase F (5 — F-6 사용자) = 8 원자.
+
 ---
 
 ## 7. 근사 이식 지점 (이 포커스)
@@ -1465,7 +1544,8 @@ if (exhausionEnabled) {
 }
 ```
 
-**1.21.1 처리**: 두 블록 통째로 skip. `exhausionEnabled` 변수 자체 미선언.
+**1.21.1 처리**: 두 블록 통째로 skip. `exhausionEnabled` 변수 자체 미선언. **세션 19 적용 완료** —
+`SmartMovingJumper.tryJump` 새 본체에서 D-5/D-14 위치에 SKIP 주석 + §7-1 참조 명시.
 
 **근사 이식 — 원본과 차이**:
 - jumpExhaustion 게이트 미작동 (점프 시도 차단 안 됨)

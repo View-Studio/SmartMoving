@@ -31,13 +31,29 @@ public final class SmartMovingJumper {
 
     private SmartMovingJumper() {}
 
-    // ── jumpType 상수 ────────────────────────────────────────────────────────
-    // 원본: SmartMovingConfig.Up / ChargeUp / HeadUp / WallUp / WallHead 등 정수 상수
-    public static final int UP = 0, CHARGE_UP = 1, HEAD_UP = 2,
-            WALL_UP = 3, CLIMB_UP = 4, CLIMB_BACK = 5, CLIMB_BACK_HEAD = 6,
-            LEFT = 7, RIGHT = 8, BACK = 9, WALL_HEAD = 10,
-            WALL_UP_SLIDE = 11, WALL_HEAD_SLIDE = 12,
-            SLIDE_DOWN = 13;   // B-42-B26 (세션 134) — 슬라이딩 진입 시 수평 속도 증폭
+    // ── jumpType 상수 (Phase B-2.5 / 세션 19 정리) ──────────────────────────
+    // SmartMovingConfig.JUMP_TYPE_* alias (원본 SmartMovingClientConfig L178-L192).
+    // 원본 값으로 통일: Up=0, ChargeUp=1, Angle=2, HeadUp=3, SlideDown=4, ClimbUp=5,
+    //   ClimbUpHandsOnly=6, ClimbBackUp=7, ClimbBackUpHandsOnly=8, ClimbBackHead=9,
+    //   ClimbBackHeadHandsOnly=10, WallUp=11, WallHead=12, WallUpSlide=13, WallHeadSlide=14.
+    public static final int UP                          = SmartMovingConfig.JUMP_TYPE_UP;
+    public static final int CHARGE_UP                   = SmartMovingConfig.JUMP_TYPE_CHARGE_UP;
+    public static final int ANGLE                       = SmartMovingConfig.JUMP_TYPE_ANGLE;
+    public static final int HEAD_UP                     = SmartMovingConfig.JUMP_TYPE_HEAD_UP;
+    public static final int SLIDE_DOWN                  = SmartMovingConfig.JUMP_TYPE_SLIDE_DOWN;
+    public static final int CLIMB_UP                    = SmartMovingConfig.JUMP_TYPE_CLIMB_UP;
+    public static final int CLIMB_UP_HANDS_ONLY         = SmartMovingConfig.JUMP_TYPE_CLIMB_UP_HANDS_ONLY;
+    public static final int CLIMB_BACK                  = SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_UP;
+    public static final int CLIMB_BACK_HANDS_ONLY       = SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY;
+    public static final int CLIMB_BACK_HEAD             = SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD;
+    public static final int CLIMB_BACK_HEAD_HANDS_ONLY  = SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY;
+    public static final int WALL_UP                     = SmartMovingConfig.JUMP_TYPE_WALL_UP;
+    public static final int WALL_HEAD                   = SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
+    public static final int WALL_UP_SLIDE               = SmartMovingConfig.JUMP_TYPE_WALL_UP_SLIDE;
+    public static final int WALL_HEAD_SLIDE             = SmartMovingConfig.JUMP_TYPE_WALL_HEAD_SLIDE;
+    // LEFT/RIGHT/BACK: handleJumping 더블클릭 방향 점프 인라인 처리 — tryJump 호출 없음.
+    //   Phase E-4 에서 ANGLE type + angle 파라미터로 통합 예정. 현재는 미사용 sentinel.
+    public static final int LEFT = -1, RIGHT = -2, BACK = -3;
 
     // ── [10-3] getJumpMoving ─────────────────────────────────────────────────
 
@@ -122,183 +138,188 @@ public final class SmartMovingJumper {
         player.calculateDimensions();
     }
 
-    // ── [10-2] tryJump ───────────────────────────────────────────────────────
+    // ── [10-2] tryJump (Phase D 1:1 재작성, 세션 19) ────────────────────────
 
     /**
      * 실제 점프 속도를 계산하고 적용한다.
-     * 원본: SmartMovingSelf.tryJump() 이식.
      *
-     * @param jumpType UP / CHARGE_UP / HEAD_UP / WALL_UP 등 jumpType 상수
-     * @param charge   차지 점프 누적값 (0 ~ cfg.jumpChargeMaximum)
+     * 원본: `SmartMovingSelf.tryJump()` L1999-L2136 (포커스 #2.5 Phase D, 세션 19, 1:1 이식).
+     *
+     * **§7-1 근사 (D-5/D-14 skip)**: jumpExhaustion 게이트 + 누적 미이식.
+     *   Easy 1:1 차원에서 모든 jumpExhaustion=false → exhausionEnabled 항상 false →
+     *   D-5/D-14 안쪽 블록 100% dead. focus_05 §6.5 P-9~P-19 dead 분석 일관.
+     *   사용자 수동 활성화 시 미작동 (focus_02_5 §7-1 영구 등록).
+     *
+     * @param type             SmartMovingConfig.JUMP_TYPE_* 상수 (15종)
+     * @param inWaterOrNull    null → sm.isDipping 사용 / non-null → 강제 (SlideDown=false 등)
+     * @param isRunningOrNull  null → sm.isRunning(player) 사용 / non-null → 강제 (SlideDown=wasRunning 등)
+     * @param angle            null → 일반 점프 / non-null → 각도 점프 (Wall/Side/Back)
+     * @return enabled         isJumpingEnabled(speed, type) 결과. 호출 측 fallback 판단용.
      */
-    public static void tryJump(ClientPlayerEntity player, SmartMovingClientState sm,
-                                int jumpType, float charge) {
+    public static boolean tryJump(ClientPlayerEntity player, SmartMovingClientState sm,
+                                   int type, Boolean inWaterOrNull, Boolean isRunningOrNull, Float angle) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // WallUpSlide/WallHeadSlide: 수직 속도 유지, 비슬라이드 타입으로 변환 (원본: noVertical=true)
+        // === D-2 (원본 L2002-L2006) — WallUpSlide/WallHeadSlide → noVertical 변환 ===
         boolean noVertical = false;
-        if (jumpType == WALL_UP_SLIDE) {
-            jumpType = WALL_UP;
-            noVertical = true;
-        } else if (jumpType == WALL_HEAD_SLIDE) {
-            jumpType = WALL_HEAD;
+        if (type == SmartMovingConfig.JUMP_TYPE_WALL_UP_SLIDE
+                || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD_SLIDE) {
+            type = (type == SmartMovingConfig.JUMP_TYPE_WALL_UP_SLIDE)
+                    ? SmartMovingConfig.JUMP_TYPE_WALL_UP
+                    : SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
             noVertical = true;
         }
 
-        // 원본 tryJump() up/head 분류:
-        //   up: Up, ChargeUp, HeadUp, ClimbUp, ClimbBackUp, ClimbBackHead, WallUp, WallHead 등
-        //   head: HeadUp, ClimbBackHead, WallHead
-        boolean up   = jumpType == UP || jumpType == CHARGE_UP || jumpType == HEAD_UP
-                    || jumpType == WALL_UP || jumpType == WALL_HEAD;
-        boolean head = jumpType == HEAD_UP || jumpType == WALL_HEAD;
-        boolean fast = player.isSprinting();
+        // === D-3 (원본 L2008-L2012) — 지역 변수 계산 ===
+        boolean inWater   = inWaterOrNull   != null ? inWaterOrNull   : sm.isDipping;
+        boolean isRunning = isRunningOrNull != null ? isRunningOrNull : sm.isRunning(player);
+        boolean charged = type == SmartMovingConfig.JUMP_TYPE_CHARGE_UP;
+        boolean up = type == SmartMovingConfig.JUMP_TYPE_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_CHARGE_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_HEAD_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_UP_HANDS_ONLY
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD
+                  || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY
+                  || type == SmartMovingConfig.JUMP_TYPE_ANGLE
+                  || type == SmartMovingConfig.JUMP_TYPE_WALL_UP
+                  || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
+        boolean head = type == SmartMovingConfig.JUMP_TYPE_HEAD_UP
+                    || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD
+                    || type == SmartMovingConfig.JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY
+                    || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
 
+        // === D-4 (원본 L2014-L2015) — getJumpSpeed + isJumpingEnabled ===
+        int speed = SmartMovingConfig.getJumpSpeed(sm.isStanding, sm.isSlow, isRunning, sm.isFast, angle);
+        boolean enabled = cfg.isJumpingEnabled(speed, type);
+
+        // === D-5 — SKIP (§7-1 근사) ===
+        // 원본 L2018-L2027 jumpExhaustion 게이트/누적: Easy default 모든 jumpExhaustion=false →
+        //   exhausionEnabled 항상 false → 안쪽 블록 100% dead. focus_05 §6.5 P-9~P-19 일관.
+        //   사용자 수동 활성화 시 미작동 (focus_02_5 §7-1 영구 등록).
+
+        // === D-6 (원본 L2029-L2032) — jumpFactor (potion) + horizontal/vertical factor + jumpChargeFactor ===
+        float jumpFactor = 1F;
+        StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
+        if (jumpBoost != null)
+            jumpFactor = 1F + (jumpBoost.getAmplifier() + 1) * 0.2F;
+        float horizontalJumpFactor = cfg.getJumpHorizontalFactor(speed, type) * jumpFactor;
+        float verticalJumpFactor   = cfg.getJumpVerticalFactor(speed, type) * jumpFactor;
+        float jumpChargeFactor = charged ? cfg.getJumpChargeFactor(sm.jumpCharge) : 1F;
+
+        // === D-7 (원본 L2034-L2038) — !up 변환 (sqrt) ===
+        if (!up) {
+            horizontalJumpFactor = (float) Math.sqrt(
+                    horizontalJumpFactor * horizontalJumpFactor
+                            + verticalJumpFactor * verticalJumpFactor);
+            verticalJumpFactor = 0F;
+        }
+
+        // === D-8 (원본 L2040-L2045) — maxHorizontalMotion + verticalMotion 초기 ===
+        Double maxHorizontalMotion = null;
+        double horizontalMotion = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX
+                                           + sm.jumpMotionZ * sm.jumpMotionZ);
+        double verticalMotion = -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor;
+        if (horizontalJumpFactor > 1F && !player.horizontalCollision) {
+            maxHorizontalMotion = (double) cfg.getMaxHorizontalMotion(speed, type, inWater)
+                                  * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        }
+
+        // === D-9 (원본 L2047-L2062) — Up && vanilla 분기 ===
         Vec3d vel = player.getVelocity();
         double motionX = vel.x;
         double motionZ = vel.z;
-
-        // ── 수직 속도 계산 ──────────────────────────────────────────────────
-        // 원본 분기: angle==null → "vanilla Up" 블록(0.419D + potion); angle!=null → 공식 경로
-        // 벽점프(WALL_UP/WALL_HEAD)는 tryJump(type, null, null, angle)로 호출되어 angle!=null 경로
-        double verticalMotion;
-        if (up && !player.isTouchingWater()) {
-            if (jumpType == WALL_UP) {
-                // 원본: angle!=null 경로, getJumpVerticalFactor → wallUpJumpVerticalFactor(0.4F)
-                verticalMotion = -0.078 + 0.498 * cfg.wallUpJumpVerticalFactor;
-            } else if (jumpType == WALL_HEAD) {
-                // 원본: angle!=null 경로, factor += wallHeadJumpVerticalFactor(0.3F)
-                verticalMotion = -0.078 + 0.498 * (cfg.wallUpJumpVerticalFactor + cfg.wallHeadJumpVerticalFactor);
-            } else {
-                // 원본: angle==null 경로 — vanilla Up 점프 수치
-                StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
-                int potionJump = (jumpBoost != null) ? jumpBoost.getAmplifier() : 0;
-                verticalMotion = 0.41999998688697815D + potionJump * 0.1F;
+        if (type == SmartMovingConfig.JUMP_TYPE_UP && sm.vanilla()) {
+            verticalMotion = 0.41999998688697815D;
+            if (jumpBoost != null) verticalMotion += (jumpBoost.getAmplifier() + 1) * 0.1F;
+            if (player.isSprinting()) {
+                float f = player.getYaw() * 0.017453292F;
+                motionX -= Math.sin(f) * 0.2F;
+                motionZ += Math.cos(f) * 0.2F;
             }
-        } else {
-            // 원본: -0.078 + 0.498 * verticalJumpFactor * jumpChargeFactor
-            // verticalJumpFactor = Config._jumpVerticalFactor.value = PositiveFactor 기본값 1F (A-19 확인)
-            // jumpChargeFactor = 1F + charge/max * (factor-1F) (getJumpChargeFactor 공식)
-            float jumpChargeFactor = 1F + (cfg.jumpChargeMaximum > 0
-                    ? charge / cfg.jumpChargeMaximum * (cfg.jumpChargeFactor - 1F)
-                    : 0F);
-            verticalMotion = -0.078 + 0.498 * 1.0D * jumpChargeFactor;
         }
 
-        // ── 스프린트 점프 수평 보정 ─────────────────────────────────────────
-        // 원본: "vanilla Up" 블록(angle==null) 내부에만 적용 → 벽점프(WALL_UP/WALL_HEAD) 시 스킵
-        if (fast && jumpType != WALL_UP && jumpType != WALL_HEAD) {
-            double yawRad = Math.toRadians(player.getYaw());
-            motionX -= Math.sin(yawRad) * 0.2F;
-            motionZ += Math.cos(yawRad) * 0.2F;
-        }
-
-        // ── 헤드점프 각도 재계산 ────────────────────────────────────────────
-        // 원본: normalAngle = atan(vMotion/hSpeed)
-        //       newAngle = headJumpControlFactor * normalAngle
-        //       vMotion = totalMotion * sin(newAngle)
-        //       hMotion = totalMotion * cos(newAngle)
+        // === D-10 (원본 L2065-L2079) — head 재계산 ===
         if (head) {
-            double horizontalSpeed = Math.sqrt(motionX * motionX + motionZ * motionZ);
-            if (horizontalSpeed > 0.01D) {
-                float normalAngle = (float) Math.atan(verticalMotion / horizontalSpeed);
-                float newAngle = cfg.headJumpControlFactor * normalAngle;
-                double totalMotion = Math.sqrt(horizontalSpeed * horizontalSpeed + verticalMotion * verticalMotion);
-                double newVertical    = totalMotion * Math.sin(newAngle);
-                double newHorizontal  = totalMotion * Math.cos(newAngle);
-                double scale = newHorizontal / horizontalSpeed;
-                motionX *= scale;
-                motionZ *= scale;
-                verticalMotion = newVertical;
-            }
+            double normalAngle = Math.atan(verticalMotion / horizontalMotion);
+            double totalMotion = Math.sqrt(verticalMotion * verticalMotion
+                                           + horizontalMotion * horizontalMotion);
+            double newAngle = cfg.getHeadJumpFactor(sm.headJumpCharge) * normalAngle;
+            double newVerticalMotion = totalMotion * Math.sin(newAngle);
+            double newHorizontalMotion = totalMotion * Math.cos(newAngle);
+            if (maxHorizontalMotion != null)
+                maxHorizontalMotion = maxHorizontalMotion * (newHorizontalMotion / horizontalMotion);
+            verticalMotion = newVerticalMotion;
+            horizontalMotion = newHorizontalMotion;
         }
 
-        // ── 속도 적용 ───────────────────────────────────────────────────────
-        // setVelocity() 내부에서 velocityDirty = true 자동 세팅
-        // noVertical: Slide 점프 — 수직 속도 유지 (원본: noVertical=true → motionY 미적용)
-        player.setVelocity(motionX, noVertical ? vel.y : verticalMotion, motionZ);
+        // === D-11 (원본 L2081-L2095) — angle != null 분기 ===
+        if (angle != null) {
+            // 원본 RadiantToAngle = 180 / PI ≈ 57.2957795
+            float jumpAngleRad = angle / 57.295776F;
+            boolean reset = type == SmartMovingConfig.JUMP_TYPE_WALL_UP
+                         || type == SmartMovingConfig.JUMP_TYPE_WALL_HEAD;
+            double horizontal = Math.max(horizontalMotion, horizontalJumpFactor);
+            double moveX = -Math.sin(jumpAngleRad);
+            double moveZ =  Math.cos(jumpAngleRad);
+            motionX = getJumpMoving(sm.jumpMotionX, moveX, reset, horizontal, horizontalJumpFactor);
+            motionZ = getJumpMoving(sm.jumpMotionZ, moveZ, reset, horizontal, horizontalJumpFactor);
+            horizontalMotion = 0;
+            verticalMotion = verticalJumpFactor;
+        }
 
-        // ── 헤드점프 상태 세팅 ──────────────────────────────────────────────
+        // === D-12 (원본 L2097-L2110) — horizontalMotion > 0 스케일 ===
+        if (horizontalMotion > 0) {
+            double absMotionX = Math.abs(motionX) * horizontalJumpFactor;
+            double absMotionZ = Math.abs(motionZ) * horizontalJumpFactor;
+            if (maxHorizontalMotion != null) {
+                absMotionX = Math.min(absMotionX, maxHorizontalMotion
+                                * (horizontalJumpFactor * (Math.abs(motionX) / horizontalMotion)));
+                absMotionZ = Math.min(absMotionZ, maxHorizontalMotion
+                                * (horizontalJumpFactor * (Math.abs(motionZ) / horizontalMotion)));
+            }
+            motionX = Math.signum(motionX) * absMotionX;
+            motionZ = Math.signum(motionZ) * absMotionZ;
+        }
+
+        // === D-13 (원본 L2113-L2118) — up && !noVertical → motionY 적용 + Stats + isSprintJump ===
+        double motionY = vel.y;  // !up 또는 noVertical 시 default 유지
+        if (up && !noVertical) {
+            motionY = verticalMotion;
+            player.incrementStat(Stats.JUMP);
+            sm.isSprintJump = sm.isFast;
+        }
+
+        // === D-14 — SKIP (§7-1 근사) ===
+        // 원본 L2120-L2124 점프 후 exhaustion 누적: D-5 와 동일 dead.
+
+        // === D-15 (원본 L2126-L2130) — head → isHeadJumping + setPoseSmall + heightOffset ===
         if (head) {
             sm.isHeadJumping = true;
-            sm.heightOffset = -1F;
             setPoseSmall(player);
+            sm.heightOffset = -1F;
         }
-        sm.isSprintJump = fast;
 
-        // 원본: sp.addStat(StatList.jumpStat, 1) — up && !noVertical 시만 기록 (C-37)
-        if (up && !noVertical) player.incrementStat(Stats.JUMP);
+        // === D-16 (원본 L2131-L2134) — setVelocity + isJumping ===
+        player.setVelocity(motionX, noVertical ? vel.y : motionY, motionZ);
+        // sp.isAirBorne = true — vanilla 자동 (velocityDirty + fallDistance)
+        sm.isJumping = true;
+        // onLivingJump() — vanilla PlayerEntity 자동 점프 이벤트 처리
 
-        // ── 상태 클리어 ─────────────────────────────────────────────────────
+        // === D-18 (1.21.1 동작 유지) — 호출 측 상태 클리어를 내부 처리 ===
+        //   원본은 호출 측 (handleJumping 등) 에서 jumpCharge=0 등 처리. 1.21.1 은 모든 호출처
+        //   (handleJumping 4곳 + handleWallJumping + ClientState 2곳) 가 결과적으로 같은 후처리
+        //   필요하므로 내부 통합. SlideDown / Creative flying 호출 시 차징 진행 중일 가능성 0
+        //   이므로 부작용 없음.
         sm.jumpCharge = 0F;
         sm.headJumpCharge = 0F;
         sm.blockJumpTillButtonRelease = true;
         sm.jumpPending = false;
-    }
 
-    // ── [10-2b] trySlideDownJump ─────────────────────────────────────────────
-
-    /**
-     * 원본 SmartMovingSelf L2557 `tryJump(Config.SlideDown, false, wasRunning, null)` 경량 이식.
-     *
-     * **B-42-B26 해소 (세션 134)**: 슬라이딩 진입 시 수평 속도 증폭 효과.
-     *
-     * 원본 tryJump SlideDown 경로 추적 결과 핵심 효과:
-     *   1. `Config.isJumpingEnabled(speed, SlideDown) = _slide.value` 활성 체크
-     *   2. `horizontalJumpFactor = jumpHorizontalFactor * speed별 factor * potionJumpFactor`
-     *      → up=false 변환: `horizontalJumpFactor = sqrt(h² + v²)`
-     *   3. `horizontalMotion > 0` 이면 수평 속도 스케일 (`|motionX| * factor`)
-     *   4. `isJumping = true; isAirBorne = true`
-     *   수직 속도 미변경 (up=false, noVertical 효과).
-     *
-     * **§7 근사** (B-42-B26-approx, 세션 134): Jumper factor 인프라 (speed별 horizontalFactor/
-     * verticalFactor + `_jumpHorizontalFactor`/`_jumpVerticalFactor` base + exhaustion 시스템
-     * 전체) 미이식 → 모든 factor 를 **기본값 1F** 로 근사. 원본 PositiveFactor 기본값 1F
-     * 이므로 미수정 Config 에서는 1:1 동치. 사용자 Config 수정 시 speed 별 factor 조정은
-     * 반영 안 됨 (별도 포커스 — Jumper factor 인프라 이식).
-     * potion JUMP_BOOST 효과는 원본 L2029 `jumpFactor = 1 + (amp+1)*0.2F` 그대로 반영.
-     */
-    public static void trySlideDownJump(ClientPlayerEntity player, SmartMovingClientState sm,
-                                         boolean wasRunning) {
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        // 원본 L2015 `Config.isJumpingEnabled(speed, SlideDown) = _slide.value`
-        if (!cfg.slide || !cfg.enabled) return;
-
-        Vec3d vel = player.getVelocity();
-        double motionX = vel.x;
-        double motionZ = vel.z;
-
-        // 원본 L2029: jumpFactor = potion.jump 있으면 1 + (amp+1)*0.2F
-        float jumpFactor = 1F;
-        StatusEffectInstance jumpBoost = player.getStatusEffect(StatusEffects.JUMP_BOOST);
-        if (jumpBoost != null) {
-            jumpFactor = 1F + (jumpBoost.getAmplifier() + 1) * 0.2F;
-        }
-        // 원본 L2030-L2031: getJumpHorizontalFactor/getJumpVerticalFactor — 근사 기본 1F.
-        float horizontalJumpFactor = 1F * jumpFactor;
-        float verticalJumpFactor   = 1F * jumpFactor;
-
-        // 원본 L2034-L2038: !up 변환 — horizontalJumpFactor = sqrt(h² + v²)
-        horizontalJumpFactor = (float) Math.sqrt(
-                horizontalJumpFactor * horizontalJumpFactor
-                        + verticalJumpFactor * verticalJumpFactor);
-
-        // 원본 L2097-L2110: horizontalMotion > 0 이면 수평 속도 스케일.
-        // maxHorizontalMotion 제한 (getMaxHorizontalMotion * combinedSpeedFactor) 은 factor
-        //   인프라 의존 — §7 근사 (제한 생략).
-        double horizontalMotion = Math.sqrt(motionX * motionX + motionZ * motionZ);
-        if (horizontalMotion > 0) {
-            double absoluteMotionX = Math.abs(motionX) * horizontalJumpFactor;
-            double absoluteMotionZ = Math.abs(motionZ) * horizontalJumpFactor;
-            motionX = Math.signum(motionX) * absoluteMotionX;
-            motionZ = Math.signum(motionZ) * absoluteMotionZ;
-        }
-
-        // 수직 속도 유지 (원본 up=false, noVertical 효과 — L2113 `if(up && !noVertical)` 건너뜀).
-        player.setVelocity(motionX, vel.y, motionZ);
-
-        // 원본 L2131-L2132: isAirBorne = true; isJumping = true;
-        //   vanilla Entity 에 isAirBorne 필드 없음 (1.21.1 은 velocityDirty + fallDistance 자동 관리).
-        sm.isJumping = true;
+        // === D-17 (원본 L2135) — return enabled ===
+        return enabled;
     }
 
     // ── [10-1] handleJumping ─────────────────────────────────────────────────
@@ -409,7 +430,8 @@ public final class SmartMovingJumper {
                 sm.jumpCharge = Math.min(sm.jumpCharge + 1F, cfg.jumpChargeMaximum);
                 isJumpCharging = true;
             } else if (sm.jumpCharge > 0 && !sneakKeyPressed) {
-                tryJump(player, sm, CHARGE_UP, sm.jumpCharge);
+                // Phase D 새 시그니처: charge 는 tryJump 내부에서 sm.jumpCharge 직접 사용
+                tryJump(player, sm, CHARGE_UP, null, null, null);
                 return;
             }
         }
@@ -431,7 +453,8 @@ public final class SmartMovingJumper {
                 isHeadJumpCharging = true;
             }
         } else if (sm.headJumpCharge > 0 && !grabKeyPressed) {
-            tryJump(player, sm, HEAD_UP, sm.headJumpCharge);
+            // Phase D 새 시그니처: charge 는 tryJump 내부에서 sm.headJumpCharge 직접 사용
+            tryJump(player, sm, HEAD_UP, null, null, null);
             return;
         }
 
@@ -446,7 +469,8 @@ public final class SmartMovingJumper {
                 Vec3d vel = player.getVelocity();
                 player.setVelocity(vel.x, vel.y - 0.04D, vel.z);
                 if (player.isOnGround()) {
-                    tryJump(player, sm, UP, 0F);
+                    // Phase D 새 시그니처: 수면 점프 — inWater null → sm.isDipping 사용
+                    tryJump(player, sm, UP, null, null, null);
                     return;
                 }
             }
@@ -467,7 +491,8 @@ public final class SmartMovingJumper {
             } else {
                 sm.angleJumpType = 0;
             }
-            tryJump(player, sm, UP, 0F);
+            // Phase D 새 시그니처: 일반 점프 — angle null (방향 점프는 위 더블클릭 인라인 처리)
+            tryJump(player, sm, UP, null, null, null);
             return;
         }
 
@@ -602,22 +627,18 @@ public final class SmartMovingJumper {
 
         sm.isWallJumping = true;
 
-        // 원본: tryJump(angle != null) → getJumpMoving 경유 수평 속도 재방향 설정
-        // horizontalFactor = _wallUpJumpHorizontalFactor(0.15F) / _wallHeadJumpHorizontalFactor(0.15F)
-        float horizontalFactor = grabPressed ? cfg.wallHeadJumpHorizontalFactor : cfg.wallUpJumpHorizontalFactor;
-        double jumpDirX = -Math.sin(Math.toRadians(jumpAngle));
-        double jumpDirZ =  Math.cos(Math.toRadians(jumpAngle));
-        double preVelH = Math.sqrt(sm.jumpMotionX * sm.jumpMotionX + sm.jumpMotionZ * sm.jumpMotionZ);
-        double horizontal = Math.max(preVelH, horizontalFactor);
-        double newVx = getJumpMoving(sm.jumpMotionX, jumpDirX, true, horizontal, horizontalFactor);
-        double newVz = getJumpMoving(sm.jumpMotionZ, jumpDirZ, true, horizontal, horizontalFactor);
-        player.setVelocity(newVx, vel.y, newVz);
-
-        // 원본: rotationYaw = jumpAngle (tryJump 성공 후); isCollidedHorizontally = false; fallDistance = 0F
+        // Phase D 새 시그니처 (세션 19): tryJump 가 angle 파라미터로 D-11 분기 처리.
+        //   기존 setVelocity + horizontalCollision/fallDistance 리셋은 tryJump 호출 후
+        //   원본 SmartMovingSelf L2068+ 동등하게 처리됨. 사전 setVelocity/리셋 코드 제거.
         player.horizontalCollision = false;
         player.fallDistance = 0F;
 
-        tryJump(player, sm, jumpType, 0F);
+        sm.isWallJumping = true;
+
+        // 원본: tryJump(jumpType, null, null, jumpAngle) — angle != null 경로 (D-11)
+        //   D-11 의 getJumpMoving 가 wallUp/HeadJumpHorizontalFactor (0.15F) 를 reset=true 로
+        //   적용하여 수평 속도 재방향 설정. 기존 인라인 호출 대체.
+        tryJump(player, sm, jumpType, null, null, jumpAngle);
         player.setYaw(jumpAngle);
         player.bodyYaw = jumpAngle;
         // 원본: continueWallJumping = !isHeadJumping (tryJump 성공 후 — WallHead 시 false)

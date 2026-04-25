@@ -1346,7 +1346,8 @@ public final class SmartMovingClientState {
             // tryJump(Config.Up, null, null, null) → 1.21.1 tryJump(player, sm, UP, 0F)
             //   (angle==null → vanilla Up 경로).
             if (wasCrawling && !isCrawling && player.getAbilities().flying) {
-                SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, 0F);
+                // Phase D 새 시그니처 (포커스 #2.5 세션 19): tryJump(Up, null, null, null) 1:1
+                SmartMovingJumper.tryJump(player, this, SmartMovingJumper.UP, null, null, null);
             }
 
             // B-41 (세션 70): 원본 L2451-L2463 `wantCrawlNotClimb` 갱신 공식 이식.
@@ -1390,8 +1391,11 @@ public final class SmartMovingClientState {
                     && !isDipping) {
                 heightOffset = -1F;                                     // 원본 L2555
                 player.move(MovementType.SELF, new Vec3d(0, -1D, 0));   // 원본 L2556
-                // B-42-B26 해소: 원본 L2557 tryJump(SlideDown, false, wasRunning, null) 이식
-                SmartMovingJumper.trySlideDownJump(player, this, wasRunning);
+                // Phase D 새 시그니처 (포커스 #2.5 세션 19): trySlideDownJump 제거,
+                //   tryJump(SlideDown, false, wasRunning, null) 직접 호출 — 원본 L2557 1:1.
+                //   E-1 통합 완료 — 별도 trySlideDownJump 헬퍼 불필요.
+                SmartMovingJumper.tryJump(player, this, SmartMovingJumper.SLIDE_DOWN,
+                                           false, wasRunning, null);
                 isSliding = true;                                        // 원본 L2558
                 isHeadJumping = false;                                   // 원본 L2559
                 isAerodynamic = false;                                   // 원본 L2560
@@ -2271,7 +2275,9 @@ public final class SmartMovingClientState {
      * SM 비활성 상태 또는 명시적 vanilla 스타일 옵션 활성 시 true.
      * isRunning() / handleLand L678/L721 / tryJump L2047 등 여러 조건에 사용.
      */
-    private boolean vanilla() {
+    public boolean vanilla() {
+        // 가시성 변경 (private → public, 포커스 #2.5 Phase D-9 의존, 세션 19):
+        //   tryJump 의 D-9 (`if (type == Up && sm.vanilla())`) 외부 호출.
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         return !cfg.enabled || cfg.vanillaStyle;
     }
