@@ -434,7 +434,7 @@ sm_travel_client(movementInput, ci)
 
 | ID | 영역 | 위치 | 영향 | 우선순위 |
 |---|---|---|---|---|
-| **B-10d** | isLevitating 공식 갱신 (항상 false) | ClientState L1176 부근 | 수영 중 정적 자세 미감지. POSE/dimensions 영향 0 (#2.7 D 채택). | 🔴 높음 |
+| ~~B-10d~~ ✅ **세션 3 정정** | (이미 이식됨 — SmartMovingSwimmer.updateSwimState L192-L196 세션 71. 호출: sm_travel_client L92) | SmartMovingSwimmer L192 + ClientState L1176 (주석 정정) | 정상 작동. | ✅ 완료 |
 | ~~B-19~~ ✅ **세션 2 정정** | (이미 이식됨 — SmartMovingClimber L385-L455 B-19a4 세션 108. 호출: sm_travel_client L177) | SmartMovingClimber L433 + ClientState L1542 | 정상 작동 (cfg 클라이밍 모드 활성 시). | ✅ 완료 |
 | **B-N-standup-approx-4** | capabilities.flying sync (§18.1) | ClientState L2530-L2531 | Creative 비행 자동 해제 안 됨. 수동 F 필요. | 🟡 중간 |
 | **fromSwimmingOrDiving 트리거 블록** | 원본 L1383-L1389 부분 이식 | sm_travel_client L115 | 물→육지 전환 애니메이션 미흡. | 🟡 중간 |

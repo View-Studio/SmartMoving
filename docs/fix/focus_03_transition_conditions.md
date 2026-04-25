@@ -38,7 +38,7 @@
 | # | 시나리오 | 대상 전환 | 원본 기대 트리거 | 1.21.1 실제 | 원본 라인 근거 | 잔존 ID |
 |---|---------|---------|---------------|-----------|-------------|---|
 | 1 | 1 블록 통로 클라이밍 + 크롤 (천장 1.5 블록 이하) | isCrawlClimbing → true | `(wasCrawling \|\| isCrawlClimbing) && isClimbing && isNeighborClimbing && sneak && moveForward` (L2737) | ✅ **세션 2 검증 완료 — 이미 정상 작동** (cfg 클라이밍 모드 활성 시) | SmartMovingClimber L385-L455 + ClientState L1542 | ~~B-19~~ ✅ |
-| 2 | 수중 정적 자세 (방향키 없이 수영) | isLevitating → true | `diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (L505) | **항상 false** (B-10d 미이식) | SmartMovingSelf L505 (handleSwimming) | **B-10d** |
+| 2 | 수중 정적 자세 (방향키 없이 수영) | isLevitating → true | `diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (L505) | ✅ **세션 3 검증 완료 — 이미 정상 작동** (B-10d 세션 71 이식 완료) | SmartMovingSwimmer L192-L196 | ~~B-10d~~ ✅ |
 | 3 | Creative 비행 + 좁은 공간 접근 (속도 낮음 + 하강) | tryLanding → standupIfPossible(true, restoreFromFlying) | tryLanding=true → `capabilities.isFlying = false` + restoreFromFlying=true (L2199) | SM `isFlying = false` 만 실행, vanilla 비행 유지 (수동 F 필요) | SmartMovingSelf L2196-L2201 + L2542-L2544 | **§18.1** |
 | 4 | 깊은 물 → 육지 (걷기/스니크/크롤) | fromSwimmingOrDiving 4 분기 (L1369-L1404) | wasShortInWater && !isShortInWater → 4 분기 setHeightOffset(-1F) | 트리거 블록 부분 이식 — 일부 분기 누락 가능성 | SmartMovingSelf L1363-L1405 | **B-fromSwim** |
 | 5 | 물 표면 아래 크롤 유지 | contextContinueCrawl=true (L1389) | 깊은 물 → 수면 아래 크롤 진입 시 set | 미이식 (false 고정) | SmartMovingSelf L1389 | **B-context** |
@@ -183,10 +183,18 @@ standupIfPossible 본체 인용 — 모두 `research_state_transitions.md` 에 �
   || cfg.simpleClimb || cfg.smartClimb` (Standard Base Climb 모드만 미진입). 인게임 검증
   deferred (통합 시점).
 
-**B-2. B-10d isLevitating 공식 이식** (영향 미미 — 우선순위 ↓)
-- [ ] B-2. 원본 SmartMovingSelf L505 `isLevitating = diving && !diveUp && !diveDown &&
-  moveStrafe==0 && moveForward==0` 1.21.1 매핑 → SmartMovingSwimmer.handleSwimming 또는
-  ClientState.tickEssential 적절한 위치에 추가.
+**B-2. B-10d isLevitating 공식 이식** — ✅ **세션 3 검증 완료 (이미 이식됨)**
+- [x] **B-2 (세션 3)**. 원본 SmartMovingSelf L505 `isLevitating = levitating` (식
+  `diving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0`) 1.21.1 매핑:
+  SmartMovingSwimmer.updateSwimState L192-L196 (B-10d 세션 71) 이미 이식 완료.
+  ```java
+  sm.isLevitating = sm.isDiving
+          && !diveUp16
+          && !diveDown16
+          && player.input.movementSideways == 0F
+          && player.input.movementForward == 0F;
+  ```
+  호출: sm_travel_client L92 매 tick. ClientState L1176 stale 주석 정정 완료.
 
 **B-3. §18.1 B-N-standup-approx-4 (capabilities.flying sync)** ★ §18.1 잔존 원자
 - [ ] B-3a. ClientState `standupIfPossible(player, true, restoreFromFlying)` 본체에서
@@ -409,6 +417,48 @@ ClientPlayerEntity.tickMovement
 
 진행률: P 2/2 + A 1/1 + B-1 4/4 = **7/13 (~54%)**. B-2 ~ B-6 / C 잔존.
 
+### 세션 3 — 2026-04-25 — B-2 검증 완료 (B-10d 이미 이식됨 확정) ★
+
+사용자 지시: 세션 2 prompt 따라 B-2 진입.
+
+진행한 작업:
+1. **원본 isLevitating grep**: L505 `isLevitating = levitating` (handleSwimming) /
+   L1494 reset / L2293 resetState / L2320 updateEntityActionState 시작 지역 변수.
+   원본 식 (L468-L474): `levitating = diving && !diveUp && !diveDown && moveStrafe==0
+   && moveForward==0`.
+2. **1.21.1 SmartMovingSwimmer grep**: L192-L196 — `sm.isLevitating = sm.isDiving &&
+   !diveUp16 && !diveDown16 && movementSideways == 0F && movementForward == 0F` 이미
+   이식 (B-10d 세션 71). 원본 1:1.
+3. **호출 경로**: sm_travel_client L92 → updateSwimState → L192-L196 매 tick.
+4. **★ 핵심 발견**: 세션 1 Agent D 의 "B-10d 미이식" 결론은 ClientState L1176 stale 주석에
+   의존. 실제로는 이미 이식됨. (B-19 와 동일 패턴)
+5. **stale 주석 정정**: ClientState L1176 의 "B-10d 미이식 → 항상 false" → "이미 이식됨,
+   매 tick 갱신" 정정.
+
+수정 파일:
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` L1176-L1177
+  stale 주석 정정.
+- `docs/fix/focus_03_transition_conditions.md` — §3 Case 2 / §10 B-2 / §16 / 본 세션 로그.
+- `docs/research/mapping/research_state_transitions.md` — §5.2 B-10d 정정.
+
+회귀 0건 (코드 변경 = 주석 정정 1 위치).
+
+완료 전 검증 체크리스트 (세션 3 기준):
+- [근거] 원본 SmartMovingSelf L505 갱신 식 + L468-L474 levitating 정의
+- [근거] 1.21.1 SmartMovingSwimmer L192-L196 이미 이식 확인
+- [대응] 원본 ↔ 1.21.1 1:1 (5 조건 AND)
+- [분기] diveUp / diveDown / moveSideways / moveForward 모두 보존
+- [상수] 변경 0 (검증만)
+- [타이밍] sm_travel_client L92 매 tick 호출 ✓
+- [근사] 신규 0건
+- [신규] 세션 1 Agent D 의 "B-10d 미이식" 결론 정정
+- [회귀] stale 주석 정정만
+- [빌드] 코드 변경 0 (주석만)
+
+다음 세션 권고: **B-3 (§18.1 capabilities.flying sync)** 진입 — 실제 코드 변경 첫 원자.
+
+진행률: P 2/2 + A 1/1 + B-1 4/4 + B-2 1/1 = **8/13 (~62%)**. B-3 ~ B-6 / C 잔존.
+
 ---
 
 ## 16. 신규 발견 — 세션 1 4 Agent 결과
@@ -416,7 +466,7 @@ ClientPlayerEntity.tickMovement
 | 발견 | 영향 | 위치 |
 |---|---|---|
 | ~~B-19 isNeighborClimbing 항상 false~~ ✅ **세션 2 정정** | (이미 이식됨 — B-19a4 세션 108. ClientState L1534 stale 주석 정정 완료) | SmartMovingClimber L385-L455 + ClientState L1542 |
-| **B-10d isLevitating** 항상 false | 수영 중 정적 자세 미감지 (영향 미미) | ClientState L1176 |
+| ~~B-10d isLevitating 항상 false~~ ✅ **세션 3 정정** | (이미 이식됨 — SmartMovingSwimmer L192-L196 세션 71. ClientState L1176 stale 주석 정정 완료) | SmartMovingSwimmer.updateSwimState |
 | **§18.1 capabilities.flying sync** 미실행 | Creative 비행 자동 해제 안 됨 | ClientState L2530-L2531 |
 | **fromSwimmingOrDiving** 4 분기 일부 누락 | 깊은 물 → 좁은 공간 크롤 진입 누락 가능성 | sm_travel_client L115 |
 | **contextContinueCrawl** 미이식 | 수면 아래 크롤 전환 영향 | (1.21.1 미이식) |

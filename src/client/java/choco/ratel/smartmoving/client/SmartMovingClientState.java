@@ -1173,8 +1173,11 @@ public final class SmartMovingClientState {
             //   축소판이 참조하지 않으므로 현재 생략. B-N 확장 여지.
             // ※ isGroundSprinting 전환 후처리 (원본 L2697-L2709) 는 wasRunningWhenSprintStarted /
             //   Options._runOnSprintRelease / isStandupSprintingOrRunning() 미이식 → 별도 원자.
-            // ※ isLevitating 필드는 이식(L179)되었으나 갱신 로직 (B-10d) 미이식 → 항상 false.
-            //   B-10d 이식 후 isGroundSprinting 공식의 isLevitating 분기 자동 활성.
+            // ※ **포커스 #3 B-2 (세션 3 검증)**: B-10d (isLevitating 갱신 로직) 이미 완전
+            //   이식됨 확정 — SmartMovingSwimmer.updateSwimState L192-L196 (세션 71) 에서
+            //   매 tick `isDiving && !diveUp && !diveDown && moveStrafe==0 && moveForward==0`
+            //   공식으로 갱신. 원본 SmartMovingSelf L505 `isLevitating = levitating` 1:1.
+            //   호출: sm_travel_client L92. isGroundSprinting 공식의 isLevitating 분기 정상 활성.
             {
                 // 원본 L2633-L2634 / L2643-L2644: isSprintJump 매 틱 갱신.
                 if (!player.isOnGround() && isFast && !isClimbing && !isCeilingClimbing
