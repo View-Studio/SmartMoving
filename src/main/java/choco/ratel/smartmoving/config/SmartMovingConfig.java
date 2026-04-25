@@ -150,6 +150,93 @@ public class SmartMovingConfig {
         return true;
     }
 
+    /**
+     * Phase B-4 — getJumpHorizontalFactor(speed, type).
+     *
+     * 원본 `SmartMovingClientConfig.java` L465-L505 (1:1 번역):
+     * <pre>
+     * public float getJumpHorizontalFactor(int speed, int type) {
+     *     if (!enabled) return speed == Running ? 2F : 1F;
+     *
+     *     float result = _jumpHorizontalFactor.value;
+     *
+     *     if (type == Angle)                                                 result *= _angleJumpHorizontalFactor.value;
+     *
+     *     if (type == ClimbBackUp || type == ClimbBackUpHandsOnly)           result *= _climbBackUpJumpHorizontalFactor.value;
+     *     if (type == ClimbBackUpHandsOnly)                                  result *= _climbBackUpJumpHandsOnlyHorizontalFactor.value;
+     *
+     *     if (type == ClimbBackHead || type == ClimbBackHeadHandsOnly)       result *= _climbBackHeadJumpHorizontalFactor.value;
+     *     if (type == ClimbBackHeadHandsOnly)                                result *= _climbBackHeadJumpHandsOnlyHorizontalFactor.value;
+     *
+     *     if (type == WallUp)                                                result *= _wallUpJumpHorizontalFactor.value;
+     *     if (type == WallHead)                                              result *= _wallHeadJumpHorizontalFactor.value;
+     *
+     *     if (type == Angle || type == ClimbUp || type == ClimbUpHandsOnly
+     *         || type == ClimbBackUp || type == ClimbBackUpHandsOnly
+     *         || type == ClimbBackHead || type == ClimbBackHeadHandsOnly
+     *         || type == WallUp || type == WallHead)
+     *         return result;   // type 매칭 시 speed 분기 skip (early return)
+     *
+     *     if (speed == Sprinting)                                            result *= _sprintJumpHorizontalFactor.value;
+     *     else if (speed == Running)                                         result *= _runJumpHorizontalFactor.value;
+     *     else if (speed == Walking)                                         result *= _walkJumpHorizontalFactor.value;
+     *     else if (speed == Sneaking)                                        result *= _sneakJumpHorizontalFactor.value;
+     *     else if (speed == Standing && type != ClimbBackUp && type != ClimbBackUpHandsOnly
+     *                                && type != ClimbBackHead && type != ClimbBackHeadHandsOnly)
+     *         result *= 0F;   // L501 — Standing 점프는 수평 0 (Climb 4종은 위에서 early return)
+     *     return result;
+     * }
+     * </pre>
+     *
+     * 호출처: tryJump (Phase D-6) — `float horizontalJumpFactor = cfg.getJumpHorizontalFactor(speed, type) * jumpFactor;`
+     */
+    public float getJumpHorizontalFactor(int speed, int type) {
+        if (!enabled)
+            return speed == SPEED_RUNNING ? 2F : 1F;
+
+        float result = jumpHorizontalFactor;
+
+        if (type == JUMP_TYPE_ANGLE)
+            result *= angleJumpHorizontalFactor;
+
+        if (type == JUMP_TYPE_CLIMB_BACK_UP || type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY)
+            result *= climbBackUpJumpHorizontalFactor;
+        if (type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY)
+            result *= climbBackUpJumpHandsOnlyHorizontalFactor;
+
+        if (type == JUMP_TYPE_CLIMB_BACK_HEAD || type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            result *= climbBackHeadJumpHorizontalFactor;
+        if (type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            result *= climbBackHeadJumpHandsOnlyHorizontalFactor;
+
+        if (type == JUMP_TYPE_WALL_UP)
+            result *= wallUpJumpHorizontalFactor;
+        if (type == JUMP_TYPE_WALL_HEAD)
+            result *= wallHeadJumpHorizontalFactor;
+
+        if (type == JUMP_TYPE_ANGLE
+            || type == JUMP_TYPE_CLIMB_UP || type == JUMP_TYPE_CLIMB_UP_HANDS_ONLY
+            || type == JUMP_TYPE_CLIMB_BACK_UP || type == JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY
+            || type == JUMP_TYPE_CLIMB_BACK_HEAD || type == JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY
+            || type == JUMP_TYPE_WALL_UP || type == JUMP_TYPE_WALL_HEAD)
+            return result;
+
+        if (speed == SPEED_SPRINTING)
+            result *= sprintJumpHorizontalFactor;
+        else if (speed == SPEED_RUNNING)
+            result *= runJumpHorizontalFactor;
+        else if (speed == SPEED_WALKING)
+            result *= walkJumpHorizontalFactor;
+        else if (speed == SPEED_SNEAKING)
+            result *= sneakJumpHorizontalFactor;
+        else if (speed == SPEED_STANDING
+                 && type != JUMP_TYPE_CLIMB_BACK_UP && type != JUMP_TYPE_CLIMB_BACK_UP_HANDS_ONLY
+                 && type != JUMP_TYPE_CLIMB_BACK_HEAD && type != JUMP_TYPE_CLIMB_BACK_HEAD_HANDS_ONLY)
+            result *= 0F;
+
+        return result;
+    }
+
 
     // ── 서버 배포 제어 플래그 (config_system.md 2-1, 5-3) ───────────
     /** true → 접속한 모든 클라이언트에게 이 설정을 강제 적용. */
