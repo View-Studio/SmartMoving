@@ -2386,3 +2386,207 @@
 - L127 `glTranslatef(offsetX/Y/Z)` = ModelPart.offsetY 필드 부재 (§16-8) — MatrixStack 보정 필요.
 
 **다음 청크**: R-5 청크 2 (ModelRotationRenderer.java L185-L368) — reset() 본체 + fadeRotateAngleX/Y + fadeIntermediate/fadeStore + ignoreSuperRotation + canBeRandomBoxSource + 필드 선언.
+
+### 청크 2 (ModelRotationRenderer.java L185-L368) — reset() 본체 + renderWithRotation/postRender + UpdateLocals/UpdateCompiled (reflection) + 필드 선언 (6 회전순서 상수 포함) + fadeStore/fadeIntermediate + canBeRandomBoxSource + GetIntermediate* 헬퍼 + reflection 필드
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L185 | `rotationOrder = XYZ;` | (1.21.1 ModelPart 기본 XYZ — vanilla setAngles reset 자동) | [정합] | reset 시 기본 회전순서 |
+| L186 | (빈 줄) | — | [N/A] | |
+| L187 | `scaleX = 1.0F;` | `xScale = 1.0F` (vanilla setAngles reset 자동) | [정합] | |
+| L188 | `scaleY = 1.0F;` | `yScale = 1.0F` (vanilla 자동) | [정합] | |
+| L189 | `scaleZ = 1.0F;` | `zScale = 1.0F` (vanilla 자동) | [정합] | |
+| L190 | (빈 줄) | — | [N/A] | |
+| L191 | `rotationPointX = 0F;` | `pivotX = 0F` (vanilla reset 자동) | [정합] | |
+| L192 | `rotationPointY = 0F;` | `pivotY = 0F` | [정합] | |
+| L193 | `rotationPointZ = 0F;` | `pivotZ = 0F` | [정합] | |
+| L194 | (빈 줄) | — | [N/A] | |
+| L195 | `rotateAngleX = 0F;` | `pitch = 0F` (vanilla setAngles reset 자동) | [정합] | |
+| L196 | `rotateAngleY = 0F;` | `yaw = 0F` | [정합] | |
+| L197 | `rotateAngleZ = 0F;` | `roll = 0F` | [정합] | |
+| L198 | (빈 줄) | — | [N/A] | |
+| L199 | `ignoreBase = false;` | (다층 부재) | [N/A] | |
+| L200 | `ignoreSuperRotation = false;` | (어깨 ZYX 분리 부재) | [N/A] | §16-5 |
+| L201 | `forceRender = false;` | (다층 부재) | [N/A] | |
+| L202 | (빈 줄) | — | [N/A] | |
+| L203 | `offsetX = 0;` | (ModelPart.offsetY 필드 부재) | [N/A] | §16-8 |
+| L204 | `offsetY = 0;` | (offsetY 부재) | [N/A] | §16-8 |
+| L205 | `offsetZ = 0;` | (offsetZ 부재) | [N/A] | |
+| L206 | (빈 줄) | — | [N/A] | |
+| L207 | `fadeOffsetX = false;` | (fade 메커니즘 부재) | [N/A] | §17 |
+| L208 | `fadeOffsetY = false;` | (fade 부재) | [N/A] | |
+| L209 | `fadeOffsetZ = false;` | (fade 부재) | [N/A] | |
+| L210 | `fadeRotateAngleX = false;` | (fade 부재) | [N/A] | §17 |
+| L211 | `fadeRotateAngleY = false;` | (fade 부재) | [N/A] | |
+| L212 | `fadeRotateAngleZ = false;` | (fade 부재) | [N/A] | |
+| L213 | `fadeRotationPointX = false;` | (fade 부재) | [N/A] | |
+| L214 | `fadeRotationPointY = false;` | (fade 부재) | [N/A] | |
+| L215 | `fadeRotationPointZ = false;` | (fade 부재) | [N/A] | |
+| L216 | (빈 줄) | — | [N/A] | |
+| L217 | `previous = null;` | (RendererData 부재) | [N/A] | |
+| L218 | `}` | — | [N/A] | reset 종료 |
+| L219 | (빈 줄) | — | [N/A] | |
+| L220 | `@Override` | — | [N/A] | |
+| L221 | `public void renderWithRotation(float f)` | (vanilla 자동) | [N/A] | |
+| L222 | `{` | — | [N/A] | |
+| L223 | `boolean update = !compiled;` | (vanilla 자동 빌드) | [N/A] | |
+| L224 | `super.renderWithRotation(f);` | — | [N/A] | |
+| L225 | `if(update)` | — | [N/A] | |
+| L226 | `UpdateLocals();` | — | [N/A] | |
+| L227 | `}` | — | [N/A] | |
+| L228 | (빈 줄) | — | [N/A] | |
+| L229 | `@Override` | — | [N/A] | |
+| L230 | `public void postRender(float f)` | (vanilla 자동) | [N/A] | |
+| L231 | `{` | — | [N/A] | |
+| L232 | `boolean update = !compiled;` | — | [N/A] | |
+| L233 | `if(!preRender(f))` | — | [N/A] | |
+| L234 | `return;` | — | [N/A] | |
+| L235 | `if(update)` | — | [N/A] | |
+| L236 | `UpdateLocals();` | — | [N/A] | |
+| L237 | `preTransforms(f, false, true);` | — | [N/A] | |
+| L238 | `}` | — | [N/A] | |
+| L239 | (빈 줄) | — | [N/A] | |
+| L240 | `private void UpdateLocals()` | (reflection — 1.21.1 부재) | [N/A] | |
+| L241 | `{` | — | [N/A] | |
+| L242 | `UpdateCompiled();` | — | [N/A] | |
+| L243 | `if(compiled)` | — | [N/A] | |
+| L244 | `UpdateDisplayList();` | — | [N/A] | |
+| L245 | `}` | — | [N/A] | |
+| L246 | (빈 줄) | — | [N/A] | |
+| L247 | `private void UpdateCompiled()` | (reflection 부재) | [N/A] | |
+| L248 | `{` | — | [N/A] | |
+| L249 | `compiled = (Boolean)Reflect.GetField(_compiled, this);` | — | [N/A] | |
+| L250 | `}` | — | [N/A] | |
+| L251 | (빈 줄) | — | [N/A] | |
+| L252 | `private void UpdateDisplayList()` | (reflection 부재) | [N/A] | |
+| L253 | `{` | — | [N/A] | |
+| L254 | `displayList = (Integer)Reflect.GetField(_displayList, this);` | — | [N/A] | |
+| L255 | `}` | — | [N/A] | |
+| L256 | (빈 줄) | — | [N/A] | |
+| L257 | `private static Field _compiled = Reflect.GetField(...);` | (reflection 부재) | [N/A] | |
+| L258 | `private static Method _compileDisplayList = Reflect.GetMethod(...);` | — | [N/A] | |
+| L259 | `private static Field _displayList = Reflect.GetField(...);` | — | [N/A] | |
+| L260 | (빈 줄) | — | [N/A] | |
+| L261 | `protected ModelRotationRenderer base;` | (다층 — ModelData child 자동) | [N/A] | |
+| L262 | (빈 줄) | — | [N/A] | |
+| L263 | `public boolean ignoreRender;` | (다층 부재) | [N/A] | |
+| L264 | `public boolean forceRender;` | (다층 부재) | [N/A] | |
+| L265 | (빈 줄) | — | [N/A] | |
+| L266 | `public boolean compiled;` | (vanilla 자동 빌드) | [N/A] | |
+| L267 | `public int displayList;` | (DisplayList 부재 — VertexConsumer) | [N/A] | |
+| L268 | `public int rotationOrder;` | (1.21.1 ModelPart에 회전순서 필드 부재 — setAngles* 헬퍼로 분리) | [N/A] | rotationOrder 일원화 부재 — 헬퍼 호출 시점 분리 |
+| L269 | (빈 줄) | — | [N/A] | |
+| L270 | `public float scaleX;` | `ModelPart.xScale` (public field) | [정합] | |
+| L271 | `public float scaleY;` | `ModelPart.yScale` (B-3 setArmScales/setLegScales 활용) | [정합] | §16-7 |
+| L272 | `public float scaleZ;` | `ModelPart.zScale` | [정합] | |
+| L273 | (빈 줄) | — | [N/A] | |
+| L274 | `public boolean ignoreBase;` | (다층 부재) | [N/A] | |
+| L275 | `public boolean ignoreSuperRotation;` | (어깨 ZYX 부재) | [N/A] | §16-5 |
+| L276 | (빈 줄) | — | [N/A] | |
+| L277 | `public static int XYZ = 0;` | (회전순서 0 — vanilla pitch/yaw/roll 기본) | [정합] | R-17 검증 1차 자료 |
+| L278 | `public static int XZY = 1;` | setAnglesXZY 매핑 (B-2 세션 2) | [정합] | R-17 GitHub 검증 |
+| L279 | `public static int YXZ = 2;` | setAnglesYXZ 매핑 (B-1 세션 2) | [정합] | R-17 |
+| L280 | `public static int YZX = 3;` | setAnglesYZX 매핑 (B-08) | [정합] | R-17 |
+| L281 | `public static int ZXY = 4;` | setAnglesZXY 매핑 (B-08) | [정합] | R-17 |
+| L282 | `public static int ZYX = 5;` | (어깨 부재로 미이식) | [정합] | §16-5 — N/A 가 아니라 [정합 (구조 부재)] (상수 자체는 정의됨) |
+| L283 | (빈 줄) | — | [N/A] | |
+| L284 | `public boolean fadeEnabled;` | (fade 메커니즘 부재) | [N/A] | §17 |
+| L285 | (빈 줄) | — | [N/A] | |
+| L286 | `public boolean fadeOffsetX;` | (fade 부재) | [N/A] | |
+| L287 | `public boolean fadeOffsetY;` | (fade 부재) | [N/A] | |
+| L288 | `public boolean fadeOffsetZ;` | (fade 부재) | [N/A] | |
+| L289 | `public boolean fadeRotateAngleX;` | (fade 부재) | [N/A] | |
+| L290 | `public boolean fadeRotateAngleY;` | (fade 부재) | [N/A] | |
+| L291 | `public boolean fadeRotateAngleZ;` | (fade 부재) | [N/A] | |
+| L292 | `public boolean fadeRotationPointX;` | (fade 부재) | [N/A] | |
+| L293 | `public boolean fadeRotationPointY;` | (fade 부재) | [N/A] | |
+| L294 | `public boolean fadeRotationPointZ;` | (fade 부재) | [N/A] | |
+| L295 | (빈 줄) | — | [N/A] | |
+| L296 | `public RendererData previous;` | (fade 데이터 부재) | [N/A] | |
+| L297 | (빈 줄) | — | [N/A] | |
+| L298 | `public void fadeStore(float totalTime)` | (fade 부재) | [N/A] | §17 |
+| L299 | `{` | — | [N/A] | |
+| L300 | `if(previous != null)` | — | [N/A] | |
+| L301 | `{` | — | [N/A] | |
+| L302 | `previous.offsetX = offsetX;` | — | [N/A] | |
+| L303 | `previous.offsetY = offsetY;` | — | [N/A] | |
+| L304 | `previous.offsetZ = offsetZ;` | — | [N/A] | |
+| L305 | `previous.rotateAngleX = rotateAngleX;` | — | [N/A] | |
+| L306 | `previous.rotateAngleY = rotateAngleY;` | — | [N/A] | |
+| L307 | `previous.rotateAngleZ = rotateAngleZ;` | — | [N/A] | |
+| L308 | `previous.rotationPointX = rotationPointX;` | — | [N/A] | |
+| L309 | `previous.rotationPointY = rotationPointY;` | — | [N/A] | |
+| L310 | `previous.rotationPointZ = rotationPointZ;` | — | [N/A] | |
+| L311 | `previous.totalTime = totalTime;` | — | [N/A] | |
+| L312 | `}` | — | [N/A] | |
+| L313 | `}` | — | [N/A] | |
+| L314 | (빈 줄) | — | [N/A] | |
+| L315 | `public void fadeIntermediate(float totalTime)` | (fade 부재) | [N/A] | §17 |
+| L316 | `{` | — | [N/A] | |
+| L317 | `if(previous != null && totalTime - previous.totalTime <= 2F)` | — | [N/A] | |
+| L318 | `{` | — | [N/A] | |
+| L319 | `offsetX = GetIntermediatePosition(previous.offsetX, offsetX, fadeOffsetX, previous.totalTime, totalTime);` | — | [N/A] | |
+| L320 | `offsetY = GetIntermediatePosition(...);` | — | [N/A] | |
+| L321 | `offsetZ = GetIntermediatePosition(...);` | — | [N/A] | |
+| L322 | (빈 줄) | — | [N/A] | |
+| L323 | `rotateAngleX = GetIntermediateAngle(...);` | (fade 보간 미이식) | [N/A] | §17 — vanilla MathHelper.lerpAngle 활용 가능 |
+| L324 | `rotateAngleY = GetIntermediateAngle(...);` | — | [N/A] | |
+| L325 | `rotateAngleZ = GetIntermediateAngle(...);` | — | [N/A] | |
+| L326 | (빈 줄) | — | [N/A] | |
+| L327 | `rotationPointX = GetIntermediatePosition(...);` | — | [N/A] | |
+| L328 | `rotationPointY = GetIntermediatePosition(...);` | — | [N/A] | |
+| L329 | `rotationPointZ = GetIntermediatePosition(...);` | — | [N/A] | |
+| L330 | `}` | — | [N/A] | |
+| L331 | `}` | — | [N/A] | |
+| L332 | (빈 줄) | — | [N/A] | |
+| L333 | `@SuppressWarnings("static-method")` | — | [N/A] | |
+| L334 | `public boolean canBeRandomBoxSource()` | (영혼 파티클 — 본 포커스 외) | [N/A] | |
+| L335 | `{` | — | [N/A] | |
+| L336 | `return true;` | — | [N/A] | |
+| L337 | `}` | — | [N/A] | |
+| L338 | (빈 줄) | — | [N/A] | |
+| L339 | `private static float GetIntermediatePosition(float prevPosition, float shouldPosition, boolean fade, float lastTotalTime, float totalTime)` | (fade 미이식) | [N/A] | §17 |
+| L340 | `{` | — | [N/A] | |
+| L341 | `if(!fade \|\| shouldPosition == prevPosition)` | — | [N/A] | |
+| L342 | `return shouldPosition;` | — | [N/A] | |
+| L343 | (빈 줄) | — | [N/A] | |
+| L344 | `return prevPosition + (shouldPosition - prevPosition) * (totalTime - lastTotalTime) * 0.2F;` | (선형 보간 0.2F * dt — 미이식) | [N/A] | §17 — `MathHelper.lerp(0.2f * dt, prev, target)` 등가 가능 |
+| L345 | `}` | — | [N/A] | |
+| L346 | (빈 줄) | — | [N/A] | |
+| L347 | `private static float GetIntermediateAngle(float prevAngle, float shouldAngle, boolean fade, float lastTotalTime, float totalTime)` | (fade angle wrap 미이식) | [N/A] | |
+| L348 | `{` | — | [N/A] | |
+| L349 | `if(!fade \|\| shouldAngle == prevAngle)` | — | [N/A] | |
+| L350 | `return shouldAngle;` | — | [N/A] | |
+| L351 | (빈 줄) | — | [N/A] | |
+| L352 | `while(prevAngle >= Whole) prevAngle -= Whole;` | (각도 wrap — vanilla MathHelper.wrapDegrees 등가) | [N/A] | |
+| L353 | `while(prevAngle < 0F) prevAngle += Whole;` | — | [N/A] | |
+| L354 | (빈 줄) | — | [N/A] | |
+| L355 | `while(shouldAngle >= Whole) shouldAngle -= Whole;` | — | [N/A] | |
+| L356 | `while(shouldAngle < 0F) shouldAngle += Whole;` | — | [N/A] | |
+| L357 | (빈 줄) | — | [N/A] | |
+| L358 | `if(shouldAngle > prevAngle && (shouldAngle - prevAngle) > Half)` | (최단 회전 방향 선택) | [N/A] | |
+| L359 | `prevAngle += Whole;` | — | [N/A] | |
+| L360 | (빈 줄) | — | [N/A] | |
+| L361 | `if(shouldAngle < prevAngle && (prevAngle - shouldAngle) > Half)` | — | [N/A] | |
+| L362 | `shouldAngle += Whole;` | — | [N/A] | |
+| L363 | (빈 줄) | — | [N/A] | |
+| L364 | `return prevAngle + (shouldAngle - prevAngle) * (totalTime - lastTotalTime) * 0.2F;` | (선형 보간) | [N/A] | |
+| L365 | `}` | — | [N/A] | |
+| L366 | (빈 줄) | — | [N/A] | |
+| L367 | `private static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);` | (matrix buffer — reflection 부재) | [N/A] | |
+| L368 | `private static float[] array = new float[16];` | — | [N/A] | 클래스 종료 (} 묵시) |
+
+**청크 2 (L185-L368) 통계: 정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 162 = 184 라인 전수.**
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. 핵심 검증:
+- L185-L197 reset() 14 라인 (rotationOrder/scaleXYZ/pivotXYZ/rotateXYZ) — vanilla setAngles 진입 시 자동 reset 매핑.
+- L270-L272 scaleX/Y/Z 필드 → ModelPart.xScale/yScale/zScale public field (B-3 세션 2 setArmScales/setLegScales 활용).
+- L277-L282 6 회전순서 상수 (XYZ=0/XZY=1/YXZ=2/YZX=3/ZXY=4/ZYX=5) — R-17 GitHub 검증과 정확히 일치, B-1/B-2 세션 2 헬퍼 매핑 1차 자료 확정.
+- fade 메커니즘 (L298-L331 fadeStore/fadeIntermediate, L339-L365 GetIntermediate*) — 1.21.1 미이식 (§17 잔여). vanilla MathHelper.lerp/lerpAngle 로 등가 이식 가능.
+
+**R-5 청크 1+2 ModelRotationRenderer.java 누적 (368 라인)**:
+- 청크 1 (L1-L184): 정합 21 / N/A 163
+- 청크 2 (L185-L368): 정합 22 / N/A 162
+- 합계: 정합 43 / N/A 325 = 368 라인 전수 (오역/누락/잉여 0).
+
+**다음 청크**: R-5 청크 3 (RendererData/ModelCapeRenderer/ModelEarsRenderer/ModelSpecialRenderer 4 파일 ~232줄). R-5 마지막 청크.

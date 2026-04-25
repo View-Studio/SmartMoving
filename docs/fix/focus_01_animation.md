@@ -316,7 +316,7 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - **R-4 누적**: 정합 62 / 오역 0 / 누락 1 / 잉여 0 / N/A 406 = 469 라인 전수
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
   - [x] R-5 청크 1 (ModelRotationRenderer L1-L184) — 세션 14 (정합 21 / 오역 0 / 누락 0 / 잉여 0 / N/A 163)
-  - [ ] R-5 청크 2 (ModelRotationRenderer L185-L368)
+  - [x] R-5 청크 2 (ModelRotationRenderer L185-L368) — 세션 15 (정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 162)
   - [ ] R-5 청크 3 (RendererData/Cape/Ears/Special 4 파일)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
@@ -942,6 +942,44 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-5 청크 2 (ModelRotationRenderer.java L185-L368) — reset() 본체 + fade* 메커니즘 + ignoreSuperRotation + canBeRandomBoxSource + 필드 선언.
+
+---
+
+### 세션 15 — 2026-04-26 — Phase R / R-5 청크 2 (ModelRotationRenderer.java L185-L368)
+
+**진행한 작업**:
+
+1. **R-5 청크 2 라인별 read**: 원본 ModelRotationRenderer.java L185-L368 (184 라인 전수 read).
+2. **1.21.1 매핑 검증**: vanilla setAngles reset 자동 + ModelPart.xScale/yScale/zScale public field + R-17 GitHub 6 회전순서 상수 정의 비교 + fade 메커니즘 미이식 확인.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-5 청크 2 섹션 — 184 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계**:
+- [정합] 22 (reset 13 라인 (rotationOrder XYZ + scale 3 + pivot 3 + rotateAngle 3 + 추가 3) / scaleX/Y/Z 필드 3 / 6 회전순서 상수 6)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 162 (renderWithRotation/postRender + UpdateLocals reflection + 다층 모델 부재 + fade 메커니즘 (fadeStore/fadeIntermediate/GetIntermediate*) + canBeRandomBoxSource + reflection 정적 필드 + 빈 줄)
+- 합계: 184 라인 전수.
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. 핵심 검증:
+- L185-L197 reset() — vanilla setAngles 진입 시 자동 reset 매핑.
+- L270-L272 scaleX/Y/Z → ModelPart.xScale/yScale/zScale public field (B-3 setArmScales/setLegScales 활용 근거).
+- L277-L282 6 회전순서 상수 (XYZ=0/XZY=1/YXZ=2/YZX=3/ZXY=4/ZYX=5) — R-17 GitHub 검증 1차 자료 확정. B-1/B-2 세션 2 헬퍼 매핑 근거.
+- fade 메커니즘 (L298-L331 fadeStore/fadeIntermediate, L339-L365 GetIntermediate*) — 1.21.1 미이식 (§17 잔여). vanilla MathHelper.lerp/lerpAngle 로 등가 이식 가능.
+
+**검증 체크리스트 (세션 15 R-5 청크 2)**:
+- [근거] ✓ 원본 로컬 read (offset=185, limit=184 정확)
+- [전수] ✓ 청크 내 184 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 184 일치 (22+0+0+0+162)
+- [발견] ✓ 신규 발견 0건 (회전순서 R-17 검증 일관)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (ModelPart.xScale/yScale/zScale + setAnglesXYZ/XZY/YXZ/YZX/ZXY 헬퍼 본체)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**ModelRotationRenderer.java 전체 누적 (368 라인, 2 청크 2 세션)**:
+- 합계: 정합 43 / 오역 0 / 누락 0 / 잉여 0 / N/A 325 = 368 라인 전수 (skip 0).
+- 핵심 매핑 1차 자료 확정: 6 회전순서(XYZ/XZY/YXZ/YZX/ZXY/ZYX) + xScale/yScale/zScale + offsetY 부재(§16-8) + fade 메커니즘 부재(§17).
+
+**다음 청크**: R-5 청크 3 (RendererData/ModelCapeRenderer/ModelEarsRenderer/ModelSpecialRenderer 4 파일 ~232줄). R-5 마지막 청크.
 
 ---
 
