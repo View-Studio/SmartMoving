@@ -1081,3 +1081,196 @@
 - B-N (Levitate 후처리 — currentHorizontalAngle = currentCameraAngle): L132-L134 — Levitating 시 카메라 각도로 강제 정렬 미이식. sm_captureBodyYaw 에 Levitate 분기 추가 검토.
 
 **다음 청크**: R-2 청크 2 (SmartMovingRender.java L201-L337) — renderGuiIngame 본체 + 잔여 + SM render 하위 5 파일 (Context/IModel/IRender/ModelPlayer/RenderPlayer).
+
+### 청크 2 (SmartMovingRender.java L201-L337 + SmartRenderContext.java + IModelPlayer.java + IRenderPlayer.java)
+
+**파트 A — SmartMovingRender.java L201-L337 (renderGuiIngame HUD + drawIcon + 필드)**
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L201 | (빈 줄) | — | [N/A] | |
+| L202-L204 | `// Returning here causes Smart Moving's icons to not get rendered ...` (주석) | — | [N/A] | 주석 |
+| L205 | (빈 줄) | — | [N/A] | |
+| L206 | `SmartMovingSelf moving = (SmartMovingSelf)SmartMovingFactory.getInstance(minecraft.thePlayer);` | (HUD 영역 — 본 포커스 #1 외) | [N/A] | UI/HUD 별도 포커스 |
+| L207 | `if(moving != null && Config.enabled && (Options._displayExhaustionBar.value \|\| Options._displayJumpChargeBar.value))` | (HUD 가드) | [N/A] | |
+| L208 | `{` | — | [N/A] | |
+| L209 | `ScaledResolution scaledresolution = new ScaledResolution(...);` | (1.21.1: ScaledResolution 제거됨 — Window/MatrixStack 사용) | [N/A] | |
+| L210 | `int width = scaledresolution.getScaledWidth();` | — | [N/A] | |
+| L211 | `int height = scaledresolution.getScaledHeight();` | — | [N/A] | |
+| L212 | (빈 줄) | — | [N/A] | |
+| L213 | `if(minecraft.playerController.shouldDrawHUD())` | — | [N/A] | |
+| L214 | `{` | — | [N/A] | |
+| L215 | `float maxExhaustion = Client.getMaximumExhaustion();` | (HUD 영역) | [N/A] | exhaustionBar 본 포커스 외 |
+| L216 | `float exhaustion = Math.min(moving.exhaustion, maxExhaustion);` | — | [N/A] | |
+| L217 | `boolean drawExhaustion = exhaustion > 0 && exhaustion <= maxExhaustion;` | — | [N/A] | |
+| L218 | (빈 줄) | — | [N/A] | |
+| L219 | `float maxStillJumpCharge = Config._jumpChargeMaximum.value;` | (HUD jumpChargeBar) | [N/A] | |
+| L220 | `float stillJumpCharge = Math.min(moving.jumpCharge, maxStillJumpCharge);` | — | [N/A] | |
+| L221 | (빈 줄) | — | [N/A] | |
+| L222 | `float maxRunJumpCharge = Config._headJumpChargeMaximum.value;` | — | [N/A] | |
+| L223 | `float runJumpCharge = Math.min(moving.headJumpCharge, maxRunJumpCharge);` | — | [N/A] | |
+| L224 | (빈 줄) | — | [N/A] | |
+| L225 | `boolean drawJumpCharge = stillJumpCharge > 0 \|\| runJumpCharge > 0;` | — | [N/A] | |
+| L226 | `float maxJumpCharge = stillJumpCharge > runJumpCharge ? maxStillJumpCharge : maxRunJumpCharge;` | — | [N/A] | |
+| L227 | `float jumpCharge = Math.max(stillJumpCharge, runJumpCharge);` | — | [N/A] | |
+| L228 | (빈 줄) | — | [N/A] | |
+| L229 | `if(drawExhaustion \|\| drawJumpCharge)` | — | [N/A] | |
+| L230 | `{` | — | [N/A] | |
+| L231 | `GL11.glPushAttrib(GL11.GL_TEXTURE_BIT);` | (1.21.1: GL11 제거 — RenderSystem) | [N/A] | |
+| L232 | `minecraft.getTextureManager().bindTexture(new ResourceLocation("smartmoving", "gui/icons.png"));` | (HUD texture binding) | [N/A] | |
+| L233 | `GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);` | (1.21.1: 자동) | [N/A] | |
+| L234 | `_minecraft = minecraft;` | (HUD instance reference) | [N/A] | |
+| L235 | `}` | — | [N/A] | |
+| L236 | (빈 줄) | — | [N/A] | |
+| L237 | `if(drawExhaustion)` | (HUD exhaustion bar 본체) | [N/A] | |
+| L238 | `{` | — | [N/A] | |
+| L239 | `float maxExhaustionForAction = Math.min(moving.maxExhaustionForAction, maxExhaustion);` | — | [N/A] | |
+| L240 | `float maxExhaustionToStartAction = Math.min(moving.maxExhaustionToStartAction, maxExhaustion);` | — | [N/A] | |
+| L241 | (빈 줄) | — | [N/A] | |
+| L242 | `float fitness = maxExhaustion - exhaustion;` | — | [N/A] | |
+| L243 | `float minFitnessForAction = Float.isNaN(maxExhaustionForAction) ? 0 : maxExhaustion - maxExhaustionForAction;` | — | [N/A] | |
+| L244 | `float minFitnessToStartAction = Float.isNaN(maxExhaustionToStartAction) ? 0 : maxExhaustion - maxExhaustionToStartAction;` | — | [N/A] | |
+| L245 | (빈 줄) | — | [N/A] | |
+| L246 | `float maxFitnessDrawn = Math.max(...);` | — | [N/A] | |
+| L247 | (빈 줄) | — | [N/A] | |
+| L248 | `int halfs = (int)Math.floor(maxFitnessDrawn / maxExhaustion * 21F);` | — | [N/A] | |
+| L249 | `int fulls = halfs / 2;` | — | [N/A] | |
+| L250 | `int half = halfs % 2;` | — | [N/A] | |
+| L251 | (빈 줄) | — | [N/A] | |
+| L252-L254 | `int fitnessHalfs = ...` 외 fitness 계산 3 라인 | — | [N/A] | HUD |
+| L255 | (빈 줄) | — | [N/A] | |
+| L256-L258 | `int minFitnessForActionHalfs = ...` 외 minFitnessForAction 계산 3 라인 | — | [N/A] | HUD |
+| L259 | (빈 줄) | — | [N/A] | |
+| L260-L261 | `int minFitnessToStartActionHalfs = ...` minFitnessToStartAction 계산 2 라인 | — | [N/A] | HUD |
+| L262 | (빈 줄) | — | [N/A] | |
+| L263 | `_jOffset = height - 39 - 10 - (minecraft.thePlayer.isInsideOfMaterial(Material.water) ? 10 : 0);` | (HUD position calc — Material.water 1.21.1 부재) | [N/A] | |
+| L264 | `for(int i = 0; i < Math.min(fulls + half, 10); i++)` | — | [N/A] | |
+| L265 | `{` | — | [N/A] | |
+| L266 | `_iOffset = (width / 2 + 90) - (i + 1) * 8;` | — | [N/A] | |
+| L267-L289 | `if(i < fitnessFulls)...else if...else...` 23 라인 (HUD icon 분기 트리) | — | [N/A] | exhaustion icon 분기 |
+| L290 | `}` | — | [N/A] | |
+| L291-L305 | `else { if(i < minFitnessForActionFulls)...else...else }` 15 라인 | — | [N/A] | HUD icon |
+| L306 | `}` | — | [N/A] | |
+| L307 | `}` | — | [N/A] | |
+| L308 | (빈 줄) | — | [N/A] | |
+| L309 | `if(drawJumpCharge)` | (HUD jumpCharge bar 본체) | [N/A] | |
+| L310 | `{` | — | [N/A] | |
+| L311 | `boolean max = jumpCharge == maxJumpCharge;` | — | [N/A] | |
+| L312 | `int fulls = max ? 10 : (int)Math.ceil(((jumpCharge - 2) * 10D) / maxJumpCharge);` | — | [N/A] | |
+| L313 | `int half = max ? 0 : (int)Math.ceil((jumpCharge * 10D) / maxJumpCharge) - fulls;` | — | [N/A] | |
+| L314 | (빈 줄) | — | [N/A] | |
+| L315 | `_jOffset = height - 39 - 10 - (minecraft.thePlayer.getTotalArmorValue() > 0 ? 10 : 0);` | — | [N/A] | |
+| L316 | `for(int i = 0; i < fulls + half; i++)` | — | [N/A] | |
+| L317 | `{` | — | [N/A] | |
+| L318 | `_iOffset = (width / 2 - 91) + i * 8;` | — | [N/A] | |
+| L319 | `drawIcon(i < fulls ? 2 : 3, 0);` | — | [N/A] | |
+| L320 | `}` | — | [N/A] | |
+| L321 | `}` | — | [N/A] | |
+| L322 | (빈 줄) | — | [N/A] | |
+| L323 | `if(drawExhaustion \|\| drawJumpCharge)` | — | [N/A] | |
+| L324 | `GL11.glPopAttrib();` | (1.21.1: 자동) | [N/A] | |
+| L325 | `}` | — | [N/A] | |
+| L326 | `}` | — | [N/A] | |
+| L327 | `}` | — | [N/A] | renderGuiIngame 종료 |
+| L328 | (빈 줄) | — | [N/A] | |
+| L329 | `private static void drawIcon(int x, int y)` | (HUD 헬퍼) | [N/A] | |
+| L330 | `{` | — | [N/A] | |
+| L331 | `_minecraft.ingameGUI.drawTexturedModalRect(_iOffset, _jOffset, x * 9, y * 9, 9, 9);` | — | [N/A] | |
+| L332 | `}` | — | [N/A] | |
+| L333 | (빈 줄) | — | [N/A] | |
+| L334 | `public final SmartMovingModel modelBipedMain;` | (1.21.1 단일 모델 — 부재) | [N/A] | |
+| L335 | (빈 줄) | — | [N/A] | |
+| L336 | `private static int _iOffset, _jOffset;` | (HUD 필드) | [N/A] | |
+| L337 | `private static Minecraft _minecraft;` | (HUD 필드) | [N/A] | |
+
+**파트 A 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 137 = 137 라인 전수.** (HUD 영역 일괄 — 본 포커스 #1 외)
+
+**파트 B — SmartRenderContext.java (27 라인)**
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L16 | 라이선스 헤더 | — | [N/A] | |
+| L17 | `// ==…==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | — | [N/A] | |
+| L20 | `import net.smart.moving.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `public abstract class SmartRenderContext extends SmartMovingContext` | (1.21.1: SmartMovingClientState 등 흡수) | [N/A] | |
+| L23 | `{` | — | [N/A] | |
+| L24 | `public static final int Scale = 0;` | (메인 모델 = Scale 가드 묵시 — setArmScales/setLegScales 가드 제거 근거) | [정합] | §16-7 — 0 = 첫 분기 통과 (always true) |
+| L25 | `public static final int NoScaleStart = 1;` | (갑옷 일반 — 1.21.1 미이식) | [N/A] | §16-8 |
+| L26 | `public static final int NoScaleEnd = 2;` | (갑옷 흉갑 offsetY — §17 잔여) | [N/A] | §16-8 |
+| L27 | `}` | — | [N/A] | |
+
+**파트 B 통계: 정합 1 / 오역 0 / 누락 0 / 잉여 0 / N/A 26 = 27 라인 전수.**
+
+**파트 C — IModelPlayer.java (35 라인)**
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | — | [N/A] | |
+| L20 | (빈 줄) | — | [N/A] | |
+| L21 | `public interface IModelPlayer` | (1.21.1: 단일 PlayerEntityModel — 인터페이스 부재) | [N/A] | |
+| L22 | `{` | — | [N/A] | |
+| L23 | `SmartMovingModel getMovingModel();` | (단일 모델) | [N/A] | |
+| L24 | `void superAnimateHeadRotation(...)` | (vanilla setAngles 자동 — head.yaw/pitch 매개변수 자동 설정) | [N/A] | |
+| L25 | `void superAnimateSleeping(...)` | (vanilla SleepingPose 자동) | [N/A] | |
+| L26 | `void superAnimateArmSwinging(...)` | (vanilla limbSwing 기반 자동 — sm_setAngles TAIL inject가 11-state 분기 시 덮어씀) | [N/A] | |
+| L27 | `void superAnimateRiding(...)` | (vanilla Riding pose 자동) | [N/A] | |
+| L28 | `void superAnimateLeftArmItemHolding(...)` | (vanilla item holding 자동) | [N/A] | |
+| L29 | `void superAnimateRightArmItemHolding(...)` | (vanilla 자동) | [N/A] | |
+| L30 | `void superAnimateWorkingBody(...)` | (vanilla 자동 — 어깨 NonStandardWorking 미이식 §16-5) | [N/A] | |
+| L31 | `void superAnimateWorkingArms(...)` | (vanilla 자동) | [N/A] | |
+| L32 | `void superAnimateSneaking(...)` | (vanilla sneak 자동 — leaningPitch=0 별도 처리) | [N/A] | |
+| L33 | `void superApplyAnimationOffsets(...)` | (vanilla applyAnimationOffsets 자동) | [N/A] | |
+| L34 | `void superAnimateBowAiming(...)` | (vanilla 활쏘기 자동) | [N/A] | |
+| L35 | `}` | — | [N/A] | |
+
+**파트 C 통계: 정합 0 / 오역 0 / 누락 0 / 잉여 0 / N/A 35 = 35 라인 전수.** (인터페이스 시그니처 — 1.21.1 단일 모델 + vanilla 자동 처리로 모두 N/A)
+
+**파트 D — IRenderPlayer.java (43 라인)**
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L17 | 라이선스 + `==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.moving.render;` | — | [N/A] | |
+| L20 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L21 | `import net.minecraft.client.renderer.entity.*;` | — | [N/A] | |
+| L22 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L23 | (빈 줄) | — | [N/A] | |
+| L24 | `public interface IRenderPlayer` | (1.21.1: PlayerEntityRenderer 직접 Mixin — 인터페이스 부재) | [N/A] | |
+| L25 | `{` | — | [N/A] | |
+| L26 | `void superRenderRenderPlayer(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks);` | (vanilla render 호출 — Mixin TAIL inject 자동) | [N/A] | |
+| L27 | (빈 줄) | — | [N/A] | |
+| L28 | `void superRenderRotatePlayer(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2);` | MixinPlayerEntityRenderer.sm_captureBodyYaw HEAD + @ModifyArg index=3 (vanilla setupTransforms 호출 시 bodyYaw 인자 교체) | [정합] | rotatePlayer = setupTransforms 매핑 |
+| L29 | (빈 줄) | — | [N/A] | |
+| L30 | `void superRenderRenderPlayerAt(AbstractClientPlayer entityplayer, double d, double d1, double d2);` | sm_getPositionOffset @Inject(cancellable) | [정합] | renderPlayerAt = getPositionOffset 매핑 |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `void superRenderRenderName(EntityLivingBase par1EntityPlayer, double par2, double par4, double par6);` | smartmoving$adjustLabelY @Inject(HEAD, cancellable) + MixinLivingEntityRenderer.hasLabel @Redirect | [정합] | renderName = renderLabelIfPresent 매핑 |
+| L33 | (빈 줄) | — | [N/A] | |
+| L34 | `RenderManager getRenderManager();` | (1.21.1: EntityRenderDispatcher 자동) | [N/A] | |
+| L35 | (빈 줄) | — | [N/A] | |
+| L36 | `IModelPlayer getPlayerModelBipedMain();` | (1.21.1: 단일 모델 직접 this) | [N/A] | |
+| L37 | (빈 줄) | — | [N/A] | |
+| L38 | `IModelPlayer getPlayerModelArmorChestplate();` | (갑옷 ArmorFeatureRenderer §17 잔여) | [N/A] | |
+| L39 | (빈 줄) | — | [N/A] | |
+| L40 | `IModelPlayer getPlayerModelArmor();` | (갑옷) | [N/A] | |
+| L41 | (빈 줄) | — | [N/A] | |
+| L42 | `IModelPlayer[] getPlayerModels();` | (다층 모델 부재) | [N/A] | |
+| L43 | `}` | — | [N/A] | |
+
+**파트 D 통계: 정합 3 / 오역 0 / 누락 0 / 잉여 0 / N/A 40 = 43 라인 전수.**
+
+**R-2 청크 2 통계 (4 파일 합계)**:
+- 파트 A (HUD): 0 / 0 / 0 / 0 / 137 = 137 라인
+- 파트 B (Context): 1 / 0 / 0 / 0 / 26 = 27 라인
+- 파트 C (IModel): 0 / 0 / 0 / 0 / 35 = 35 라인
+- 파트 D (IRender): 3 / 0 / 0 / 0 / 40 = 43 라인
+- **합계: 정합 4 / 오역 0 / 누락 0 / 잉여 0 / N/A 238 = 242 라인 전수**
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. HUD 영역 + 인터페이스 시그니처 — 본 포커스 #1 외이거나 vanilla 자동 처리.
+
+**다음 청크**: R-2 청크 3 (ModelPlayer.java 167줄 + RenderPlayer.java 120줄 = ~287줄). R-2 마지막 청크.

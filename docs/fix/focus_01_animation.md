@@ -304,7 +304,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - **R-1 누적**: 정합 346 / 오역 14 / 누락 14 / 잉여 0 / N/A 423 = 797 라인 전수
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
   - [x] R-2 청크 1 (SmartMovingRender.java L1-L200) — 세션 7 (정합 51 / 오역 0 / 누락 3 / 잉여 0 / N/A 146)
-  - [ ] R-2 청크 2 (SmartMovingRender.java L201-L337 + SM render 5 파일 ~389줄)
+  - [x] R-2 청크 2 (SmartMovingRender.java L201-L337 + Context/IModel/IRender 4 파일) — 세션 8 (정합 4 / 오역 0 / 누락 0 / 잉여 0 / N/A 238)
+  - [ ] R-2 청크 3 (ModelPlayer.java + RenderPlayer.java ~287줄)
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
@@ -661,6 +662,49 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-2 청크 2 (SmartMovingRender.java L201-L337 + SM render 5 파일 ~389줄).
+
+---
+
+### 세션 8 — 2026-04-26 — Phase R / R-2 청크 2 (SmartMovingRender.java L201-L337 + Context/IModel/IRender)
+
+**진행한 작업**:
+
+1. **R-2 청크 2 라인별 read** (4 파일):
+   - SmartMovingRender.java L201-L337 (137 라인) — renderGuiIngame HUD + drawIcon + 필드 선언
+   - SmartRenderContext.java (27 라인) — Scale/NoScaleStart/NoScaleEnd 상수
+   - IModelPlayer.java (35 라인) — 11 superAnimate* 인터페이스
+   - IRenderPlayer.java (43 라인) — 9 메서드 인터페이스
+
+2. **1.21.1 매핑 검증**:
+   - HUD 영역: 본 포커스 #1 외 (UI/HUD 별도 포커스 영역) → 일괄 [N/A]
+   - SmartRenderContext.Scale → setArmScales/setLegScales 가드 제거 근거 [정합]
+   - NoScaleStart/NoScaleEnd → 갑옷 ArmorFeatureRenderer 영역 (§17 잔여) [N/A]
+   - IModelPlayer 11 superAnimate* → vanilla 자동 처리 [N/A]
+   - IRenderPlayer superRenderRotatePlayer → MixinPlayerEntityRenderer.sm_captureBodyYaw + @ModifyArg [정합]
+   - IRenderPlayer superRenderRenderPlayerAt → sm_getPositionOffset [정합]
+   - IRenderPlayer superRenderRenderName → smartmoving$adjustLabelY + MixinLivingEntityRenderer.hasLabel @Redirect [정합]
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-2 청크 2 4 파트 섹션 — 242 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계 (4 파일 합)**:
+- [정합] 4 (Context Scale 상수 1 + IRender 3 핵심 매핑 시그니처)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 238 (HUD 137 + Context NoScale 갑옷 분기 + IModel 11 시그니처 + IRender 6 시그니처 + 라이선스/import/빈 줄)
+- 합계: 242 라인 전수.
+
+**청크 2 발견**: 신규 [오역]/[누락]/[잉여] 0건. 본 청크는 HUD/인터페이스 시그니처 위주 — 매핑 의미는 R-2 청크 1 검증과 일치 확인.
+
+**검증 체크리스트 (세션 8 R-2 청크 2)**:
+- [근거] ✓ 4 파일 모두 라인별 read 완료 (offset+limit 정확)
+- [전수] ✓ 4 파일 합계 242 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 242 일치 (4+0+0+0+238)
+- [발견] ✓ 신규 발견 0건 (의미 없는 인터페이스/HUD)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (R-2 청크 1과 동일 매핑 일관 검증)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-2 진행률**: 청크 1 + 청크 2 = SmartMovingRender 337 + Context 27 + IModel 35 + IRender 43 = 442 / 726 라인 (60.9%). 다음 청크: ModelPlayer.java 167 + RenderPlayer.java 120 = 287 라인 (R-2 마지막).
 
 ---
 
