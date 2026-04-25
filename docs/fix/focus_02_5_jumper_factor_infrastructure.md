@@ -203,16 +203,16 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-1b. `jumpVerticalFactor = 1F` (원본 L231, PositiveFactor >= 0) — 세션 1
 - [x] A-1c. `jumpControlFactor = 1F` (원본 L228, DecreasingFactor >= 0, <= 1) — 세션 1
 
-**A-2. Speed 별 Horizontal/Vertical factor 10건**
-- [ ] A-2a. `standJumpVerticalFactor = 1F` (원본 L235)
-- [ ] A-2b. `sneakJumpHorizontalFactor = 1F` (원본 L238)
-- [ ] A-2c. `sneakJumpVerticalFactor = 1F` (원본 L239)
-- [ ] A-2d. `walkJumpHorizontalFactor = 1F` (원본 L242)
-- [ ] A-2e. `walkJumpVerticalFactor = 1F` (원본 L243)
-- [ ] A-2f. `runJumpHorizontalFactor = 2F` ★ (원본 L246, 오버라이드)
-- [ ] A-2g. `runJumpVerticalFactor = 1F` (원본 L247)
-- [ ] A-2h. `sprintJumpHorizontalFactor = 2F` ★ (원본 L250, 오버라이드)
-- [ ] A-2i. `sprintJumpVerticalFactor = 1F` (원본 L251)
+**A-2. Speed 별 Horizontal/Vertical factor 9건**
+- [x] A-2a. `standJumpVerticalFactor = 1F` (원본 L235) — 세션 2
+- [x] A-2b. `sneakJumpHorizontalFactor = 1F` (원본 L238) — 세션 2
+- [x] A-2c. `sneakJumpVerticalFactor = 1F` (원본 L239) — 세션 2
+- [x] A-2d. `walkJumpHorizontalFactor = 1F` (원본 L242) — 세션 2
+- [x] A-2e. `walkJumpVerticalFactor = 1F` (원본 L243) — 세션 2
+- [x] A-2f. `runJumpHorizontalFactor = 2F` ★ (원본 L246, 오버라이드) — 세션 2
+- [x] A-2g. `runJumpVerticalFactor = 1F` (원본 L247) — 세션 2
+- [x] A-2h. `sprintJumpHorizontalFactor = 2F` ★ (원본 L250, 오버라이드) — 세션 2
+- [x] A-2i. `sprintJumpVerticalFactor = 1F` (원본 L251) — 세션 2
 
 **A-3. Jump 활성 Boolean 5건**
 - [ ] A-3a. `standJump = true` (원본 L234)
@@ -723,6 +723,44 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-2 (Speed 별 Horizontal/Vertical factor 9건 — A-2a~A-2i, 기존 A-2 헤딩 "10건"은 9건 오기).
 
 진행률: Phase A 3/40+ (~7.5%), 전체 #2.5 3/~110 (~2.7%).
+
+### 세션 2 — 2026-04-25 — Phase A-2 (Speed 별 Jump factor 9건)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-2 9건 (A-2a~A-2i) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L235-L251):
+   - L235 `_standJumpVerticalFactor = PositiveFactor(...)` → 기본 1F
+   - L238 `_sneakJumpHorizontalFactor = IncreasingFactor(...)` → 기본 1F
+   - L239 `_sneakJumpVerticalFactor = PositiveFactor(...)` → 기본 1F
+   - L242 `_walkJumpHorizontalFactor = IncreasingFactor(...)` → 기본 1F
+   - L243 `_walkJumpVerticalFactor = PositiveFactor(...)` → 기본 1F
+   - L246 `_runJumpHorizontalFactor = IncreasingFactor(...).defaults(2F)` ★ → 기본 2F (오버라이드)
+   - L247 `_runJumpVerticalFactor = PositiveFactor(...)` → 기본 1F
+   - L250 `_sprintJumpHorizontalFactor = IncreasingFactor(...).defaults(2F)` ★ → 기본 2F (오버라이드)
+   - L251 `_sprintJumpVerticalFactor = PositiveFactor(...)` → 기본 1F
+2. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 9건 (A-1 직후, wallUpJump 위)
+   - `load()` Properties IO 9건 (A-1 jumpVerticalFactor 다음)
+   - `save()` Properties IO 9건 (동일 위치)
+   - key 명: `move.jump.{stand|sneak|walk|run|sprint}.{horizontal|vertical}.factor` (legacy `move.{speed}.jump.{...}.factor` 는 _pre_sm_1_7 버전이라 채택 X)
+3. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 2 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L235/L238/L239/L242/L243/L246/L247/L250/L251 + Properties.java L185-L192
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 L174-L209 / `load()` L962-L970 / `save()` L1091-L1099
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치)
+- [분기] 분기 없음 (단순 필드 9개)
+- [상수] 1F × 7 + 2F × 2 (run/sprint H 오버라이드 ★ 정확 반영)
+- [타이밍] 필드 선언만 — 호출 타이밍 없음. 실제 사용은 Phase B/D 에서 발생.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음. §3 변경 없음.
+- [회귀] 신규 필드만 추가 — 기존 코드 영향 없음. A-1 base factor 와 wallUp/wallHead/jumpCharge 등 기존 jumping 필드 무영향.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s)
+
+다음 세션 권고: Phase A-3 (Jump 활성 Boolean 5건 — standJump/sneakJump/walkJump/runJump/sprintJump 모두 true). 원본 L234/L237/L241/L245/L249 Unmodified 기본 true.
+
+진행률: Phase A 12/40+ (~30%), 전체 #2.5 12/~110 (~10.9%).
 
 ---
 
