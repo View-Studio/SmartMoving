@@ -151,6 +151,45 @@ public class SmartMovingConfig {
     }
 
     /**
+     * Phase B-6 — getMaxHorizontalMotion(speed, type, inWater).
+     *
+     * 원본 `SmartMovingClientConfig.java` L508-L525 (1:1 번역):
+     * <pre>
+     * public float getMaxHorizontalMotion(int speed, int type, boolean inWater) {
+     *     float maxMotion = 0.117852041920949F;   // 육상 base (vanilla 기본 수평 속도 한계)
+     *     if (!enabled) return speed == Running ? maxMotion * 1.3F : maxMotion;
+     *     if (inWater) maxMotion = 0.07839602977037292F;   // 수중 덮어쓰기
+     *     if (speed == Sprinting)  maxMotion *= _sprintFactor.value;
+     *     else if (speed == Running)   maxMotion *= _runFactor.value;
+     *     else if (speed == Sneaking)  maxMotion *= _sneakFactor.value;
+     *     return maxMotion;   // Walking/Standing 분기 없음 — base 그대로
+     * }
+     * </pre>
+     *
+     * @param type 사용되지 않음 (원본도 `@SuppressWarnings("unused")` — 시그니처 호환만 유지).
+     *
+     * 호출처: tryJump (Phase D-8) — `maxHorizontalMotion = (double) cfg.getMaxHorizontalMotion(speed, type, inWater) * SmartMovingMover.getCombinedSpeedFactor(player, cfg);`
+     */
+    @SuppressWarnings("unused")
+    public float getMaxHorizontalMotion(int speed, int type, boolean inWater) {
+        float maxMotion = 0.117852041920949F;
+        if (!enabled)
+            return speed == SPEED_RUNNING ? maxMotion * 1.3F : maxMotion;
+
+        if (inWater)
+            maxMotion = 0.07839602977037292F;
+
+        if (speed == SPEED_SPRINTING)
+            maxMotion *= sprintFactor;
+        else if (speed == SPEED_RUNNING)
+            maxMotion *= runFactor;
+        else if (speed == SPEED_SNEAKING)
+            maxMotion *= sneakFactor;
+
+        return maxMotion;
+    }
+
+    /**
      * Phase B-5 — getJumpVerticalFactor(speed, type).
      *
      * 원본 `SmartMovingClientConfig.java` L418-L463 (1:1 번역):

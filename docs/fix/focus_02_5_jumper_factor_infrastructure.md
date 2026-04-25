@@ -331,10 +331,10 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   (Angle 즉시 early return / ClimbUp×2 / ClimbBackUp×2 / ClimbBackHead×2 / WallUp+WallHead 누적) +
   9 type early return → speed 분기 (Sprint/Run/Walk/Sneak/Stand). WallHead = base × wallUp × wallHead 특수.
 
-**B-6. `getMaxHorizontalMotion(speed, type, inWater)`** (원본 L508-L525)
-- [ ] B-6. SmartMovingConfig 에 메서드 신설 — baseMaxMotion = `0.117852041920949F`
+**B-6. `getMaxHorizontalMotion(speed, type, inWater)`** (원본 L508-L525) — 세션 16 완료
+- [x] B-6. SmartMovingConfig 에 instance 메서드 신설. baseMaxMotion = `0.117852041920949F`
   (inWater 시 `0.07839602977037292F`) × speed 분기 (Sprint→sprintFactor / Run→runFactor /
-  Sneak→sneakFactor). `!enabled` 시 speed==Running → baseMaxMotion × 1.3F.
+  Sneak→sneakFactor). `!enabled` 시 speed==Running → baseMaxMotion × 1.3F. type 파라미터 미사용.
 
 **B-7. `getJumpChargeFactor(charge)`** (원본 L401-L408)
 - [ ] B-7. SmartMovingConfig 에 이식 — 기존 Jumper L180-L182 계산 로직과 동일. Jumper 에서
@@ -1268,6 +1268,41 @@ WallHead 특이점 (현 1.21.1 주석에도 명시됨):
 다음 세션 권고: Phase B-6 `getMaxHorizontalMotion(speed, type, inWater)` 신설 (원본 L508-L525). baseMaxMotion = 0.117852041920949F (육상) / 0.07839602977037292F (수중) × speed 분기 (Sprint→sprintFactor / Run→runFactor / Sneak→sneakFactor). `!enabled` 시 speed==Running → baseMaxMotion × 1.3F.
 
 진행률: Phase B 6/9 (~67%), 전체 #2.5 72/~110 (~65.5%).
+
+### 세션 16 — 2026-04-25 — Phase B-6 (getMaxHorizontalMotion)
+
+사용자 지시: "엄격 1:1" 유지 + Phase B-6 이식.
+
+진행한 작업:
+1. 원본 라인 + 본체 확보 (`SmartMovingClientConfig.java` L507-L525):
+   - L510: `maxMotion = 0.117852041920949F` (육상 base)
+   - L511-L512: `!enabled` → return Running ? `maxMotion×1.3F` : maxMotion
+   - L514-L515: `inWater` → `maxMotion = 0.07839602977037292F` (수중 덮어쓰기)
+   - L517-L522: speed 분기 (Sprint/Run/Sneak — Walking/Standing 분기 없음)
+   - L507 `@SuppressWarnings("unused")` — type 파라미터 미사용 (시그니처 호환만)
+2. 1.21.1 의존 grep 확인:
+   - `sprintFactor` ✅ (L354 = 1.5F) / `runFactor` ✅ (L353 = 1.3F) / `sneakFactor` ✅ (L351 = 0.3F)
+3. 1.21.1 이식 (`SmartMovingConfig.java`, getJumpVerticalFactor 직전):
+   - instance 메서드 신설
+   - 원본 L508-L525 1:1 (특수 상수 0.117852041920949F / 0.07839602977037292F 정확 보존)
+   - `@SuppressWarnings("unused")` 주석 정확 이식
+4. 근사 여부: 없음. 1:1 (특수 상수 그대로, 분기 순서 보존).
+
+완료 전 검증 체크리스트 (세션 16 기준):
+- [근거] 원본 라인 확보 — `SmartMovingClientConfig.java` L507-L525
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` Phase B 인프라 (getJumpVerticalFactor 직전)
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (특수 상수 / 분기 / 순서 모두 일치)
+- [분기] `!enabled` 조기 + `inWater` 덮어쓰기 + 3-way speed 분기 — 전수
+- [상수] 0.117852041920949F (육상) / 0.07839602977037292F (수중) / 1.3F — 정확 보존
+- [타이밍] instance 메서드 — Phase D-8 호출 (`maxHorizontalMotion = ... * SmartMovingMover.getCombinedSpeedFactor(...)`).
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음.
+- [회귀] 신규 instance 메서드 추가 — 기존 코드 영향 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (7s)
+
+다음 세션 권고: Phase B-7 + B-8 (`getJumpChargeFactor(charge)` + `getHeadJumpFactor(charge)`) — 묶어 처리. 원본 L401-L408 (`getJumpChargeFactor`) + L410-L416 (`getHeadJumpFactor`). 둘 다 단순 (charge / max) 보간 공식. 기존 Jumper L180-L182 에 동등 계산 있음 — 이식 후 Jumper 호출 교체는 Phase D 에서.
+
+진행률: Phase B 7/9 (~78%), 전체 #2.5 73/~110 (~66.4%).
 
 ---
 
