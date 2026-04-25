@@ -335,34 +335,152 @@ public final class SmartMovingJumper {
 
     /**
      * 점프 판정 진입점. 매 틱 sm_travel_client() HEAD에서 호출된다.
-     * 원본: SmartMovingSelf.handleJumping()
+     * 원본: SmartMovingSelf.handleJumping() L1842-L1944.
      *
-     * 처리 순서:
-     *   a. blockJumpTillButtonRelease 해제
-     *   b. 차지 점프 (Sneak 홀드 → 릴리즈)
-     *   c. 헤드점프 차지 (Grab 홀드 → 릴리즈)
-     *   d. 수면 점프 (isDipping)
-     *   e. 일반 점프 (jumpPending)
-     *   f. jumpPending 클리어
+     * **포커스 #4 B-3 (세션 2 재작성)**: 사용자 인게임 보고 — "shift만 눌러도 차지 점프
+     *   발동" → 7+ 결함 일괄 정정.
+     *
+     * 처리 순서 (원본 1:1):
+     *   1. jumpPending = false (메서드 시작, 원본 L1844)
+     *   2. blockJumpTillButtonRelease 해제 (jumpKey release 시, 원본 L1846)
+     *   3. isSwimming/isDiving early return (원본 L1849)
+     *   4. jumpMotionX/Z 저장 (원본 L1853-L1854)
+     *   5. 차지 점프 (원본 L1856-L1878) — jumpKey hold 트리거 + wouldIsSneaking 게이트
+     *   6. 헤드 점프 (원본 L1880-L1899) — jumpKey hold 트리거 + grab+sprint 게이트
+     *   7. 수면 점프 (원본 L1901-L1913) — jumpKey hold + isDipping
+     *   8. 일반 점프 (원본 L1915-L1916) — jumpAvoided + !isVineAnyClimbing
+     *   9. 더블클릭 방향 점프 (원본 L1918-L1943) — leftJumpCount/rightJumpCount/backJumpCount
      */
     public static void handleJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        // jumpMotionX/Z 저장 — 매 틱 최신 velocity 보존 (getJumpMoving 계산용, 원본: handleJumping 최상단)
+        boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();
+        boolean grabKeyPressed  = SmartMovingKeys.grab.isPressed();
+
+        // 1. jumpPending 클리어 (원본 L1844 — 메서드 시작) ★ B-3 정정
+        sm.jumpPending = false;
+
+        // 2. blockJumpTillButtonRelease 해제 (원본 L1846-L1847)
+        if (sm.blockJumpTillButtonRelease && !jumpKeyPressed) {
+            sm.blockJumpTillButtonRelease = false;
+        }
+
+        // 3. isSwimming/isDiving early return (원본 L1849-L1850) ★ B-3 신규
+        if (sm.isSwimming_sm || sm.isDiving) return;
+
+        // 4. jump = jumpAvoided && isJumpingField && !isInWater && !isInLava (원본 L1852)
+        //    + jumpMotionX/Z 저장 (원본 L1853-L1854)
+        boolean jump = sm.jumpAvoided && sm.jumpPending  // sm_jump 가로채기 시 둘 다 set
+                && !player.isTouchingWater() && !player.isInLava();
+        // 단 sm.jumpPending 은 위 L1 에서 false 로 클리어됨 → 의미 차이.
+        // 1.21.1 매핑: jumpAvoided 만 사용 (sm_jump 인터셉트 시 set, 매 tick 시작 false 초기화).
+        jump = sm.jumpAvoided && !player.isTouchingWater() && !player.isInLava();
         {
             Vec3d cv = player.getVelocity();
             sm.jumpMotionX = cv.x;
             sm.jumpMotionZ = cv.z;
         }
 
-        // ── [IMPL-03] 더블클릭 방향 점프 → tryJump(ANGLE) 통합 (Phase E-4, 세션 20) ──
-        //   원본 SmartMovingSelf.handleJumping 의 count==-1 분기 → tryJump(Angle, ..., angle 도)
-        //   호출. 새 tryJump (Phase D, 세션 19) 의 D-11 (angle != null) 분기가 수평 속도
-        //   재방향 + 수직 속도 (D-8 의 angleJumpVerticalFactor=0.2F 기반) + 스프린트 보정
-        //   (D-9 vanilla 진입 안 됨, D-12 스케일 처리) + Stats.JUMP (D-13) + 상태 클리어 (D-18)
-        //   모두 통합 처리. 기존 인라인 코드의 vanilla Up 0.41999... 수직 속도는 ANGLE type
-        //   에 부적합 — D-8/D-11 의 angleJumpVerticalFactor 기반으로 1:1 정정.
+        // 5. 차지 점프 (원본 L1856-L1878) ★ B-3 1:1 정정
+        // 원본 식:
+        //   isJumpChargingPossible = sp.onGround && isStanding
+        //   isJumpCharging = isJumpChargingPossible && wouldIsSneaking
+        //   actualJumpCharging = isJumpChargingPossible
+        //                      && (!_jumpChargeCancelOnSneakRelease || wouldIsSneaking)
+        //   if (actualJumpCharging)
+        //     if (esp.movementInput.jump && (cancelOnSneak || wouldIsSneaking))  ★ jump 키 hold
+        //         jumpCharge++
+        //     else  if (jumpCharge > 0)  tryJump(ChargeUp); jumpCharge = 0;
+        //   else  if (jumpCharge > 0) blockJumpTillButtonRelease = true; jumpCharge = 0;
+        boolean isJumpCharging = false;
+        if (cfg.jumpCharge) {
+            boolean isJumpChargingPossible = player.isOnGround() && sm.isStanding;
+            isJumpCharging = isJumpChargingPossible && sm.wouldIsSneaking;
+
+            boolean actualJumpCharging = isJumpChargingPossible
+                    && (!cfg.jumpChargeCancelOnSneakRelease || sm.wouldIsSneaking);
+            if (actualJumpCharging) {
+                if (jumpKeyPressed
+                        && (cfg.jumpChargeCancelOnSneakRelease || sm.wouldIsSneaking)) {
+                    sm.jumpCharge = Math.min(sm.jumpCharge + 1F, cfg.jumpChargeMaximum);
+                } else {
+                    if (sm.jumpCharge > 0) {
+                        tryJump(player, sm, CHARGE_UP, null, null, null);
+                    }
+                    sm.jumpCharge = 0;
+                }
+            } else {
+                if (sm.jumpCharge > 0) {
+                    sm.blockJumpTillButtonRelease = true;
+                }
+                sm.jumpCharge = 0;
+            }
+        }
+
+        // 6. 헤드 점프 (원본 L1880-L1899) ★ B-3 1:1 정정 — jumpKey 트리거
+        // 원본 식:
+        //   isHeadJumpCharging = grabButton.Pressed && (isGroundSprinting || isSprintJump
+        //                       || (isRunning() && sp.onGround)) && !isCrawling
+        //   if (isHeadJumpCharging)
+        //     if (esp.movementInput.jump)         ★ jump 키 hold
+        //         headJumpCharge++
+        //     else  if (headJumpCharge > 0 && sp.onGround) tryJump(HeadUp); headJumpCharge = 0;
+        //   else  if (headJumpCharge > 0) blockJumpTillButtonRelease = true; headJumpCharge = 0;
+        boolean isGroundSprinting = (sm.isFast || player.isSprinting())
+                && player.isOnGround() && !sm.isSliding && !sm.isCrawling;
+        boolean isRunning = player.isSprinting() && !sm.isFast
+                && (player.isOnGround() || sm.isFlying);
+        boolean isHeadJumpCharging = false;
+        if (cfg.headJump) {
+            isHeadJumpCharging = grabKeyPressed
+                    && (isGroundSprinting || sm.isSprintJump || (isRunning && player.isOnGround()))
+                    && !sm.isCrawling;
+            if (isHeadJumpCharging) {
+                if (jumpKeyPressed) {
+                    sm.headJumpCharge = Math.min(sm.headJumpCharge + 1F, cfg.headJumpChargeMaximum);
+                } else {
+                    if (sm.headJumpCharge > 0 && player.isOnGround()) {
+                        tryJump(player, sm, HEAD_UP, null, null, null);
+                    }
+                    sm.headJumpCharge = 0;
+                }
+            } else {
+                if (sm.headJumpCharge > 0) {
+                    sm.blockJumpTillButtonRelease = true;
+                }
+                sm.headJumpCharge = 0;
+            }
+        }
+
+        // 7. 수면 점프 (원본 L1901-L1913) ★ B-3 1:1 정정 — jumpKey hold 트리거
+        // 원본 식:
+        //   if (esp.movementInput.jump && sp.isInWater() && isDipping)
+        //     if (posY - floor(posY) > (isSlow ? 0.37 : 0.6))
+        //       sp.motionY -= 0.04F
+        //       if (!isStillSwimmingJump && sp.onGround && jumpCharge == 0)
+        //         tryJump(Up, true, null, null) → splash sound
+        if (jumpKeyPressed && player.isTouchingWater() && sm.isDipping) {
+            double frac = player.getY() - Math.floor(player.getY());
+            double threshold = sm.isSlow ? 0.37D : 0.6D;
+            if (frac > threshold) {
+                Vec3d vel = player.getVelocity();
+                player.setVelocity(vel.x, vel.y - 0.04D, vel.z);
+                if (!sm.isStillSwimmingJump && player.isOnGround() && sm.jumpCharge == 0) {
+                    tryJump(player, sm, UP, Boolean.TRUE, null, null);
+                    // 원본 L1910 splash sound 는 1.21.1 미이식 (효과음만, 게임플레이 무관)
+                }
+            }
+        }
+
+        // 8. 일반 점프 (원본 L1915-L1916) ★ B-3 1:1 정정 — !isVineAnyClimbing 추가
+        if (jump && !sm.blockJumpTillButtonRelease && !isJumpCharging && !isHeadJumpCharging
+                && !sm.isVineAnyClimbing) {
+            tryJump(player, sm, UP, Boolean.FALSE, null, null);
+        }
+
+        // 9. 더블클릭 방향 점프 (원본 L1918-L1943)
+        // [IMPL-03] 더블클릭 leftJumpCount/rightJumpCount/backJumpCount == -1 시 발동.
         {
             int left = 0, back = 0;
             if (sm.leftJumpCount  == -1) left++;
@@ -379,117 +497,19 @@ public final class SmartMovingJumper {
                     else if (left < 0) relAngle = back == 0 ? 90  : 135;
                     else               relAngle = 180;
 
-                    // 애니메이션 타입 (원본: ((360 - relAngle) / 45) % 8)
                     sm.angleJumpType = ((360 - relAngle) / 45) % 8;
 
-                    // 세계 공간 점프 방향 (rotationYaw + 상대 각도) — tryJump angle 파라미터로 전달
                     float worldAngleDeg = (float) ((player.getYaw() + relAngle) % 360.0);
                     if (worldAngleDeg < 0F) worldAngleDeg += 360F;
 
-                    // Phase E-4 통합: 새 tryJump(ANGLE, null, null, worldAngleDeg) 단일 호출
                     tryJump(player, sm, ANGLE, null, null, worldAngleDeg);
                 }
 
                 sm.leftJumpCount  = 0;
                 sm.rightJumpCount = 0;
                 sm.backJumpCount  = 0;
-                return;
             }
         }
-
-        boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();
-        boolean sneakKeyPressed = mc.options.sneakKey.isPressed();
-        boolean grabKeyPressed  = SmartMovingKeys.grab.isPressed();
-
-        // ── a. blockJumpTillButtonRelease 해제 ─────────────────────────────
-        // 원본: jumpButton.StopPressed → blockJumpTillButtonRelease = false
-        if (sm.blockJumpTillButtonRelease && !jumpKeyPressed) {
-            sm.blockJumpTillButtonRelease = false;
-        }
-
-        // ── b. 차지 점프 ────────────────────────────────────────────────────
-        // 원본: isJumpChargingPossible = onGround && isStanding
-        //       isJumpCharging = possible && wouldIsSneaking && Config.isJumpChargingEnabled()
-        boolean isJumpCharging = false;
-        if (cfg.jumpCharge && player.isOnGround() && !sm.isCrawling && !sm.isSliding) {
-            if (sneakKeyPressed && !sm.blockJumpTillButtonRelease) {
-                sm.jumpCharge = Math.min(sm.jumpCharge + 1F, cfg.jumpChargeMaximum);
-                isJumpCharging = true;
-            } else if (sm.jumpCharge > 0 && !sneakKeyPressed) {
-                // Phase D 새 시그니처: charge 는 tryJump 내부에서 sm.jumpCharge 직접 사용
-                tryJump(player, sm, CHARGE_UP, null, null, null);
-                return;
-            }
-        }
-
-        // ── c. 헤드점프 차지 ────────────────────────────────────────────────
-        // 원본: isHeadJumpCharging = grabButton.Pressed && (isGroundSprinting || isSprintJump || isRunning) && !isCrawling
-        //   isGroundSprinting = (isFast || isSprinting()) && onGround && !isSliding && !isCrawling
-        //   isRunning() = isSprinting() && !isFast && (onGround || vanilla()) (A-21 확인)
-        boolean isGroundSprinting = (sm.isFast || player.isSprinting())
-                && player.isOnGround() && !sm.isSliding && !sm.isCrawling;
-        boolean isRunning = player.isSprinting() && !sm.isFast
-                && (player.isOnGround() || sm.isFlying);
-        boolean isHeadJumpCharging = false;
-        if (cfg.headJump && grabKeyPressed
-                && (isGroundSprinting || sm.isSprintJump || isRunning)
-                && !sm.isCrawling) {
-            if (!sm.blockJumpTillButtonRelease) {
-                sm.headJumpCharge = Math.min(sm.headJumpCharge + 1F, cfg.headJumpChargeMaximum);
-                isHeadJumpCharging = true;
-            }
-        } else if (sm.headJumpCharge > 0 && !grabKeyPressed) {
-            // Phase D 새 시그니처: charge 는 tryJump 내부에서 sm.headJumpCharge 직접 사용
-            tryJump(player, sm, HEAD_UP, null, null, null);
-            return;
-        }
-
-        // ── d. 수면 점프 ────────────────────────────────────────────────────
-        // 원본: isDipping && jumpButton.StartPressed && (posY - floor(posY)) > (isSlow ? 0.37 : 0.6)
-        //   isSlow = wantSneak && !wantSprint && !isClimbing (A-22 확인)
-        //   sm.isSlow는 C-15(tickEssential)에서 매 틱 계산됨
-        if (sm.isDipping && sm.jumpPending) {
-            double frac = player.getY() - Math.floor(player.getY());
-            double threshold = sm.isSlow ? 0.37D : 0.6D;
-            if (frac > threshold) {
-                Vec3d vel = player.getVelocity();
-                player.setVelocity(vel.x, vel.y - 0.04D, vel.z);
-                if (player.isOnGround()) {
-                    // Phase D 새 시그니처: 수면 점프 — inWater null → sm.isDipping 사용
-                    tryJump(player, sm, UP, null, null, null);
-                    return;
-                }
-            }
-        }
-
-        // ── e. 일반 점프 ────────────────────────────────────────────────────
-        // 원본: !blockJumpTillButtonRelease && !isJumpCharging && !isHeadJumpCharging
-        //       && !isVineAnyClimbing && jumpButton.StartPressed(=jumpPending)
-        // **포커스 #2.6 D-1 (세션 5)**: 원본 L1852 `boolean jump = jumpAvoided && isJumping
-        //   && !isInWater() && !handleLavaMovement()` 의 lava/water 회피 — 1.21.1 매핑.
-        //   vanilla L2643-L2647: lava 안이라도 onGround 시 `jump()` 호출 → sm_jump 인터셉트 →
-        //   jumpAvoided=true 가 됨. 따라서 명시적 회피 필요. cfg.lavaLikeWater=true 시
-        //   lava 안 점프 차단 + handleLava 가 자체 motion 처리.
-        if (!sm.blockJumpTillButtonRelease && !isJumpCharging && !isHeadJumpCharging
-                && sm.jumpPending && !sm.isClimbing && !sm.isCrawlClimbing
-                && !player.isTouchingWater() && !player.isInLava()) {
-            // 방향 점프 각도 계산
-            // 원본: angleJumpType = ((360 - movementAngle) / 45) % 8
-            Vec3d vel = player.getVelocity();
-            if (vel.horizontalLength() > 0.01D) {
-                double movementAngle = Math.toDegrees(Math.atan2(-vel.x, vel.z));
-                if (movementAngle < 0) movementAngle += 360D;
-                sm.angleJumpType = (int) ((360D - movementAngle) / 45D) % 8;
-            } else {
-                sm.angleJumpType = 0;
-            }
-            // Phase D 새 시그니처: 일반 점프 — angle null (방향 점프는 위 더블클릭 인라인 처리)
-            tryJump(player, sm, UP, null, null, null);
-            return;
-        }
-
-        // ── f. jumpPending 클리어 ───────────────────────────────────────────
-        sm.jumpPending = false;
     }
 
     // ── [10-5] 벽 점프 상태 갱신 ─────────────────────────────────────────────

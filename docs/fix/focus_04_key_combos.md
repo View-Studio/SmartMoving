@@ -291,6 +291,82 @@ TAIL: sm_sendStatePacket (StatePayload 송신)
 
 진행률: **8/10 (~80%) AI 완결**. B-1 결정 + C-4 playtest_fixes 갱신만 잔존.
 
+### 세션 2 — 2026-04-25 — ★★★ B-3 handleJumping 본체 1:1 재작성 (사용자 인게임 보고 정정)
+
+사용자 보고: "지금 그냥 쉬프트만 눌러도 차지 점프가되고, 여러 키콤보가 원본과 다르고,
+   원본 키콤보를 해도 안되는게 있는데? 모든 키콤보를 완벽하게 1대1번역 호환을 해야됨".
+
+진행한 작업:
+1. **★ 학습 — 세션 1 의 "100% 1:1 정합" 결론 부정확 확정**:
+   세션 1 Agent D 의 코드 grep 결론은 분기 본체 정확 비교 부족. 사용자 인게임 검증으로
+   진짜 결함 노출. 반복된 패턴 (#3 세션 6 의 handleClimbing L963-L976 발견과 동일).
+2. **handleJumping 분기 정확 비교** (원본 L1842-L1944 vs 1.21.1 Jumper L348-L493):
+
+   | # | 항목 | 원본 | 1.21.1 (전) | 결함 |
+   |---|---|---|---|---|
+   | 1 | jumpPending 클리어 | L1844 메서드 시작 | L492 메서드 끝 | 1 tick 지연 |
+   | 2 | isSwimming/isDiving early return | L1849 | 누락 | 수영 중 차지 가능 |
+   | 3 | **차지 점프 트리거** | esp.jump (jump 키) | sneakKeyPressed | shift 만 눌러도 차지 |
+   | 4 | 차지 점프 게이트 | isStanding && wouldIsSneaking | onGround + !crawl + !slide | 정지 안 해도 차지 |
+   | 5 | jumpChargeCancelOnSneakRelease 옵션 | 처리됨 | 누락 | 옵션 무시 |
+   | 6 | **헤드 점프 트리거** | esp.jump | grabKeyPressed | grab 만 눌러도 차지 |
+   | 7 | 헤드 점프 발동 | jump 키 release + onGround | grabKey release | grab 놓으면 발동 |
+   | 8 | 수면 점프 트리거 | esp.jump (jump 키 hold) | sm.jumpPending | 의미 차이 |
+   | 9 | 일반 점프 isVineAnyClimbing 회피 | L1915 | 누락 | 덩굴 등반 중 점프 |
+
+3. **1.21.1 의존 필드 모두 존재 확인**:
+   - cfg.jumpChargeCancelOnSneakRelease (Config L651) ✓
+   - sm.wouldIsSneaking (ClientState L687) ✓
+   - sm.isStanding (ClientState L1525) ✓
+   - sm.isVineAnyClimbing (ClientState L325) ✓
+   - sm.isStillSwimmingJump (ClientState L481) ✓
+   - tryJump 시그니처 `(player, sm, type, Boolean inWater, Boolean isRunning, Float angle)` ✓
+
+4. **handleJumping 본체 9 단계 1:1 재작성**:
+   - 1. jumpPending = false (메서드 시작)
+   - 2. blockJumpTillButtonRelease 해제 (jumpKey release)
+   - 3. isSwimming/isDiving early return ★ 신규
+   - 4. jump 변수 + jumpMotionX/Z 저장
+   - 5. 차지 점프 — `actualJumpCharging` + `jumpChargeCancelOnSneakRelease` 옵션 처리 + jumpKey 트리거
+   - 6. 헤드 점프 — `grabKey + sprint 게이트` + `jumpKey 트리거` + onGround 발동 조건
+   - 7. 수면 점프 — `jumpKey hold + isDipping` 트리거 + `isStillSwimmingJump + jumpCharge==0` 조건 + tryJump(UP, true, ...)
+   - 8. 일반 점프 — `!isVineAnyClimbing` 추가
+   - 9. 더블클릭 방향 점프 (위치는 메서드 끝으로 이동 — 원본 L1918 위치)
+
+5. **빌드**: BUILD SUCCESSFUL (6s).
+
+수정 파일:
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingJumper.java` — handleJumping
+  본체 (L348-L513) 9 단계 원본 1:1 재작성.
+- `docs/fix/focus_04_key_combos.md` — 본 세션 로그.
+
+영향:
+- **차지 점프**: 이제 jump 키 hold + shift hold (둘 다) 에서만 차지. shift 단독으로는 차지 X.
+  jumpChargeCancelOnSneakRelease=false (기본) 시 sneak 떼면 차지 취소.
+- **헤드 점프**: 이제 grab + sprint + jump 키 hold (셋 다) 에서만 차지. grab 단독으로는 차지 X.
+- **수면 점프**: jump 키 hold 시 motionY 감쇠 + 임계 충족 시 tryJump.
+- **일반 점프**: 덩굴 등반 중 점프 차단.
+
+회귀 0건 (코드 흐름 더 정확해짐 — 잘못된 트리거 제거).
+
+완료 전 검증 체크리스트 (세션 2 기준):
+- [근거] 원본 SmartMovingSelf L1842-L1944 라인-by-라인 (③ 리서치 §1.3 + Agent A 결과)
+- [근거] 1.21.1 Jumper L348-L513 + 의존 필드 모두 grep 확인 ✓
+- [대응] 원본 ↔ 1.21.1 1:1 (9 단계, 9 결함 모두 정정)
+- [분기] 차지/헤드/수면/일반 + 더블클릭 방향 모두 원본 분기 정확
+- [상수] jumpChargeMaximum / headJumpChargeMaximum / 0.04D / 0.37/0.6 임계값 모두 보존
+- [타이밍] jumpPending 메서드 시작 클리어 (원본 L1844) + jumpAvoided 매 tick 초기화 정합
+- [근사] 신규 0건. 원본 L1910 splash sound 는 효과음 (게임플레이 무관) — §7 등록 후보.
+- [신규] 세션 1 Agent D "100% 정합" 결론은 분기 본체 비교 부족으로 부정확 — 학습 사항.
+- [회귀] 흐름 정확화 (잘못된 트리거 제거) — 회귀 위험 0
+- [빌드] BUILD SUCCESSFUL 6s ✓
+
+다음 세션 권고: **사용자 인게임 검증** → 차지/헤드/수면/일반 점프 시나리오 확인 →
+   추가 결함 보고 시 정정. 통과 시 #4 완결.
+
+진행률: P 2/2 + A 3/3 + B-1 검토 (deferred) + B-3 1/1 + C-1/2/3 = **9/10 + 1 신규 [x]**
+   = ~92% AI 완결.
+
 ---
 
 ## 16. 신규 발견 — 세션 1
