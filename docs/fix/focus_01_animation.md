@@ -324,6 +324,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-6 청크 2 (Utilities 109 + Context 48 + Mod 74 + Info 29 + Install 27 + IModel 63 + IRender 48 = 7 파일 398 라인) — 세션 18 (정합 33 / 오역 0 / 누락 0 / 잉여 0 / N/A 365)
   - **R-6 누적**: 정합 61 / 오역 0 / 누락 0 / 잉여 0 / N/A 565 = 626 라인 전수
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
+  - [x] R-7 청크 1 (SR ModelPlayer 180 + RenderPlayer 157 = 337) — 세션 19 (정합 10 / 오역 0 / 누락 0 / 잉여 0 / N/A 327)
+  - [ ] R-7 청크 2 (SR playerapi 3 파일 ~453줄)
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
 - [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
@@ -1113,6 +1115,40 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-6 완료** — SmartRenderRender + SR utility/Forge mod/인터페이스 8 파일 626 라인 전수 라인별 1:1 매핑.
 
 **다음 R-단계**: R-7 (SR ModelPlayer 179 + RenderPlayer 156 + SR playerapi 3 파일 (SmartRender 43 + ModelPlayerBase 248 + RenderPlayerBase 162) = 5 파일 ~788 라인). SR mod 측 ModelPlayer/RenderPlayer + PlayerAPI 인프라 — R-2/R-3과 유사 구조 위임자 패턴.
+
+---
+
+### 세션 19 — 2026-04-26 — Phase R / R-7 청크 1 (SR ModelPlayer + RenderPlayer)
+
+**진행한 작업**:
+
+1. **R-7 청크 1 라인별 read** (2 파일):
+   - SR ModelPlayer.java (180 라인) — IModelPlayer 구현 (model 위임 + 14 노드 initialize + 16 ModelRenderer getter + 11 animateXxx + 11 super*)
+   - SR RenderPlayer.java (157 라인) — IRenderPlayer 구현 (render 위임 + doRender/rotateCorpse/preRenderCallback/handleRotationFloat 진입점)
+
+2. **1.21.1 매핑 검증**: R-2 청크 3 (Smart Moving ModelPlayer/RenderPlayer)와 동등 구조 — 위임자 패턴 일관 매핑.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-7 청크 1 2 파트 섹션 — 337 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계 (2 파일 합)**:
+- [정합] 10 (ModelPlayer 16 ModelRenderer getter 중 8 / RenderPlayer 클래스 + rotateCorpse 진입점 2)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 327 (ModelPlayer 위임 + 7 부재 노드 / RenderPlayer 5 vanilla 진입점 위임 + 갑옷 + 다층 캐시 + 빈 줄)
+- 합계: 337 라인 전수.
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. R-2 청크 3과 매핑 일관 검증.
+
+**검증 체크리스트 (세션 19 R-7 청크 1)**:
+- [근거] ✓ 2 파일 라인별 read 완료
+- [전수] ✓ 청크 내 337 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 337 일치 (10+0+0+0+327)
+- [발견] ✓ 신규 발견 0건 (R-2 청크 3 매핑 일관)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (16 ModelRenderer getter R-3 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-7 청크 2 (SR playerapi 3 파일: SmartRender 43 + ModelPlayerBase 248 + RenderPlayerBase 162 = 453 라인). R-7 마지막 청크.
 
 ---
 
