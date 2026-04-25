@@ -327,9 +327,10 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-7 청크 1 (SR ModelPlayer 180 + RenderPlayer 157 = 337) — 세션 19 (정합 10 / 오역 0 / 누락 0 / 잉여 0 / N/A 327)
   - [x] R-7 청크 2 (SR playerapi: SmartRender 44 + ModelPlayerBase 249 + RenderPlayerBase 163 = 456) — 세션 20 (정합 12 / 오역 0 / 누락 0 / 잉여 0 / N/A 444)
   - **R-7 누적**: 정합 22 / 오역 0 / 누락 0 / 잉여 0 / N/A 771 = 793 라인 전수
-- [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
+- [x] R-8. SmartStatistics 일체 (7 파일 ~620줄) — **세션 22 완료**
   - [x] R-8 청크 1 (SmartStatistics 198 + Factory 143 = 341) — 세션 21 (정합 16 / 오역 0 / 누락 0 / 잉여 0 / N/A 325)
-  - [ ] R-8 청크 2 (Datas/Data/Context/Other/IEntityPlayerSP 5 파일 ~223줄)
+  - [x] R-8 청크 2 (Datas 76 + Data 61 + Context 38 + Other 30 + IEntityPlayerSP 23 = 228) — 세션 22 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
+  - **R-8 누적**: 정합 44 / 오역 0 / 누락 0 / 잉여 0 / N/A 525 = 569 라인 전수
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
 - [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
 
@@ -1232,6 +1233,58 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [빌드] N/A (코드 변경 없음)
 
 **다음 청크**: R-8 청크 2 (Datas 75 + Data 60 + Context 37 + Other 29 + IEntityPlayerSP 22 = 5 파일 ~223 라인). R-8 마지막 청크.
+
+---
+
+### 세션 22 — 2026-04-26 — Phase R / R-8 청크 2 (5 파일) — **R-8 완료**
+
+**진행한 작업**:
+
+1. **R-8 청크 2 라인별 read** (5 파일):
+   - SmartStatisticsDatas.java (76 라인) — 3축 통계 컨테이너 (horizontal/vertical/all)
+   - SmartStatisticsData.java (61 라인) — **vanilla limbAnimator 갱신 공식 1차 자료**
+   - SmartStatisticsContext.java (38 라인) — calculateHorizontalStats flag + onTickInGame
+   - SmartStatisticsOther.java (30 라인) — 다른 플레이어 통계 (foundAlive flag)
+   - IEntityPlayerSP.java (23 라인) — 자기 자신 플레이어 인터페이스
+
+2. **1.21.1 매핑 검증**: vanilla 1.21.1 LivingEntity.tickMovement 의 limbAnimator 갱신 공식 (4배 곱 + 0.4 저역 보간 + 누적) = SmartStatisticsData.calcualte() 와 정확히 일치 검증.
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-8 청크 2 5 파트 섹션 — 228 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계 (5 파일 합)**:
+- [정합] 28 (Datas horizontal 측 9 / Data 클래스+필드+5 메서드 19)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 200 (Datas vertical/all 측 + Context tick dispatcher + Other 분리 + IEntityPlayerSP 인터페이스)
+- 합계: 228 라인 전수.
+
+**청크 2 발견 (핵심 1차 자료 확정)**: 신규 [오역]/[누락]/[잉여] 0건. 다음 검증:
+- **`SmartStatisticsData.calcualte()` 공식 (`distance*4F`, `legYaw += (distance - legYaw) * 0.4F`, `total += legYaw`) = vanilla 1.7.10 EntityLivingBase.onLivingUpdate / 1.21.1 LivingEntity.tickMovement 의 limbAnimator 갱신 공식과 정확히 일치** — horizontal 측은 vanilla limbAnimator 자동 갱신으로 100% 등가 처리됨 [정합].
+- vertical 측 (수직 거리 누적) + all 측 (3D 거리 누적) — 1.21.1 vanilla 부재 → **§16-10/12/13/15 [오역] 발견 변수의 원본 갱신 로직 부재 진단 결정타** 확정.
+- L24/L25/L26 prevLegYaw/legYaw/total 필드 = vanilla `prevSpeed/speed/pos` (LimbAnimator) 직접 등가.
+
+**검증 체크리스트 (세션 22 R-8 청크 2 + R-8 전체)**:
+- [근거] ✓ 5 파일 라인별 read 완료
+- [전수] ✓ 청크 내 228 라인 + R-8 전체 569 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 청크 2 합계 228 / R-8 전체 합계 569 일치
+- [발견] ✓ §16-10/12/13/15 [오역] 발견 변수 진단 결정타 확정
+- [통계] ✓ R-8 누적 표 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (vanilla LivingEntity.tickMovement limbAnimator 갱신 공식 일치)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-8 전체 누적 (569 라인, 7 파일 2 청크 2 세션)**:
+- 합계: 정합 44 / 오역 0 / 누락 0 / 잉여 0 / N/A 525 = 569 라인 전수 (skip 0).
+- 신규 발견 0건 (단 §16-10/12/13/15 [오역] 진단 결정타 확정).
+
+**R-8 완료** — SmartStatistics 일체 7 파일 569 라인 전수 라인별 1:1 매핑.
+
+**전체 R-1~R-8 누적**: 4,968 라인 전수 라인별 매핑 완료 (사용자 진술 ~5,000 근사).
+
+**다음 R-단계**: **R-9 (통합 라인별 매핑 표 + focus_01 §5/§10 대폭 보강)** — 정리 단계. 핵심 작업:
+1. R-1~R-8 통합 누적 통계표 작성
+2. R-10+ B-N 후보 17 그룹 종합 정리
+3. focus_01 §5 (원본 근거)/§10 (작업 목록) 대폭 보강
+4. R-10+ 본격 1:1 대응 진입 준비.
 
 ---
 
