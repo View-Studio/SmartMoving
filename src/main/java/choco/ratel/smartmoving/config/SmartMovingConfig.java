@@ -18,6 +18,57 @@ public class SmartMovingConfig {
     // ── 버전 (config_system.md: SmartMovingConfig._sm_current = "3.2" → 1.21.1 포트는 "1.0") ──
     public static final String SM_VERSION = "1.0";
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Phase B (포커스 #2.5) — Jumper 판정 헬퍼 정적 인프라
+    // 원본 SmartMovingClientConfig L172-L192 (Speed/Type 상수) +
+    //      SmartMovingSelf L2148-L2163 (getJumpSpeed 헬퍼).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // === Speed 상수 (원본 SmartMovingClientConfig L172-L176, B-2) ===
+    //   getJumpSpeed 반환 + isJumpingEnabled / getJumpHorizontalFactor /
+    //   getJumpVerticalFactor / getMaxHorizontalMotion 의 speed 파라미터 도메인.
+    public static final int SPEED_SPRINTING = 0;
+    public static final int SPEED_RUNNING   = 1;
+    public static final int SPEED_WALKING   = 2;
+    public static final int SPEED_SNEAKING  = 3;
+    public static final int SPEED_STANDING  = 4;
+
+    /**
+     * Phase B-1 — getJumpSpeed 헬퍼.
+     *
+     * 원본 `SmartMovingSelf.java` L2148-L2163 (1:1 번역):
+     * <pre>
+     * private static int getJumpSpeed(boolean isStanding, boolean isSneaking,
+     *                                 boolean isRunning, boolean isSprinting, Float angle) {
+     *     isSprinting &amp;= angle == null;
+     *     isRunning   &amp;= angle == null;
+     *     if (isSprinting)      return Config.Sprinting;
+     *     else if (isRunning)   return Config.Running;
+     *     else if (isSneaking)  return Config.Sneaking;
+     *     else if (isStanding)  return Config.Standing;
+     *     else                  return Config.Walking;
+     * }
+     * </pre>
+     *
+     * angle != null (사이드/백 점프) 일 때 sprint/run 게이팅을 강제로 끄고 sneaking/standing
+     * /walking 로만 판정 — 원본 의도: angle 점프는 항상 base speed 로 분류.
+     *
+     * 호출처: tryJump (Phase D-4) — `int speed = getJumpSpeed(sm.isStanding, sm.isSlow,
+     *                                                          isRunning, sm.isFast, angle);`
+     */
+    public static int getJumpSpeed(boolean isStanding, boolean isSneaking,
+                                    boolean isRunning, boolean isSprinting, Float angle) {
+        isSprinting &= angle == null;
+        isRunning   &= angle == null;
+
+        if (isSprinting)      return SPEED_SPRINTING;
+        else if (isRunning)   return SPEED_RUNNING;
+        else if (isSneaking)  return SPEED_SNEAKING;
+        else if (isStanding)  return SPEED_STANDING;
+        else                  return SPEED_WALKING;
+    }
+
+
     // ── 서버 배포 제어 플래그 (config_system.md 2-1, 5-3) ───────────
     /** true → 접속한 모든 클라이언트에게 이 설정을 강제 적용. */
     public boolean globalConfig = false;

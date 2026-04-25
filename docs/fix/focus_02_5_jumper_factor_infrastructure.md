@@ -279,8 +279,8 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 
 ### Phase B. 판정 헬퍼 메서드 전수 이식 (SmartMovingConfig.java)
 
-**B-1. `getJumpSpeed` 헬퍼 (SmartMovingSelf L2148-L2163)**
-- [ ] B-1. 신설 — isStanding/isSneaking/isRunning/isSprinting/angle 기반 speed 반환:
+**B-1. `getJumpSpeed` 헬퍼 (SmartMovingSelf L2148-L2163)** — 세션 12 완료
+- [x] B-1. 신설 — isStanding/isSneaking/isRunning/isSprinting/angle 기반 speed 반환:
   ```java
   public static int getJumpSpeed(boolean isStanding, boolean isSneaking,
                                  boolean isRunning, boolean isSprinting, Float angle) {
@@ -294,9 +294,9 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
   }
   ```
 
-**B-2. Speed 상수** (원본 L172-L176)
-- [ ] B-2. `SmartMovingConfig` 또는 `SmartMovingJumper` 에 `SPEED_SPRINTING=0, SPEED_RUNNING=1,
-     SPEED_WALKING=2, SPEED_SNEAKING=3, SPEED_STANDING=4` 상수 5개 신설.
+**B-2. Speed 상수** (원본 L172-L176) — 세션 12 완료
+- [x] B-2. `SmartMovingConfig` 정적 상수 `SPEED_SPRINTING=0, SPEED_RUNNING=1,
+     SPEED_WALKING=2, SPEED_SNEAKING=3, SPEED_STANDING=4` 5개 신설 (B-1 과 묶어 처리).
 
 **B-3. `isJumpingEnabled(speed, type)`** (원본 L194-L227)
 - [ ] B-3. SmartMovingConfig 에 메서드 신설 — 11 type 분기 전수 + speed 5 분기:
@@ -1096,6 +1096,43 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: **Phase B 진입**. B-1 `getJumpSpeed(isStanding, isSneaking, isRunning, isSprinting, angle)` 헬퍼 신설. 원본 `SmartMovingSelf.java` L2148-L2163 (1:1 번역). 위치: `SmartMovingConfig.java` 또는 `SmartMovingJumper.java` 정적 메서드 (전자 권장 — 원본 ClientConfig 위치).
 
 진행률: **Phase A 완결 (~52 원자)**, 전체 #2.5 52/~110 (~47.3%) — 약 절반 통과.
+
+### 세션 12 — 2026-04-25 — Phase B-1 + B-2 (getJumpSpeed 헬퍼 + Speed 상수 5건)
+
+사용자 지시: "엄격 1:1" 유지 + Phase B 진입, B-1 + B-2 묶어 이식.
+
+진행한 작업:
+1. 원본 라인 + 본체 확보:
+   - `SmartMovingClientConfig.java` L172-L176 — Speed 상수 5개 (Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4)
+   - `SmartMovingSelf.java` L2148-L2163 — `getJumpSpeed(isStanding, isSneaking, isRunning, isSprinting, Float angle)` 정적 헬퍼
+2. 1.21.1 의존 grep 확인:
+   - `sm.isStanding` ✅ (`SmartMovingClientState.java` L137)
+   - `sm.isSlow` ✅ (sneaking 의미, L121)
+   - `sm.isFast` ✅ (sprinting 의미, L128)
+   - `sm.isRunning(player)` 메서드는 Phase D-3 (`isRunningOrNull` 분기) 진입 시 별도 확인.
+3. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java` L21-L74, SM_VERSION 직후):
+   - 그룹 헤더 주석 (Phase B 인프라)
+   - `SPEED_SPRINTING/RUNNING/WALKING/SNEAKING/STANDING = 0~4` (B-2)
+   - `public static int getJumpSpeed(...)` (B-1) — 원본 L2148-L2163 1:1
+4. 명명: `Sprinting/Running/...` → `SPEED_*` (Java 컨벤션, 표면 매핑 허용. 값/로직 1:1 유지).
+5. 가시성: 원본 `private static` → 1.21.1 `public static` (Jumper 에서 정적 호출 필요).
+6. 근사 여부: 없음. 1:1 (`isSprinting &= angle == null`, `isRunning &= angle == null`, 5-way if/else 순서 모두 보존).
+
+완료 전 검증 체크리스트 (세션 12 기준):
+- [근거] 원본 라인 확보 — `SmartMovingSelf.java` L2148-L2163 + `SmartMovingClientConfig.java` L172-L176
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` L21-L74
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (값/연산자/순서 모두 일치)
+- [분기] 5-way if/else 전수 + `&=` 게이팅 2건 모두 이식
+- [상수] 0/1/2/3/4 정확 반영
+- [타이밍] 정적 헬퍼 — 호출 타이밍 없음. Phase D-4 에서 호출.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 의존 발견 없음 — `sm.isRunning(player)` 메서드 확인은 Phase D-3 미루기.
+- [회귀] 신규 정적 상수/메서드 추가 — 기존 코드 영향 0.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (4s)
+
+다음 세션 권고: Phase B-3 (`isJumpingEnabled(speed, type)` 신설). 원본 `SmartMovingClientConfig.java` L194-L227 — 11 type 분기 + 5 speed 분기 전수 이식. 의존 추가 — Jump Type 상수 (Up=0~WallHeadSlide=14, 15개) 도 같이 이식 필요 (B-3 의존). 별도 원자 B-2.5 (Type 상수) 추가 후 B-3 진행 권장.
+
+진행률: Phase B 2/8 (B-1 + B-2 완료, ~25%), 전체 #2.5 54/~110 (~49.1%).
 
 ---
 
