@@ -1697,3 +1697,166 @@
 - isRenderedWithBodyTopAlwaysInAccelerateDirection 4 분기 (Flying/Swim/Dive/HeadJump) — sm_captureBodyYaw 8 분기 중 4 분기 합집합 일치.
 
 **R-3 완료**. 다음 R-단계: **R-4 (SmartRenderModel.java 469줄, 3 청크 × ~160줄)**.
+
+---
+
+## R-4: SmartRenderModel.java (469 라인)
+
+### 청크 1 (L1-L160) — 헤더 + 생성자 (14 노드 트리 + 상태 복사) + create/copy helper + render 시작
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L16 | Smart Render GPLv3 라이선스 헤더 | — | [N/A] | 16 라인 일괄 |
+| L17 | `// ==…==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import java.util.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L23 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L24 | `import net.minecraft.entity.passive.*;` | — | [N/A] | |
+| L25 | `import net.minecraft.util.*;` | — | [N/A] | |
+| L26 | (빈 줄) | — | [N/A] | |
+| L27 | `public class SmartRenderModel extends SmartRenderContext` | (1.21.1: PlayerEntityModel 단일 + Mixin) | [N/A] | 다층 모델 부재 |
+| L28 | `{` | — | [N/A] | |
+| L29 | `public IModelPlayer imp;` | (Mixin: this 직접) | [N/A] | |
+| L30 | `public ModelBiped mp;` | — | [N/A] | |
+| L31 | (빈 줄) | — | [N/A] | |
+| L32 | `public SmartRenderModel(ModelBiped mp, IModelPlayer imp, ModelRenderer originalBipedBody, originalBipedCloak, originalBipedHead, originalBipedEars, originalBipedHeadwear, originalBipedRightArm, originalBipedLeftArm, originalBipedRightLeg, originalBipedLeftLeg)` | (Mixin: 생성자 부재 — vanilla PlayerEntityModel 자동) | [N/A] | |
+| L33 | `{` | — | [N/A] | |
+| L34 | `this.imp = imp;` | — | [N/A] | |
+| L35 | `this.mp = mp;` | — | [N/A] | |
+| L36 | (빈 줄) | — | [N/A] | |
+| L37 | `mp.boxList.clear();` | (1.21.1: ModelData 시스템 — boxList 부재) | [N/A] | |
+| L38 | (빈 줄) | — | [N/A] | |
+| L39 | `bipedOuter = create(-1, -1, null);` | (Outer 노드 부재) | [N/A] | §16-2 — 다층 부모 노드 |
+| L40 | `bipedOuter.setRotationPoint(0.0F, 0.0F, 0.0F);` | — | [N/A] | |
+| L41 | `bipedOuter.fadeEnabled = true;` | (fade 메커니즘 부재) | [N/A] | §17 잔여 — fade 보간 0.2F*timeDelta |
+| L42 | (빈 줄) | — | [N/A] | |
+| L43 | `bipedTorso = create(16, 16, bipedOuter);` | (Torso 부재 — body 단일 노드 근사) | [N/A] | §16-2 |
+| L44 | `bipedTorso.setRotationPoint(0.0F, 0.0F, 0.0F);` | — | [N/A] | |
+| L45 | (빈 줄) | — | [N/A] | |
+| L46 | `bipedBody = create(16, 16, bipedTorso, originalBipedBody);` | `body` (PlayerEntityModel) | [정합] | 표면 매핑 — 단, Torso 자식 관계 부재 |
+| L47 | `bipedBody.setRotationPoint(0.0F, 0.0F, 0.0F);` | `body.pivotX/Y/Z` 기본 0 | [정합] | |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49 | `bipedBreast = create(-1, -1, bipedTorso);` | (Breast 부재) | [N/A] | §16-2 |
+| L50 | `bipedBreast.setRotationPoint(0.0F, 0.0F, 0.0F);` | — | [N/A] | |
+| L51 | (빈 줄) | — | [N/A] | |
+| L52 | `bipedNeck = create(-1, -1, bipedBreast);` | (Neck 부재) | [N/A] | |
+| L53 | `bipedNeck.setRotationPoint(0.0F, 0.0F, 0.0F);` | — | [N/A] | |
+| L54 | (빈 줄) | — | [N/A] | |
+| L55 | `bipedCloak = new ModelCapeRenderer(mp, 0, 0, bipedBreast, bipedOuter);` | `cloak` (PlayerEntityModel.cloak) | [정합] | 표면 매핑 — 부모 (Breast/Outer) 부재로 자식 관계 N/A |
+| L56 | `copy(bipedCloak, originalBipedCloak);` | (vanilla cloak 자동) | [정합] | |
+| L57 | `bipedCloak.setRotationPoint(0.0F, 0.0F, 2.0F);` | `cloak.pivotZ = 2.0F` (vanilla 기본 매핑) | [정합] | |
+| L58 | (빈 줄) | — | [N/A] | |
+| L59 | `bipedHead = create(0, 0, bipedNeck, originalBipedHead);` | `head` | [정합] | 표면 매핑 |
+| L60 | `bipedHead.setRotationPoint(0.0F, 0.0F, 0.0F);` | `head.pivot` 기본 | [정합] | |
+| L61 | (빈 줄) | — | [N/A] | |
+| L62 | `bipedEars = new ModelEarsRenderer(mp, 24, 0, bipedHead);` | (SR mod 전용 노드 부재) | [N/A] | Ears 노드 — 1.21.1 부재 |
+| L63 | `copy(bipedCloak, originalBipedEars);` | — | [N/A] | (note: 원본 버그 가능성 — `bipedCloak`이 들어감, `bipedEars`이 의도. 본 매핑 영향 없음 — 어차피 N/A) |
+| L64 | `bipedEars.setRotationPoint(0.0F, 0.0F, 0.0F);` | — | [N/A] | |
+| L65 | (빈 줄) | — | [N/A] | |
+| L66 | `bipedHeadwear = create(32, 0, bipedHead, originalBipedHeadwear);` | `hat` (PlayerEntityModel.hat) | [정합] | 표면 매핑 |
+| L67 | `bipedHeadwear.setRotationPoint(0.0F, 0.0F, 0.0F);` | `hat.pivot` 기본 | [정합] | |
+| L68 | (빈 줄) | — | [N/A] | |
+| L69 | `bipedRightShoulder = create(40, 16, bipedBreast);` | (Shoulder 부재) | [N/A] | §16-5 |
+| L70 | `bipedRightShoulder.setRotationPoint(-5F, 2.0F, 0.0F);` | — | [N/A] | |
+| L71 | (빈 줄) | — | [N/A] | |
+| L72 | `bipedRightArm = create(40, 16, bipedRightShoulder, originalBipedRightArm);` | `rightArm` | [정합] | 표면 매핑 — Shoulder 자식 관계 부재 |
+| L73 | (빈 줄) | — | [N/A] | |
+| L74 | `bipedLeftShoulder = create(-1, -1, bipedBreast);` | (Shoulder 부재) | [N/A] | §16-5 |
+| L75 | `bipedLeftShoulder.mirror = true;` | — | [N/A] | |
+| L76 | `bipedLeftShoulder.setRotationPoint(5F, 2.0F, 0.0F);` | — | [N/A] | |
+| L77 | (빈 줄) | — | [N/A] | |
+| L78 | `bipedLeftArm = create(40, 16, bipedLeftShoulder, originalBipedLeftArm);` | `leftArm` | [정합] | |
+| L79 | (빈 줄) | — | [N/A] | |
+| L80 | `bipedPelvic = create(-1, -1, bipedTorso);` | (Pelvic 부재) | [N/A] | §16-3 |
+| L81 | `bipedPelvic.setRotationPoint(0.0F, 12.0F, 0.0F);` | — | [N/A] | |
+| L82 | (빈 줄) | — | [N/A] | |
+| L83 | `bipedRightLeg = create(0, 16, bipedPelvic, originalBipedRightLeg);` | `rightLeg` | [정합] | 표면 매핑 — Pelvic 자식 관계 부재 (1.21.1 leg 직접 root) |
+| L84 | `bipedRightLeg.setRotationPoint(-2F, 0.0F, 0.0F);` | `rightLeg.pivotX = -2F` (vanilla 기본 매핑) | [정합] | |
+| L85 | (빈 줄) | — | [N/A] | |
+| L86 | `bipedLeftLeg = create(0, 16, bipedPelvic, originalBipedLeftLeg);` | `leftLeg` | [정합] | |
+| L87 | `bipedLeftLeg.setRotationPoint(2.0F, 0.0F, 0.0F);` | `leftLeg.pivotX = 2.0F` | [정합] | |
+| L88 | (빈 줄) | — | [N/A] | |
+| L89 | `imp.initialize(bipedBody, bipedCloak, bipedHead, bipedEars, bipedHeadwear, bipedRightArm, bipedLeftArm, bipedRightLeg, bipedLeftLeg);` | (1.21.1: vanilla PlayerEntityModel 초기화 자동) | [N/A] | |
+| L90 | (빈 줄) | — | [N/A] | |
+| L91 | `if(SmartRenderRender.CurrentMainModel != null)` | (SmartMovingClientState 일원화 — CurrentMainModel 부재) | [N/A] | |
+| L92 | `{` | — | [N/A] | |
+| L93 | `isInventory = SmartRenderRender.CurrentMainModel.isInventory;` | (vanilla InventoryScreen 자동) | [N/A] | |
+| L94 | (빈 줄) | — | [N/A] | |
+| L95 | `totalVerticalDistance = SmartRenderRender.CurrentMainModel.totalVerticalDistance;` | (1.21.1 limbSwing 잘못 매핑 — §16-10 [오역]) | [N/A] | 변수 캐싱 — 정의 자체는 §16-10 발견 변수 |
+| L96 | `currentVerticalSpeed = SmartRenderRender.CurrentMainModel.currentVerticalSpeed;` | (1.21.1 limbSwingAmount 잘못 매핑 — §16-10) | [N/A] | |
+| L97 | `totalDistance = SmartRenderRender.CurrentMainModel.totalDistance;` | (1.21.1 limbSwing 또는 animationProgress 잘못 매핑 — §16-12/13/15) | [N/A] | |
+| L98 | `currentSpeed = SmartRenderRender.CurrentMainModel.currentSpeed;` | (1.21.1 limbSwingAmount 잘못 매핑 — §16-13/15) | [N/A] | |
+| L99 | (빈 줄) | — | [N/A] | |
+| L100 | `distance = SmartRenderRender.CurrentMainModel.distance;` | (state holder) | [N/A] | |
+| L101 | `verticalDistance = SmartRenderRender.CurrentMainModel.verticalDistance;` | (수직 거리 — 1.21.1 capture 부재) | [N/A] | |
+| L102 | `horizontalDistance = SmartRenderRender.CurrentMainModel.horizontalDistance;` | (수평 거리 — limbSwing) | [N/A] | |
+| L103 | `currentCameraAngle = SmartRenderRender.CurrentMainModel.currentCameraAngle;` | (player.getYaw 활용) | [N/A] | |
+| L104 | `currentVerticalAngle = SmartRenderRender.CurrentMainModel.currentVerticalAngle;` | `sm.stats.currentVerticalAngle` (state holder) | [N/A] | |
+| L105 | `currentHorizontalAngle = SmartRenderRender.CurrentMainModel.currentHorizontalAngle;` | (atan2(-vel.x, vel.z)) | [N/A] | |
+| L106 | `prevOuterRenderData = SmartRenderRender.CurrentMainModel.prevOuterRenderData;` | (Outer 부재 — fade 보간 데이터 부재) | [N/A] | §17 잔여 |
+| L107 | `isSleeping = SmartRenderRender.CurrentMainModel.isSleeping;` | (vanilla SleepingPose 자동) | [N/A] | |
+| L108 | (빈 줄) | — | [N/A] | |
+| L109 | `actualRotation = SmartRenderRender.CurrentMainModel.actualRotation;` | (player.getYaw 처리) | [N/A] | |
+| L110 | `forwardRotation = SmartRenderRender.CurrentMainModel.forwardRotation;` | sm_captureBodyYaw lerp 처리 | [N/A] | |
+| L111 | `workingAngle = SmartRenderRender.CurrentMainModel.workingAngle;` | (어깨 부재로 N/A) | [N/A] | §16-5 |
+| L112 | `}` | — | [N/A] | |
+| L113 | `}` | — | [N/A] | 생성자 종료 |
+| L114 | (빈 줄) | — | [N/A] | |
+| L115 | `private ModelRotationRenderer create(int i, int j, ModelRotationRenderer base)` | (ModelRotationRenderer 부재 — ModelPart 자체로 충분) | [N/A] | |
+| L116 | `{` | — | [N/A] | |
+| L117 | `return new ModelRotationRenderer(mp, i, j, base);` | — | [N/A] | |
+| L118 | `}` | — | [N/A] | |
+| L119 | (빈 줄) | — | [N/A] | |
+| L120 | `private ModelRotationRenderer create(int i, int j, ModelRotationRenderer base, ModelRenderer original)` | — | [N/A] | |
+| L121 | `{` | — | [N/A] | |
+| L122 | `ModelRotationRenderer local = create(i, j, base);` | — | [N/A] | |
+| L123 | `copy(local, original);` | — | [N/A] | |
+| L124 | `return local;` | — | [N/A] | |
+| L125 | `}` | — | [N/A] | |
+| L126 | (빈 줄) | — | [N/A] | |
+| L127 | `private static void copy(ModelRotationRenderer local, ModelRenderer original)` | (1.21.1: ModelData 자동) | [N/A] | |
+| L128 | `{` | — | [N/A] | |
+| L129 | `if(original.childModels != null)` | — | [N/A] | |
+| L130 | `for(Object childModel : original.childModels)` | — | [N/A] | |
+| L131 | `local.addChild((ModelRenderer)childModel);` | — | [N/A] | |
+| L132 | `if(original.cubeList != null)` | — | [N/A] | |
+| L133 | `for(Object cube : original.cubeList)` | — | [N/A] | |
+| L134 | `local.cubeList.add(cube);` | — | [N/A] | |
+| L135 | `local.mirror = original.mirror;` | (1.21.1: ModelPart.mirror 자동) | [N/A] | |
+| L136 | `local.isHidden = original.isHidden;` | (1.21.1: ModelPart.hidden) | [N/A] | |
+| L137 | `local.showModel = original.showModel;` | (1.21.1: ModelPart.visible) | [N/A] | |
+| L138 | `}` | — | [N/A] | |
+| L139 | (빈 줄) | — | [N/A] | |
+| L140 | `public void render(Entity entity, float totalHorizontalDistance, float currentHorizontalSpeed, float totalTime, float viewHorizontalAngelOffset, float viewVerticalAngelOffset, float factor)` | (vanilla PlayerEntityModel.render 자동 — Mixin 자동 처리) | [N/A] | |
+| L141 | `{` | — | [N/A] | |
+| L142 | `bipedBody.ignoreRender = bipedHead.ignoreRender = bipedHeadwear.ignoreRender = bipedRightArm.ignoreRender = bipedLeftArm.ignoreRender = bipedRightLeg.ignoreRender = bipedLeftLeg.ignoreRender = true;` | (vanilla 자동 — 다층 모델 부재로 ignoreRender 불필요) | [N/A] | |
+| L143 | `imp.superRender(entity, ...)` | (vanilla render 본체) | [N/A] | |
+| L144 | `bipedBody.ignoreRender = bipedHead.ignoreRender = bipedHeadwear.ignoreRender = bipedRightArm.ignoreRender = bipedLeftArm.ignoreRender = bipedRightLeg.ignoreRender = bipedLeftLeg.ignoreRender = false;` | (복원 — 불필요) | [N/A] | |
+| L145 | (빈 줄) | — | [N/A] | |
+| L146 | `bipedOuter.render(factor);` | (Outer 부재 — 전체 렌더 부재) | [N/A] | §16-2 |
+| L147 | (빈 줄) | — | [N/A] | |
+| L148 | `bipedOuter.renderIgnoreBase(factor);` | — | [N/A] | |
+| L149 | `bipedTorso.renderIgnoreBase(factor);` | (Torso 부재) | [N/A] | |
+| L150 | `bipedBody.renderIgnoreBase(factor);` | (vanilla 자동 — body 단일 렌더) | [N/A] | |
+| L151 | `bipedBreast.renderIgnoreBase(factor);` | (Breast 부재) | [N/A] | |
+| L152 | `bipedNeck.renderIgnoreBase(factor);` | (Neck 부재) | [N/A] | |
+| L153 | `bipedHead.renderIgnoreBase(factor);` | (vanilla 자동) | [N/A] | |
+| L154 | `bipedHeadwear.renderIgnoreBase(factor);` | (vanilla 자동) | [N/A] | |
+| L155 | `bipedRightShoulder.renderIgnoreBase(factor);` | (Shoulder 부재) | [N/A] | |
+| L156 | `bipedRightArm.renderIgnoreBase(factor);` | (vanilla 자동) | [N/A] | |
+| L157 | `bipedLeftShoulder.renderIgnoreBase(factor);` | (Shoulder 부재) | [N/A] | |
+| L158 | `bipedLeftArm.renderIgnoreBase(factor);` | (vanilla 자동) | [N/A] | |
+| L159 | `bipedPelvic.renderIgnoreBase(factor);` | (Pelvic 부재) | [N/A] | |
+| L160 | `bipedRightLeg.renderIgnoreBase(factor);` | (vanilla 자동) | [N/A] | |
+
+**청크 1 (L1-L160) 통계: 정합 15 / 오역 0 / 누락 0 / 잉여 0 / N/A 145 = 160 라인 전수.**
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 사항 확인:
+- 14 SmartRender 노드 중 7개만 1.21.1 ModelPart 매핑됨 (Body/Cloak/Head/Headwear→hat/RightArm/LeftArm/RightLeg/LeftLeg = 8 노드, Cloak는 부분 매핑) — 7개 부재 (Outer/Torso/Breast/Neck/Shoulder×2/Pelvic/Ears 중 Ears 제외 7) — §16-2/3/5/§17 fade 일관 검증.
+- L95-L98 변수 정의 (totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed)는 §16-10/12/13/15 [오역] 발견 변수의 *원본 정의 위치* 확인 — SmartRenderModel.java에 위치하며 SmartRenderRender 에서 매 프레임 갱신.
+- L62-L64 bipedEars 생성에서 `copy(bipedCloak, originalBipedEars);` 가 Cloak로 잘못 들어감 (원본 버그 가능성 — bipedEars가 의도). 본 매핑 영향 없음 (Ears 자체 N/A).
+
+**다음 청크**: R-4 청크 2 (SmartRenderModel.java L161-L320) — render() 잔여 + setRotationAngles 본체 + animateXxx 메서드 일부.

@@ -310,6 +310,9 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [x] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄) — **세션 10 완료**
   - 합계: 정합 14 / 오역 0 / 누락 0 / 잉여 0 / N/A 362 = 376 라인 전수
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
+  - [x] R-4 청크 1 (L1-L160) — 세션 11 (정합 15 / 오역 0 / 누락 0 / 잉여 0 / N/A 145)
+  - [ ] R-4 청크 2 (L161-L320)
+  - [ ] R-4 청크 3 (L321-L469)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
@@ -791,6 +794,39 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-3 완료** — SM render/playerapi 3 파일 376 라인 전수 라인별 1:1 매핑.
 
 **다음 R-단계**: R-4 (SmartRenderModel.java 469줄 — 3 청크 × ~160줄). SmartRender mod의 핵심 모델 클래스로 7 SR 전용 노드 (Outer/Torso/Breast/Neck/Pelvic/RightShoulder/LeftShoulder) + ModelRotationRenderer 6 회전순서 정의. 1.21.1 단일 PlayerEntityModel 구조 차이로 [N/A] 비중 크지만, 회전순서 매핑 검증과 fade 보간 메커니즘 분석은 의미 있음.
+
+---
+
+### 세션 11 — 2026-04-26 — Phase R / R-4 청크 1 (SmartRenderModel.java L1-L160)
+
+**진행한 작업**:
+
+1. **R-4 청크 1 라인별 read**: 원본 SmartRenderModel.java L1-L160 (160 라인 전수 read).
+2. **1.21.1 매핑 검증**: PlayerEntityModel ModelPart 직접 grep + R-3 16 @Deprecated getter 매핑과 일관 확인.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-4 청크 1 섹션 — 160 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계**:
+- [정합] 15 (body 2 / cloak 3 / head 2 / hat 2 / rightArm 1 / leftArm 1 / rightLeg 2 / leftLeg 2 — vanilla ModelPart 표면 매핑 + setRotationPoint pivot 등가)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 145 (Outer/Torso/Breast/Neck/Shoulder×2/Pelvic/Ears 7 SR 전용 노드 부재 + fade 메커니즘 부재 + create/copy helper + render 본체 + 상태 복사 22 라인 + 라이선스/import/빈 줄)
+- 합계: 160 라인 전수.
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다만 다음 의미 있는 확인:
+- L95-L98: §16-10/12/13/15 [오역] 발견 변수 (totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed)의 원본 정의 위치 확인 — SmartRenderModel.java 멤버 변수, SmartRenderRender 에서 매 프레임 갱신. 1.21.1 limbSwing/limbSwingAmount/animationProgress 잘못 매핑 영향 변수.
+- L62-L64 bipedEars 생성에서 `copy(bipedCloak, originalBipedEars);` (원본 버그 — bipedEars 가 들어가야 하나 bipedCloak 들어감). Ears 노드 1.21.1 부재로 본 매핑 영향 없음.
+- L41 `bipedOuter.fadeEnabled = true;` — fade 보간 0.2F*timeDelta (§17 잔여) 진입점 확인.
+
+**검증 체크리스트 (세션 11 R-4 청크 1)**:
+- [근거] ✓ 원본 로컬 read (offset=1, limit=160 정확)
+- [전수] ✓ 청크 내 160 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 160 일치 (15+0+0+0+145)
+- [발견] ✓ 신규 발견 0건 (구조 부재 일관 확인)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (R-3 16 ModelRenderer getter 매핑과 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-4 청크 2 (SmartRenderModel.java L161-L320) — render() 잔여 + setRotationAngles 본체 + animateXxx 메서드 일부.
 
 ---
 
