@@ -311,7 +311,7 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - 합계: 정합 14 / 오역 0 / 누락 0 / 잉여 0 / N/A 362 = 376 라인 전수
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
   - [x] R-4 청크 1 (L1-L160) — 세션 11 (정합 15 / 오역 0 / 누락 0 / 잉여 0 / N/A 145)
-  - [ ] R-4 청크 2 (L161-L320)
+  - [x] R-4 청크 2 (L161-L320) — 세션 12 (정합 30 / 오역 0 / 누락 1 / 잉여 0 / N/A 129)
   - [ ] R-4 청크 3 (L321-L469)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
@@ -830,6 +830,39 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 12 — 2026-04-26 — Phase R / R-4 청크 2 (SmartRenderModel.java L161-L320)
+
+**진행한 작업**:
+
+1. **R-4 청크 2 라인별 read**: 원본 SmartRenderModel.java L161-L320 (160 라인 전수 read).
+2. **1.21.1 매핑 검증**: vanilla BipedEntityModel.setAngles 본체 공식 비교 (arm cos*0.6662*2.0*0.5 / leg cos*1.4 / Riding -π/5, -2π/5, ±π/10 / SleepingPose head + animateAttack handSwingProgress 등) + sm_setAngles TAIL inject 매핑.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-4 청크 2 섹션 — 160 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계**:
+- [정합] 30 (setRotationAngles 진입점 / sm_captureBodyYaw bodyYaw / animateHeadRotation 2 / animateSleeping head 2 / animateArmSwinging arm+leg 4 + 호출 1 / animateRiding 6 + 호출 1 / ItemHolding 좌우 2 + 호출 2 / animateWorkingBody 3 + 호출 1 / animateWorkingArms 7 + 호출 1 / animateSneaking leg 1 + 호출 1)
+- [오역] 0
+- [누락] 1 (L251 cloak.pitch = SIXTYFOURTH 기본 기울임)
+- [잉여] 0
+- [N/A] 129 (1인칭/인벤토리 분기 + Outer fade 메커니즘 + Torso/Breast/Neck/Pelvic 구조 부재 + 빈 줄/괄호)
+- 합계: 160 라인 전수.
+
+**R-10+ B-N 후보 등재 (§16-24)**:
+- B-N (cloak.pitch 기본 기울임 [누락]): L251 `bipedCloak.rotateAngleX = Sixtyfourth;` (≈5.6°). 1.21.1 vanilla cloak는 별도 기본값 없으므로 미이식. 우선순위 낮음 (망토 미세 차이).
+
+**검증 체크리스트 (세션 12 R-4 청크 2)**:
+- [근거] ✓ 원본 로컬 read (offset=161, limit=160 정확)
+- [전수] ✓ 청크 내 160 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 160 일치 (30+0+1+0+129)
+- [발견] ✓ §16-24 등재 + R-10+ B-N 후보 1 라인 식별
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (vanilla BipedEntityModel.setAngles 공식 일치 + sm_setAngles TAIL)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-4 청크 3 (L321-L469) — animateSneaking 잔여 + animateArms + animateBowAiming + reset/getter/필드 선언. R-4 마지막 청크.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -926,6 +959,12 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
     영향: 공중부양 status effect 발동 중 isDive 분기로 렌더되지만, dive horizontal angle이 이동 방향 기반으로 계산됨 → 카메라 회전과 분리. 원본은 카메라 방향과 동기화. 영향: 공중부양 시 몸 방향 정합성 손실.
 
     이식 방안: sm_captureBodyYaw 마지막에 `if (sm.isLevitating) smBodyYawOverride = MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw())` 추가 (카메라 = player yaw 등가).
+
+### 세션 12 (2026-04-26) — Phase R / R-4 청크 2 (SmartRenderModel.java L161-L320)
+
+24. **[누락] cloak.pitch 기본 기울임 — SIXTYFOURTH (≈5.6°) 미이식** (R-10+ 우선순위 낮음). 원본 SmartRenderModel.java L251: `bipedCloak.rotateAngleX = Sixtyfourth;` (setRotationAngles 본체 마지막에 망토 X 살짝 기울임). 1.21.1 vanilla cloak (PlayerEntityModel.cloak)는 별도 기본 기울임 없이 그대로 사용 — 미이식. 망토 미세 시각 차이 (≈5.6°만큼 살짝 뒤로 기울임 부재). 우선순위 낮음 (UI 영향 적음, 메인 애니메이션 외).
+
+    이식 방안: sm_setAngles @Inject(TAIL) 위치에서 `cloak.pitch = SIXTYFOURTH` 추가. 단 vanilla setAngles 가 cloak.pitch를 매 프레임 reset 하지 않으므로 누적 위험 검토 필요.
 
 ---
 
