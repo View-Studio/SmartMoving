@@ -207,3 +207,224 @@
 - B-N (rope 피벗 [누락]): L106/L117 — `bipedHead.rotationPointY = 2F` + `bipedRightArm/leftArm.rotationPointY = -2F` 미이식. 매달린 자세에서 머리/팔 피벗 +2/-2 보정 부재.
 
 **다음 청크**: R-1 청크 2 (L201-L400) — climbing 본체 (handsDistanceSide·feetDistanceUp/Side) + isCeilingClimb + isSwim 시작.
+
+### 청크 2 (L201-L400) — climbing 본체 잔여 + isClimbJump + isCeilingClimb + isSwim + isDive + isCrawl 시작
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L201 | `bipedLeftArm.rotateAngleX = cos(totalVerticalDistance * handsFrequenceUpFactor) * verticalSpeed * handsDistanceUpFactor + handsDistanceUpOffset;` | sm_animateClimbing L215: `lPitch = cos(limbSwing * 0.6662f) * verticalSpeed * handsDistUp + handsOffset` | [오역] | ⚠️ 청크 1 L200과 동일 패턴 — totalVerticalDistance → limbSwing |
+| L202 | (빈 줄) | — | [N/A] | |
+| L203 | `bipedRightArm.rotateAngleY = cos(totalHorizontalDistance * handsFrequenceSideFactor + Quarter) * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;` | L216: `rYaw = cos(limbSwing * 0.6662f + QUARTER) * horizontalSpeed` | [정합] | totalHorizontalDistance ≈ limbSwing (수평) / Side factor=1.0 묵시 / Side offset=0 묵시 |
+| L204 | `bipedLeftArm.rotateAngleY = cos(totalHorizontalDistance * handsFrequenceSideFactor) * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;` | L217: `lYaw = cos(limbSwing * 0.6662f) * horizontalSpeed` | [정합] | |
+| L205 | (빈 줄) | — | [N/A] | |
+| L206 | `if(isHandsVineClimbing)` | L221: `if (sm.isHandsVineClimbing)` | [정합] | |
+| L207 | `{` | — | [N/A] | |
+| L208 | `bipedLeftArm.rotateAngleY *= 1F + handsFrequenceSideFactor;` | L223 통합: `leftArm.yaw = leftArm.yaw * (1f + 0.6662f) + EIGHTH` | [정합] | 곱셈+오프셋 한 줄 통합 (등가) |
+| L209 | `bipedRightArm.rotateAngleY *= 1F + handsFrequenceSideFactor;` | L222 통합: `rightArm.yaw = rightArm.yaw * (1f + 0.6662f) - EIGHTH` | [정합] | 동일 |
+| L210 | (빈 줄) | — | [N/A] | |
+| L211 | `bipedLeftArm.rotateAngleY += Eighth;` | L223 통합 | [정합] | |
+| L212 | `bipedRightArm.rotateAngleY -= Eighth;` | L222 통합 | [정합] | |
+| L213 | (빈 줄) | — | [N/A] | |
+| L214 | `setArmScales(abs(cos(rightArm.X)), abs(cos(leftArm.X)));` | L225-L227: `setArmScales(rightArm, leftArm, abs(cos(rightArm.pitch)), abs(cos(leftArm.pitch)))` | [정합] | B-3 세션 2 완결 |
+| L215 | `}` | — | [N/A] | |
+| L216 | (빈 줄) | — | [N/A] | |
+| L217 | `if(!isFeetVineClimbing)` | L241: `if (!sm.isFeetVineClimbing)` | [정합] | |
+| L218 | `{` | — | [N/A] | |
+| L219 | `bipedRightLeg.rotateAngleX = cos(totalVerticalDistance * feetFrequenceUpFactor) * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;` | L244: `cos(limbSwing * 0.6662f) * feetDistUp * verticalSpeed - 0.3f` | [오역] | ⚠️ totalVerticalDistance → limbSwing. feetDistUp=0.3/verticalSpeed → 진폭 0.3 일정 (verticalSpeed 약분), offset=-0.3 정합 |
+| L220 | `bipedLeftLeg.rotateAngleX = cos(totalVerticalDistance * feetFrequenceUpFactor + Half) * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;` | L245: `cos(limbSwing * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f` | [오역] | ⚠️ 동일 |
+| L221 | `}` | — | [N/A] | |
+| L222 | (빈 줄) | — | [N/A] | |
+| L223 | `bipedRightLeg.rotateAngleZ = -(cos(totalHorizontalDistance * feetFrequenceSideFactor) - 1.0F) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;` | L255: `-(cos(limbSwing * 0.6662f) - 1f) * horizontalSpeed * feetDistSideFactor` | [정합] | feetDistSideFactor = isUpGrab ? 0.5f : 0f |
+| L224 | `bipedLeftLeg.rotateAngleZ = -(cos(totalHorizontalDistance * feetFrequenceSideFactor + Quarter) + 1.0F) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;` | L256 | [정합] | |
+| L225 | (빈 줄) | — | [N/A] | |
+| L226 | `if(isFeetVineClimbing)` | L259: `if (sm.isFeetVineClimbing)` | [정합] | |
+| L227 | `{` | — | [N/A] | |
+| L228 | `float total = (cos(totalDistance + Half) + 1) * Thirtytwoth + Sixteenth;` | L260: `float total = (cos(limbSwing + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH` | [오역] | ⚠️ `totalDistance` ≠ `limbSwing` — totalDistance는 SmartRenderModel.md L80 별도 변수 (수평+수직 누적). cos 인자 위상 차이 |
+| L229 | `bipedRightLeg.rotateAngleX = -total;` | L261 | [정합] | |
+| L230 | `bipedLeftLeg.rotateAngleX = -total;` | L262 | [정합] | |
+| L231 | (빈 줄) | — | [N/A] | |
+| L232 | `float difference = max(0, cos(totalDistance - Quarter)) * Sixtyfourth;` | L264: `max(0f, cos(limbSwing - QUARTER)) * SIXTYFOURTH` | [오역] | ⚠️ totalDistance → limbSwing |
+| L233 | `bipedLeftLeg.rotateAngleZ += -difference;` | L265 | [정합] | |
+| L234 | `bipedRightLeg.rotateAngleZ += difference;` | L266 | [정합] | |
+| L235 | (빈 줄) | — | [N/A] | |
+| L236 | `setLegScales(abs(cos(rightLeg.X)), abs(cos(leftLeg.X)));` | L269-L271 | [정합] | B-3 세션 2 완결 |
+| L237 | `}` | — | [N/A] | |
+| L238 | (빈 줄) | — | [N/A] | |
+| L239 | `if(isCrawlClimb)` | L278: `if (sm.isCrawlClimbing)` | [정합] | |
+| L240 | `{` | — | [N/A] | |
+| L241 | `float height = smallOverGroundHeight + 0.25F;` | L279 | [정합] | smallOverGroundHeight: MixinPEMC L94-L96 capture |
+| L242 | `float bodyLength = 0.7F;` | L280 | [정합] | |
+| L243 | `float legLength = 0.55F;` | L280 | [정합] | |
+| L244 | (빈 줄) | — | [N/A] | |
+| L245 | `float bodyAngleX, legAngleX, legAngleZ;` | L281 | [정합] | |
+| L246 | `if(height < bodyLength)` | L282 | [정합] | |
+| L247 | `{` | — | [N/A] | |
+| L248 | `bodyAngleX = max(0, acos(height / bodyLength));` | L283 | [정합] | |
+| L249 | `legAngleX = Quarter - bodyAngleX;` | L284 | [정합] | |
+| L250 | `legAngleZ = Thirtytwoth;` | L285 | [정합] | |
+| L251 | `}` | — | [N/A] | |
+| L252 | `else if(height < bodyLength + legLength)` | L286 | [정합] | |
+| L253 | `{` | — | [N/A] | |
+| L254 | `bodyAngleX = 0F;` | L287 | [정합] | |
+| L255 | `legAngleX = max(0, acos((height - bodyLength) / legLength));` | L288 | [정합] | |
+| L256 | `legAngleZ = Thirtytwoth * (legAngleX / 1.537F);` | L289 | [정합] | |
+| L257 | `}` | — | [N/A] | |
+| L258 | `else` | L290 | [정합] | |
+| L259 | `{` | — | [N/A] | |
+| L260 | `bodyAngleX = 0F;` | L291 | [정합] | |
+| L261 | `legAngleX = 0F;` | L292 | [정합] | |
+| L262 | `legAngleZ = 0F;` | L293 | [정합] | |
+| L263 | `}` | — | [N/A] | |
+| L264 | (빈 줄) | — | [N/A] | |
+| L265 | `bipedTorso.rotateAngleX = bodyAngleX;` | L295: `body.pitch = bodyAngleX` | [정합] | bipedTorso → body 단일 노드 근사 (§16-2) |
+| L266 | (빈 줄) | — | [N/A] | |
+| L267 | `bipedRightShoulder.rotateAngleX = -bodyAngleX;` | (Shoulder 부재) | [N/A] | §16-5 — 구조 부재 |
+| L268 | `bipedLeftShoulder.rotateAngleX = -bodyAngleX;` | (Shoulder 부재) | [N/A] | §16-5 |
+| L269 | (빈 줄) | — | [N/A] | |
+| L270 | `bipedHead.rotateAngleX = -bodyAngleX;` | L296: `head.pitch = -bodyAngleX` | [정합] | |
+| L271 | (빈 줄) | — | [N/A] | |
+| L272 | `bipedRightLeg.rotateAngleX = legAngleX;` | L297 | [정합] | |
+| L273 | `bipedLeftLeg.rotateAngleX = legAngleX;` | L298 | [정합] | |
+| L274 | (빈 줄) | — | [N/A] | |
+| L275 | `bipedRightLeg.rotateAngleZ = legAngleZ;` | L299 | [정합] | |
+| L276 | `bipedLeftLeg.rotateAngleZ = -legAngleZ;` | L300 | [정합] | |
+| L277 | `}` | — | [N/A] | |
+| L278 | (빈 줄) | — | [N/A] | |
+| L279 | `if(handsClimbType == HandsClimbing.NoGrab && feetClimbType != FeetClimbing.NoStep)` | L305: `if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0)` | [정합] | NoGrab=ordinal{0,1}<2 / NoStep=0이므로 >0 |
+| L280 | `{` | — | [N/A] | |
+| L281 | `bipedTorso.rotateAngleX = 0.5F;` | L306: `body.pitch = 0.5f` | [정합] | bipedTorso → body 근사 |
+| L282 | `bipedHead.rotateAngleX -= 0.5F;` | L307: `head.pitch -= 0.5f` | [정합] | |
+| L283 | `bipedPelvic.rotateAngleX -= 0.5F;` | (Pelvic 부재) | [N/A] | §16-3 |
+| L284 | (빈 줄) | — | [N/A] | |
+| L285 | `bipedTorso.rotationPointZ = -6.0F;` | (1.21.1 미이식 — sm_animateClimbing L304 주석 명시) | [누락] | ⚠️ body.pivotZ = -6F 가능 (ModelPart.pivotZ public field). R-10+ B-N 후보 |
+| L286 | `}` | — | [N/A] | |
+| L287 | `}` (isClimb 분기 종료) | — | [N/A] | |
+| L288 | `else if(isClimbJump)` | L103: `else if (sm.isClimbJumping)` | [정합] | |
+| L289 | `{` | — | [N/A] | |
+| L290 | `bipedRightArm.rotateAngleX = Half + Sixteenth;` | L105: `rightArm.pitch = HALF + SIXTEENTH` | [정합] | |
+| L291 | `bipedLeftArm.rotateAngleX = Half + Sixteenth;` | L106 | [정합] | |
+| L292 | (빈 줄) | — | [N/A] | |
+| L293 | `bipedRightArm.rotateAngleZ = -Thirtytwoth;` | L107: `rightArm.roll = -THIRTYTWOTH` | [정합] | |
+| L294 | `bipedLeftArm.rotateAngleZ = Thirtytwoth;` | L108 | [정합] | |
+| L295 | `}` | — | [N/A] | |
+| L296 | `else if(isCeilingClimb)` | L109: `else if (sm.isCeilingClimbing)` → sm_animateCeilingClimbing | [정합] | |
+| L297 | `{` | — | [N/A] | |
+| L298 | `float distance = totalHorizontalDistance * 0.7F;` | L317: `float distance = limbSwing * 0.7f` | [정합] | totalHorizontalDistance ≈ limbSwing |
+| L299 | `float walkFactor = Factor(currentHorizontalSpeed, 0F, 0.12951545F);` | L318: `smFactor(limbSwingAmount, 0f, 0.12951545f)` | [정합] | currentHorizontalSpeed ≈ limbSwingAmount |
+| L300 | `float standFactor = Factor(currentHorizontalSpeed, 0.12951545F, 0F);` | L319 | [정합] | |
+| L301 | `float horizontalAngle = horizontalDistance < 0.015F ? currentCameraAngle : currentHorizontalAngle;` | MixinPlayerEntityRenderer.sm_captureBodyYaw ceilingClimb 분기 (threshold 0.015F) | [정합] | Mixin 분리 처리 |
+| L302 | (빈 줄) | — | [N/A] | |
+| L303 | `bipedLeftArm.rotateAngleX = (cos(distance) * 0.52F + Half) * walkFactor + Half * standFactor;` | L322 | [정합] | |
+| L304 | `bipedRightArm.rotateAngleX = (cos(distance + Half) * 0.52F - Half) * walkFactor - Half * standFactor;` | L323 | [정합] | |
+| L305 | (빈 줄) | — | [N/A] | |
+| L306 | `bipedLeftLeg.rotateAngleX = -cos(distance) * 0.12F * walkFactor;` | L324 | [정합] | |
+| L307 | `bipedRightLeg.rotateAngleX = -cos(distance + Half) * 0.32F * walkFactor;` | L325 | [정합] | 좌우 계수 비대칭 (0.12 vs 0.32) 보존 |
+| L308 | (빈 줄) | — | [N/A] | |
+| L309 | `float rotateY = cos(distance) * 0.44F * walkFactor;` | L327 | [정합] | |
+| L310 | `bipedOuter.rotateAngleY = rotateY + horizontalAngle;` | MixinPlayerEntityRenderer.sm_captureBodyYaw ceilingClimb 분기 (rotateY + horizontalAngle 합성) | [정합] | Mixin 분리 |
+| L311 | (빈 줄) | — | [N/A] | |
+| L312 | `bipedRightArm.rotateAngleY = bipedLeftArm.rotateAngleY = -rotateY;` | L328: `rightArm.yaw = leftArm.yaw = -rotateY` | [정합] | |
+| L313 | `bipedRightLeg.rotateAngleY = bipedLeftLeg.rotateAngleY = -rotateY;` | L329 | [정합] | |
+| L314 | (빈 줄) | — | [N/A] | |
+| L315 | `bipedHead.rotateAngleY = -rotateY;` | L330: `head.yaw = -rotateY;` | [정합] | ⚠️ 1.21.1 L332 추가 보정 `head.yaw -= headYaw * DEG_TO_RAD` 는 [잉여] — 원본 미존재 (sm_setAngles TAIL inject 시점에 vanilla setAngles가 이미 head.yaw 설정 → 추가 차감은 의도되지 않음). R-10+ 검토 |
+| L316 | `}` | — | [N/A] | |
+| L317 | `else if(isSwim)` | L111: `else if (sm.isSwimming_sm)` → sm_animateSwimming | [정합] | |
+| L318 | `{` | — | [N/A] | |
+| L319 | `float distance = totalHorizontalDistance;` | (sm_animateSwimming L354에서 limbSwing 직접 사용) | [정합] | |
+| L320 | `float walkFactor = Factor(currentHorizontalSpeed, 0.15679921F, 0.52264464F);` | L341 | [정합] | |
+| L321 | `float sneakFactor = min(Factor(.., 0, 0.15679921F), Factor(.., 0.52264464F, 0.15679921F));` | L342-L344 | [정합] | |
+| L322 | `float standFactor = Factor(currentHorizontalSpeed, 0.15679921F, 0F);` | L345 | [정합] | |
+| L323 | `float standSneakFactor = standFactor + sneakFactor;` | L346 + sm.swimStandSneakFactor capture | [정합] | sm_setupTransforms 에 전달 |
+| L324 | `float horizontalAngle = horizontalDistance < (isGenericSneaking ? 0.005 : 0.015F) ? currentCameraAngle : currentHorizontalAngle;` | MixinPlayerEntityRenderer.sm_captureBodyYaw swim 분기 (threshold 0.005/0.015 isGenericSneaking) | [정합] | Mixin 분리 |
+| L325 | (빈 줄) | — | [N/A] | |
+| L326 | `bipedHead.rotationOrder = ModelRotationRenderer.YXZ;` | L352 setAnglesYXZ 헬퍼 (B-1 세션 2) | [정합] | |
+| L327 | `bipedHead.rotateAngleY = cos(distance / 2.0F - Quarter) * walkFactor;` | L354 (Y 인자) | [정합] | |
+| L328 | `bipedHead.rotateAngleX = -Eighth * standSneakFactor;` | L353 (X 인자) | [정합] | |
+| L329 | `bipedHead.rotationPointZ = -2F;` | (1.21.1 미이식) | [누락] | ⚠️ head.pivotZ = -2F 미적용. R-10+ B-N 후보 |
+| L330 | (빈 줄) | — | [N/A] | |
+| L331 | `bipedOuter.fadeRotateAngleX = true;` | (Outer 부재 + fade 메커니즘 부재) | [N/A] | §17 잔여 — fade 보간 |
+| L332 | `bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor;` | MixinPlayerEntityRenderer.sm_setupTransforms swim 분기 (matrices.multiply POSITIVE_X) | [정합] | Mixin 분리 — sm.swimStandSneakFactor 활용 |
+| L333 | `bipedOuter.rotateAngleY = horizontalAngle;` | sm_captureBodyYaw swim 분기 | [정합] | Mixin 분리 |
+| L334 | (빈 줄) | — | [N/A] | |
+| L335 | `bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance / 2.0F - Quarter) * walkFactor;` | (sm_animateSwimming 본체에 body.yaw 설정 부재) | [누락] | ⚠️ Breast 부재이지만 `bipedBody.rotateAngleY` 미이식. body.yaw = cos(limbSwing/2 - QUARTER) * walkFactor 가능. R-10+ B-N 후보 |
+| L336 | (빈 줄) | — | [N/A] | |
+| L337 | `bipedRightArm.rotationOrder = ModelRotationRenderer.YZX;` | L363 setAnglesYZX (B-08) | [정합] | |
+| L338 | `bipedLeftArm.rotationOrder = ModelRotationRenderer.YZX;` | L364 setAnglesYZX | [정합] | |
+| L339 | (빈 줄) | — | [N/A] | |
+| L340 | `bipedRightArm.rotateAngleZ = Quarter + Eighth + cos(totalTime * 0.1F) * standSneakFactor * 0.8F;` | L361 rightRoll (Z 인자) | [정합] | totalTime → animationProgress |
+| L341 | `bipedLeftArm.rotateAngleZ = -Quarter - Eighth - cos(totalTime * 0.1F) * standSneakFactor * 0.8F;` | L362 leftRoll | [정합] | |
+| L342 | (빈 줄) | — | [N/A] | |
+| L343 | `bipedRightArm.rotateAngleX = ((distance * 0.5F) % Whole - Half) * walkFactor + Sixteenth * standSneakFactor;` | L359 rightPitch (X 인자) | [정합] | dist2 = limbSwing * 0.5f |
+| L344 | `bipedLeftArm.rotateAngleX = ((distance * 0.5F + Half) % Whole - Half) * walkFactor + Sixteenth * standSneakFactor;` | L360 leftPitch | [정합] | |
+| L345 | (빈 줄) | — | [N/A] | |
+| L346 | `bipedRightLeg.rotateAngleX = cos(distance) * 0.52264464F * walkFactor;` | L367 | [정합] | |
+| L347 | `bipedLeftLeg.rotateAngleX = cos(distance + Half) * 0.52264464F * walkFactor;` | L368 | [정합] | |
+| L348 | (빈 줄) | — | [N/A] | |
+| L349 | `float rotateFeetAngleZ = Sixteenth * standSneakFactor + cos(totalTime * 0.1F) * 0.4F * (standFactor - sneakFactor);` | L370-L371 | [정합] | |
+| L350 | `bipedRightLeg.rotateAngleZ = rotateFeetAngleZ;` | L372 | [정합] | |
+| L351 | `bipedLeftLeg.rotateAngleZ = -rotateFeetAngleZ;` | L373 | [정합] | |
+| L352 | (빈 줄) | — | [N/A] | |
+| L353 | `if(scaleLegType != NoScaleStart)` | (1.21.1: 메인 모델 = Scale 이므로 가드 항상 true → 가드 제거 = 1:1 동작) | [정합] | 세션 2 분석 — §16-7 |
+| L354 | `setLegScales(...)` | L378 | [정합] | |
+| L355 | `1F + (cos(totalTime * 0.1F + Quarter) - 1F) * 0.15F * sneakFactor,` | L377 legSc | [정합] | |
+| L356 | `1F + (cos(totalTime * 0.1F + Quarter) - 1F) * 0.15F * sneakFactor);` | L378 (좌우 동일) | [정합] | |
+| L357 | (빈 줄) | — | [N/A] | |
+| L358 | `if(scaleArmType != NoScaleStart)` | (가드 제거 — 메인 모델 = Scale) | [정합] | |
+| L359 | `setArmScales(...)` | L380 | [정합] | |
+| L360 | `1F + (cos(totalTime * 0.1F - Quarter) - 1F) * 0.15F * sneakFactor,` | L379 armSc | [정합] | |
+| L361 | `1F + (cos(totalTime * 0.1F - Quarter) - 1F) * 0.15F * sneakFactor);` | L380 (좌우 동일) | [정합] | |
+| L362 | `}` | — | [N/A] | |
+| L363 | `else if(isDive)` | L113: `else if (sm.isDiving)` → sm_animateDiving | [정합] | |
+| L364 | `{` | — | [N/A] | |
+| L365 | `float distance = totalDistance * 0.7F;` | L389: `float distance = limbSwing * 0.7f` | [오역] | ⚠️ totalDistance ≠ limbSwing — totalDistance 는 SmartRenderModel 별도 변수 (수평+수직). 다이빙 위상 계산 입력 잘못 |
+| L366 | `float walkFactor = Factor(currentSpeed, 0F, 0.15679921F);` | L390: `smFactor(limbSwingAmount, 0f, 0.15679921f)` | [오역] | ⚠️ currentSpeed = 3D 속도 (md.currentSpeed) ≠ limbSwingAmount = 수평 속도 |
+| L367 | `float standFactor = Factor(currentSpeed, 0.15679921F, 0F);` | L391 | [오역] | ⚠️ 동일 |
+| L368 | `float horizontalAngle = totalDistance < (isGenericSneaking ? 0.005 : 0.015F) ? currentCameraAngle : currentHorizontalAngle;` | MixinPlayerEntityRenderer.sm_captureBodyYaw dive 분기 | [정합] | Mixin 분리 |
+| L369 | (빈 줄) | — | [N/A] | |
+| L370 | `bipedHead.rotateAngleX = -Eighth;` | (sm_animateDiving 본체에 head.pitch 설정 부재) | [누락] | ⚠️ head.pitch = -EIGHTH 미이식. R-10+ B-N 후보 |
+| L371 | `bipedHead.rotationPointZ = -2F;` | (1.21.1 미이식) | [누락] | ⚠️ head.pivotZ = -2F 미적용. R-10+ B-N 후보 |
+| L372 | (빈 줄) | — | [N/A] | |
+| L373 | `bipedOuter.fadeRotateAngleX = true;` | (Outer/fade 부재) | [N/A] | |
+| L374 | `bipedOuter.rotateAngleX = isLevitate ? Quarter - Sixteenth : (isJump ? 0F : Quarter - currentVerticalAngle);` | MixinPlayerEntityRenderer.sm_setupTransforms dive 3-way | [정합] | Mixin 분리 — Levitate/Jump/일반 |
+| L375 | `bipedOuter.rotateAngleY = horizontalAngle;` | sm_captureBodyYaw dive 분기 | [정합] | Mixin 분리 |
+| L376 | (빈 줄) | — | [N/A] | |
+| L377 | `bipedRightLeg.rotateAngleZ = (cos(distance) + 1F) * 0.52264464F * walkFactor + Sixteenth * standFactor;` | L394 | [정합] | (distance/walkFactor/standFactor 입력은 L365-L367 [오역] 영향 전파) |
+| L378 | `bipedLeftLeg.rotateAngleZ = (cos(distance + Half) - 1F) * 0.52264464F * walkFactor - Sixteenth * standFactor;` | L395 | [정합] | |
+| L379 | (빈 줄) | — | [N/A] | |
+| L380 | `if(scaleLegType != NoScaleStart)` | (가드 제거) | [정합] | |
+| L381 | `setLegScales(...)` | L407 | [정합] | |
+| L382 | `1F + (cos(distance - Quarter) - 1F) * 0.25F * walkFactor,` | L406 legSc | [정합] | 0.25F 다리 계수 |
+| L383 | `1F + (cos(distance - Quarter) - 1F) * 0.25F * walkFactor);` | L407 | [정합] | |
+| L384 | (빈 줄) | — | [N/A] | |
+| L385 | `bipedRightArm.rotateAngleZ = (cos(distance + Half) * 0.52264464F * 2.5F + Quarter) * walkFactor + (Quarter + Eighth) * standFactor;` | L398-L399 | [정합] | |
+| L386 | `bipedLeftArm.rotateAngleZ = (cos(distance) * 0.52264464F * 2.5F - Quarter) * walkFactor - (Quarter + Eighth) * standFactor;` | L400-L401 | [정합] | |
+| L387 | (빈 줄) | — | [N/A] | |
+| L388 | `if(scaleArmType != NoScaleStart)` | (가드 제거) | [정합] | |
+| L389 | `setArmScales(...)` | L409 | [정합] | |
+| L390 | `1F + (cos(distance + Quarter) - 1F) * 0.15F * walkFactor,` | L408 armSc | [정합] | 0.15F 팔 계수 (다리와 비대칭) |
+| L391 | `1F + (cos(distance + Quarter) - 1F) * 0.15F * walkFactor);` | L409 | [정합] | |
+| L392 | `}` | — | [N/A] | |
+| L393 | `else if(isCrawl)` | L115: `else if (sm.isCrawling)` → sm_animateCrawling | [정합] | |
+| L394 | `{` | — | [N/A] | |
+| L395 | `float distance = totalHorizontalDistance * 1.3F;` | L419: `float distance = limbSwing * 1.3f` | [정합] | |
+| L396 | `float walkFactor = Factor(currentHorizontalSpeedFlattened, 0F, 0.12951545F);` | L420: `smFactor(limbSwingAmount, 0f, 0.12951545f)` | [정합] | currentHorizontalSpeedFlattened ≈ currentHorizontalSpeed ≈ limbSwingAmount (NaN 아닌 일반 케이스) |
+| L397 | `float standFactor = Factor(currentHorizontalSpeedFlattened, 0.12951545F, 0F);` | L421 | [정합] | |
+| L398 | (빈 줄) | — | [N/A] | |
+| L399 | `bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle;` | L424: `head.roll = -headYaw * DEG_TO_RAD` | [정합] | viewHorizontalAngelOffset(deg) → headYaw(deg) → rad |
+| L400 | `bipedHead.rotateAngleX = -Eighth;` | L425: `head.pitch = -EIGHTH` | [정합] | |
+
+**청크 2 (L201-L400) 통계: 정합 122 / 오역 8 / 누락 5 / 잉여 0 / N/A 65 = 200 라인 전수.**
+
+(참고: L315 자체는 [정합]으로 분류했으나 1.21.1 sm_animateCeilingClimbing L332 `head.yaw -= headYaw * DEG_TO_RAD` 추가 보정은 원본 미존재 → R-10+ [잉여] 후보로 비고에 별도 명시. 통계는 라인-원본 기준이므로 [잉여] 0건으로 카운트.)
+
+**청크 2 발견 (R-10+ B-N 후보, §16 등재)**:
+- B-N (climb arm/leg verticalDistance 패턴 확장): L201/L219/L220 — 청크 1 발견과 동일 패턴 (totalVerticalDistance → limbSwing). 동일 B-N 그룹.
+- B-N (FeetVine totalDistance): L228/L232 — `totalDistance` (SmartRenderModel 별도 변수, 수평+수직 누적) → `limbSwing` (수평) 잘못 매핑. 넝쿨 발 흔들림 위상 차이.
+- B-N (Dive 입력값): L365/L366/L367 — `totalDistance`/`currentSpeed` → `limbSwing`/`limbSwingAmount` 잘못 매핑. 다이빙 진폭/위상 영향.
+- B-N (NoGrab+non-NoStep bipedTorso.rotationPointZ = -6F): L285. body.pivotZ = -6F 미이식. NoGrab 매달림에서 몸 위치 6 픽셀 차이.
+- B-N (Swim head pivotZ = -2F): L329. head.pivotZ 미적용.
+- B-N (Swim body yaw): L335. `bipedBody.rotateAngleY = cos(distance/2 - Quarter) * walkFactor` 미이식. 수영 중 몸통 좌우 흔들림 부재.
+- B-N (Dive head pitch + pivotZ): L370/L371. head.pitch=-EIGHTH + head.pivotZ=-2F 미이식. 다이빙 머리 자세 부재.
+- (잉여) sm_animateCeilingClimbing L332 `head.yaw -= headYaw * DEG_TO_RAD` — 원본 L315 미존재 추가 보정. R-10+ 검토.
+
+**다음 청크**: R-1 청크 3 (L401-L600) — isCrawl 본체 잔여 + isJump + isHeadJump + isSlide + isFalling 시작.

@@ -298,7 +298,7 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 - [ ] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄)
   - [x] R-1 청크 1 (L1-L200) — 세션 3 (정합 84 / 오역 3 / 누락 2 / 잉여 0 / N/A 111)
-  - [ ] R-1 청크 2 (L201-L400)
+  - [x] R-1 청크 2 (L201-L400) — 세션 4 (정합 122 / 오역 8 / 누락 5 / 잉여 0 / N/A 65)
   - [ ] R-1 청크 3 (L401-L600)
   - [ ] R-1 청크 4 (L601-L797)
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
@@ -516,6 +516,44 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 4 — 2026-04-26 — Phase R / R-1 청크 2 (SmartMovingModel.java L201-L400)
+
+**진행한 작업**:
+
+1. **R-1 청크 2 라인별 read**: 원본 L201-L400 (200 라인 전수 read).
+2. **1.21.1 매핑 검증**: MixinPlayerEntityModelClient sm_animateClimbing(L240-L310) + sm_animateCeilingClimbing(L316-L333) + sm_animateSwimming(L340-L381) + sm_animateDiving(L388-L410) + sm_animateCrawling 시작(L418-L425) 본체 read + grep.
+3. **매핑 표 추가**: research_animation_line_by_line.md 청크 2 섹션 — 200 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 2 통계**:
+- [정합] 122 (handsClimbing arm Side / feetVine pitch&roll / isCrawlClimb 본체 / isClimbJump / isCeilingClimb 본체 / isSwim 본체 (head YXZ + arm YZX + leg + scale) / isDive 본체 (leg/arm/scale) / isCrawl 시작)
+- [오역] 8 (L201/L219/L220 climb verticalDistance + L228/L232 FeetVine totalDistance + L365/L366/L367 Dive totalDistance/currentSpeed)
+- [누락] 5 (L285 NoGrab body pivotZ -6F / L329 Swim head pivotZ -2F / L335 Swim body yaw / L370 Dive head pitch -Eighth / L371 Dive head pivotZ -2F)
+- [잉여] 0 (라인 기준 — 1.21.1 측 추가 보정 sm_animateCeilingClimbing L332 별도 비고)
+- [N/A] 65 (Outer/Torso 일부/Shoulder/Pelvic/Breast 구조 부재 + fade 메커니즘 + 빈 줄/괄호)
+- 합계: 200 라인 전수.
+
+**R-10+ B-N 후보 등록 (§16-12~17 참조)**:
+- B-N: FeetVine total/difference 입력 [오역] (totalDistance → limbSwing) — 2 라인.
+- B-N: Dive 입력값 [오역] (totalDistance + currentSpeed → limbSwing + limbSwingAmount) — 3 라인.
+- B-N: NoGrab+non-NoStep body.pivotZ = -6F [누락] — 1 라인.
+- B-N: Swim/Dive head 자세 [누락] (head.pitch + head.pivotZ) — 3 라인.
+- B-N: Swim body.yaw [누락] — 1 라인.
+- (검토) sm_animateCeilingClimbing head.yaw 추가 차감 [잉여] — R-10+ 제거 또는 검증.
+
+**검증 체크리스트 (세션 4 R-1 청크 2)**:
+- [근거] ✓ 원본 로컬 read (offset=201, limit=200 정확)
+- [전수] ✓ 청크 내 200 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 200 일치 (122 + 8 + 5 + 0 + 65)
+- [발견] ✓ §16-12~17 등재 + R-10+ B-N 후보 10 라인 식별
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (sm_animateClimbing/CeilingClimbing/Swimming/Diving/Crawling 시작)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-1 청크 3 (L401-L600) — isCrawl 본체 잔여 + isJump + isHeadJump + isSlide + isFalling 시작.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -556,6 +594,29 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
     1.21.1 sm_animateRopeSliding (MixinPEMC L151-L182): 주석에 "rotationPointY 변경: 피벗 이동 생략" 명시 — 의도된 생략이지만 매핑 표 분류상 [누락]. 영향: 로프 매달림 자세에서 머리/팔 위치 미세 차이 (2 픽셀).
 
     이식 방안: ModelPart `pivotY` public field 사용 가능. 단 vanilla `setAngles` 진입 시점에 매 프레임 reset 되므로 sm_setAngles @Inject(TAIL) 위치에서 +2/-2 보정 → 안전.
+
+### 세션 4 (2026-04-26) — Phase R / R-1 청크 2
+
+12. **[오역] FeetVineClimbing total/difference 입력 — totalDistance → limbSwing**: SmartMovingModel.java 원본 L228 `float total = (cos(totalDistance + Half) + 1) * Thirtytwoth + Sixteenth;` / L232 `cos(totalDistance - Quarter)`. 1.21.1 sm_animateClimbing L260/L264: `cos(limbSwing + HALF)` / `cos(limbSwing - QUARTER)`. `totalDistance`(SmartRenderModel.totalDistance — 수평+수직 누적) ≠ `limbSwing`(수평 누적). 넝쿨 클라이밍 발 흔들림 위상 차이. R-10+ B-N 후보.
+
+13. **[오역] Dive 입력값 — totalDistance/currentSpeed → limbSwing/limbSwingAmount** (R-10+ B-N 후보). 원본:
+    - L365 `float distance = totalDistance * 0.7F;` (수평+수직 누적)
+    - L366 `float walkFactor = Factor(currentSpeed, 0F, 0.15679921F);` (3D 속도)
+    - L367 `float standFactor = Factor(currentSpeed, 0.15679921F, 0F);`
+
+    1.21.1 sm_animateDiving L389-L391: limbSwing/limbSwingAmount(수평만) 사용. 다이빙은 수직+수평 운동 모두 강한 상태이므로 차이 가시화 가능.
+
+14. **[누락] bipedTorso.rotationPointZ = -6F — NoGrab+non-NoStep 분기** (R-10+ B-N 후보). 원본 L285: 손 NoGrab(NONE/SINK) + 발 not-NoStep 매달림 자세에서 몸 피벗 Z=-6 픽셀 (벽에서 떨어진 자세). 1.21.1 sm_animateClimbing L304 주석에 "bipedPelvic/rotationPointZ는 1.21.1 대응 없음"으로 명시되어 있으나 ModelPart `body.pivotZ`는 public field이므로 이식 가능.
+
+15. **[누락] Swim/Dive head 자세 — head.rotationPointZ = -2F + Dive head.rotateAngleX = -Eighth** (R-10+ B-N 후보). 원본:
+    - Swim L329 `bipedHead.rotationPointZ = -2F;` — 1.21.1 sm_animateSwimming 미이식
+    - Dive L370 `bipedHead.rotateAngleX = -Eighth;` + L371 `bipedHead.rotationPointZ = -2F;` — 1.21.1 sm_animateDiving 미이식
+
+    영향: 수영/다이빙 시 머리 위치 (2 픽셀 앞) + 다이빙 시 머리 살짝 위로 들기 (-Eighth) 부재 → 자세 정합 부족.
+
+16. **[누락] Swim body yaw — body.rotateAngleY 좌우 흔들림 미이식** (R-10+ B-N 후보). 원본 L335: `bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance / 2.0F - Quarter) * walkFactor;` (Breast는 부재이지만 Body 부분은 이식 가능). 1.21.1 sm_animateSwimming 본체에 `body.yaw` 설정 부재. 영향: 수영 시 몸통 좌우 흔들림 (자유형 영법 동작) 결손.
+
+17. **[잉여] sm_animateCeilingClimbing head.yaw 추가 차감 — 원본 미존재 보정**. 1.21.1 L332: `head.yaw -= headYaw * DEG_TO_RAD;` (원본 L315에는 `bipedHead.rotateAngleY = -rotateY` 단순 설정만). vanilla setAngles가 진입 시 head.yaw를 자동 설정하지만, sm_setAngles는 TAIL inject이므로 vanilla 결과를 덮어쓰는 것이 정상. 추가 차감은 의도되지 않은 보정으로 판단. R-10+ 검토 (제거 또는 검증).
 
 ---
 
