@@ -299,7 +299,7 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 - [ ] R-1. SmartMovingModel.java 라인별 read (4 청크 × ~200줄) + 1.21.1 매핑 (797줄)
   - [x] R-1 청크 1 (L1-L200) — 세션 3 (정합 84 / 오역 3 / 누락 2 / 잉여 0 / N/A 111)
   - [x] R-1 청크 2 (L201-L400) — 세션 4 (정합 122 / 오역 8 / 누락 5 / 잉여 0 / N/A 65)
-  - [ ] R-1 청크 3 (L401-L600)
+  - [x] R-1 청크 3 (L401-L600) — 세션 5 (정합 95 / 오역 3 / 누락 7 / 잉여 0 / N/A 95)
   - [ ] R-1 청크 4 (L601-L797)
 - [ ] R-2. SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (~726줄)
 - [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
@@ -554,6 +554,41 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 
 ---
 
+### 세션 5 — 2026-04-26 — Phase R / R-1 청크 3 (SmartMovingModel.java L401-L600)
+
+**진행한 작업**:
+
+1. **R-1 청크 3 라인별 read**: 원본 L401-L600 (200 라인 전수 read).
+2. **1.21.1 매핑 검증**: MixinPlayerEntityModelClient sm_animateCrawling(L418-L457) + sm_animateSliding(L465-L492) + sm_animateFlying(L506-L537) + sm_animateHeadJumping(L545-L572) + sm_animateFalling(L580-L601) + sm_animateAngleJumping(L609-L624) 본체 read + grep.
+3. **매핑 표 추가**: research_animation_line_by_line.md 청크 3 섹션 — 200 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 3 통계**:
+- [정합] 95 (isCrawl 본체 / isSlide 본체 / isFlying 본체 (XZY+ANIM-01) / isHeadJump 본체 (ANIM-01+overGroundBlock 단순화) / isFalling 본체 (XZY) / animateAngleJumping 다리 ZXY+팔)
+- [오역] 3 (L477/L478/L479 isFlying 입력값 — totalDistance/currentSpeed → limbSwing/limbSwingAmount)
+- [누락] 7 (L401 Crawl head.pivotZ -2F / L405 Crawl body.pivotY 3F / L442 Slide head.roll / L444 Slide head.pivotZ -2F / L448 Slide outer.pivotY 5F / L452 Slide body.offsetY -0.4F / L453 Slide body.pivotY 6.5F)
+- [잉여] 0
+- [N/A] 95 (Outer/Pelvic/Shoulder 구조 부재 + fade 메커니즘 부재 + isWorking + animateNonStandardWorking + animateNonStandardBowAiming 일체 + 빈 줄/괄호)
+- 합계: 200 라인 전수.
+
+**R-10+ B-N 후보 등록 (§16-18~21 참조)**:
+- B-N: isCrawl head/body 피벗 [누락] — L401 head.pivotZ + L405 body.pivotY (2 라인).
+- B-N: isSlide head/body/outer 피벗·offset [누락] — L442/L444/L448/L452/L453 (5 라인).
+- B-N: isFlying 입력값 [오역] — L477/L478/L479 (3 라인, 청크 1/2 동일 패턴 확장).
+
+**검증 체크리스트 (세션 5 R-1 청크 3)**:
+- [근거] ✓ 원본 로컬 read (offset=401, limit=200 정확)
+- [전수] ✓ 청크 내 200 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 200 일치 (95+3+7+0+95)
+- [발견] ✓ §16-18~21 등재 + R-10+ B-N 후보 10 라인 식별
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (sm_animateCrawling/Sliding/Flying/HeadJumping/Falling/AngleJumping)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-1 청크 4 (L601-L797) — animateNonStandardBowAiming 잔여 + setArmScales/setLegScales 본체 + 기타 유틸/내부 헬퍼. R-1 마지막 청크 → 완료 시 R-2 진입.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -617,6 +652,27 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 16. **[누락] Swim body yaw — body.rotateAngleY 좌우 흔들림 미이식** (R-10+ B-N 후보). 원본 L335: `bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance / 2.0F - Quarter) * walkFactor;` (Breast는 부재이지만 Body 부분은 이식 가능). 1.21.1 sm_animateSwimming 본체에 `body.yaw` 설정 부재. 영향: 수영 시 몸통 좌우 흔들림 (자유형 영법 동작) 결손.
 
 17. **[잉여] sm_animateCeilingClimbing head.yaw 추가 차감 — 원본 미존재 보정**. 1.21.1 L332: `head.yaw -= headYaw * DEG_TO_RAD;` (원본 L315에는 `bipedHead.rotateAngleY = -rotateY` 단순 설정만). vanilla setAngles가 진입 시 head.yaw를 자동 설정하지만, sm_setAngles는 TAIL inject이므로 vanilla 결과를 덮어쓰는 것이 정상. 추가 차감은 의도되지 않은 보정으로 판단. R-10+ 검토 (제거 또는 검증).
+
+### 세션 5 (2026-04-26) — Phase R / R-1 청크 3
+
+18. **[누락] isCrawl 머리/몸통 피벗** (R-10+ B-N 후보). 원본:
+    - L401 `bipedHead.rotationPointZ = -2F;` — 크롤링 머리 Z 피벗 (몸이 수평이므로 머리 앞쪽으로 2 픽셀 이동)
+    - L405 `bipedTorso.rotationPointY = 3F;` — 몸통 Y 피벗 +3 (수평 자세에서 몸통 위치 보정)
+
+    1.21.1 sm_animateCrawling: head.pivotZ + body.pivotY 미적용. ModelPart `pivotY`/`pivotZ` public field 사용 가능. R-10+ 이식.
+
+19. **[누락] isSlide 머리/몸통/Outer 피벗·offset** (R-10+ B-N 후보). 원본:
+    - L442 `bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle;` — head.roll 방향 정렬
+    - L444 `bipedHead.rotationPointZ = -2F;`
+    - L448 `bipedOuter.rotationPointY = 5F;` — outer 전체 Y 피벗 (entity-level translate 가능)
+    - L452 `bipedBody.offsetY = -0.4F;` — ⚠️ ModelPart 에 offsetY 필드 부재 (MatrixStack translate 보정 필요)
+    - L453 `bipedBody.rotationPointY = +6.5F;` — body.pivotY 가능
+
+    1.21.1 sm_animateSliding 본체에 모두 미적용. 영향: 슬라이딩 자세에서 머리 방향/위치, 몸 전체 위치 (5 + 6.5 - 0.4 픽셀) 미세 차이.
+
+20. **[오역] isFlying 입력값 — totalDistance/currentSpeed → limbSwing/limbSwingAmount** (R-10+ B-N 후보). 원본 L477-L479. 청크 1/2의 climb/dive 동일 패턴. 1.21.1 sm_animateFlying L507-L509에서 `limbSwing`/`limbSwingAmount` 사용. 비행 위상은 walkFactor/standFactor 분기로 영향이 크므로 가시 영향 가능.
+
+21. **[정합 (근사)] isHeadJump overGroundBlock 단순화**. 원본 L521 `if(overGroundBlock != null && overGroundBlock.getMaterial().isSolid())` (머리 위 블록의 재질 검사) → 1.21.1 sm_animateHeadJumping L562 `if (sm.smallOverGroundHeight < 5f)` (단순 높이 검사). computeSmallOverGroundHeight 가 5블록 스캔 후 첫 고체 블록 거리 반환하므로 5f 미만 = 머리 위 고체 블록 존재 ≈ 등가. material 분류는 손실 (물·용암 등 비고체 콜리전이 다른 경우 차이 가능). R-10+ 정밀 검토 우선순위 낮음.
 
 ---
 
