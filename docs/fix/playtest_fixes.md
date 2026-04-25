@@ -8,11 +8,17 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #2.5 — Jumper Factor 인프라 전수 이식 (B-42-B26 확장)
+항목 #2.5 — ✅ AI 완결 (세션 22, 2026-04-25)
+다음 후보: #2.6 / #2.7 / #3 (사용자 결정 대기)
 ```
 
-**작업 문서 (주)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
-**병행 포커스**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md) (B-42c (2) 확장 — 독립, 동시 진행 가능)
+**완결 문서 (#2.5)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
+   — Phase A 완결 + B 완결 + C skip (Easy 1:1) + D 완결 + E 완결 + F-1~F-5 완결.
+   F-6 (인게임 플레이테스트) 는 통합 인게임 검증 단계로 분리.
+**다음 후보**:
+- [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md) (~15 원자, 2-3 세션)
+- [`focus_02_7_bbox_server_sync.md`](focus_02_7_bbox_server_sync.md) (Phase 2, ~20 원자)
+- [`focus_03_transition_conditions.md`](focus_03_transition_conditions.md) (#2 / #2.5 / #2.6 / #2.7 완료 의존)
 **참조 문서 (본체)**: [`focus_02_state_issues.md`](focus_02_state_issues.md) (Extended 기록)
 
 **선행 의존**: #2 Extended (완료 — 세션 134). #2.5/#2.6 완료 후 #3 진입.
@@ -86,7 +92,7 @@
 | 1 | **#5** | 옵션토글 2상태 + Easy 1:1 | [focus_05](focus_05_config_toggle.md) | ✅ 완료 (2026-04-24, 세션 23) | 없음 |
 | 2 | **#6** | increase/decrease 작동 안 됨 | [focus_06](focus_06_speed_change.md) | ✅ 완료 (2026-04-24, 세션 28) | #5 완료 |
 | 3 | **#2** | 스마트무빙 상태 이상 | [focus_02_extended](focus_02_extended.md) (주) / [focus_02](focus_02_state_issues.md) (본체 참조) | ✅ 완료 (2026-04-25, 세션 134) — Extended 67/67 전수 완결 | 없음 |
-| 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | 🟠 현재 포커스 (B-42-B26 확장, ~110 원자) | #2 완료 |
+| 3.5 | **#2.5** | Jumper Factor 인프라 | [focus_02_5_jumper_factor_infrastructure](focus_02_5_jumper_factor_infrastructure.md) | ✅ AI 완결 (2026-04-25, 세션 22) — F-1~F-5 통과 / F-6 통합 인게임 검증 대기 | #2 완료 |
 | 3.6 | **#2.6** | Lava Liquid Border | [focus_02_6_lava_liquid_border](focus_02_6_lava_liquid_border.md) | 🟡 병행 대기 (B-42c (2) 확장, ~15 원자) | #2 완료 |
 | 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟡 Phase 1 완료 / Phase 2 대기 (서버 sync, ~20 원자) | #2 완료 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ⚪ 대기 | #2 / #2.5 / #2.6 / #2.7 완료 |
