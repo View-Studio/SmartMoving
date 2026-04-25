@@ -273,6 +273,22 @@ public class SmartMovingConfig {
     //   getJumpVerticalFactor(speed, ClimbUpHandsOnly) = ... × (climbUpJumpVerticalFactor × climbUpJumpHandsOnlyVerticalFactor).
     public float climbUpJumpHandsOnlyVerticalFactor = 0.8F;
 
+    // === ClimbBackUp 점프 (원본 SmartMovingConfig L278-L283) ===
+    // 원본 L279: _climbBackUpJump = Unmodified("move.jump.climb.back.up") → 기본 true
+    public boolean climbBackUpJump = true;
+    // 원본 L280: _climbBackUpJumpVerticalFactor = DecreasingFactor(...).defaults(0.2F).defaults(1F, _pre_sm_3_1) ★
+    //   ClimbBackUp vertical factor (>= 0, <= 1). 0.2F (sm_3_1 이상). _pre_sm_3_1 만 1F — 1.7.10 은 sm_3_1 이후라 0.2F 채택.
+    public float climbBackUpJumpVerticalFactor = 0.2F;
+    // 원본 L281: _climbBackUpJumpHorizontalFactor = DecreasingFactor(...).defaults(0.3F).defaults(1F, _pre_sm_3_1) ★
+    //   ClimbBackUp horizontal factor (>= 0, <= 1). 0.3F (sm_3_1 이상). _pre_sm_3_1 만 1F.
+    public float climbBackUpJumpHorizontalFactor = 0.3F;
+    // 원본 L282: _climbBackUpJumpHandsOnlyVerticalFactor = DecreasingFactor(...).defaults(0.8F) ★
+    //   ClimbBackUp Hands-only 추가 vertical factor (>= 0, <= 1). 기본 0.8F.
+    public float climbBackUpJumpHandsOnlyVerticalFactor = 0.8F;
+    // 원본 L283: _climbBackUpJumpHandsOnlyHorizontalFactor = DecreasingFactor("move.jump.climb.back.up.hands.only.horizontal.factor")
+    //   ClimbBackUp Hands-only 추가 horizontal factor (>= 0, <= 1). DecreasingFactor 기본 1F.
+    public float climbBackUpJumpHandsOnlyHorizontalFactor = 1F;
+
     /**
      * 원본: _angleJumpDoubleClickTicks = Positive("move.jump.angle.double.click.ticks").singular().up(3F, 2F)
      * 각도 점프 더블클릭 감지 타이머(틱). 첫 클릭 후 이 시간 내에 두 번째 클릭 시 트리거.
@@ -1070,6 +1086,11 @@ public class SmartMovingConfig {
         climbUpJump              = getBool(p,   "move.jump.climb.up",             climbUpJump);
         climbUpJumpVerticalFactor = getFloat(p, "move.jump.climb.up.vertical.factor", climbUpJumpVerticalFactor);
         climbUpJumpHandsOnlyVerticalFactor = getFloat(p, "move.jump.climb.up.hands.only.vertical.factor", climbUpJumpHandsOnlyVerticalFactor);
+        climbBackUpJump          = getBool(p,   "move.jump.climb.back.up",        climbBackUpJump);
+        climbBackUpJumpVerticalFactor = getFloat(p, "move.jump.climb.back.up.vertical.factor", climbBackUpJumpVerticalFactor);
+        climbBackUpJumpHorizontalFactor = getFloat(p, "move.jump.climb.back.up.horizontal.factor", climbBackUpJumpHorizontalFactor);
+        climbBackUpJumpHandsOnlyVerticalFactor = getFloat(p, "move.jump.climb.back.up.hands.only.vertical.factor", climbBackUpJumpHandsOnlyVerticalFactor);
+        climbBackUpJumpHandsOnlyHorizontalFactor = getFloat(p, "move.jump.climb.back.up.hands.only.horizontal.factor", climbBackUpJumpHandsOnlyHorizontalFactor);
         angleJumpDoubleClickTicks = getFloat(p, "move.jump.angle.double.click.ticks", angleJumpDoubleClickTicks);
         wallJumpDoubleClick      = getBool(p,   "move.jump.wall.double.click",    wallJumpDoubleClick);
         wallJumpDoubleClickTicks = getFloat(p,  "move.jump.wall.double.click.ticks", wallJumpDoubleClickTicks);
@@ -1219,6 +1240,11 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.climb.up",              String.valueOf(climbUpJump));
         p.setProperty("move.jump.climb.up.vertical.factor", String.valueOf(climbUpJumpVerticalFactor));
         p.setProperty("move.jump.climb.up.hands.only.vertical.factor", String.valueOf(climbUpJumpHandsOnlyVerticalFactor));
+        p.setProperty("move.jump.climb.back.up",         String.valueOf(climbBackUpJump));
+        p.setProperty("move.jump.climb.back.up.vertical.factor", String.valueOf(climbBackUpJumpVerticalFactor));
+        p.setProperty("move.jump.climb.back.up.horizontal.factor", String.valueOf(climbBackUpJumpHorizontalFactor));
+        p.setProperty("move.jump.climb.back.up.hands.only.vertical.factor", String.valueOf(climbBackUpJumpHandsOnlyVerticalFactor));
+        p.setProperty("move.jump.climb.back.up.hands.only.horizontal.factor", String.valueOf(climbBackUpJumpHandsOnlyHorizontalFactor));
         p.setProperty("move.jump.angle.double.click.ticks", String.valueOf(angleJumpDoubleClickTicks));
         p.setProperty("move.jump.wall.double.click",     String.valueOf(wallJumpDoubleClick));
         p.setProperty("move.jump.wall.double.click.ticks", String.valueOf(wallJumpDoubleClickTicks));
