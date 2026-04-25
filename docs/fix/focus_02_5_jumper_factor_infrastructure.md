@@ -215,11 +215,11 @@ Sprinting=0, Running=1, Walking=2, Sneaking=3, Standing=4
 - [x] A-2i. `sprintJumpVerticalFactor = 1F` (원본 L251) — 세션 2
 
 **A-3. Jump 활성 Boolean 5건**
-- [ ] A-3a. `standJump = true` (원본 L234)
-- [ ] A-3b. `sneakJump = true` (원본 L237)
-- [ ] A-3c. `walkJump = true` (원본 L241)
-- [ ] A-3d. `runJump = true` (원본 L245)
-- [ ] A-3e. `sprintJump = true` (원본 L249)
+- [x] A-3a. `standJump = true` (원본 L234) — 세션 3
+- [x] A-3b. `sneakJump = true` (원본 L237) — 세션 3
+- [x] A-3c. `walkJump = true` (원본 L241) — 세션 3
+- [x] A-3d. `runJump = true` (원본 L245) — 세션 3
+- [x] A-3e. `sprintJump = true` (원본 L249) — 세션 3
 
 **A-4. ChargeUp 필드 4건**
 - [ ] A-4a. `jumpCharge = true` (원본 L254)
@@ -761,6 +761,41 @@ Phase F (감사 + 플레이테스트) — side-by-side 대조 + 빌드 + 인게�
 다음 세션 권고: Phase A-3 (Jump 활성 Boolean 5건 — standJump/sneakJump/walkJump/runJump/sprintJump 모두 true). 원본 L234/L237/L241/L245/L249 Unmodified 기본 true.
 
 진행률: Phase A 12/40+ (~30%), 전체 #2.5 12/~110 (~10.9%).
+
+### 세션 3 — 2026-04-25 — Phase A-3 (Jump 활성 Boolean 5건)
+
+사용자 지시: "엄격 1:1" 유지 + Phase A-3 5건 (A-3a~A-3e) 이식.
+
+진행한 작업:
+1. 원본 라인 + 기본값 확보 (`SmartMovingConfig.java` L234-L249):
+   - L234 `_standJump = Unmodified("move.jump.stand")` → 기본 true
+   - L237 `_sneakJump = Unmodified("move.jump.sneak")` → 기본 true
+   - L241 `_walkJump = Unmodified("move.jump.walk")` → 기본 true
+   - L245 `_runJump = Unmodified("move.jump.run")` → 기본 true
+   - L249 `_sprintJump = Unmodified("move.jump.sprint")` → 기본 true
+   - Properties.java L171-L172 → Unmodified 기본 true
+2. 1.21.1 이식 (`src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java`):
+   - 필드 선언 5건 — 각 speed 그룹 첫 줄 (V/H factor 위) 에 추가하여 원본 L234/L237/L241/L245/L249 순서 보존
+   - `load()` Properties IO 5건 — 동일 순서 (각 speed 그룹 첫 줄)
+   - `save()` Properties IO 5건 — 동일 순서
+   - key 명: `move.jump.{stand|sneak|walk|run|sprint}` (legacy `move.{speed}.jump` 는 _pre_sm_1_7 — 채택 X)
+3. 근사 여부: 없음. 1:1.
+
+완료 전 검증 체크리스트 (세션 3 기준):
+- [근거] 원본 라인 확보 — 로컬 `SmartMovingConfig.java` L234/L237/L241/L245/L249 + Properties.java L171-L172
+- [근거] 1.21.1 이식 위치 확정 — `SmartMovingConfig.java` 필드 L177/L184/L192/L200/L208 / `load()` L996/L998/L1001/L1004/L1007 (정확한 라인은 grep 가능, 묶음 추가) / `save()` 동일 그룹
+- [대응] 원본 ↔ 1.21.1 side-by-side 1:1 (필드명 / 기본값 / key 명 일치)
+- [분기] 분기 없음 (단순 Boolean 5개)
+- [상수] true × 5 (Unmodified 기본 true 정확 반영)
+- [타이밍] 필드 선언만 — 호출 타이밍 없음. 실제 사용은 Phase B (`isJumpingEnabled`) 에서 발생.
+- [근사] 근사 없음. §7 등록 없음.
+- [신규] 추가 의존 없음. §3 변경 없음.
+- [회귀] 신규 필드만 추가 — 기존 코드 영향 없음. A-1/A-2 + 기존 wallUp/wallHead/jumpCharge 무영향.
+- [빌드] `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (7s)
+
+다음 세션 권고: Phase A-4 (ChargeUp 필드 4건 — A-4a `jumpCharge=true` + A-4d `jumpChargeCancelOnSneakRelease=true` 이식, A-4b/c 는 ✅ 이미 이식됨 확인만). 원본 L254/L257.
+
+진행률: Phase A 17/40+ (~42.5%), 전체 #2.5 17/~110 (~15.5%).
 
 ---
 

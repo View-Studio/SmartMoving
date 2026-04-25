@@ -171,12 +171,17 @@ public class SmartMovingConfig {
     //   tryJump getJumpVerticalFactor 의 base factor (>= 0). PositiveFactor 기본 1F.
     public float jumpVerticalFactor = 1F;
 
-    // === Speed 별 Jump factor (원본 SmartMovingConfig L233-L251) ===
+    // === Speed 별 Jump 활성 + factor (원본 SmartMovingConfig L233-L251) ===
+    // 원본 L234: _standJump = Unmodified("move.jump.stand") → 기본 true
+    //   isJumpingEnabled(speed=Standing, type) 분기 진입.
+    public boolean standJump = true;
     // 원본 L235: _standJumpVerticalFactor = PositiveFactor("move.jump.stand.vertical.factor")
     //   Standing 점프 vertical factor (>= 0). PositiveFactor 기본 1F.
     //   주: Stand 는 horizontal 없음 — getJumpHorizontalFactor 에서 speed=Standing 시 *0F.
     public float standJumpVerticalFactor = 1F;
 
+    // 원본 L237: _sneakJump = Unmodified("move.jump.sneak") → 기본 true
+    public boolean sneakJump = true;
     // 원본 L238: _sneakJumpHorizontalFactor = IncreasingFactor("move.jump.sneak.horizontal.factor")
     //   Sneaking 점프 horizontal factor (>= 1). IncreasingFactor 기본 1F.
     public float sneakJumpHorizontalFactor = 1F;
@@ -184,6 +189,8 @@ public class SmartMovingConfig {
     //   Sneaking 점프 vertical factor (>= 0). PositiveFactor 기본 1F.
     public float sneakJumpVerticalFactor = 1F;
 
+    // 원본 L241: _walkJump = Unmodified("move.jump.walk") → 기본 true
+    public boolean walkJump = true;
     // 원본 L242: _walkJumpHorizontalFactor = IncreasingFactor("move.jump.walk.horizontal.factor")
     //   Walking 점프 horizontal factor (>= 1). IncreasingFactor 기본 1F.
     public float walkJumpHorizontalFactor = 1F;
@@ -191,6 +198,8 @@ public class SmartMovingConfig {
     //   Walking 점프 vertical factor (>= 0). PositiveFactor 기본 1F.
     public float walkJumpVerticalFactor = 1F;
 
+    // 원본 L245: _runJump = Unmodified("move.jump.run") → 기본 true
+    public boolean runJump = true;
     // 원본 L246: _runJumpHorizontalFactor = IncreasingFactor("move.jump.run.horizontal.factor").defaults(2F) ★ 오버라이드
     //   Running 점프 horizontal factor (>= 1). 기본 2F (sprint 와 동일).
     public float runJumpHorizontalFactor = 2F;
@@ -198,6 +207,8 @@ public class SmartMovingConfig {
     //   Running 점프 vertical factor (>= 0). PositiveFactor 기본 1F.
     public float runJumpVerticalFactor = 1F;
 
+    // 원본 L249: _sprintJump = Unmodified("move.jump.sprint") → 기본 true
+    public boolean sprintJump = true;
     // 원본 L250: _sprintJumpHorizontalFactor = IncreasingFactor("move.jump.sprint.horizontal.factor").defaults(2F) ★ 오버라이드
     //   Sprinting 점프 horizontal factor (>= 1). 기본 2F.
     public float sprintJumpHorizontalFactor = 2F;
@@ -993,13 +1004,18 @@ public class SmartMovingConfig {
         jumpControlFactor              = getFloat(p, "move.jump.control.factor",          jumpControlFactor);
         jumpHorizontalFactor           = getFloat(p, "move.jump.horizontal.factor",       jumpHorizontalFactor);
         jumpVerticalFactor             = getFloat(p, "move.jump.vertical.factor",         jumpVerticalFactor);
+        standJump                      = getBool(p,  "move.jump.stand",                   standJump);
         standJumpVerticalFactor        = getFloat(p, "move.jump.stand.vertical.factor",   standJumpVerticalFactor);
+        sneakJump                      = getBool(p,  "move.jump.sneak",                   sneakJump);
         sneakJumpHorizontalFactor      = getFloat(p, "move.jump.sneak.horizontal.factor", sneakJumpHorizontalFactor);
         sneakJumpVerticalFactor        = getFloat(p, "move.jump.sneak.vertical.factor",   sneakJumpVerticalFactor);
+        walkJump                       = getBool(p,  "move.jump.walk",                    walkJump);
         walkJumpHorizontalFactor       = getFloat(p, "move.jump.walk.horizontal.factor",  walkJumpHorizontalFactor);
         walkJumpVerticalFactor         = getFloat(p, "move.jump.walk.vertical.factor",    walkJumpVerticalFactor);
+        runJump                        = getBool(p,  "move.jump.run",                     runJump);
         runJumpHorizontalFactor        = getFloat(p, "move.jump.run.horizontal.factor",   runJumpHorizontalFactor);
         runJumpVerticalFactor          = getFloat(p, "move.jump.run.vertical.factor",     runJumpVerticalFactor);
+        sprintJump                     = getBool(p,  "move.jump.sprint",                  sprintJump);
         sprintJumpHorizontalFactor     = getFloat(p, "move.jump.sprint.horizontal.factor", sprintJumpHorizontalFactor);
         sprintJumpVerticalFactor       = getFloat(p, "move.jump.sprint.vertical.factor",  sprintJumpVerticalFactor);
         wallUpJump                     = getBool(p,  "move.jump.wall",                     wallUpJump);
@@ -1131,13 +1147,18 @@ public class SmartMovingConfig {
         p.setProperty("move.jump.control.factor",            String.valueOf(jumpControlFactor));
         p.setProperty("move.jump.horizontal.factor",         String.valueOf(jumpHorizontalFactor));
         p.setProperty("move.jump.vertical.factor",           String.valueOf(jumpVerticalFactor));
+        p.setProperty("move.jump.stand",                     String.valueOf(standJump));
         p.setProperty("move.jump.stand.vertical.factor",     String.valueOf(standJumpVerticalFactor));
+        p.setProperty("move.jump.sneak",                     String.valueOf(sneakJump));
         p.setProperty("move.jump.sneak.horizontal.factor",   String.valueOf(sneakJumpHorizontalFactor));
         p.setProperty("move.jump.sneak.vertical.factor",     String.valueOf(sneakJumpVerticalFactor));
+        p.setProperty("move.jump.walk",                      String.valueOf(walkJump));
         p.setProperty("move.jump.walk.horizontal.factor",    String.valueOf(walkJumpHorizontalFactor));
         p.setProperty("move.jump.walk.vertical.factor",      String.valueOf(walkJumpVerticalFactor));
+        p.setProperty("move.jump.run",                       String.valueOf(runJump));
         p.setProperty("move.jump.run.horizontal.factor",     String.valueOf(runJumpHorizontalFactor));
         p.setProperty("move.jump.run.vertical.factor",       String.valueOf(runJumpVerticalFactor));
+        p.setProperty("move.jump.sprint",                    String.valueOf(sprintJump));
         p.setProperty("move.jump.sprint.horizontal.factor",  String.valueOf(sprintJumpHorizontalFactor));
         p.setProperty("move.jump.sprint.vertical.factor",    String.valueOf(sprintJumpVerticalFactor));
         p.setProperty("move.jump.wall",                      String.valueOf(wallUpJump));
