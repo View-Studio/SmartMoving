@@ -2192,3 +2192,197 @@
 - B-N (cloak.pitch SIXTYFOURTH 기본 기울임 — §16-24): 청크 2 L251 1 라인.
 
 **R-4 완료**. 다음 R-단계: **R-5 (ModelRotationRenderer.java 368줄 라인별 (2 청크) + RendererData/CapeRenderer/EarsRenderer/SpecialRenderer 4 파일 ~232줄)** = 6 파일 ~601 라인.
+
+---
+
+## R-5: ModelRotationRenderer.java (368) + RendererData/Cape/Ears/Special 4 파일 (~232) = 6 파일 ~600 라인
+
+### 청크 1 (ModelRotationRenderer.java L1-L184) — 헤더 + 생성자 + render/preRender/preTransforms/preTransform + rotate() 6 회전순서 정의 + postTransform/postTransforms
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L16 | Smart Render GPLv3 라이선스 헤더 | — | [N/A] | |
+| L17 | `// ==…==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import org.lwjgl.BufferUtils;` | (1.21.1: lwjgl 직접 미사용 — RenderSystem 활용) | [N/A] | |
+| L21 | `import org.lwjgl.opengl.GL11;` | (1.21.1: GL11 → MatrixStack/RotationAxis) | [N/A] | OpenGL → MatrixStack |
+| L22 | (빈 줄) | — | [N/A] | |
+| L23 | `import java.lang.reflect.*;` | (Reflect.Invoke 호출용 — 1.21.1 부재) | [N/A] | |
+| L24 | `import java.nio.FloatBuffer;` | (matrix buffer — 1.21.1 부재) | [N/A] | |
+| L25 | (빈 줄) | — | [N/A] | |
+| L26 | `import net.minecraft.client.model.*;` | — | [N/A] | |
+| L27 | `import net.smart.utilities.*;` | — | [N/A] | |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | `public class ModelRotationRenderer extends ModelRenderer` | (1.21.1: `ModelPart` 직접 사용 — ModelRotationRenderer 별도 클래스 부재. setAnglesXYZ/XZY/YXZ/YZX/ZXY 헬퍼로 회전순서 전환) | [정합] | 클래스 자체 → setAngles* 헬퍼 분리 매핑 |
+| L30 | `{` | — | [N/A] | |
+| L31 | `protected final static float RadiantToAngle = SmartRenderUtilities.RadiantToAngle;` | `MathHelper.DEGREES_PER_RADIAN` (180/π) | [정합] | 동등 상수 |
+| L32 | `protected final static float Whole = SmartRenderUtilities.Whole;` | `WHOLE = (float) (Math.PI * 2)` 또는 인라인 | [정합] | 2π 라디안 |
+| L33 | `protected final static float Half = SmartRenderUtilities.Half;` | `HALF = (float) Math.PI` | [정합] | π 라디안 |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `public ModelRotationRenderer(ModelBase modelBase, int i, int j, ModelRotationRenderer baseRenderer)` | (1.21.1: ModelData(Builder).build → ModelPart 자동 — 생성자 부재) | [N/A] | |
+| L36 | `{` | — | [N/A] | |
+| L37 | `super(modelBase, i, j);` | — | [N/A] | |
+| L38 | `rotationOrder = XYZ;` | (1.21.1: ModelPart 기본 XYZ 묵시 — pitch/yaw/roll 직접) | [N/A] | rotationOrder 필드 부재 |
+| L39 | `compiled = false;` | (1.21.1: ModelData 자동 빌드) | [N/A] | |
+| L40 | (빈 줄) | — | [N/A] | |
+| L41 | `base = baseRenderer;` | (1.21.1: ModelData child relationship 자동) | [N/A] | |
+| L42 | `if(base != null)` | — | [N/A] | |
+| L43 | `base.addChild(this);` | (vanilla 자동) | [N/A] | |
+| L44 | (빈 줄) | — | [N/A] | |
+| L45 | `scaleX = 1.0F;` | `xScale = 1.0F` (ModelPart public field 기본값) | [N/A] | 자동 |
+| L46 | `scaleY = 1.0F;` | `yScale = 1.0F` | [N/A] | |
+| L47 | `scaleZ = 1.0F;` | `zScale = 1.0F` | [N/A] | |
+| L48 | (빈 줄) | — | [N/A] | |
+| L49 | `fadeEnabled = false;` | (fade 메커니즘 부재) | [N/A] | §17 잔여 |
+| L50 | `}` | — | [N/A] | |
+| L51 | (빈 줄) | — | [N/A] | |
+| L52 | `@Override` | — | [N/A] | |
+| L53 | `public void render(float f)` | (1.21.1: vanilla ModelPart.render 자동) | [N/A] | |
+| L54 | `{` | — | [N/A] | |
+| L55 | `if((!ignoreRender && !ignoreBase) \|\| forceRender)` | (vanilla 자동) | [N/A] | |
+| L56 | `doRender(f, ignoreBase);` | — | [N/A] | |
+| L57 | `}` | — | [N/A] | |
+| L58 | (빈 줄) | — | [N/A] | |
+| L59 | `public void renderIgnoreBase(float f)` | (다층 모델 부재) | [N/A] | |
+| L60 | `{` | — | [N/A] | |
+| L61 | `if(ignoreBase)` | — | [N/A] | |
+| L62 | `doRender(f, false);` | — | [N/A] | |
+| L63 | `}` | — | [N/A] | |
+| L64 | (빈 줄) | — | [N/A] | |
+| L65 | `public void doRender(float f, boolean useParentTransformations)` | (vanilla 자동) | [N/A] | |
+| L66 | `{` | — | [N/A] | |
+| L67 | `if(!preRender(f))` | — | [N/A] | |
+| L68 | `return;` | — | [N/A] | |
+| L69 | `preTransforms(f, true, useParentTransformations);` | (vanilla matrices.push + transform 자동) | [N/A] | |
+| L70 | `GL11.glCallList(displayList);` | (1.21.1: VertexConsumer 자동) | [N/A] | |
+| L71 | `if (childModels != null)` | (vanilla child traversal 자동) | [N/A] | |
+| L72 | `for (int i = 0; i < childModels.size(); i++)` | — | [N/A] | |
+| L73 | `((ModelRenderer)childModels.get(i)).render(f);` | — | [N/A] | |
+| L74 | `postTransforms(f, true, useParentTransformations);` | (vanilla matrices.pop 자동) | [N/A] | |
+| L75 | `}` | — | [N/A] | |
+| L76 | (빈 줄) | — | [N/A] | |
+| L77 | `public boolean preRender(float f)` | (vanilla compiled 자동) | [N/A] | |
+| L78 | `{` | — | [N/A] | |
+| L79 | `if(isHidden) return false;` | (vanilla 자동) | [N/A] | |
+| L80 | `return false;` | — | [N/A] | |
+| L81 | (빈 줄) | — | [N/A] | |
+| L82 | `if(!showModel) return false;` | (vanilla 자동) | [N/A] | |
+| L83 | `return false;` | — | [N/A] | |
+| L84 | (빈 줄) | — | [N/A] | |
+| L85 | `if(!compiled)` | (vanilla 자동 빌드) | [N/A] | |
+| L86 | `UpdateCompiled();` | — | [N/A] | |
+| L87 | (빈 줄) | — | [N/A] | |
+| L88 | `if(!compiled)` | — | [N/A] | |
+| L89 | `{` | — | [N/A] | |
+| L90 | `Reflect.Invoke(_compileDisplayList, this, f);` | (reflection 부재 — vanilla 자동) | [N/A] | |
+| L91 | `UpdateDisplayList();` | — | [N/A] | |
+| L92 | `compiled = true;` | — | [N/A] | |
+| L93 | `}` | — | [N/A] | |
+| L94 | (빈 줄) | — | [N/A] | |
+| L95 | `return true;` | — | [N/A] | |
+| L96 | `}` | — | [N/A] | |
+| L97 | (빈 줄) | — | [N/A] | |
+| L98 | `public void preTransforms(float f, boolean push, boolean useParentTransformations)` | (vanilla matrices 자동) | [N/A] | |
+| L99 | `{` | — | [N/A] | |
+| L100 | `if(base != null && !ignoreBase && useParentTransformations)` | (vanilla parent traversal 자동) | [N/A] | |
+| L101 | `base.preTransforms(f, push, true);` | — | [N/A] | |
+| L102 | `preTransform(f, push);` | — | [N/A] | |
+| L103 | `}` | — | [N/A] | |
+| L104 | (빈 줄) | — | [N/A] | |
+| L105 | `public void preTransform(float f, boolean push)` | (vanilla ModelPart.rotate + translate + scale 자동) | [N/A] | |
+| L106 | `{` | — | [N/A] | |
+| L107 | `if(rotateAngleX != 0.0F \|\| rotateAngleY != 0.0F \|\| rotateAngleZ != 0.0F \|\| ignoreSuperRotation)` | (vanilla 자동 — 0 체크 없이도 수행) | [N/A] | |
+| L108 | `{` | — | [N/A] | |
+| L109 | `if(push)` | — | [N/A] | |
+| L110 | `GL11.glPushMatrix();` | `matrices.push()` | [N/A] | vanilla 자동 |
+| L111 | (빈 줄) | — | [N/A] | |
+| L112 | `GL11.glTranslatef(rotationPointX * f, rotationPointY * f, rotationPointZ * f);` | (vanilla ModelPart.translate(matrices) 자동 — pivot * scale) | [N/A] | |
+| L113 | (빈 줄) | — | [N/A] | |
+| L114 | `if (ignoreSuperRotation)` | (어깨 ZYX 분리 — 어깨 부재 §16-5) | [N/A] | |
+| L115 | `{` | — | [N/A] | |
+| L116 | `buffer.rewind();` | (matrix buffer 부재) | [N/A] | |
+| L117 | `GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);` | — | [N/A] | |
+| L118 | `buffer.get(array);` | — | [N/A] | |
+| L119 | (빈 줄) | — | [N/A] | |
+| L120 | `GL11.glLoadIdentity();` | — | [N/A] | |
+| L121 | `GL11.glTranslatef(array[12] / array[15], array[13] / array[15], array[14] / array[15]);` | (super rotation 무시 — 위치만 추출) | [N/A] | |
+| L122 | `}` | — | [N/A] | |
+| L123 | (빈 줄) | — | [N/A] | |
+| L124 | `rotate(rotationOrder, rotateAngleX, rotateAngleY, rotateAngleZ);` | `setAnglesXYZ/XZY/YXZ/YZX/ZXY/ZYX(part, pitch, yaw, roll)` 6 헬퍼 (B-08 + B-1 + B-2 세션 2) | [정합] | **핵심 매핑** — rotate() → setAngles* 6 헬퍼 |
+| L125 | (빈 줄) | — | [N/A] | |
+| L126 | `GL11.glScalef(scaleX, scaleY, scaleZ);` | `xScale/yScale/zScale` ModelPart public field (rotate 후 자동 적용) | [정합] | setArmScales/setLegScales (B-3 세션 2) — yScale 활용 |
+| L127 | `GL11.glTranslatef(offsetX, offsetY, offsetZ);` | (ModelPart에 offsetY 필드 부재 — MatrixStack 보정 가능) | [N/A] | §16-8 |
+| L128 | `}` | — | [N/A] | |
+| L129 | `else if(rotationPointX != 0.0F \|\| rotationPointY != 0.0F \|\| rotationPointZ != 0.0F \|\| scaleX != 1.0F \|\| scaleY != 1.0F \|\| scaleZ != 1.0F \|\| offsetX != 0.0F \|\| offsetY != 0.0F \|\| offsetZ != 0.0F)` | (vanilla 자동 — 0 체크 분기 부재) | [N/A] | |
+| L130 | `{` | — | [N/A] | |
+| L131 | `GL11.glTranslatef(rotationPointX * f, rotationPointY * f, rotationPointZ * f);` | (vanilla 자동) | [N/A] | |
+| L132 | `GL11.glScalef(scaleX, scaleY, scaleZ);` | (vanilla 자동) | [N/A] | |
+| L133 | `GL11.glTranslatef(offsetX, offsetY, offsetZ);` | (offsetY 부재) | [N/A] | |
+| L134 | `}` | — | [N/A] | |
+| L135 | `}` | — | [N/A] | |
+| L136 | (빈 줄) | — | [N/A] | |
+| L137 | `private static void rotate(int rotationOrder, float rotateAngleX, float rotateAngleY, float rotateAngleZ)` | `setAnglesXYZ/XZY/YXZ/YZX/ZXY/ZYX` 6 헬퍼 (post-multiply 규칙 등가) | [정합] | **R-17 GitHub 검증 1차 자료** |
+| L138 | `{` | — | [N/A] | |
+| L139 | `if((rotationOrder == ZXY) && rotateAngleY != 0.0F)` | setAnglesZXY: `qZ * qX * qY` (vertex 적용 Z→X→Y) — GL call 순서 Y, X, Z (역순) | [정합] | ZXY 첫 GL call = Y |
+| L140 | `GL11.glRotatef(rotateAngleY * RadiantToAngle, 0.0F, 1.0F, 0.0F);` | setAnglesZXY 본체: `.rotationY(yaw)` 첫째 | [정합] | |
+| L141 | (빈 줄) | — | [N/A] | |
+| L142 | `if((rotationOrder == YXZ) && rotateAngleZ != 0.0F)` | setAnglesYXZ: `qY * qX * qZ` (vertex 적용 Y→X→Z) — GL call 순서 Z, X, Y | [정합] | YXZ 첫 GL call = Z (B-1 세션 2) |
+| L143 | `GL11.glRotatef(rotateAngleZ * RadiantToAngle, 0.0F, 0.0F, 1.0F);` | setAnglesYXZ: `.rotationZ(roll)` 마지막 (post-multiply) | [정합] | |
+| L144 | (빈 줄) | — | [N/A] | |
+| L145 | `if((rotationOrder == YZX \|\| rotationOrder == YXZ \|\| rotationOrder == ZXY \|\| rotationOrder == ZYX) && rotateAngleX != 0.0F)` | setAnglesYZX/YXZ/ZXY/ZYX: 모두 X 회전 포함 | [정합] | 4 회전순서 X 적용 |
+| L146 | `GL11.glRotatef(rotateAngleX * RadiantToAngle, 1.0F, 0.0F, 0.0F);` | 각 헬퍼: `.rotationX(pitch)` 적용 (post-multiply 위치별) | [정합] | |
+| L147 | (빈 줄) | — | [N/A] | |
+| L148 | `if((rotationOrder == XZY \|\| rotationOrder == ZYX) && rotateAngleY != 0.0F)` | setAnglesXZY/ZYX: Y 회전 포함 | [정합] | 2 회전순서 Y 적용 |
+| L149 | `GL11.glRotatef(rotateAngleY * RadiantToAngle, 0.0F, 1.0F, 0.0F);` | (XZY: B-2 세션 2 / ZYX: 어깨 부재) | [정합] | XZY는 GL call 순서 Y, Z, X 첫째 |
+| L150 | (빈 줄) | — | [N/A] | |
+| L151 | `if((rotationOrder == XYZ \|\| rotationOrder == XZY \|\| rotationOrder == YZX \|\| rotationOrder == ZXY \|\| rotationOrder == ZYX) && rotateAngleZ != 0.0F)` | 5 회전순서 Z 적용 | [정합] | |
+| L152 | `GL11.glRotatef(rotateAngleZ * RadiantToAngle, 0.0F, 0.0F, 1.0F);` | 각 헬퍼: `.rotationZ(roll)` | [정합] | |
+| L153 | (빈 줄) | — | [N/A] | |
+| L154 | `if((rotationOrder == XYZ \|\| rotationOrder == YXZ \|\| rotationOrder == YZX) && rotateAngleY != 0.0F)` | 3 회전순서 Y 적용 (XYZ는 마지막, YXZ/YZX는 마지막) | [정합] | |
+| L155 | `GL11.glRotatef(rotateAngleY * RadiantToAngle, 0.0F, 1.0F, 0.0F);` | 각 헬퍼: `.rotationY(yaw)` | [정합] | |
+| L156 | (빈 줄) | — | [N/A] | |
+| L157 | `if((rotationOrder == XYZ \|\| rotationOrder == XZY) && rotateAngleX != 0.0F)` | 2 회전순서 X 적용 (XYZ/XZY 모두 마지막) | [정합] | |
+| L158 | `GL11.glRotatef(rotateAngleX * RadiantToAngle, 1.0F, 0.0F, 0.0F);` | XYZ: pitch 마지막 / XZY: pitch 마지막 | [정합] | |
+| L159 | `}` | — | [N/A] | rotate() 종료 |
+| L160 | (빈 줄) | — | [N/A] | |
+| L161 | `public void postTransform(float f, boolean pop)` | (vanilla matrices.pop 자동) | [N/A] | |
+| L162 | `{` | — | [N/A] | |
+| L163 | `if(rotateAngleX != 0.0F \|\| rotateAngleY != 0.0F \|\| rotateAngleZ != 0.0F \|\| ignoreSuperRotation)` | (vanilla 자동) | [N/A] | |
+| L164 | `{` | — | [N/A] | |
+| L165 | `if(pop)` | — | [N/A] | |
+| L166 | `GL11.glPopMatrix();` | `matrices.pop()` | [N/A] | vanilla 자동 |
+| L167 | `}` | — | [N/A] | |
+| L168 | `else if(rotationPointX != 0.0F \|\| rotationPointY != 0.0F \|\| rotationPointZ != 0.0F \|\| scaleX != 1.0F \|\| scaleY != 1.0F \|\| scaleZ != 1.0F \|\| offsetX != 0.0F \|\| offsetY != 0.0F \|\| offsetZ != 0.0F)` | (vanilla 자동) | [N/A] | |
+| L169 | `{` | — | [N/A] | |
+| L170 | `GL11.glTranslatef(-offsetX, -offsetY, -offsetZ);` | (vanilla 자동 — push/pop pair) | [N/A] | |
+| L171 | `GL11.glScalef(1F / scaleX, 1F / scaleY, 1F / scaleZ);` | (vanilla 자동) | [N/A] | |
+| L172 | `GL11.glTranslatef(-rotationPointX * f, -rotationPointY * f, -rotationPointZ * f);` | (vanilla 자동) | [N/A] | |
+| L173 | `}` | — | [N/A] | |
+| L174 | `}` | — | [N/A] | |
+| L175 | (빈 줄) | — | [N/A] | |
+| L176 | `public void postTransforms(float f, boolean pop, boolean useParentTransformations)` | (vanilla 자동) | [N/A] | |
+| L177 | `{` | — | [N/A] | |
+| L178 | `postTransform(f, pop);` | — | [N/A] | |
+| L179 | `if(base != null && !ignoreBase && useParentTransformations)` | — | [N/A] | |
+| L180 | `base.postTransforms(f, pop, true);` | — | [N/A] | |
+| L181 | `}` | — | [N/A] | |
+| L182 | (빈 줄) | — | [N/A] | |
+| L183 | `public void reset()` | (vanilla setAngles 진입 시 자동 reset) | [N/A] | |
+| L184 | `{` | — | [N/A] | reset() 시작 (청크 2로 이어짐) |
+
+**청크 1 (L1-L184) 통계: 정합 21 / 오역 0 / 누락 0 / 잉여 0 / N/A 163 = 184 라인 전수.**
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. 핵심 검증:
+- **L137-L158 6 회전순서 정의 = R-17 GitHub 검증 1차 자료 검증 완료**:
+  - XYZ(0): GL call Z, Y, X → vertex 적용 X→Y→Z (vanilla 기본 등가)
+  - XZY(1): GL call Y, Z, X → vertex 적용 X→Z→Y (B-2 setAnglesXZY 본체 일치)
+  - YXZ(2): GL call Z, X, Y → vertex 적용 Y→X→Z (B-1 setAnglesYXZ 본체 일치)
+  - YZX(3): GL call X, Z, Y → vertex 적용 Y→Z→X (B-08 setAnglesYZX 본체 일치)
+  - ZXY(4): GL call Y, X, Z → vertex 적용 Z→X→Y (B-08 setAnglesZXY 본체 일치)
+  - ZYX(5): GL call X, Y, Z → vertex 적용 Z→Y→X (어깨 부재 §16-5)
+- L124 `rotate()` 호출 = 1.21.1 setAngles* 6 헬퍼 매핑됨.
+- L126 `glScalef(scaleX, scaleY, scaleZ)` = 1.21.1 ModelPart.xScale/yScale/zScale (B-3 setArmScales/setLegScales 활용 근거).
+- L127 `glTranslatef(offsetX/Y/Z)` = ModelPart.offsetY 필드 부재 (§16-8) — MatrixStack 보정 필요.
+
+**다음 청크**: R-5 청크 2 (ModelRotationRenderer.java L185-L368) — reset() 본체 + fadeRotateAngleX/Y + fadeIntermediate/fadeStore + ignoreSuperRotation + canBeRandomBoxSource + 필드 선언.

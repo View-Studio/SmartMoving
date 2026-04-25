@@ -315,6 +315,9 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-4 청크 3 (L321-L469) — 세션 13 (정합 17 / 오역 0 / 누락 0 / 잉여 0 / N/A 132)
   - **R-4 누적**: 정합 62 / 오역 0 / 누락 1 / 잉여 0 / N/A 406 = 469 라인 전수
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
+  - [x] R-5 청크 1 (ModelRotationRenderer L1-L184) — 세션 14 (정합 21 / 오역 0 / 누락 0 / 잉여 0 / N/A 163)
+  - [ ] R-5 청크 2 (ModelRotationRenderer L185-L368)
+  - [ ] R-5 청크 3 (RendererData/Cape/Ears/Special 4 파일)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
@@ -899,6 +902,46 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-4 완료** — SmartRenderModel.java 469 라인 전수 라인별 1:1 매핑.
 
 **다음 R-단계**: R-5 (ModelRotationRenderer.java 368줄 (2 청크 × ~184) + RendererData/CapeRenderer/EarsRenderer/SpecialRenderer 4 파일 ~232줄 = 6 파일 ~601 라인). ModelRotationRenderer는 6 회전순서(XYZ/XZY/YXZ/YZX/ZXY/ZYX) 직접 정의 클래스로 R-1 회전순서 검증의 핵심 1차 자료.
+
+---
+
+### 세션 14 — 2026-04-26 — Phase R / R-5 청크 1 (ModelRotationRenderer.java L1-L184)
+
+**진행한 작업**:
+
+1. **R-5 청크 1 라인별 read**: 원본 ModelRotationRenderer.java L1-L184 (184 라인 전수 read).
+2. **1.21.1 매핑 검증**: setAnglesXYZ/XZY/YXZ/YZX/ZXY 6 헬퍼 본체 (B-1/B-2 세션 2 + B-08) 비교 + xScale/yScale/zScale ModelPart public field + 6 회전순서 R-17 GitHub 검증.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-5 청크 1 섹션 — 184 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계**:
+- [정합] 21 (class 매핑 / 3 상수 (RadiantToAngle/Whole/Half) / preTransform 핵심 2 라인 (rotate + glScalef) / rotate() 6 회전순서 분기 14 라인 (= 시그니처 1 + 7 if + 7 glRotatef))
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 163 (생성자 + 다층 모델 자동 처리 + ignoreSuperRotation 어깨 부재 + GL11/glPushMatrix 메커니즘 + reset 시작 + 빈 줄)
+- 합계: 184 라인 전수.
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. **핵심 검증 1차 자료 확인**:
+- L137-L158 6 회전순서 GL call 순서 정의 → 1.21.1 6 헬퍼 (post-multiply 규칙 등가):
+  - XYZ(0): GL call Z, Y, X → vanilla pitch/yaw/roll 기본 등가
+  - XZY(1): GL call Y, Z, X → setAnglesXZY (B-2)
+  - YXZ(2): GL call Z, X, Y → setAnglesYXZ (B-1)
+  - YZX(3): GL call X, Z, Y → setAnglesYZX (B-08)
+  - ZXY(4): GL call Y, X, Z → setAnglesZXY (B-08)
+  - ZYX(5): GL call X, Y, Z → 어깨 부재로 미이식 §16-5
+- L124 `rotate()` → setAngles* 6 헬퍼 매핑.
+- L126 `glScalef(scaleX, scaleY, scaleZ)` → ModelPart.xScale/yScale/zScale (B-3 setArmScales/setLegScales 활용).
+- L127 `glTranslatef(offsetX/Y/Z)` → ModelPart.offsetY 필드 부재 (§16-8).
+
+**검증 체크리스트 (세션 14 R-5 청크 1)**:
+- [근거] ✓ 원본 로컬 read (offset=1, limit=184 정확)
+- [전수] ✓ 청크 내 184 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 184 일치 (21+0+0+0+163)
+- [발견] ✓ 신규 발견 0건 (회전순서 R-17 검증 일관 확인)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (setAnglesXYZ/XZY/YXZ/YZX/ZXY 헬퍼 본체 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-5 청크 2 (ModelRotationRenderer.java L185-L368) — reset() 본체 + fade* 메커니즘 + ignoreSuperRotation + canBeRandomBoxSource + 필드 선언.
 
 ---
 
