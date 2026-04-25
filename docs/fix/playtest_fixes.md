@@ -8,12 +8,16 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #4 — 키 커맨드 조합 이상 진행 중 (세션 3 — 3 Agent 감사 + B-4 vanilla 비행 가속 신규 정정)
+항목 #1 — 애니메이션 망가짐/이상 ✅ AI 완결 (세션 2, 2026-04-26)
+   Phase B 3/3 (B-3 setArmScales/setLegScales / B-1 setAnglesYXZ / B-2 setAnglesXZY) +
+   Phase C 4/4 (빌드 / grep 정합 / 회귀 감사 / 포커스 전환) = 7/7 원자.
+   통합테스트 인계 — 사용자 in-game 시각 검증 후 §3 16 케이스 채움 + 발견 시 B-N 추가.
 ```
 
-**작업 문서 (주)**: [`focus_02_6_lava_liquid_border.md`](focus_02_6_lava_liquid_border.md)
-**종합 리서치**: [`docs/research/mapping/research_lava_border.md`](../research/mapping/research_lava_border.md)
-   — 원본 4 파일 5526 줄 전수 read 결과 (세션 1 완료)
+**작업 문서 (주)**: [`focus_01_animation.md`](focus_01_animation.md)
+**종합 리서치**: [`docs/research/mapping/animation_system.md`](../research/mapping/animation_system.md)
+   — 원본 SmartMoving + SmartRender 렌더 파이프라인 vs 1.21.1 vanilla 4 메서드 매핑 1111 줄
+   (세션 1 완료 / 세션 2 B-1/B-2/B-3 1:1 이식 완료)
 **완결 문서 (#2.5)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
    — Phase A/B 완결 + C skip + D/E 완결 + F-1~F-5 완결. F-6 통합 인게임 검증 대기.
 **대기 후보**:

@@ -221,6 +221,10 @@ public abstract class MixinPlayerEntityModelClient {
         if (sm.isHandsVineClimbing) {
             rightArm.yaw = rightArm.yaw * (1f + 0.6662f) - EIGHTH;
             leftArm.yaw  = leftArm.yaw  * (1f + 0.6662f) + EIGHTH;
+            // 원본 SmartMovingModel.java L353: setArmScales(abs(cos(rightArm.X)), abs(cos(leftArm.X)))
+            setArmScales(rightArm, leftArm,
+                    Math.abs(MathHelper.cos(rightArm.pitch)),
+                    Math.abs(MathHelper.cos(leftArm.pitch)));
         }
 
         // 발 각도 — 원본 SmartMovingModel.java L219-L239 1:1 이식.
@@ -260,6 +264,11 @@ public abstract class MixinPlayerEntityModelClient {
             float diff = Math.max(0f, MathHelper.cos(limbSwing - QUARTER)) * SIXTYFOURTH;
             leftLeg.roll  += -diff;    // roll 누적 (원본 `+=`)
             rightLeg.roll +=  diff;
+
+            // 원본 SmartMovingModel.java L391: setLegScales(abs(cos(rightLeg.X)), abs(cos(leftLeg.X)))
+            setLegScales(rightLeg, leftLeg,
+                    Math.abs(MathHelper.cos(rightLeg.pitch)),
+                    Math.abs(MathHelper.cos(leftLeg.pitch)));
         }
 
         rightLeg.yaw = 0f;
@@ -337,8 +346,13 @@ public abstract class MixinPlayerEntityModelClient {
         float standSneakFactor = standFactor + sneakFactor;
         sm.swimStandSneakFactor = standSneakFactor;
 
-        head.pitch = -EIGHTH * standSneakFactor;
-        head.yaw   = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;
+        // 머리 (YXZ 순서): rotateAngleY = cos(distance/2 - Quarter) * walkFactor,
+        //                  rotateAngleX = -Eighth * standSneakFactor (원본 SmartMovingModel.java L504-L506).
+        // R-17: YXZ → GL call Z, X, Y → setAnglesYXZ 헬퍼.
+        setAnglesYXZ(head,
+                -EIGHTH * standSneakFactor,
+                MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor,
+                0f);
 
         // 팔 (YZX 순서): pitch=X(앞뒤 젓기), yaw=0, roll=Z(좌우 펼침)
         float dist2      = limbSwing * 0.5f;
@@ -357,6 +371,13 @@ public abstract class MixinPlayerEntityModelClient {
                 + MathHelper.cos(totalTime * 0.1f) * 0.4f * (standFactor - sneakFactor);
         rightLeg.roll =  feetZ;
         leftLeg.roll  = -feetZ;
+
+        // 원본 SmartMovingModel.java L532-L542: 다리/팔 yScale 호흡 패턴 (sneakFactor 기반).
+        // 원본 가드 `if (scaleLegType != NoScaleStart)` — 메인 모델 = Scale 이므로 항상 true.
+        float legSc = 1f + (MathHelper.cos(totalTime * 0.1f + QUARTER) - 1f) * 0.15f * sneakFactor;
+        setLegScales(rightLeg, leftLeg, legSc, legSc);
+        float armSc = 1f + (MathHelper.cos(totalTime * 0.1f - QUARTER) - 1f) * 0.15f * sneakFactor;
+        setArmScales(rightArm, leftArm, armSc, armSc);
     }
 
     /**
@@ -378,6 +399,14 @@ public abstract class MixinPlayerEntityModelClient {
                 + (QUARTER + EIGHTH) * standFactor;
         leftArm.roll  = (MathHelper.cos(distance) * 0.52264464f * 2.5f - QUARTER) * walkFactor
                 - (QUARTER + EIGHTH) * standFactor;
+
+        // 원본 SmartMovingModel.java L572-L583: 다리/팔 yScale (walkFactor 기반).
+        // 원본 가드 `if (scaleLegType != NoScaleStart)` — 메인 모델 = Scale.
+        // 다리: 0.25F * walkFactor / 팔: 0.15F * walkFactor (계수 다름).
+        float legSc = 1f + (MathHelper.cos(distance - QUARTER) - 1f) * 0.25f * walkFactor;
+        setLegScales(rightLeg, leftLeg, legSc, legSc);
+        float armSc = 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor;
+        setArmScales(rightArm, leftArm, armSc, armSc);
     }
 
     /**
@@ -415,6 +444,16 @@ public abstract class MixinPlayerEntityModelClient {
                 - SIXTEENTH * standFactor;
         setAnglesYZX(rightArm, HALF + EIGHTH, -QUARTER, rRoll);
         setAnglesYZX(leftArm,  HALF + EIGHTH,  QUARTER, lRoll);
+
+        // 원본 SmartMovingModel.java L622-L626 + L645-L648: 다리/팔 yScale.
+        // 원본 가드 `if (scaleLegType != NoScaleStart)` / `scaleArmType != NoScaleStart` — 메인 모델 = Scale.
+        // 좌우 위상 다름 — 원본 표기 그대로 보존 (cos(distance + Quarter - Quarter) = cos(distance) 등 단순화 안 함).
+        setLegScales(rightLeg, leftLeg,
+                1f + (MathHelper.cos(distance + QUARTER - QUARTER) - 1f) * 0.25f * walkFactor,
+                1f + (MathHelper.cos(distance - QUARTER - QUARTER) - 1f) * 0.25f * walkFactor);
+        setArmScales(rightArm, leftArm,
+                1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor,
+                1f + (MathHelper.cos(distance - QUARTER) - 1f) * 0.15f * walkFactor);
     }
 
     /**
@@ -429,9 +468,15 @@ public abstract class MixinPlayerEntityModelClient {
 
         head.pitch = -EIGHTH - SIXTEENTH;
 
-        // 몸통 미세 흔들림
-        body.pitch = MathHelper.cos(distance - EIGHTH) * SIXTYFOURTH * walkFactor;
-        body.yaw   = MathHelper.cos(distance + EIGHTH) * SIXTYFOURTH * walkFactor;
+        // 몸통 (YXZ 순서) — 원본 SmartMovingModel.java L672-L676:
+        //   bipedBody.rotationOrder = YXZ
+        //   bipedBody.rotateAngleX = cos(distance - Eighth) * Sixtyfourth * walkFactor
+        //   bipedBody.rotateAngleY = cos(distance + Eighth) * Sixtyfourth * walkFactor
+        // R-17: YXZ → GL call Z, X, Y → setAnglesYXZ 헬퍼.
+        setAnglesYXZ(body,
+                MathHelper.cos(distance - EIGHTH) * SIXTYFOURTH * walkFactor,
+                MathHelper.cos(distance + EIGHTH) * SIXTYFOURTH * walkFactor,
+                0f);
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor + SIXTYFOURTH;
@@ -463,15 +508,19 @@ public abstract class MixinPlayerEntityModelClient {
         float walkFactor  = smFactor(limbSwingAmount, 0f, 1f);
         float standFactor = smFactor(limbSwingAmount, 1f, 0f);
 
-        // 팔 Y (정지 시 미세 흔들림)
-        rightArm.yaw = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
-        leftArm.yaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
-
-        // 팔 Z (날개짓)
-        rightArm.roll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH + HALF - SIXTEENTH) * walkFactor
+        // 팔 (XZY 순서) — 원본 SmartMovingModel.java L696-L733:
+        //   bipedRightArm.rotationOrder = XZY
+        //   rotateAngleY = cos(time*0.15) * Sixteenth * standFactor   (정지 시 미세 흔들림)
+        //   rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Half - Sixteenth) * walkFactor + Quarter * standFactor   (날개짓)
+        // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
+        float rYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
+        float lYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
+        float rRoll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH + HALF - SIXTEENTH) * walkFactor
                 + QUARTER * standFactor;
-        leftArm.roll  = (MathHelper.cos(distance) * SIXTYFOURTH - HALF + SIXTEENTH) * walkFactor
+        float lRoll = (MathHelper.cos(distance) * SIXTYFOURTH - HALF + SIXTEENTH) * walkFactor
                 - QUARTER * standFactor;
+        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance) * SIXTYFOURTH * walkFactor
@@ -531,12 +580,17 @@ public abstract class MixinPlayerEntityModelClient {
     private void sm_animateFalling(float animationProgress) {
         float distance = animationProgress * 0.1f;
 
-        // 팔 Y (좌우 흔들림)
-        rightArm.yaw = MathHelper.cos(distance + QUARTER) * EIGHTH;
-        leftArm.yaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
-        // 팔 Z
-        rightArm.roll = MathHelper.cos(distance) * EIGHTH + QUARTER;
-        leftArm.roll  = MathHelper.cos(distance) * EIGHTH - QUARTER;
+        // 팔 (XZY 순서) — 원본 SmartMovingModel.java L768-L792:
+        //   bipedRightArm.rotationOrder = XZY
+        //   rotateAngleY = cos(distance + Quarter) * Eighth   (좌우 흔들림)
+        //   rotateAngleZ = cos(distance) * Eighth ± Quarter   (Z, 좌우 부호 반대)
+        // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
+        float rYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
+        float lYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
+        float rRoll = MathHelper.cos(distance) * EIGHTH + QUARTER;
+        float lRoll = MathHelper.cos(distance) * EIGHTH - QUARTER;
+        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
         // 다리 X (앞뒤 흔들림)
         rightLeg.pitch = MathHelper.cos(distance + HALF + QUARTER) * SIXTEENTH + THIRTYTWOTH;
@@ -601,6 +655,35 @@ public abstract class MixinPlayerEntityModelClient {
     }
 
     /**
+     * 원본 SmartMovingModel.setArmScales(rightScale, leftScale) 1:1 이식.
+     *
+     * 원본 본체 (SmartMovingModel.java L948-L963):
+     *   if (scaleArmType == Scale)         { rightArm.scaleY = rs; leftArm.scaleY = ls; }
+     *   else if (scaleArmType == NoScaleEnd) { rightArm.offsetY -= (1F - rs) * 0.5F; ... }
+     *
+     * 메인 모델 = `Scale` 타입 (SmartMovingRender.java L88-L89: modelBipedMain.scaleArmType=Scale)
+     *   → 1.21.1 PlayerEntityModel 도 메인 플레이어 모델이므로 Scale 분기 본체만 적용.
+     *
+     * 근사 이식 — 원본과 차이: scaleArmType=NoScaleEnd 분기 (갑옷 흉갑) 미이식.
+     *   ModelPart 에 offsetY 필드 부재 + 갑옷 레이어는 별도 ArmorFeatureRenderer 처리.
+     *   → 갑옷 yScale 보정은 본 포커스 #1 (메인 애니메이션) 범위 외 (§7 등재 / 잔여).
+     */
+    private static void setArmScales(ModelPart rightArm, ModelPart leftArm, float rightScale, float leftScale) {
+        rightArm.yScale = rightScale;
+        leftArm.yScale  = leftScale;
+    }
+
+    /**
+     * 원본 SmartMovingModel.setLegScales(rightScale, leftScale) 1:1 이식.
+     * 원본 본체 (SmartMovingModel.java L972-L987) — setArmScales 와 동일 패턴, 대상이 다리.
+     * 메인 모델 = Scale (SmartMovingRender.java L89: modelBipedMain.scaleLegType=Scale).
+     */
+    private static void setLegScales(ModelPart rightLeg, ModelPart leftLeg, float rightScale, float leftScale) {
+        rightLeg.yScale = rightScale;
+        leftLeg.yScale  = leftScale;
+    }
+
+    /**
      * 원본 YZX GL 순서(glRotate Y → Z → X) → ModelPart pitch/yaw/roll 변환.
      * JOML: qY*qZ*qX → getEulerAnglesZYX → (e.x=pitch, e.y=yaw, e.z=roll).
      */
@@ -609,6 +692,48 @@ public abstract class MixinPlayerEntityModelClient {
                 .rotationY(yaw)
                 .mul(new Quaternionf().rotationZ(roll))
                 .mul(new Quaternionf().rotationX(pitch));
+        Vector3f e = q.getEulerAnglesZYX(new Vector3f());
+        part.pitch = e.x;
+        part.yaw   = e.y;
+        part.roll  = e.z;
+    }
+
+    /**
+     * 원본 YXZ GL 순서(glRotate Y → X → Z) → ModelPart pitch/yaw/roll 변환.
+     * post-multiply 규칙: GL call 순서 = MatrixStack call 순서 = vertex 적용 역순.
+     * vertex 적용 Y→X→Z 가 필요하므로 GL call 순서는 Z, X, Y → JOML qY * qX * qZ.
+     * JOML: qY*qX*qZ → getEulerAnglesZYX → (e.x=pitch, e.y=yaw, e.z=roll).
+     *
+     * R-17 검증 (ModelRotationRenderer.rotate() GitHub 직접):
+     *   YXZ(2): glRotatef(Z) → glRotatef(X) → glRotatef(Y) ✓
+     *
+     * 사용처: isSwim head, isSlide body.
+     */
+    private static void setAnglesYXZ(ModelPart part, float pitch, float yaw, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationY(yaw)
+                .mul(new Quaternionf().rotationX(pitch))
+                .mul(new Quaternionf().rotationZ(roll));
+        Vector3f e = q.getEulerAnglesZYX(new Vector3f());
+        part.pitch = e.x;
+        part.yaw   = e.y;
+        part.roll  = e.z;
+    }
+
+    /**
+     * 원본 XZY GL 순서(glRotate X → Z → Y) → ModelPart pitch/yaw/roll 변환.
+     * vertex 적용 X→Z→Y → GL call 순서 Y, Z, X → JOML qX * qZ * qY.
+     *
+     * R-17 검증 (ModelRotationRenderer.rotate() GitHub 직접):
+     *   XZY(1): glRotatef(Y) → glRotatef(Z) → glRotatef(X) ✓
+     *
+     * 사용처: isFlying arm, isFalling arm.
+     */
+    private static void setAnglesXZY(ModelPart part, float pitch, float yaw, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationX(pitch)
+                .mul(new Quaternionf().rotationZ(roll))
+                .mul(new Quaternionf().rotationY(yaw));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
