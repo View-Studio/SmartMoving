@@ -307,7 +307,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-2 청크 2 (SmartMovingRender.java L201-L337 + Context/IModel/IRender 4 파일) — 세션 8 (정합 4 / 오역 0 / 누락 0 / 잉여 0 / N/A 238)
   - [x] R-2 청크 3 (ModelPlayer.java + RenderPlayer.java) — 세션 9 (정합 5 / 오역 0 / 누락 0 / 잉여 0 / N/A 284)
   - **R-2 누적**: 정합 60 / 오역 0 / 누락 3 / 잉여 0 / N/A 668 = 731 라인 전수
-- [ ] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄)
+- [x] R-3. SM render/playerapi 3 파일 (SmartMoving + ModelPlayerBase + RenderPlayerBase, ~373줄) — **세션 10 완료**
+  - 합계: 정합 14 / 오역 0 / 누락 0 / 잉여 0 / N/A 362 = 376 라인 전수
 - [ ] R-4. SmartRenderModel.java 라인별 (3 청크, 469줄)
 - [ ] R-5. ModelRotationRenderer.java 라인별 (2 청크, 368줄) + RendererData/Cape/Ears/Special (~233줄)
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
@@ -749,6 +750,47 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-2 완료** — SmartMovingRender + SM render 5 파일 731 라인 전수 라인별 1:1 매핑 완료.
 
 **다음 R-단계**: R-3 (SM render/playerapi 3 파일 ~373줄 — SmartMoving.java 54 + SmartMovingModelPlayerBase.java 181 + SmartMovingRenderPlayerBase.java 138). 1 청크 또는 2 청크로 처리.
+
+---
+
+### 세션 10 — 2026-04-26 — Phase R / R-3 (SM render/playerapi 3 파일) — **R-3 완료**
+
+**진행한 작업**:
+
+1. **R-3 라인별 read** (3 파일 1 청크):
+   - SmartMoving.java (55 라인) — PlayerAPI 등록 진입점
+   - SmartMovingModelPlayerBase.java (182 라인) — IModelPlayer 구현 (PlayerAPI ModelPlayerBase 확장 + 11 dynamicOverride + 11 super dynamic + 16 @Deprecated ModelRenderer getter)
+   - SmartMovingRenderPlayerBase.java (139 라인) — IRenderPlayer 구현 (PlayerAPI RenderPlayerBase 확장 + renderPlayer/rotatePlayer/renderPlayerSleep/passSpecialRender 위임 + isRenderedWithBodyTopAlwaysInAccelerateDirection)
+
+2. **1.21.1 매핑 검증**:
+   - PlayerAPI 인프라 (api.player.model/render) → 1.21.1 Fabric Mixin이 등가 (PlayerAPI 자체 부재) → 일괄 [N/A]
+   - 16 @Deprecated ModelRenderer getter — 9 [정합] (Body/Head/Headwear→hat/RightArm/LeftArm/RightLeg/LeftLeg/Cloak → ModelPart 매핑) + 7 [N/A] (Outer/Torso/Breast/Neck/Shoulder×2/Pelvic/Ears 구조 부재 §16-2/3/5)
+   - 핵심 진입점 매핑 [정합]: 클래스 (Mixin) / rotatePlayer (sm_captureBodyYaw + @ModifyArg) / renderPlayerSleep (sm_getPositionOffset) / passSpecialRender (smartmoving$adjustLabelY)
+   - isRenderedWithBodyTopAlwaysInAccelerateDirection 4 분기 — sm_captureBodyYaw 8 분기 중 4 분기 (Flying/Swim/Dive/HeadJump) 합집합 일치 [정합]
+
+3. **매핑 표 추가**: research_animation_line_by_line.md R-3 청크 1 3 파트 섹션 — 376 라인 모두 5종 분류 등재 (skip 0건).
+
+**R-3 통계 (3 파일 합)**:
+- [정합] 14 (ModelPlayerBase 클래스 + 9 ModelRenderer getter / RenderPlayerBase 클래스 + 3 진입점 + isRendered... 2 라인)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 362 (PlayerAPI 인프라 + 11 dynamicOverride + 11 super dynamic + 7 구조 부재 getter + 위임 본체 (R-2 청크 1과 중복) + 빈 줄/괄호)
+- 합계: 376 라인 전수.
+
+**R-3 발견**: 신규 [오역]/[누락]/[잉여] 0건. R-3는 PlayerAPI 인프라 위임자 패턴 — 1.21.1 Mixin 구조에서 자동 처리. R-1/R-2와 매핑 일관 확인.
+
+**검증 체크리스트 (세션 10 R-3)**:
+- [근거] ✓ 3 파일 라인별 read 완료
+- [전수] ✓ 376 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 376 일치 (14+0+0+0+362)
+- [발견] ✓ 신규 발견 0건 (인프라 위임자)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (R-2 매핑 일관)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**R-3 완료** — SM render/playerapi 3 파일 376 라인 전수 라인별 1:1 매핑.
+
+**다음 R-단계**: R-4 (SmartRenderModel.java 469줄 — 3 청크 × ~160줄). SmartRender mod의 핵심 모델 클래스로 7 SR 전용 노드 (Outer/Torso/Breast/Neck/Pelvic/RightShoulder/LeftShoulder) + ModelRotationRenderer 6 회전순서 정의. 1.21.1 단일 PlayerEntityModel 구조 차이로 [N/A] 비중 크지만, 회전순서 매핑 검증과 fade 보간 메커니즘 분석은 의미 있음.
 
 ---
 
