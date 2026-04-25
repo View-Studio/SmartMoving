@@ -32,7 +32,24 @@
 | `getLiquidBorder` lava 분기 | SmartMovingBase L139-L150 | ❌ 세션 119 근사 |
 | `getLiquidBorder` modded fluid 분기 | SmartMovingBase L147-L148 (`material.isLiquid() → 1F`) | ❌ 세션 119 근사 |
 | `handleLava()` SM lava 이동 | SmartMovingSelf L578-L600 | ❌ 미이식 (vanilla 위임) |
-| `tryJump` / isHeadJumping lava 연동 | SmartMovingSelf L1852 / L2530 | ❌ 확인 필요 |
+| `tryJump` / isHeadJumping lava 연동 | SmartMovingSelf L1852 / L2530 / L2643 | ❌ 확인 필요 |
+| `_lavaSwimParticlePeriodFactor = 4F` Config 필드 | SmartMovingConfig L164 | ❌ 세션 1 신규 발견 (lava 파티클 주기) |
+| `isLava(block)` 헬퍼 | SmartMovingBase L123-L129 | ❌ 세션 1 신규 발견 (Phase D 보조) |
+
+### 신규 발견 (포커스 #2.6 세션 1, 2026-04-25)
+> **종합 리서치**: `docs/research/mapping/research_lava_border.md` — 원본 4 파일 5526 줄
+> 전수 read (4 Agent 병렬) 후 lava/liquid 모든 라인 + 분기 + 상수 + 호출처 정리.
+
+추가 검증/보강 항목:
+1. `handleSwimming` 본체 lava 진입 조건 (Self L232) — 1.21.1 SmartMovingSwimmer.updateSwimState
+   B-7c 이식 검증 필요 (정확히 `(isInWater() || (wasSwimming && isInLiquid()) || (lavaLikeWaterEnabled && isInLava()))` 3-OR 보존?)
+2. `handleAlternativeFlying` / `handleLand` 의 `handledLava` 필터 (Self L602-L643) — 1.21.1
+   에 동등 메서드 없음 (vanilla 위임). Phase C 이식 시 검증.
+3. `isInLiquid()` 정확 공식 (Base L411-L416): `getMax > minY || getMin < maxY` — focus_02_6
+   B-1 검증 시 공식 일치 확인 필요.
+4. `getMax/MinPlayerLiquidBetween` 스캔 방향 (Base L418-L451): Max=위→아래, Min=아래→위.
+5. `getNormalWaterBorder` 구현 (Base L152-L163): vanilla `FluidState.getHeight` 동치 근거.
+6. `reverseHandleMaterialAcceleration` (Base L884-L932): `Material.water` 고정 — lava 무관.
 
 ---
 
@@ -68,6 +85,21 @@
 
 ## 2. 원본 구조 매핑
 
+> **종합 리서치 참조**: `docs/research/mapping/research_lava_border.md` — 원본 4 파일 5526 줄
+> 전수 read 결과. 본 §2 는 핵심 발췌. 자세한 라인별 분석은 리서치 파일 참조.
+
+### 2.0 원본 `isLava(Block block)` (SmartMovingBase L123-L129) — 세션 1 신규 추가
+```java
+@SuppressWarnings("static-method")
+protected boolean isLava(Block block) {
+    if (block == Block.getBlockFromName("lava") || block == Block.getBlockFromName("flowing_lava"))
+        return true;
+    return block != null && block.getMaterial() == Material.lava;
+}
+```
+**1.21.1 매핑**: `world.getFluidState(pos).isIn(FluidTags.LAVA)` (FluidState 기반).
+**용도**: lava 블록 직접 체크. Phase D 점프 조건 검증 시 보조 활용 가능.
+
 ### 2.1 원본 `getLiquidBorder` (SmartMovingBase L131-L151) 분기 전수
 ```java
 protected float getLiquidBorder(int i, int j, int k) {
@@ -95,6 +127,39 @@ protected float getLiquidBorder(int i, int j, int k) {
 }
 ```
 
+### 2.1.5 원본 `getNormalWaterBorder` (SmartMovingBase L152-L163) — 세션 1 신규 추가
+```java
+protected float getNormalWaterBorder(int i, int j, int k) {
+    int blockMetaData = sp.worldObj.getBlockMetadata(i, j, k);
+    if (blockMetaData >= 8)        return 1F;            // 가득
+    if (blockMetaData == 0)
+        if (sp.worldObj.isAirBlock(i, j+1, k))  return 0.8875F;  // source 표면 보정
+        else                                     return 1F;
+    return (8 - blockMetaData) / 8F;                       // level 1~7 → 0.875~0.125
+}
+```
+**상수**: `0.8875F` (source 표면), `8F` 분모.
+**1.21.1 매핑**: vanilla `FluidState.getHeight(world, pos)` 가 동일 시멘틱 (level + falling 보정).
+완전 동치 — 별도 이식 불필요.
+
+### 2.1.6 원본 `isInLiquid` (SmartMovingBase L411-L416) — 세션 1 신규 추가
+```java
+protected boolean isInLiquid() {
+    return
+        getMaxPlayerLiquidBetween(sp.boundingBox.minY, sp.boundingBox.maxY) != sp.boundingBox.minY ||
+        getMinPlayerLiquidBetween(sp.boundingBox.minY, sp.boundingBox.maxY) != sp.boundingBox.maxY;
+}
+```
+**의미**: `getMax > minY` (최상위 fluid 가 minY 위) OR `getMin < maxY` (최하위 fluid 가 maxY 아래).
+**1.21.1**: 이미 이식됨 (`ClientState.isInLiquid(player)` L2184). Phase A 후 lava 자동 포함.
+**B-1 검증 시 공식 정확 보존 확인 필수.**
+
+### 2.1.7 원본 `getMax/MinPlayerLiquidBetween` (SmartMovingBase L418-L451) — 세션 1 신규 추가
+
+**`getMaxPlayerLiquidBetween` (L418-L432)**: 위→아래 (yMax → yMin) 스캔. 첫 fluid → `j + border`.
+**`getMinPlayerLiquidBetween` (L434-L451)**: 아래→위 (yMin → yMax) 스캔. 첫 fluid → 분기 (j > yMin → j / yMin → yMin).
+**1.21.1**: 이미 이식됨 (`ClientState L2117/L2148`). Phase A 후 lava 자동 반영.
+
 ### 2.2 원본 `handleLava` (SmartMovingSelf L578-L600)
 ```java
 private boolean handleLava(float moveForward, float moveStrafing,
@@ -121,13 +186,41 @@ private boolean handleLava(float moveForward, float moveStrafing,
 }
 ```
 
+### 2.2.5 원본 `handleSwimming` lava 진입 조건 (SmartMovingSelf L232) — 세션 1 신규 추가
+```java
+boolean handleSwimming = !isFlying && !isLiquidClimbing
+                      && (sp.isInWater()
+                          || (wasSwimming && isInLiquid())
+                          || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()));
+```
+**3-OR 진입 조건**:
+1. `sp.isInWater()` — vanilla 물
+2. `wasSwimming && isInLiquid()` — 이전 틱 수영 + 현재 fluid 존재
+3. `Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()` — lava 활성화 + lava 안
+
+**1.21.1 이식 상태**: `SmartMovingSwimmer.updateSwimState` L98-L114 (B-7c, 세션 127).
+**Phase B-4 신규 검증 항목**: 1.21.1 이식이 정확히 같은 3-OR 조건 보존하는지 확인.
+
+### 2.2.6 원본 `handleLava` 호출 후 필터 (SmartMovingSelf L602-L643) — 세션 1 신규 추가
+- **L602-L604**: `handleAlternativeFlying(...handledLava)` 메서드 시그니처 — `!handledLava` 필터
+  (lava 처리됨 → 대안 비행 불가)
+- **L633-L643**: `handleLand(...handledLava...)` — `!handledLava` 필터 (lava 처리됨 → 육지 처리 스킵)
+
+**1.21.1 영향**: 1.21.1 에 `handleAlternativeFlying` / `handleLand` 동등 메서드 없음
+(vanilla `LivingEntity.travel()` 위임). Phase C 이식 시 `handleLava` 호출이 vanilla travel 을
+어떻게 차단할지 결정 필요 (Mixin `ci.cancel()` 등).
+
 ### 2.3 원본 tryJump / isHeadJumping lava 연동
-- L1852: `boolean jump = jumpAvoided && isp.getIsJumpingField()
-           && !sp.isInWater() && !sp.handleLavaMovement();`
-- L2530: `isHeadJumping = isHeadJumping && ...
+- **L1852**: `boolean jump = jumpAvoided && isp.getIsJumpingField()
+           && !sp.isInWater() && !sp.handleLavaMovement();` (handleJumping 메서드)
+   → **lava 진입 시 점프 불가**.
+- **L2529-L2530**: `isHeadJumping = isHeadJumping && !sp.onGround && !(isSwimming || isDiving)
+           && !(isFlying || sp.capabilities.isFlying) && !(sp.handleWaterMovement() && sp.motionY < 0)
            && !sp.handleLavaMovement();`
-- L2643: `if (sp.onGround || isFlying || capabilities.isFlying
-           || isSwimming || isDiving || sp.handleLavaMovement())`
+   → **lava 진입 시 헤드점프 자동 해제**.
+- **L2643**: `if (sp.onGround || isFlying || capabilities.isFlying || isSwimming || isDiving
+           || sp.handleLavaMovement()) isSprintJump = false;`
+   → **lava 진입 시 isSprintJump 해제**.
 
 1.21.1 이식 상태 확인:
 - L1414 `!player.isInLava()` (ClientState) — 확인됨
@@ -188,6 +281,17 @@ vanilla 위임.
 - [ ] A-4. `focus_02_state_issues.md` §7 B-42c (2) 해소 완료 기록. FiniteLiquid mod 분기만
   잔존 (mod 미이식 — 해소 불가).
 
+**A-5. `_lavaSwimParticlePeriodFactor = 4F` Config 필드** (세션 1 신규 발견, SmartMovingConfig L164)
+- [ ] A-5. `SmartMovingConfig.java` 에 필드 + load/save IO 신규 등록.
+  ```java
+  public float lavaSwimParticlePeriodFactor = 4F;
+  // load: getFloat(p, "move.lava.swim.particle.period.factor", lavaSwimParticlePeriodFactor)
+  // save: setProperty("move.lava.swim.particle.period.factor", String.valueOf(...))
+  ```
+  **소비처**: 1.21.1 SmartMovingRender 또는 lava 파티클 생성 코드 (현재 직접 호출처 0건 추정).
+  파티클 시각 효과만 영향 — 미이식 시 §7 영구 등록 가능 (lava 파티클 vanilla 동작 위임).
+  → **결정 필요 (Phase A 진입 시)**: 이식 vs §7 등록 중 선택.
+
 ---
 
 ### Phase B. `isInLiquid` + `getMax/MinPlayerLiquidBetween` 검증
@@ -207,6 +311,12 @@ vanilla 위임.
   - `ClientState.fromSwimmingOrDiving` (B-42-B39) — crawlStandUpLiquidCeiling
   - `ClientState.SwimBorderValues` computeSwimBorderValues — totalSwimWaterBorder
   - `handleSwimming` motion 계산 (이미 lavaLikeWater 활성 시 진입)
+
+**B-4. `handleSwimming` 진입 조건 검증** (세션 1 신규 발견, 원본 L232 기준)
+- [ ] B-4. 원본 L232 `handleSwimming = !isFlying && !isLiquidClimbing && (sp.isInWater()
+  || (wasSwimming && isInLiquid()) || (Config.isLavaLikeWaterEnabled() && sp.handleLavaMovement()))`
+  3-OR 조건이 1.21.1 `SmartMovingSwimmer.updateSwimState` L98-L114 (B-7c) 에 정확히 보존
+  되는지 line-by-line 비교. 누락 분기 발견 시 정정.
 
 ---
 
@@ -242,6 +352,13 @@ vanilla 위임.
 - [ ] C-4. **C-3 (엄격 이식) 권고** — Extended #2 방침 따름. 단 플레이테스트에서 체감 차이
   없으면 C-2 (근사 유지) 로 후퇴 가능.
 
+**C-5. `handleAlternativeFlying` / `handleLand` 의 handledLava 필터 검증** (세션 1 신규 발견)
+- [ ] C-5. 원본 L602-L604 `handleAlternativeFlying(...handledLava)` + L633-L643
+  `handleLand(...handledLava...)` 가 `!handledLava` 필터로 lava 처리 후 다른 처리 차단.
+  1.21.1 에는 동등 메서드 없음 (vanilla `LivingEntity.travel()` 위임). Phase C-3 채택 시
+  `MixinLivingEntityClient.sm_beforeTravel` 에서 `handleLava` 호출 후 `ci.cancel()` 로 vanilla
+  travel 차단 → 자연스럽게 동등 효과. 코드 변경 0 가능 — 검증만.
+
 ---
 
 ### Phase D. lava 연관 상태/점프 경로 감사
@@ -258,9 +375,10 @@ vanilla 위임.
 - [ ] D-3. 원본 L2679 `isGroundSprinting = ... && !isSwimming && !isDiving && !isClimbing`
   — lava 조건 없음. 1.21.1 동일 확인.
 
-**D-4. `jumpAvoided` lava 조건** (원본 L2643)
-- [ ] D-4. 원본 `jumpAvoided = onGround || isFlying || capabilities.isFlying || isSwimming
-  || isDiving || isInLava()` — 1.21.1 grep 하여 `isInLava()` 포함 여부 확인.
+**D-4. `isSprintJump` 해제 lava 조건** (원본 L2643) — 세션 1 정정 (이전 jumpAvoided 오기)
+- [ ] D-4. 원본 L2643 `if (sp.onGround || isFlying || capabilities.isFlying || isSwimming
+  || isDiving || sp.handleLavaMovement()) isSprintJump = false;` — 1.21.1 grep 하여
+  `player.isInLava()` 또는 `sm.isInLava` 포함 여부 확인. 미포함 시 추가.
 
 ---
 
@@ -300,8 +418,9 @@ Phase D (lava 연관 점프 / 상태 조건 감사)
 Phase E (빌드 + 플레이테스트)
 ```
 
-**전체 규모**: Phase A 4 + Phase B 3 + Phase C 1 (C-3 선택 시 본문 이식 소규모) + Phase D 4 +
-Phase E 3 = **약 15 원자 / 예상 2-3 세션**.
+**전체 규모 (세션 1 갱신)**: Phase A 5 (A-5 신규) + Phase B 4 (B-4 신규) + Phase C 5 (C-5 신규) +
+Phase D 4 + Phase E 3 = **약 21 원자 / 예상 3-4 세션**. 단 다수 검증/N/A 항목으로 실 작업
+규모는 ~15 원자 유사.
 
 ---
 
@@ -336,14 +455,78 @@ Phase E 3 = **약 15 원자 / 예상 2-3 세션**.
 
 **다음 세션 권고**: Phase A-1 (lava 분기) + A-2 (modded liquid 분기) — 소형 수정 한 번에.
 
+### 세션 1 — 2026-04-25 — 원본 4 파일 5526 줄 전수 리서치 + 문서 보강
+
+사용자 지시: "2.6페이즈와 관련된 모든 원본 코드및 리서치 파일들을 1개도 빠트리지 말고,
+   각 파일의 처음부터 끝까지 라인별로 청크 분리해서 모든 라인을 읽고... 1대1 번역이라는
+   걸 명심하고 모든라인을 다 리서칭".
+
+진행한 작업:
+1. **원본 4 파일 size 확인**:
+   - SmartMovingBase.java: 932 줄
+   - SmartMovingSelf.java: 3345 줄 (가장 큼)
+   - SmartMovingClientConfig.java: 595 줄
+   - SmartMovingConfig.java: 654 줄
+   - **총 5526 줄**
+2. **4 Agent 병렬 위임** (Explore subagent, 각 파일별 전수 read + lava/liquid 키워드 매치
+   모든 라인 + 컨텍스트 추출):
+   - SmartMovingBase.java: 9 메서드 추출 (isLava L123-L129 / getLiquidBorder L131-L150 /
+     getNormalWaterBorder L152-L163 / getFiniteLiquidWaterBorder L165-L181 / isInLiquid
+     L411-L416 / getMaxPlayerLiquidBetween L418-L432 / getMinPlayerLiquidBetween L434-L451 /
+     isInsideOfMaterial L524-L543 / reverseHandleMaterialAcceleration L884-L932)
+   - SmartMovingSelf.java: 9 lava 위치 (L132 / L133-L134 / L135 / L136 / L232 / L578-L600 /
+     L602-L604 / L633-L643 / L1852 / L2529-L2530 / L2643)
+   - SmartMovingClientConfig.java: 1 메서드 (isLavaLikeWaterEnabled L87-L90)
+   - SmartMovingConfig.java: 2 Property (_lavaLikeWater L162-L163 / _lavaSwimParticlePeriodFactor L164)
+3. **종합 리서치 파일 작성**: `docs/research/mapping/research_lava_border.md` 신규.
+   원본 코드 그대로 + 라인 번호 + 분기 트리 + 상수 + 1.21.1 매핑.
+4. **신규 발견 항목** (focus_02_6 보강):
+   - **`_lavaSwimParticlePeriodFactor = 4F`** Config 필드 (Phase A-5 신규 원자)
+   - **`isLava(block)` 헬퍼** (§2.0 추가)
+   - **`getNormalWaterBorder` 구현 디테일** (§2.1.5 추가)
+   - **`isInLiquid` 정확 공식** (§2.1.6 추가)
+   - **`getMax/MinPlayerLiquidBetween` 스캔 방향** (§2.1.7 추가)
+   - **`handleSwimming` 본체 lava 진입 조건** (§2.2.5 추가, Phase B-4 신규 원자)
+   - **`handleAlternativeFlying`/`handleLand` handledLava 필터** (§2.2.6 추가, Phase C-5 신규 원자)
+   - **`reverseHandleMaterialAcceleration` water 전용** (§2 영향 0 명시)
+5. **§3 신규 원자 추가**: A-5, B-4, C-5 (총 3 원자)
+6. **§3 D-4 정정**: 이전 "jumpAvoided" 오기 → "isSprintJump 해제" (원본 L2643 정확 표기)
+
+근사 여부: 신규 0. §7 잠재 근사 후보만 발견 (`_lavaSwimParticlePeriodFactor` 미이식 시 §7 등록 가능).
+
+완료 전 검증 체크리스트 (세션 1 기준):
+- [근거] 원본 4 파일 5526 줄 전수 read 완료 (4 Agent 병렬, 1개도 빠짐없이)
+- [근거] 종합 리서치 파일 작성 (`docs/research/mapping/research_lava_border.md`)
+- [대응] 신규 발견 항목 모두 §0/§2/§3 에 반영
+- [분기] 원본 7 분기 (water/FiniteLiquid/lava block/Material.lava/Material.water/Material.isLiquid/0F)
+   + handleLava 본체 4-AND 진입 + 9 처리 단계 모두 문서화
+- [상수] `0.5D` damping / `0.02D` 중력 / `0.60000002384185791D` offset / `0.30000001192092896D`
+   motionY / `0.8875F` source 표면 / `4F` 파티클 주기 모두 리서치 파일에 정확 보존
+- [타이밍] handleSwimming → handleLava → handleAlternativeFlying → handleLand 호출 순서 보존
+- [근사] 신규 0. §7-1 후보 1건 (lavaSwimParticlePeriodFactor) 만 등록 가능.
+- [신규] §3 신규 원자 3건 (A-5/B-4/C-5) 추가
+- [회귀] 코드 변경 0 → 회귀 0
+- [빌드] 코드 변경 없음 — 빌드 영향 0
+
+다음 세션 권고: **Phase A 진입** — A-1 (lava 분기) + A-2 (modded liquid) + (선택) A-5
+   (`_lavaSwimParticlePeriodFactor`) 묶어 진행. 단 A-5 는 이식 vs §7 등록 사용자 결정 필요.
+
+진행률: **세션 1 리서치 완료**, Phase 진입 전. 전체 #2.6 1/21 (~5%).
+
 ---
 
 ## 7. 근사 이식 지점 (이 포커스)
 
 **§7 이 파일**: Phase 진행 중 불가피한 근사 이식 지점. 현재 시작 시점: 0건.
 
-잔존 근사 후보:
-- FiniteLiquid mod 분기 (원본 L137-L138) — mod 1.21.1 미이식. 해소 불가. **유지**.
+잔존 근사 후보 (세션 1 갱신):
+- **FiniteLiquid mod 분기** (원본 SmartMovingBase L137-L138) — mod 1.21.1 미이식. 해소 불가. **영구 유지**.
+- **`_lavaSwimParticlePeriodFactor = 4F`** (원본 SmartMovingConfig L164) — Phase A-5 결정 사항.
+  이식 vs §7 등록 (lava 파티클 vanilla 동작 위임) 중 선택.
+- **`isInsideOfMaterial(Material material)` water 전용** (원본 SmartMovingBase L524-L543) —
+  FiniteLiquid mod 의존, lava 무관. 미이식 영구 (mod 미이식 일관).
+- **`reverseHandleMaterialAcceleration()` water 전용** (원본 SmartMovingBase L884-L932) —
+  Material.water 고정, lava 미관련. 본 포커스 영향 0.
 
 ---
 
@@ -366,10 +549,34 @@ Phase E 3 = **약 15 원자 / 예상 2-3 세션**.
 
 ## 9. 참고 자료
 
-### 원본 소스 경로 (로컬)
-- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingBase.java` (L131-L151 getLiquidBorder)
-- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java` (L578-L600 handleLava, L132-L134 호출 컨텍스트)
-- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\config\SmartMovingClientConfig.java` (L87-L90 isLavaLikeWaterEnabled)
+### 종합 리서치 파일 (세션 1 신규)
+- `docs/research/mapping/research_lava_border.md` — 원본 4 파일 5526 줄 전수 read 결과.
+  9 메서드 (Base) + 9 위치 (Self) + 1 메서드 (ClientConfig) + 2 Property (Config) 모두 정리.
+
+### 원본 소스 경로 (로컬, 세션 1 보강)
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingBase.java`
+  - L123-L129 `isLava(block)`
+  - L131-L151 `getLiquidBorder` ★ Phase A
+  - L152-L163 `getNormalWaterBorder`
+  - L165-L181 `getFiniteLiquidWaterBorder` (FiniteLiquid mod, §7 영구)
+  - L411-L416 `isInLiquid`
+  - L418-L451 `getMax/MinPlayerLiquidBetween`
+  - L524-L543 `isInsideOfMaterial` (water 전용)
+  - L884-L932 `reverseHandleMaterialAcceleration` (water 전용)
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java`
+  - L132-L136 호출 컨텍스트
+  - L232 `handleSwimming` 본체 lava 진입 조건
+  - L578-L600 `handleLava` ★ Phase C
+  - L602-L604 `handleAlternativeFlying` (handledLava 필터)
+  - L633-L643 `handleLand` (handledLava 필터)
+  - L1852 jump 회피 lava 조건 ★ Phase D-1
+  - L2529-L2530 isHeadJumping 해제 lava 조건 ★ Phase D-2
+  - L2643 isSprintJump 해제 lava 조건 ★ Phase D-4
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\config\SmartMovingClientConfig.java`
+  - L87-L90 `isLavaLikeWaterEnabled` (이미 1.21.1 이식 완료)
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\config\SmartMovingConfig.java`
+  - L162-L163 `_lavaLikeWater = Creative` (이미 1.21.1 이식 완료)
+  - L164 `_lavaSwimParticlePeriodFactor = 4F` ★ Phase A-5 신규
 
 ### 1.21.1 이식 대상
 - `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` (L2094 getLiquidBorder)
