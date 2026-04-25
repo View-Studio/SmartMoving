@@ -2750,3 +2750,235 @@
 | **합계** | **5 파일** | **607** | **71** | **0** | **2** | **0** | **534** |
 
 **R-5 완료**. 다음 R-단계: **R-6 (SmartRenderRender.java 227 + SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 8 파일 ~618 라인)**.
+
+---
+
+## R-6: SmartRenderRender + Utilities/Mod/Info/Install/Context/IModel/IRender (8 파일 ~618)
+
+### 청크 1 (SmartRenderRender.java 228 라인) — 헤더 + 생성자 + renderPlayer 본체 (통계+위치차이+모델분배) + drawFirstPersonHand + rotatePlayer + renderSpecials + before/afterHandleRotationFloat + getPreviousRendererData + 정적 필드
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L1-L16 | Smart Render GPLv3 라이선스 헤더 | — | [N/A] | |
+| L17 | `// ==…==` | — | [N/A] | |
+| L18 | (빈 줄) | — | [N/A] | |
+| L19 | `package net.smart.render;` | — | [N/A] | |
+| L20 | `import java.util.*;` | — | [N/A] | |
+| L21 | (빈 줄) | — | [N/A] | |
+| L22 | `import net.minecraft.client.*;` | — | [N/A] | |
+| L23 | `import net.minecraft.client.entity.*;` | — | [N/A] | |
+| L24 | `import net.minecraft.client.gui.inventory.*;` | (1.21.1: InventoryScreen 자동) | [N/A] | |
+| L25 | `import net.minecraft.entity.*;` | — | [N/A] | |
+| L26 | `import net.minecraft.entity.player.*;` | — | [N/A] | |
+| L27 | `import net.smart.render.statistics.*;` | (1.21.1: SmartStatistics 부재 — limbAnimator/age 등가) | [N/A] | R-8 검토 |
+| L28 | (빈 줄) | — | [N/A] | |
+| L29 | `public class SmartRenderRender extends SmartRenderContext` | `@Mixin(PlayerEntityRenderer.class) MixinPlayerEntityRenderer` (R-2 청크 1 매핑) | [정합] | 표면 매핑 |
+| L30 | `{` | — | [N/A] | |
+| L31 | `public static SmartRenderModel CurrentMainModel;` | (1.21.1: 단일 모델) | [N/A] | |
+| L32 | (빈 줄) | — | [N/A] | |
+| L33 | `public IRenderPlayer irp;` | (Mixin: this 직접) | [N/A] | |
+| L34 | (빈 줄) | — | [N/A] | |
+| L35 | `public SmartRenderRender(IRenderPlayer irp)` | (Mixin: 생성자 부재) | [N/A] | |
+| L36 | `{` | — | [N/A] | |
+| L37 | `this.irp = irp;` | — | [N/A] | |
+| L38 | (빈 줄) | — | [N/A] | |
+| L39 | `modelBipedMain = irp.createModel(irp.getModelBipedMain(), 0.0F).getRenderModel();` | (1.21.1: 단일 PlayerEntityModel — 다층 createModel 부재) | [N/A] | |
+| L40 | `SmartRenderModel modelArmorChestplate = irp.createModel(irp.getModelArmorChestplate(), 1.0F).getRenderModel();` | (갑옷 ArmorFeatureRenderer §17 잔여) | [N/A] | |
+| L41 | `SmartRenderModel modelArmor = irp.createModel(irp.getModelArmor(), 0.5F).getRenderModel();` | (갑옷) | [N/A] | |
+| L42 | (빈 줄) | — | [N/A] | |
+| L43 | `irp.initialize(modelBipedMain.mp, modelArmorChestplate.mp, modelArmor.mp, 0.5F);` | (다층 모델 초기화 — 단일 자동) | [N/A] | |
+| L44 | `}` | — | [N/A] | |
+| L45 | (빈 줄) | — | [N/A] | |
+| L46 | `public void renderPlayer(AbstractClientPlayer entityplayer, double d, double d1, double d2, float f, float renderPartialTicks)` | (vanilla render + Mixin TAIL inject 자동) | [정합] | 진입점 |
+| L47 | `{` | — | [N/A] | |
+| L48 | `SmartStatistics statistics = SmartStatisticsFactory.getInstance(entityplayer);` | `SmartMovingClientState sm = SmartMovingClientStateAccess.smartmoving$getState(player)` (state holder) | [정합] | factory → state holder |
+| L49 | `if(statistics != null)` | (sm null check) | [정합] | |
+| L50 | `{` | — | [N/A] | |
+| L51 | `boolean isInventory = d == 0.0F && d1 == 0.0F && d2 == 0.0F && f == 0.0F && renderPartialTicks == 1.0F;` | (1.21.1: InventoryScreen 자동 분리) | [N/A] | |
+| L52 | `boolean isSleeping = entityplayer.isPlayerSleeping();` | `player.isSleeping()` (vanilla SleepingPose 자동) | [정합] | |
+| L53 | (빈 줄) | — | [N/A] | |
+| L54 | `float totalVerticalDistance = statistics.getTotalVerticalDistance(renderPartialTicks);` | (1.21.1 limbSwing 잘못 매핑 — §16-10 [오역] 발견 변수의 갱신 위치) | [N/A] | SmartStatistics 부재 — vanilla 등가 부재 |
+| L55 | `float currentVerticalSpeed = statistics.getCurrentVerticalSpeed(renderPartialTicks);` | (§16-10 [오역] 발견) | [N/A] | |
+| L56 | `float totalDistance = statistics.getTotalDistance(renderPartialTicks);` | (§16-12/13/15 [오역] 발견) | [N/A] | |
+| L57 | `float currentSpeed = statistics.getCurrentSpeed(renderPartialTicks);` | (§16-13/15 [오역] 발견) | [N/A] | |
+| L58 | (빈 줄) | — | [N/A] | |
+| L59 | `double distance = 0;` | (변수 선언) | [N/A] | |
+| L60 | `double verticalDistance = 0;` | — | [N/A] | |
+| L61 | `double horizontalDistance = 0;` | — | [N/A] | |
+| L62 | `float currentCameraAngle = 0;` | — | [N/A] | |
+| L63 | `float currentVerticalAngle = 0;` | — | [N/A] | |
+| L64 | `float currentHorizontalAngle = 0;` | — | [N/A] | |
+| L65 | (빈 줄) | — | [N/A] | |
+| L66 | `if (!isInventory)` | (vanilla 자동) | [N/A] | |
+| L67 | `{` | — | [N/A] | |
+| L68 | `double xDiff = entityplayer.posX - entityplayer.prevPosX;` | `player.getX() - player.prevX` (sm_captureBodyYaw 등가 — getVelocity 활용) | [정합] | |
+| L69 | `double yDiff = entityplayer.posY - entityplayer.prevPosY;` | `vel.y` 등가 | [정합] | |
+| L70 | `double zDiff = entityplayer.posZ - entityplayer.prevPosZ;` | `vel.z` 등가 | [정합] | |
+| L71 | (빈 줄) | — | [N/A] | |
+| L72 | `verticalDistance = Math.abs(yDiff);` | (sm.stats 또는 직접 계산 — capture 부재일 수 있음) | [정합] | |
+| L73 | `horizontalDistance = Math.sqrt(xDiff * xDiff + zDiff * zDiff);` | (sm.stats.horizontalDistance 또는 sm_captureBodyYaw vel.x²+vel.z² 등가) | [정합] | |
+| L74 | `distance = Math.sqrt(horizontalDistance * horizontalDistance + verticalDistance * verticalDistance);` | (3D 거리 — sm.stats.distance 또는 capture 부재) | [정합] | |
+| L75 | (빈 줄) | — | [N/A] | |
+| L76 | `currentCameraAngle = entityplayer.rotationYaw / RadiantToAngle;` | `player.getYaw() * DEG_TO_RAD` (sm_captureBodyYaw 활용) | [정합] | |
+| L77 | `currentVerticalAngle = (float)Math.atan(yDiff / horizontalDistance);` | (sm.stats.currentVerticalAngle 갱신 — sm_animateHeadJumping/Flying ANIM-01 활용) | [정합] | sm_setupTransforms theta 계산에 사용 |
+| L78 | `if(Float.isNaN(currentVerticalAngle))` | (NaN 가드) | [정합] | |
+| L79 | `currentVerticalAngle = Quarter;` | (NaN → π/2) | [정합] | |
+| L80 | (빈 줄) | — | [N/A] | |
+| L81 | `currentHorizontalAngle = (float)-Math.atan(xDiff / zDiff);` | sm_captureBodyYaw: `Math.atan2(-vel.x, vel.z)` | [정합] | atan2가 quadrant 자동 처리 (등가) |
+| L82 | `if (Float.isNaN(currentHorizontalAngle))` | (atan2 자동 NaN 회피) | [정합] | |
+| L83 | `if(Float.isNaN(statistics.prevHorizontalAngle))` | — | [정합] | |
+| L84 | `currentHorizontalAngle = currentCameraAngle;` | (NaN fallback) | [정합] | |
+| L85 | `else` | — | [N/A] | |
+| L86 | `currentHorizontalAngle = statistics.prevHorizontalAngle;` | (이전 값 유지 — atan2 자동 일관) | [정합] | |
+| L87 | `else if (zDiff < 0)` | (atan vs atan2 quadrant 차이 — atan2가 자동 처리) | [정합] | |
+| L88 | `currentHorizontalAngle += Half;` | (atan2 등가) | [정합] | |
+| L89 | (빈 줄) | — | [N/A] | |
+| L90 | `statistics.prevHorizontalAngle = currentHorizontalAngle;` | (캐시 — sm_captureBodyYaw 매 프레임 lerp 자동) | [N/A] | |
+| L91 | `}` | — | [N/A] | |
+| L92 | (빈 줄) | — | [N/A] | |
+| L93 | `IModelPlayer[] modelPlayers = irp.getRenderModels();` | (1.21.1 단일 모델) | [N/A] | |
+| L94 | (빈 줄) | — | [N/A] | |
+| L95 | `for(int i = 0; i < modelPlayers.length; i++)` | (단일 모델 — for 부재) | [N/A] | |
+| L96 | `{` | — | [N/A] | |
+| L97 | `SmartRenderModel modelPlayer = modelPlayers[i].getRenderModel();` | (단일) | [N/A] | |
+| L98 | (빈 줄) | — | [N/A] | |
+| L99 | `modelPlayer.isInventory = isInventory;` | — | [N/A] | |
+| L100 | (빈 줄) | — | [N/A] | |
+| L101 | `modelPlayer.totalVerticalDistance = totalVerticalDistance;` | (state holder 일원화 — 분배 부재) | [N/A] | |
+| L102 | `modelPlayer.currentVerticalSpeed = currentVerticalSpeed;` | — | [N/A] | |
+| L103 | `modelPlayer.totalDistance = totalDistance;` | — | [N/A] | |
+| L104 | `modelPlayer.currentSpeed = currentSpeed;` | — | [N/A] | |
+| L105 | (빈 줄) | — | [N/A] | |
+| L106 | `modelPlayer.distance = distance;` | — | [N/A] | |
+| L107 | `modelPlayer.verticalDistance = verticalDistance;` | — | [N/A] | |
+| L108 | `modelPlayer.horizontalDistance = horizontalDistance;` | — | [N/A] | |
+| L109 | `modelPlayer.currentCameraAngle = currentCameraAngle;` | — | [N/A] | |
+| L110 | `modelPlayer.currentVerticalAngle = currentVerticalAngle;` | `sm.stats.currentVerticalAngle` (sm_animateFlying/HeadJumping ANIM-01 활용) | [N/A] | state holder |
+| L111 | `modelPlayer.currentHorizontalAngle = currentHorizontalAngle;` | (sm_captureBodyYaw 자체 lerp) | [N/A] | |
+| L112 | `modelPlayer.prevOuterRenderData = getPreviousRendererData(entityplayer);` | (fade 데이터 부재 — §17) | [N/A] | |
+| L113 | `modelPlayer.isSleeping = isSleeping;` | (vanilla SleepingPose) | [N/A] | |
+| L114 | `}` | — | [N/A] | |
+| L115 | `}` | — | [N/A] | |
+| L116 | (빈 줄) | — | [N/A] | |
+| L117 | `CurrentMainModel = modelBipedMain;` | (단일 모델) | [N/A] | |
+| L118 | `irp.superRenderPlayer(entityplayer, ...)` | (vanilla render — Mixin TAIL 자동) | [N/A] | |
+| L119 | `CurrentMainModel = null;` | — | [N/A] | |
+| L120 | `}` | — | [N/A] | renderPlayer 종료 |
+| L121 | (빈 줄) | — | [N/A] | |
+| L122 | `public void drawFirstPersonHand(EntityPlayer entityPlayer)` | (1.21.1 vanilla 1인칭 손 자동) | [N/A] | |
+| L123 | `{` | — | [N/A] | |
+| L124 | `modelBipedMain.firstPerson = true;` | (vanilla 1인칭 자동 분리) | [N/A] | |
+| L125 | `irp.superDrawFirstPersonHand(entityPlayer);` | — | [N/A] | |
+| L126 | `modelBipedMain.firstPerson = false;` | — | [N/A] | |
+| L127 | `}` | — | [N/A] | |
+| L128 | (빈 줄) | — | [N/A] | |
+| L129 | `public void rotatePlayer(AbstractClientPlayer entityplayer, float totalTime, float actualRotation, float f2)` | sm_captureBodyYaw HEAD + @ModifyArg index=3 (R-2 청크 1) | [정합] | rotatePlayer = setupTransforms 진입점 |
+| L130 | `{` | — | [N/A] | |
+| L131 | `boolean isLocal = entityplayer instanceof EntityPlayerSP;` | (vanilla 자동 — ClientPlayerEntity 자동) | [N/A] | |
+| L132 | `boolean isInventory = f2 == 1.0F && isLocal && Minecraft.getMinecraft().currentScreen instanceof GuiInventory;` | (vanilla InventoryScreen 자동) | [N/A] | |
+| L133 | `if(!isInventory)` | (vanilla 자동) | [N/A] | |
+| L134 | `{` | — | [N/A] | |
+| L135 | `float forwardRotation = entityplayer.prevRotationYaw + (entityplayer.rotationYaw - entityplayer.prevRotationYaw) * f2;` | sm_captureBodyYaw: `MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw())` | [정합] | |
+| L136 | (빈 줄) | — | [N/A] | |
+| L137 | `if(entityplayer.isPlayerSleeping())` | (vanilla SleepingPose 자동 — 0 reset) | [정합] | |
+| L138 | `{` | — | [N/A] | |
+| L139 | `actualRotation = 0;` | (vanilla 자동) | [정합] | |
+| L140 | `forwardRotation = 0;` | (vanilla 자동) | [정합] | |
+| L141 | `}` | — | [N/A] | |
+| L142 | (빈 줄) | — | [N/A] | |
+| L143 | `float workingAngle;` | (어깨 NonStandardWorking 부재 §16-5) | [N/A] | |
+| L144 | `Minecraft minecraft = Minecraft.getMinecraft();` | (vanilla MinecraftClient 자동) | [N/A] | |
+| L145 | `if(!isLocal)` | (어깨 부재) | [N/A] | |
+| L146 | `{` | — | [N/A] | |
+| L147 | `workingAngle = -entityplayer.rotationYaw;` | — | [N/A] | |
+| L148 | `workingAngle += minecraft.renderViewEntity.rotationYaw;` | — | [N/A] | |
+| L149 | `}` | — | [N/A] | |
+| L150 | `else` | — | [N/A] | |
+| L151 | `workingAngle = actualRotation - getPreviousRendererData(entityplayer).rotateAngleY * RadiantToAngle;` | (fade 데이터 + 어깨 부재) | [N/A] | |
+| L152 | (빈 줄) | — | [N/A] | |
+| L153 | `if(minecraft.gameSettings.thirdPersonView == 2 && !minecraft.renderViewEntity.isPlayerSleeping())` | (vanilla 3rd person 자동) | [N/A] | |
+| L154 | `workingAngle += 180F;` | (어깨 부재) | [N/A] | |
+| L155 | (빈 줄) | — | [N/A] | |
+| L156 | `IModelPlayer[] modelPlayers = irp.getRenderModels();` | (단일 모델) | [N/A] | |
+| L157 | (빈 줄) | — | [N/A] | |
+| L158 | `for(int i = 0; i < modelPlayers.length; i++)` | (단일) | [N/A] | |
+| L159 | `{` | — | [N/A] | |
+| L160 | `SmartRenderModel modelPlayer = modelPlayers[i].getRenderModel();` | — | [N/A] | |
+| L161 | (빈 줄) | — | [N/A] | |
+| L162 | `modelPlayer.actualRotation = actualRotation;` | (state holder) | [N/A] | |
+| L163 | `modelPlayer.forwardRotation = forwardRotation;` | (sm_captureBodyYaw smBodyYawOverride 갱신) | [N/A] | |
+| L164 | `modelPlayer.workingAngle = workingAngle;` | (어깨 부재) | [N/A] | §16-5 |
+| L165 | `}` | — | [N/A] | |
+| L166 | (빈 줄) | — | [N/A] | |
+| L167 | `actualRotation = 0;` | (Mixin: @ModifyArg가 인자 교체) | [N/A] | |
+| L168 | `}` | — | [N/A] | |
+| L169 | (빈 줄) | — | [N/A] | |
+| L170 | `irp.superRotatePlayer(entityplayer, totalTime, actualRotation, f2);` | (vanilla setupTransforms — @ModifyArg가 인자 변환) | [N/A] | |
+| L171 | `}` | — | [N/A] | rotatePlayer 종료 |
+| L172 | (빈 줄) | — | [N/A] | |
+| L173 | `public void renderSpecials(AbstractClientPlayer entityplayer, float f)` | (vanilla CapeFeatureRenderer + 자동) | [N/A] | |
+| L174 | `{` | — | [N/A] | |
+| L175 | `modelBipedMain.bipedEars.beforeRender();` | (Ears 부재) | [N/A] | |
+| L176 | `modelBipedMain.bipedCloak.beforeRender(entityplayer, f);` | (vanilla CapeFeatureRenderer 자동) | [N/A] | |
+| L177 | `irp.superRenderSpecials(entityplayer, f);` | (vanilla 자동) | [N/A] | |
+| L178 | `modelBipedMain.bipedCloak.afterRender();` | (vanilla 자동) | [N/A] | |
+| L179 | `modelBipedMain.bipedEars.afterRender();` | (Ears 부재) | [N/A] | |
+| L180 | `}` | — | [N/A] | |
+| L181 | (빈 줄) | — | [N/A] | |
+| L182 | `@SuppressWarnings({ "static-method", "unused" })` | — | [N/A] | |
+| L183 | `public void beforeHandleRotationFloat(EntityLivingBase entityliving, float f)` | (1.21.1: ticksRiding 보정 미이식) | [N/A] | |
+| L184 | `{` | — | [N/A] | |
+| L185 | `if(entityliving instanceof EntityPlayer)` | — | [N/A] | |
+| L186 | `{` | — | [N/A] | |
+| L187 | `SmartStatistics statistics = SmartStatisticsFactory.getInstance((EntityPlayer)entityliving);` | (SmartStatistics 부재) | [N/A] | R-8 검토 |
+| L188 | `if (statistics != null)` | — | [N/A] | |
+| L189 | `entityliving.ticksExisted += statistics.ticksRiding;` | (1.21.1: vanilla RidingPose 자동 — ticksRiding 보정 부재) | [N/A] | 라이딩 흔들림 동기화 — vanilla 자동 |
+| L190 | `}` | — | [N/A] | |
+| L191 | `}` | — | [N/A] | |
+| L192 | (빈 줄) | — | [N/A] | |
+| L193 | `@SuppressWarnings({ "static-method", "unused" })` | — | [N/A] | |
+| L194 | `public void afterHandleRotationFloat(EntityLivingBase entityliving, float f)` | (1.21.1: ticksRiding 복원 부재) | [N/A] | |
+| L195 | `{` | — | [N/A] | |
+| L196 | `if(entityliving instanceof EntityPlayer)` | — | [N/A] | |
+| L197 | `{` | — | [N/A] | |
+| L198 | `SmartStatistics statistics = SmartStatisticsFactory.getInstance((EntityPlayer)entityliving);` | — | [N/A] | |
+| L199 | `if (statistics != null)` | — | [N/A] | |
+| L200 | `entityliving.ticksExisted -= statistics.ticksRiding;` | (vanilla RidingPose 자동) | [N/A] | |
+| L201 | `}` | — | [N/A] | |
+| L202 | `}` | — | [N/A] | |
+| L203 | (빈 줄) | — | [N/A] | |
+| L204 | `public static RendererData getPreviousRendererData(EntityPlayer entityplayer)` | (fade 데이터 캐시 — fade 부재로 N/A) | [N/A] | §17 |
+| L205 | `{` | — | [N/A] | |
+| L206 | `if(++previousRendererDataAccessCounter > 1000)` | (1000회마다 GC) | [N/A] | |
+| L207 | `{` | — | [N/A] | |
+| L208 | `List<?> players = Minecraft.getMinecraft().theWorld.playerEntities;` | (vanilla 자동 GC) | [N/A] | |
+| L209 | (빈 줄) | — | [N/A] | |
+| L210 | `Iterator<EntityPlayer> iterator = previousRendererData.keySet().iterator();` | — | [N/A] | |
+| L211 | `while(iterator.hasNext())` | — | [N/A] | |
+| L212 | `if(!players.contains(iterator.next()))` | — | [N/A] | |
+| L213 | `iterator.remove();` | — | [N/A] | |
+| L214 | (빈 줄) | — | [N/A] | |
+| L215 | `previousRendererDataAccessCounter = 0;` | — | [N/A] | |
+| L216 | `}` | — | [N/A] | |
+| L217 | (빈 줄) | — | [N/A] | |
+| L218 | `RendererData result = previousRendererData.get(entityplayer);` | (fade 부재) | [N/A] | |
+| L219 | `if(result == null)` | — | [N/A] | |
+| L220 | `previousRendererData.put(entityplayer, result = new RendererData());` | — | [N/A] | |
+| L221 | `return result;` | — | [N/A] | |
+| L222 | `}` | — | [N/A] | |
+| L223 | (빈 줄) | — | [N/A] | |
+| L224 | `private static Map<EntityPlayer, RendererData> previousRendererData = new HashMap<EntityPlayer, RendererData>();` | (fade 데이터 캐시 부재) | [N/A] | |
+| L225 | `private static int previousRendererDataAccessCounter = 0;` | — | [N/A] | |
+| L226 | (빈 줄) | — | [N/A] | |
+| L227 | `public final SmartRenderModel modelBipedMain;` | (단일 모델) | [N/A] | |
+| L228 | `}` | — | [N/A] | 클래스 종료 |
+
+**청크 1 (228 라인) 통계: 정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200 = 228 라인 전수.**
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 의미 있는 확인:
+- L54-L57 SmartStatistics 변수 갱신 위치 — §16-10/12/13/15 [오역] 발견 변수의 SR mod 측 *원본 갱신 지점*. 1.21.1 SmartStatistics 부재 → vanilla limbAnimator/age 등가 매핑이 제한적.
+- L77-L88 atan-based 각도 계산 (currentVerticalAngle/currentHorizontalAngle) — 1.21.1 atan2 등가 (sm_captureBodyYaw + sm.stats.currentVerticalAngle) [정합].
+- L81 `-Math.atan(xDiff / zDiff)` + L87-L88 `if (zDiff < 0) += Half` = `atan2(-xDiff, zDiff)` 등가 — 1.21.1 sm_captureBodyYaw 의 `atan2(-vel.x, vel.z)`와 정확히 일치.
+- L189/L200 `ticksExisted += statistics.ticksRiding` — 라이딩 흔들림 ticks 동기화. 1.21.1 vanilla RidingPose 자동 처리 (별도 ticksRiding 변수 부재) → 미이식이지만 vanilla 자동 처리로 영향 약함.
+
+**다음 청크**: R-6 청크 2 (SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 7 파일 ~391 라인). R-6 마지막 청크.

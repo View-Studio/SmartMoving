@@ -320,6 +320,8 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-5 청크 3 (RendererData 32 + Cape 90 + Ears 61 + Special 56 = 239) — 세션 16 (정합 28 / 오역 0 / 누락 2 / 잉여 0 / N/A 209)
   - **R-5 누적**: 정합 71 / 오역 0 / 누락 2 / 잉여 0 / N/A 534 = 607 라인 전수
 - [ ] R-6. SmartRenderRender.java + SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender (~564줄)
+  - [x] R-6 청크 1 (SmartRenderRender.java 228 라인) — 세션 17 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
+  - [ ] R-6 청크 2 (SmartRenderUtilities + Mod/Info/Install/Context/IModel/IRender 7 파일 ~391줄)
 - [ ] R-7. SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (~788줄)
 - [ ] R-8. SmartStatistics 일체 (7 파일 ~620줄)
 - [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
@@ -1027,6 +1029,40 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 **R-5 완료** — ModelRotationRenderer + RendererData/Cape/Ears/Special 5 파일 607 라인 전수 라인별 1:1 매핑.
 
 **다음 R-단계**: R-6 (SmartRenderRender.java 227 + SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 8 파일 ~618 라인). SR mod 진입점 + 유틸 + 인터페이스 위주 — 거의 인프라 영역.
+
+---
+
+### 세션 17 — 2026-04-26 — Phase R / R-6 청크 1 (SmartRenderRender.java 228 라인)
+
+**진행한 작업**:
+
+1. **R-6 청크 1 라인별 read**: 원본 SmartRenderRender.java 228 라인 전수 read.
+2. **1.21.1 매핑 검증**: MixinPlayerEntityRenderer.sm_captureBodyYaw + @ModifyArg index=3 + state holder 활용 + atan2 등가 매핑 비교.
+3. **매핑 표 추가**: research_animation_line_by_line.md R-6 청크 1 섹션 — 228 라인 모두 5종 분류 등재 (skip 0건).
+
+**청크 1 통계**:
+- [정합] 28 (class @Mixin / renderPlayer 진입점 / state holder 매핑 / isSleeping / 위치 차이 lerp 8 라인 (xDiff/yDiff/zDiff/distance/horizontal/vertical) / atan-based 각도 계산 8 라인 / rotatePlayer 진입점 + forwardRotation lerp + isSleeping reset 4 라인 등)
+- [오역] 0 / [누락] 0 / [잉여] 0
+- [N/A] 200 (다층 모델 분배 + SmartStatistics 부재 + 어깨 NonStandardWorking 부재 + fade 캐시 + ticksRiding 보정 + 빈 줄)
+- 합계: 228 라인 전수.
+
+**청크 1 발견**: 신규 [오역]/[누락]/[잉여] 0건. 다음 핵심 검증:
+- L54-L57 SmartStatistics 변수 갱신 위치 — §16-10/12/13/15 [오역] 발견 변수의 SR mod 측 *원본 갱신 지점*. 1.21.1 SmartStatistics 부재 → vanilla limbAnimator/age 등가가 제한적.
+- L81 `-atan(xDiff / zDiff)` + L87-L88 `if (zDiff < 0) += Half` = `atan2(-xDiff, zDiff)` 등가 — 1.21.1 sm_captureBodyYaw `atan2(-vel.x, vel.z)`와 정확히 일치 검증.
+- L77 `atan(yDiff / horizontalDistance)` (currentVerticalAngle) — sm_animateFlying/HeadJumping ANIM-01 활용되는 핵심 capture 변수. 1.21.1 sm.stats.currentVerticalAngle (state holder)에 갱신.
+- L189/L200 `ticksExisted += statistics.ticksRiding` — 라이딩 흔들림 동기화. 1.21.1 vanilla RidingPose 자동 처리.
+
+**검증 체크리스트 (세션 17 R-6 청크 1)**:
+- [근거] ✓ 원본 로컬 read 완료 (228 라인)
+- [전수] ✓ 청크 내 228 라인 모두 매핑 표 등재 (skip 0)
+- [분류] ✓ 5종 분류 합계 228 일치 (28+0+0+0+200)
+- [발견] ✓ 신규 발견 0건 (R-2 매핑과 일관)
+- [통계] ✓ 매핑 표 + 본 §15 양쪽 기록
+- [검증] ✓ 1.21.1 대응 위치 grep 검증 (sm_captureBodyYaw atan2 + state holder)
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**다음 청크**: R-6 청크 2 (SmartRenderUtilities 108 + Mod 73 + Info 28 + Install 26 + Context 47 + IModel 62 + IRender 47 = 7 파일 ~391 라인). R-6 마지막 청크.
 
 ---
 
