@@ -542,6 +542,16 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-23** sm_isClimbing_client + sm_applyClimbingSpeed + sm_updateLimbs_client + sm_isInSwimmingPose_client cfg.enabled 가드 — sm.* 잔존 timing 차단 (4 inject) (세션 36 4차 감사)
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
+- [📋 등재] **BUG-25** 비행 속도 원본보다 느림 — `getNonSlowInputSpeedFactor` 누락 또는 다른 속도 배수 미적용 (Agent 가설)
+- [📋 등재] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — `flyCloseToGround=true` 기본값 시 자동 착지 비활성 (옵션 의미 / standupIfPossible 호출 조건)
+- [📋 등재] **BUG-27** 위아래 보면서 전진 속도 너무 느림 — moveFlying 비표준 정규화 `sqrt(sqrt(x²+z²) + y²)` 영향 가능 (원본도 동일 — 잠재 원인 추가 분석 필요)
+- [📋 등재] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — jump 키 hold 시 motionY 누적 또는 vanilla gravity 자동 적용 충돌
+- [📋 등재] **BUG-29** 비행 진입 뚝 끊김 — sm.isFlying 첫 프레임 timing / heightOffset 즉시 적용 / stats 갱신 timing
+- [📋 등재] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — sm_animateFlying 의 setAnglesXZY 헬퍼 정확성 (XZY 매핑 검증)
+- [📋 등재] **BUG-31** 몸 기울기 방향 다름 (몸 앞쪽이 하늘) — sm_setupTransforms isFlying `theta = (π/2 - currentVerticalAngle) * walkFactor` 부호 또는 기준점 검증 필요
+- [📋 등재] **BUG-32** 머리 이상하게 고정 — sm_animateFlying head.pitch ANIM-01 처리 (head.pitch = -theta/2) 부정확 또는 currentVerticalAngle 범위 차이
+- [📋 등재] **BUG-33** 비행 모든 애니메이션 부드럽지 않음 (프레임 끊김) — sm.stats.calculate 비행 중 갱신 timing (ci.cancel 후 sm_afterMove_client 호출 검증) / limbSwingAmount vs sm.currentSpeed
+- [📋 등재] **BUG-34** 비행 디테일 (각도/움직임/속도/스무스함) 다름 — sm_animateFlying 의 limbSwing vs sm.stats.totalDistance 입력값 혼합 영향 / 정밀 1:1 재검증 필요
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)
