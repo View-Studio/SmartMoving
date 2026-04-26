@@ -635,14 +635,27 @@ public abstract class MixinPlayerEntityModelClient {
         //   rotateAngleY = cos(time*0.15) * Sixteenth * standFactor   (정지 시 미세 흔들림)
         //   rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Half - Sixteenth) * walkFactor + Quarter * standFactor   (날개짓)
         // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
+        //
+        // 🔴 (세션 65b): 비행 중 공격 시 preferred arm 만 setAnglesXZY skip.
+        //   사용자 요구: "비행 중에도 그냥 땅에서 오른팔 휘두르는 그 모션 그대로".
+        //   vanilla setAngles TAIL 의 animateArms 가 preferred arm 에 적용한 full
+        //   vanilla swing 모션 (기본 setAngles arm.pitch + animateArms 효과) 을 그대로
+        //   잔존시키기 위해 setAnglesXZY 자체를 skip. 다른 팔만 날개짓 자세 적용.
+        //   세션 65 의 += 재적용 방식은 setAnglesXZY 가 vanilla 기본 arm.pitch 를 0 reset
+        //   한 후에 animateArms 효과만 += 하는 결과 → vanilla swing 의 절반만 보임.
+        float swing = player.handSwingProgress;
+        Arm preferredArm = player.getMainArm();
+        boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
+        boolean preserveLeft  = swing > 0F && preferredArm == Arm.LEFT;
+
         float rYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float lYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float rRoll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH + HALF - SIXTEENTH) * walkFactor
                 + QUARTER * standFactor;
         float lRoll = (MathHelper.cos(distance) * SIXTYFOURTH - HALF + SIXTEENTH) * walkFactor
                 - QUARTER * standFactor;
-        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
-        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
+        if (!preserveRight) setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        if (!preserveLeft)  setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance) * SIXTYFOURTH * walkFactor
@@ -675,45 +688,9 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65): 비행 중 공격 swing — vanilla 1.21.1 animateArms 효과 1:1 직접 적용.
-        //   사용자 요구: 비행 시 공격 모션은 vanilla 1.21.1 기본 swing 모션 그대로 보이게 함.
-        //   원본 1.7.10 SmartRenderModel.animateWorkingArms 는 1.7.10 vanilla swing 매핑이지만,
-        //   1.21.1 매핑은 1.21.1 vanilla 기본 swing 을 사용 (animateArms — BipedEntityModel).
-        //
-        //   배경:
-        //   - vanilla setAngles TAIL 에서 animateArms 호출 → body.yaw, arm.pivot,
-        //     arm.yaw/pitch/roll += swing 효과 적용.
-        //   - 그러나 sm_setAngles reset 인프라 (L107) 가 body.yaw=0 reset.
-        //   - sm_animateFlying 의 setAnglesXZY 가 arm.yaw/roll 절대값 set → vanilla 의
-        //     arm rotation += 효과 덮어씀.
-        //   - 결과: pivot 효과만 잔존 → 사용자 보고 "팔이 어깨 앞뒤로만 흔들림".
-        //
-        //   정정: vanilla 1.21.1 animateArms 의 arm rotation 효과를 setAnglesXZY 후 1:1 다시 적용.
-        //     body.yaw 값은 swing 으로부터 vanilla 와 동일 공식으로 재계산
-        //     (reset 으로 0 됐기 때문).
-        //   참조: docs/research/vanilla/BipedEntityModel_detail.md B-06.
-        float swing = player.handSwingProgress;
-        if (swing > 0F) {
-            Arm preferred = player.getMainArm();
-            float bodyYawSwing = MathHelper.sin(MathHelper.sqrt(swing) * (float)(Math.PI * 2)) * 0.2F;
-            if (preferred == Arm.LEFT) bodyYawSwing = -bodyYawSwing;
-
-            rightArm.yaw  += bodyYawSwing;
-            leftArm.yaw   += bodyYawSwing;
-            leftArm.pitch += bodyYawSwing;
-
-            float f = 1F - swing;
-            f *= f;
-            f *= f;                 // (1 - swing)^4
-            f = 1F - f;
-            float g = MathHelper.sin(f * (float) Math.PI);
-            float h = MathHelper.sin(swing * (float) Math.PI) * -(head.pitch - 0.7F) * 0.75F;
-
-            ModelPart preferredArm = (preferred == Arm.LEFT) ? leftArm : rightArm;
-            preferredArm.pitch -= g * 1.2F + h;
-            preferredArm.yaw   += bodyYawSwing * 2F;
-            preferredArm.roll  += MathHelper.sin(swing * (float) Math.PI) * -0.4F;
-        }
+        // 🔴 (세션 65b): swing 처리 = preferred arm 의 setAnglesXZY skip (위 팔 블록 참조).
+        //   vanilla setAngles + animateArms 가 preferred arm 에 적용한 full vanilla swing
+        //   모션이 그대로 보존됨. 추가 += 적용 불필요.
     }
 
     /**
