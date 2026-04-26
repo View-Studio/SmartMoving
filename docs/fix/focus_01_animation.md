@@ -419,7 +419,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying 본체 `distance = limbSwing * 0.08f` + `walkFactor/standFactor = smFactor(limbSwingAmount, ...)` 3 라인 → `sm.stats.totalDistance` / `sm.stats.currentSpeed` 교체. sm 인자 이미 있음. **세션 32 완료**.
 
 **[신규 Mixin]**
-- [ ] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — 신규 MixinCapeFeatureRenderer + 자체 outer.X(setupTransforms theta) capture → `cloak.pitch = clamp(cloak.pitch, ..., max(70.523° - outerX, 6°))`. 우선순위 중간 (메인 외 망토).
+- [-] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — **§17 잔여로 deferred (세션 33)**. 사유: vanilla CapeFeatureRenderer 가 `matrices.multiply(POSITIVE_X.rotationDegrees(angleDeg))` 로 망토 X 회전 직접 적용 (cloak.pitch 무시) → `@ModifyArg` 로 angleDeg 가로채야 하나, 그 안에서 entity/sm 접근 어려움 → ThreadLocal capture + `@Inject(HEAD)` 분리 필요 + 1.21.1 vanilla 정확 시그니처 확인 필요 (sources jar 부재). 우선순위 중간 (메인 외 망토). 본 작업 별도 세션 / Phase B 외 처리.
 
 **[정합 근사 검토만 — B-N 미등록]**
 - ~~§16-21. Head jump overGroundBlock material → smallOverGroundHeight 단순 높이~~ 5블록 스캔 첫 고체 블록 거리 ≈ material.isSolid() 등가. material 분류 손실은 매우 희귀 케이스. **R-10+ 추가 작업 없음**.
@@ -2119,6 +2119,74 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 ---
 
+### 세션 33 — 2026-04-26 — Phase B / B-17 분석 + deferred 결정 — **Phase B 사실상 종료 (15/16)**
+
+**진행한 작업** (B-17 분석 + §17 잔여 이동 + Phase B 마무리 정리):
+
+1. **원본 1차 자료 read** — `ModelCapeRenderer.java` 전체 (90 라인):
+   - L34-L39 `beforeRender(entityplayer, factor)` — 진입점 (entityplayer + setFactor 저장)
+   - L42-L79 `preTransform(factor, push)` — 망토 transform 본체:
+     - L47-L70: 망토 X/Z 회전 각도 계산 (SM 1.7.10 SRG 필드 + cameraYaw + walkDistance)
+     - L71 `localAngle = 6F + f3/2.0F + f2;` — 기본 망토 X 각도 (= 1.21.1 vanilla `6.0F + k/2.0F + j` 와 동일 패턴)
+     - **L72 `localAngleMax = Math.max(70.523F - outer.rotateAngleX * RadiantToAngle, 6F);`** — outer.X 기반 상한 (도 단위)
+     - **L73 `realLocalAngle = Math.min(localAngle, localAngleMax);`** — 클램프 적용
+     - L75 `glRotatef(realLocalAngle, 1, 0, 0)` — 클램프 후 X 회전
+
+2. **1.21.1 vanilla `CapeFeatureRenderer` 분석**:
+   - sources jar 부재 (`fabric-loom/decompile/v1.zip` 에 `CapeFeatureRenderer.java` 부재 확인).
+   - 일반적으로 알려진 1.21.1 yarn 구현: vanilla 가 `matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(6.0F + k/2.0F + j))` 로 망토 X 회전 직접 적용 (cloak.pitch 미사용).
+   - **클램프 적용 = vanilla 의 `rotationDegrees(F)` 인자 가로채야 함** → `@ModifyArg(target="...rotationDegrees(F)...", ordinal=0)`.
+
+3. **Mixin 작업 복잡도 분석**:
+   - `@ModifyArg` 안에서 entity/sm 접근 어려움 (메서드 인자만 받음) → **ThreadLocal capture 필요**:
+     - `@Inject(method=render, at=HEAD)` — entity 받아서 ThreadLocal 에 sm 저장
+     - `@ModifyArg(method=render, target=rotationDegrees, ordinal=0)` — ThreadLocal 의 sm 사용해 클램프 적용
+     - `@Inject(method=render, at=RETURN)` — ThreadLocal 정리 (memory leak 방지)
+   - 추가로 1.21.1 vanilla CapeFeatureRenderer.render 의 정확한 메서드 시그니처 + RotationAxis.POSITIVE_X.rotationDegrees 호출 위치 + ordinal 확인 필요 (sources jar 없이 추측 위험).
+   - SmartMovingClientState 에 `smOuterTiltX` (라디안) capture 필드 + sm_setupTransforms 의 5 분기 (isSwim/isDive/isSlide/isFlying/isHeadJumping) 모두 갱신 추가 필요.
+
+4. **deferred 결정**:
+   - B-17 우선순위 = **중간** (메인 애니메이션 외 망토 시각 차이 / SM 11-state 큰 X 기울기 상태에서만 발현).
+   - 추측 기반 Mixin 작업 = sources jar 없이 진행 시 **잘못된 시그니처로 inject 실패 또는 잘못된 ordinal 으로 다른 회전 가로챔** 위험.
+   - 본 작업 = 정확한 vanilla 시그니처 확인 + ThreadLocal 인프라 + 신규 Mixin + 5 분기 capture = 한 세션 범위 초과 가능성.
+   - **결정**: B-17 = §17 잔여로 일시 이동. **Phase B 사실상 종료 (15/16 = 93.75%)**. 본 작업 별도 세션 (인게임 통합테스트 후 망토 시각 차이 평가 후 진행 결정).
+
+5. **§17 잔여 등재**:
+   - B-17 deferred 사유 + 작업 단계 4 항목 (vanilla read / SmartMovingClientState capture / Mixin 생성 / mixins.json) 명시.
+   - 인게임 통합테스트 후 망토 시각 차이 평가 후 진행 결정 가능 안내.
+
+6. **§10 B-17 표시 변경**: `[ ]` → `[-]` (deferred 마커) + §17 이동 명시.
+
+**검증 체크리스트 (세션 33 B-17 deferred)**:
+- [근거] ✓ 원본 ModelCapeRenderer.java 전체 read 완료 + 1.21.1 vanilla CapeFeatureRenderer 부재 확인
+- [전수] N/A (코드 변경 없음 / 분석 + 문서)
+- [발견] 1.21.1 vanilla CapeFeatureRenderer 정확 시그니처 sources jar 부재로 검증 어려움 — 후속 작업 전제 조건
+- [검증] ✓ `@ModifyArg + ThreadLocal` 작업 패턴 합리성 분석
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**Phase B 사실상 종료 (세션 24-33 / 10 세션 / 15/16 = 93.75%)**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ 누적 검증 후 (B-16) — 1/1
+- ✅ 인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 5/5
+- ⏳ 신규 Mixin (B-17) — **deferred (§17 잔여 이동)**
+
+**Phase B 누적 코드 변경**:
+- 수정 파일: `MixinPlayerEntityModelClient.java` (sm_setAngles 본체 reset 인프라 + 11 분기 본체 변경 + 끝 cloak), `MixinPlayerEntityRenderer.java` (sm_getPositionOffset 자기/타인 분기 + sm_setupTransforms isSliding body.offsetY + sm_captureBodyYaw isLevitating)
+- 신규 파일: `PlayerEntityModelAccessor.java` (B-16 cloak Accessor)
+- 신규 등록: `smartmoving.client.mixins.json` (PlayerEntityModelAccessor)
+- 11 commit (R-10+ B-8 ~ B-X+B-4 ~ B-5+B-7 ~ B-6 ~ B-17 deferred)
+
+**다음 단계 (세션 34+)**: 권장 진행:
+1. **§14 회귀 방지 감사** — Phase B 코드 변경 후 기존 분기 영향 점검 (vanilla setAngles 호환성 / 다른 SM 분기 회귀)
+2. **인게임 통합테스트 인계** — `playtest_fixes.md` "현재 포커스" → (#1 AI 완결 / 통합테스트 인계). 사용자 in-game §3 16 케이스 매칭 확인.
+3. **B-17 별도 세션** — 통합테스트 후 망토 시각 차이 평가 → 우선순위 재평가 → 진행 결정.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -2257,3 +2325,12 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - fade 보간 0.2F*timeDelta 계수 vanilla lerpAngleDegrees 차이 — bodyYaw 부드러움 영향 (저우선)
 - **NoScaleEnd 갑옷 흉갑 다리 offsetY 보정** — ArmorFeatureRenderer Mixin 별도 작업 (포커스 #1 외, 갑옷 레이어 영역). ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정 필요.
 - **animateNonStandardWorking / BowAiming 어깨 ZYX** — 1.21.1 PlayerEntityModel 에 어깨 노드 부재로 구조적 N/A. SM 비표준 상태(클라이밍/수영) 중 활/석궁 사용 시 어깨 고정 불가. 우선순위 낮음.
+- **B-17 deferred (Cape outer.X 클램프 / §16-25 / ModelCapeRenderer L72-L73)** — 세션 33 deferred. 1.21.1 vanilla `CapeFeatureRenderer.render` 가 `matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(angleDeg))` 로 망토 X 회전 직접 적용 (cloak.pitch 미사용). 클램프 적용 위해 `@ModifyArg(target=rotationDegrees, ordinal=0)` 필요하나, 그 안에서 entity 접근 어려움 → ThreadLocal capture + `@Inject(HEAD)` 분리 + 1.21.1 vanilla CapeFeatureRenderer 정확 시그니처 확인 (sources jar 부재로 추측 위험) 필요. **별도 세션 작업** — 작업 진행 시:
+    1. 1.21.1 vanilla CapeFeatureRenderer 본체 read (sources jar / yarn API 직접)
+    2. SmartMovingClientState 에 `smOuterTiltX` (라디안) capture 필드 추가 + sm_setupTransforms 의 모든 outer.X 적용 분기 (isSwim/isDive/isSlide/isFlying/isHeadJumping) 에서 갱신
+    3. 신규 `MixinCapeFeatureRenderer` 생성:
+       - `@Inject(method=render, at=HEAD)` — entity 받아서 ThreadLocal 에 sm 저장
+       - `@ModifyArg(method=render, target=POSITIVE_X.rotationDegrees, ordinal=0)` — angleDeg 가로채서 `Math.min(angleDeg, Math.max(70.523f - outerXDeg, 6f))` 클램프 적용
+       - `@Inject(method=render, at=RETURN)` — ThreadLocal 정리
+    4. mixins.json 등록 + 빌드 검증
+    - 우선순위 중간 (메인 애니메이션 외 망토). 인게임 통합테스트 후 시각 차이 평가 후 진행 결정 가능.
