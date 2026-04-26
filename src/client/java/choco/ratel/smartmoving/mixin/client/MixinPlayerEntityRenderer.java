@@ -32,6 +32,8 @@ public class MixinPlayerEntityRenderer {
 
     @Unique private static boolean smBodyYawActive;
     @Unique private static float smBodyYawOverride;
+    /** BUG-27/32 (세션 47): 비행 시 추가 Y 회전 (horizontalAngle - lerpedYaw, 라디안). 0 = 추가 회전 없음. */
+    @Unique private static float smFlyingExtraYaw;
 
     /**
      * [9-6][12-6] getPositionOffset() 오버라이드.
@@ -89,6 +91,7 @@ public class MixinPlayerEntityRenderer {
                                     float animationProgress, float bodyYaw, float tickDelta, float scale,
                                     CallbackInfo ci) {
         smBodyYawActive = false;
+        smFlyingExtraYaw = 0f;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         // BUG-12 (세션 36): SM disabled 시 bodyYaw 오버라이드 안 함 → vanilla bodyYaw 그대로 (BUG-7 확장).
         if (!SmartMovingConfig.Config.enabled) return;
@@ -156,13 +159,43 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // isFlying (원본 L704/L713) — 고정 threshold 0.05F
+        // 🔴 BUG-27/32 진짜 원인 정정 (Flying Phase / 세션 47): 원본 1:1 정확 매핑.
+        //   원본 SmartMovingRender.rotatePlayer L145-L148:
+        //     forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2 (= lerpedYaw)
+        //     if (isFlying || ...) entityplayer.renderYawOffset = forwardRotation
+        //   = **player.bodyYaw 를 lerpedYaw (마우스 yaw) 로 강제** — 이동 방향 (horizontalAngle) 아님!
+        //   이로 인해 vanilla setAngles 의 head.yaw = headYaw - bodyYaw = headYaw - lerpedYaw ≈ 0
+        //   = 머리가 몸과 정렬 = 마우스 좌우 시 몸+머리 같이 회전 = 슈퍼맨 자세 자연스러움.
+        //
+        //   원본 SmartMovingModel.isFlying L486:
+        //     bipedOuter.rotateAngleY = horizontalAngle (이동 방향)
+        //   = 모델 전체 추가 Y 회전 — 모델 root pivot (= head pivot) 기준.
+        //
+        //   이전 1.21.1 잘못 매핑: bodyYaw 인자만 ModifyArg 로 horizontalAngle 변경.
+        //     1) entity.bodyYaw field 변경 안 함 → vanilla setAngles 의 head.yaw 가 자연 값
+        //        (마우스 좌우 시 head.yaw 따로 변함) → 사용자 보고 BUG-32 "머리 이상 고정/이상".
+        //     2) bipedOuter.Y (= horizontalAngle 추가 회전) 효과 부재 → 모델이 이동 방향으로
+        //        안 따라감 → 사용자 보고 "전진 시 몸 중심점 다름" + BUG-27 효과.
+        //   정정:
+        //     - smBodyYawOverride = lerpedYaw (마우스 yaw, 도)
+        //     - localPlayer.bodyYaw = localPlayer.prevBodyYaw = lerpedYaw 직접 강제 (vanilla
+        //       setAngles 의 head.yaw 계산 영향)
+        //     - 추가 Y 회전 (horizontalAngle - lerpedYaw) 은 sm_setupTransforms TAIL 에서 처리
+        //       (smFlyingExtraYaw 캐시 통해 전달).
         if (sm.isFlying) {
+            float lerpedYawDeg = localPlayer.prevYaw
+                    + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
+            smBodyYawActive = true;
+            smBodyYawOverride = lerpedYawDeg;
+            // entity.bodyYaw field 강제 (vanilla setAngles 가 lerp 후 사용)
+            localPlayer.bodyYaw = lerpedYawDeg;
+            localPlayer.prevBodyYaw = lerpedYawDeg;
+            // bipedOuter.rotateAngleY 효과: horizontalAngle (이동 방향) 추가 Y 회전.
+            //   sm_setupTransforms TAIL 의 X 회전 직전에 적용 (회전 중심 = 머리 위치).
             float horizontalAngle = sm.stats.horizontalDistance < 0.05F
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
+            smFlyingExtraYaw = horizontalAngle - (float) Math.toRadians(lerpedYawDeg);
             return;
         }
 
@@ -275,18 +308,24 @@ public class MixinPlayerEntityRenderer {
         if (sm.isFlying) {
             float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
             float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
-            // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 46): 회전 중심 = 머리 위치.
-            //   원본 SmartMovingRender 의 bipedOuter 회전 (rotateAngleX = θ) 은 ModelRotationRenderer
-            //   pivot (0,0,0) = vanilla biped model root = head pivot 기준 회전.
-            //   vanilla 1.21.1 LivingEntityRenderer.render() 디컴파일 L329-L356:
-            //     setupTransforms (TAIL inject 시점) → 이후 scale(-1,-1,1) + translate(0,-1.501,0)
-            //     모델 root 를 player.y + 1.501 (= 머리 위치) 로 이동.
-            //   1.21.1 잘못된 매핑: setupTransforms TAIL inject 시점 matrices 가 발 위치 →
-            //     matrices.multiply(X 회전) = 발 위치 기준 회전 = 모델 전체가 발 끝 회전축으로 기울어짐.
-            //   사용자 보고 BUG-29 "비행 시 몸 중심점이 다름 + 움직일 때 이상" 직접 원인.
-            //   정정: translate(0, +1.5, 0) → 머리 위치 → 회전 → translate(0, -1.5, 0) 복원.
-            //     원본 head pivot (= model root) 기준 회전 1:1 매칭.
+            // 🔴 BUG-29 (세션 46) + BUG-27/32 (세션 47) 진짜 원인 정정: 회전 중심 = 머리 위치.
+            //   원본 SmartMovingRender bipedOuter 회전 = ModelRotationRenderer pivot (0,0,0) =
+            //   vanilla biped model root = head pivot 기준 회전.
+            //   vanilla 1.21.1 LivingEntityRenderer.render() L329-L356:
+            //     setupTransforms (TAIL 시점) → 이후 scale + translate(0,-1.501,0) 모델 root → head.
+            //
+            //   원본 비행 시 두 단계 회전 (세션 47):
+            //     1) bipedOuter.rotateAngleY = horizontalAngle (이동 방향) — Y 추가 회전
+            //     2) bipedOuter.rotateAngleX = (Quarter - verticalAngle) * walkFactor — X 기울기
+            //   smFlyingExtraYaw = horizontalAngle - lerpedYaw 는 sm_captureBodyYaw 에서 계산.
+            //   X 회전 부호 반전 (-theta) = vanilla setupTransforms POSITIVE_Y(180-bodyYaw) 의
+            //     좌표계 뒤집힘 보정 (세션 40 BUG-31).
+            //   정정: head 위치로 translate → Y 추가 회전 → X 기울기 → translate 복원.
+            //     원본 head pivot 기준 (Y+X) 두 회전 1:1 매칭.
             matrices.translate(0f, 1.5f, 0f);
+            if (smFlyingExtraYaw != 0f) {
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(smFlyingExtraYaw));
+            }
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
             matrices.translate(0f, -1.5f, 0f);
             sm.smOuterTiltX = theta;
