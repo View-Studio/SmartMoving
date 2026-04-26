@@ -16,7 +16,7 @@
 
 | F-단계 | 대상 | 상태 | 세션 |
 |---|---|---|---|
-| F-1 | 원본 SmartMovingSelf 비행 처리 (handleAlternativeFlying + handleLand 비행 분기 + standupIfPossible + wasFlying 엣지 + flyWhileOnGround) | ⏳ 대기 | 38 예정 |
+| F-1 | 원본 SmartMovingSelf 비행 처리 (handleAlternativeFlying + handleLand 비행 분기 + standupIfPossible + wasFlying 엣지 + flyWhileOnGround) | 🔄 진행 — 청크 1 (handleAlternativeFlying L602-L631) ✅ 완료 / 청크 2 (진입/종료) 대기 / 청크 3 (보조) 대기 | 38 진행 중 |
 | F-2 | 원본 SmartMovingBase.moveFlying L56-L93 + HorizontalAirDamping | ⏳ 대기 | 38 예정 |
 | F-3 | 원본 SmartMovingModel isFlying 분기 L474-L520 | ⏳ 대기 | 38 예정 |
 | F-4 | 1.21.1 SmartMovingFlyer + sm_animateFlying + sm_setupTransforms + sm.isFlying 갱신 + standupIfPossible 모두 read + 매핑 | ⏳ 대기 | 39 예정 |
@@ -44,20 +44,53 @@
 
 ---
 
-## F-1: 원본 SmartMovingSelf 비행 처리 (대기 — 세션 38 예정)
+## F-1: 원본 SmartMovingSelf 비행 처리
 
-대상 라인:
-- L80: `if(sp.capabilities.isFlying && !Config.isFlyingEnabled())` — 비행 가드
-- **L602-L631**: `handleAlternativeFlying` 본체
-- L633-L663: `handleLand` 비행 분기 (L637-L640 sprint+jump 가속)
-- L1803-L1831: `beforeOnLivingUpdate` + `afterOnLivingUpdate` (flyWhileOnGround / wasCapabilitiesIsFlying)
-- L2186-L2212: `standupIfPossible(boolean tryLanding, boolean restoreFromFlying)`
-- L2320: `boolean isLevitating = sp.capabilities.isFlying && !isFlying;`
-- L2404: `if(esp.capabilities.isFlying && (Config.isFlyingEnabled() || Config.isLevitateSmallEnabled())) mustCrawl = false;`
-- L2509+: wasFlying 저장 + 엣지 처리
-- L2542+: `tryLanding` 계산 + standupIfPossible 호출
+### F-1 청크 1 — `handleAlternativeFlying` L602-L631 (세션 38)
 
-→ 다음 세션 작업.
+vs 1.21.1 `SmartMovingFlyer.handleFlying` L28-L77 (BUG-1+8 세션 37 수정 후 기준):
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L602 | `private boolean handleAlternativeFlying(float moveForward, float moveStrafing, float speedFactor, boolean handledSwimming, boolean handledLava)` | `public static boolean handleFlying(ClientPlayerEntity player, SmartMovingClientState sm, Vec3d movementInput, boolean jumping)` (L28-L29) | [정합] | 시그니처 차이 — handledSwimming/Lava 는 sm_travel_client 호출 흐름 (Swimmer→Lava→Sliding→handleFlying 순서) 으로 대체. moveForward/Strafing 은 movementInput.z/x 에서 추출. speedFactor 는 본체에서 직접 계산. |
+| L604 | `boolean handleAlternativeFlying = !handledSwimming && !handledLava && sp.capabilities.isFlying && Config.isFlyingEnabled();` | L31 `if (!sm.isFlying \|\| !cfg.fly) return false;` | [정합] | sm.isFlying 갱신 (SmartMovingClientState L1298) = `cfg.isFlyingEnabled() && capabilities.flying && !isSwimming_sm && !isDiving` 가 원본 가드 모두 내포. cfg.fly 는 sm.isFlying 안에 cfg.isFlyingEnabled 통해 이미 포함 — 단순 가드로 명시. |
+| L605 | `if(handleAlternativeFlying)` | (가드 통과 후 본체 진입) | [정합] | 가드 후 분기 |
+| L607 | `resetSwimming();` | `MixinLivingEntityClient.sm_travel_client` Swimmer 분기 (L101+) 처리 흐름 — handleFlying 진입 시점 = 이미 swim 처리 완료 | [N/A] | 호출 위치 분리 |
+| L608 | `resetClimbing();` | `MixinLivingEntityClient.sm_travel_client` L147-L153 (handleFlying 호출 직전) — `sm.isClimbing/isCrawlClimbing/isCeilingClimbing/isClimbJumping/isClimbHolding/isClimbCrawling/isClimbBackJumping = false` | [정합] | 호출 위치 동등 |
+| L610 | `float moveUpward = 0F;` | L33 `float moveUpward = 0F;` | [정합] | 동일 |
+| L611 | `if(esp.movementInput.sneak)` | L37 `if (player.isSneaking())` | **[오역 후보]** | ⚠️ **원본 = `movementInput.sneak` (키 입력 raw)** vs **1.21.1 = `player.isSneaking()` (vanilla pose 결과)**. SM enabled 시 forceIsSneaking 가로챔 등 영향 가능 → 키 입력과 pose 결과 불일치 케이스. **추가 검증 필요** (BUG-29/30/32 잠재 영향). |
+| L613 | `sp.motionY += 0.14999999999999999D;` | L38 `player.setVelocity(vel.x, vel.y + 0.14999999999999999D, vel.z);` | [정합] | sneak 시 motionY 증가 (양수 = 하강 의도, vanilla 좌표계) |
+| L614 | `moveUpward -= 0.98F;` | L40 `moveUpward -= 0.98F;` | [정합] | 동일 |
+| L615 | `}` | L41 | [정합] | |
+| L616 | `if(esp.movementInput.jump)` | L43 `if (jumping)` | [정합 / 의심] | `jumping` = `LivingEntity.jumping` shadow field. vanilla 가 `movementInput.jump` 키 입력으로 매 틱 갱신 → 동등. 단 BUG-18 (sm_jumpingFilter cfg.enabled 가드) 영향 검토 — SM enabled 시 `this.jumping = false` 강제 가능 (sm.isCrawling 등 조건). **비행 중 jumping 필드 정확성 검증 필요**. |
+| L618 | `sp.motionY -= 0.14999999999999999D;` | L44 `player.setVelocity(vel.x, vel.y - 0.14999999999999999D, vel.z);` | [정합] | jump 시 motionY 감소 (음수 = 상승 의도) |
+| L619 | `moveUpward += 0.98F;` | L45 동일 | [정합] | |
+| L620 | `}` | L46 | [정합] | |
+| L622 | `moveFlying(moveUpward, moveStrafing, moveForward, speedFactor * 0.05F * Config._flyingSpeedFactor.value, Options._flyControlVertical.value);` | L57-L61: `combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg); flyingSpeed = combinedFactor * 0.05F * cfg.flyingSpeedFactor; moveFlying(player, moveUpward, moveStrafe, moveForward, flyingSpeed, cfg.flyControlVertical);` | **🔴 [오역]** | **🔴 BUG-25 직접 원인 확정**: 원본 `speedFactor` (SmartMovingSelf L119) = `getConfigSpeedFactor * getPotionSpeedFactor * getNonSlowInputSpeedFactor(moveForward, moveStrafing)`. **1.21.1 `combinedFactor` = `getConfigSpeedFactor * getPotionSpeedFactor` 만 — getNonSlowInputSpeedFactor 누락**. SmartMovingFlyer L52-L57 주석에서 "근사" 인정. |
+| L624 | `sp.moveEntity(sp.motionX, sp.motionY, sp.motionZ);` | L69-L70: `Vec3d motion = player.getVelocity(); player.move(MovementType.SELF, motion);` | [정합] | **BUG-1+8 (세션 37) 해결됨** |
+| L626 | `sp.motionX *= HorizontalAirDamping;` | L73-L74: `velAfterMove = player.getVelocity(); player.setVelocity(velAfterMove.x * 0.91F, velAfterMove.y * 0.91F, velAfterMove.z * 0.91F);` | [정합] | move() 후 감쇠 (원본 L626 도 moveEntity 후 적용 동일 순서). HorizontalAirDamping = 0.91F 하드코딩. |
+| L627 | `sp.motionY *= HorizontalAirDamping;` | L74 (위와 같은 호출) | [정합] | |
+| L628 | `sp.motionZ *= HorizontalAirDamping;` | L74 | [정합] | |
+| L629 | `}` | L75 | [정합] | |
+| L630 | `return handleAlternativeFlying;` | L76 `return true;` | [정합] | true 반환 (가드 통과 시) |
+| L631 | `}` | L77 | [정합] | |
+
+**청크 1 통계 (30 라인)**: 정합 23 / 오역 1 (L622 NonSlowInput) / 오역 후보 2 (L611 sneak / L616 jumping) / 누락 0 / 잉여 0 / N/A 4 (L607 resetSwimming + L612/L617/L621/L629 닫는괄호 등 구조)
+
+**핵심 발견 (F-1 청크 1)**:
+1. 🔴 **[오역] L622 — getNonSlowInputSpeedFactor 누락 = BUG-25 직접 원인 확정**
+   - 원본 `speedFactor = getConfigSpeedFactor * getPotionSpeedFactor * getNonSlowInputSpeedFactor`
+   - 1.21.1 `combinedFactor = getConfigSpeedFactor * getPotionSpeedFactor` (NonSlowInput 누락)
+   - 단 사용자 보고 "느림" 과 NonSlowInput "옆/뒤 0.6배 감속" 은 부분적 모순 — getNonSlowInputSpeedFactor 의 정확한 정의 (앞 입력 시 1.0, 옆/뒤 0.6 외 다른 케이스?) 추가 확인 필요. **F-1 청크 추가 — getNonSlowInputSpeedFactor 정의 read 필요**.
+2. ⚠️ **[오역 후보] L611 sneak 검사** — `movementInput.sneak` (키 raw) vs `isSneaking()` (pose 결과). SM enabled 시 forceIsSneaking 가로챔 영향 가능. 정확한 매핑 = vanilla `Input.sneaking` 또는 `MinecraftClient.options.sneakKey.isPressed()` 검토 필요.
+3. ⚠️ **[오역 후보] L616 jumping 필드** — sm_jumpingFilter (BUG-18 가드) 영향 검토. 비행 중 `this.jumping` 강제 false 가능성.
+
+**F-1 청크 1 발견 — F-5 BUG 매핑 후보**:
+- BUG-25 (속도 느림) → L622 getNonSlowInputSpeedFactor 누락 [원인 확정]
+- BUG-29/30/32 (진입 끊김 / 팔축 / 머리) → L611 sneak 검사 차이 잠재 영향
+- BUG-28 (하늘 끝까지) → L616 jumping 필드 검토 + L613/L618 motionY 부호 검증 (sneak +0.15 / jump -0.15 — 원본 동일)
+
+**다음 청크**: F-1 청크 2 (비행 진입/종료 처리 — L1803-L1831 + L2186-L2212 + L2542+ + getNonSlowInputSpeedFactor 정의).
 
 ---
 
