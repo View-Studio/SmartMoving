@@ -219,6 +219,10 @@ public class MixinPlayerEntityRenderer {
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
             // bipedOuter.rotationPointY = 5F
             matrices.translate(0f, 5f / 16f, 0f);
+            // bipedBody.offsetY = -0.4F (원본 SmartMovingModel.java L452, B-13 / §16-19)
+            // ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정.
+            // 단위: 픽셀 → 블록 (/16). slide 분기 안에서만 적용 (push/pop 자동 관리).
+            matrices.translate(0f, -0.4f / 16f, 0f);
         }
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)

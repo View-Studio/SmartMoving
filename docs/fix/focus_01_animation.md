@@ -402,7 +402,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L339) — `head.yaw -= headYaw * DEG_TO_RAD;` + 주석 1 라인 제거 (원본 L315 절대 할당 1:1). **세션 25 완료**.
 
 **[다중 라인 + MatrixStack 보정]**
-- [ ] B-13. Slide 다중 피벗 (§16-19 / SmartMovingModel L442/L444/L448/L452/L453) — sm_animateSliding `head.roll = -viewHorizontalAngelOffset/RadiantToAngle; head.pivotZ = -2F; body.pivotY = +6.5F;` + sm_setupTransforms 별도 `matrices.translate(0, -0.4F/16, 0)` 보정 (body.offsetY 부재 우회) + outer.pivotY = +5F 등가 (entity-level translate 또는 sm_getPositionOffset 분기)
+- [x] B-13. Slide 다중 피벗 (§16-19 / SmartMovingModel L442/L444/L448/L452/L453) — sm_animateSliding 시그니처에 headYaw 추가 + 호출처 갱신 / `head.roll = -headYaw * DEG_TO_RAD; head.pivotZ = -2F; body.pivotY = +6.5F;` 3 라인 / sm_setupTransforms isSliding 분기에 `matrices.translate(0, -0.4F/16F, 0)` 1 라인 (body.offsetY 부재 보정) / outer.pivotY=+5F 는 기존 sm_setupTransforms L221 에 이미 이식 / head.roll reset 인프라 1 라인 확장. **세션 28 완료**.
 
 **[신규 분기 추가]**
 - [ ] B-14. 타인 플레이어 crawl Y 보정 (§16-22 / SmartMovingRender L124-L125) — sm_getPositionOffset 분기 추가 `else if (!isOwnPlayer && entity.isSneaking() && sm.isCrawling) cir.setReturnValue(new Vec3d(0, 0.125, 0));`
@@ -1713,6 +1713,84 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **Phase B 진행 누적**: 16 원자 중 **7 완료** / 9 남음. 단일 라인 그룹 6 원자 + B-19 (climbing 같은 분기 누락) = 7 모두 완료. **남은 9 원자 = 다중/신규/누적/인프라/Mixin 그룹**.
 
 **다음 단계 (세션 28+)**: 권장 시작 = **B-13** (slide 다중 피벗 — 5 라인 + MatrixStack 보정 / body.offsetY 부재 우회). 다중 라인 그룹 진입.
+
+---
+
+### 세션 28 — 2026-04-26 — Phase B / R-10+ B-13 (slide 다중 피벗) 1:1 이식 — **다중 라인 그룹 진입**
+
+**진행한 작업** (다중 라인 + MatrixStack 보정 — 2 메서드 / 5 라인 추가 + 시그니처 1 + 호출처 1 + reset 인프라 1 = 8 라인 변경):
+
+1. **원본 1차 자료 read** — SmartMovingModel.java L437-L455 (slide 분기 머리/Outer/몸통):
+   - **L442**: `bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle;` (head.roll 방향 정렬)
+   - **L443**: `bipedHead.rotateAngleX = -Eighth - Sixteenth;` (이미 head.pitch = -EIGHTH - SIXTEENTH 매핑됨)
+   - **L444**: `bipedHead.rotationPointZ = -2F;` (head.pivotZ)
+   - **L447**: `bipedOuter.rotateAngleY = currentHorizontalAngle;` (이미 sm_captureBodyYaw 매핑됨)
+   - **L448**: `bipedOuter.rotationPointY = 5F;` (entity-level translate, **이미 sm_setupTransforms L221 에 `matrices.translate(0f, 5f/16f, 0f)` 매핑됨**)
+   - **L449**: `bipedOuter.rotateAngleX = Quarter;` (이미 sm_setupTransforms L218 매핑됨)
+   - **L451**: `bipedBody.rotationOrder = ModelRotationRenderer.YXZ;` (이미 setAnglesYXZ 매핑됨)
+   - **L452**: `bipedBody.offsetY = -0.4F;` ← **ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정 필요**
+   - **L453**: `bipedBody.rotationPointY = +6.5F;` (body.pivotY)
+
+2. **viewHorizontalAngelOffset 매핑 검증** — `research_animation_line_by_line.md` L413 에서 crawl L399 의 `head.rotateAngleZ = -viewHorizontalAngelOffset/RadiantToAngle` 가 1.21.1 sm_animateCrawling 의 `head.roll = -headYaw * DEG_TO_RAD` 로 [정합] 매핑됨을 확인 → slide 도 동일 패턴 적용.
+
+3. **vanilla reset 패턴 사전 검증**:
+   - `head.roll`: vanilla setAngles 가 head.roll 매 프레임 reset 안 함 → **누적 위험** → **B-13 reset 인프라 확장 (head.roll = 0 추가)**.
+   - `head.pivotZ`: B-9 reset 인프라 (sm_setAngles HEAD) 안전.
+   - `body.pivotY`: vanilla 매 프레임 sneak 분기 reset (B-8 검증) 안전.
+   - `matrices.translate`: render call 마다 push/pop 자동 관리, 누적 없음.
+
+4. **B-13 코드 수정** (3 파일 변경 — MixinPlayerEntityModelClient + MixinPlayerEntityRenderer):
+
+   a. **sm_setAngles HEAD reset 인프라 확장** (anySmState 분기):
+      ```java
+      head.pivotZ = 0f;   // (B-9 기존)
+      body.pivotZ = 0f;   // (B-9 기존)
+      body.yaw    = 0f;   // (B-11 기존)
+      head.roll   = 0f;   // (B-13 신규)
+      ```
+   b. **sm_animateSliding 시그니처 변경**: `(float limbSwing, float limbSwingAmount)` → `(float limbSwing, float limbSwingAmount, float headYaw)`. 호출처 L126 갱신.
+   c. **sm_animateSliding 본체 추가 라인 3 줄**:
+      - 머리 끝: `head.roll = -headYaw * DEG_TO_RAD;` (원본 L442) + `head.pivotZ = -2f;` (원본 L444)
+      - 몸통 끝: `body.pivotY = 6.5f;` (원본 L453)
+   d. **sm_setupTransforms isSliding 분기 추가 라인 1 줄**:
+      ```java
+      // bipedBody.offsetY = -0.4F (원본 L452, B-13)
+      // ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정. 단위: 픽셀 → 블록 (/16).
+      // slide 분기 안에서만 적용 (push/pop 자동 관리).
+      matrices.translate(0f, -0.4f / 16f, 0f);
+      ```
+      외부 push/pop 으로 slide 진입/종료 자동 관리, 누적 위험 없음.
+
+5. **값 정확성 검증**:
+   - `head.roll = -headYaw * DEG_TO_RAD`: 원본 viewHorizontalAngelOffset (도) → headYaw (도) 등가, RadiantToAngle = DEGREES_PER_RADIAN. 1:1 등가 (이미 crawl 분기에서 검증됨).
+   - `head.pivotZ = -2F` / `body.pivotY = 6.5F`: 1.21.1 기본값에서 직접 매핑 (정확).
+   - `outer.pivotY = +5F` (이미 이식): SR `bipedOuter` = root → 전체 visual +5 = entity-level translate. `matrices.translate(0, 5F/16F, 0)` 직접 등가.
+   - `body.offsetY = -0.4F` → `matrices.translate(0, -0.4F/16F, 0)`: ModelPart 의 offsetY 는 1.7.10 ModelRotationRenderer 의 transform 후 추가 평행이동. 1.21.1 ModelPart 에 부재 → MatrixStack 으로 보정 = 모든 자식 노드 동시 이동. SR 원본은 bipedBody (bipedTorso 자식) 만 이동했으나 1.21.1 단일 모델에서는 root 레벨에서 적용 → head/arm/leg 도 함께 이동 (근사 차이 가능, 단 -0.4 픽셀 ≈ -0.025 블록으로 매우 작음).
+
+6. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**검증 체크리스트 (세션 28 B-13)**:
+- [근거] ✓ 원본 SmartMovingModel.java L437-L455 read 완료 + research_animation_line_by_line.md L413/L477 매핑 검증
+- [전수] ✓ 원본 변경 5 지점 (L442/L444/L448/L452/L453) 모두 1.21.1 매핑 — outer.pivotY=5F (기존) + 4 신규
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla reset 패턴 — head.roll (reset 인프라 확장) / head.pivotZ (B-9 인프라) / body.pivotY (vanilla 매 프레임) / matrices.translate (push/pop) 모두 안전 확인
+- [회귀] ✓ slide 진입/종료 모두 안전 — 다른 분기에서 자동 reset, MatrixStack push/pop 으로 leak 없음
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 16 원자 중 **8 완료** (B-8/B-9/B-10/B-11/B-12/B-13/B-18/B-19) / 8 남음. 
+
+**그룹 진행도 갱신**:
+- ✅ 단일 라인 그룹 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 (climbing 같은 분기) — 1/1
+- ✅ **B-13 (다중 라인 + MatrixStack) — 1/1**
+- 신규 분기: B-14 / B-15 (2 원자)
+- 누적 검증 후: B-16 (1 원자)
+- 인프라 + 입력값: B-X / B-4 / B-5 / B-6 / B-7 (5 원자)
+- 신규 Mixin: B-17 (1 원자)
+
+**reset 인프라 누적** (sm_setAngles HEAD anySmState 분기): `head.pivotZ + body.pivotZ + body.yaw + head.roll = 0` 4 필드.
+
+**다음 단계 (세션 29+)**: 권장 시작 = **B-14** (sm_getPositionOffset 분기 — 타인 플레이어 crawl Y +0.125 / 신규 분기 추가) 또는 **B-15** (sm_captureBodyYaw 끝 보정 — levitate horizontal=camera / 신규 분기 추가). 신규 분기 그룹 진입.
 
 ---
 

@@ -86,14 +86,16 @@ public abstract class MixinPlayerEntityModelClient {
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
             this.leaningPitch = 0f;
-            // pivot/yaw reset 인프라 (B-9/B-11 부속): vanilla setAngles 는 head/body pivotZ 와
-            //   body.yaw 를 매 프레임 reset 하지 않는다 (sneak 분기는 leg.pivotZ 만 변경 /
-            //   body.yaw 는 animateArms 안 handSwingProgress > 0 분기에서만 설정).
+            // pivot/yaw/roll reset 인프라 (B-9/B-11/B-13 부속): vanilla setAngles 는
+            //   head/body pivotZ, body.yaw, head.roll 을 매 프레임 reset 하지 않는다
+            //   (sneak 분기는 leg.pivotZ 만 변경 / body.yaw 는 animateArms 안
+            //   handSwingProgress > 0 분기에서만 설정 / head.roll 은 vanilla 미사용).
             //   이전 sm 분기의 변경이 다음 분기까지 누적되는 위험을 막기 위해
             //   SM 분기 진입 직전에 vanilla 기본값(0) 으로 reset 한다.
             head.pivotZ = 0f;
             body.pivotZ = 0f;
             body.yaw    = 0f;
+            head.roll   = 0f;
         }
 
         // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
@@ -123,7 +125,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isCrawling) {
             sm_animateCrawling(limbSwing, limbSwingAmount, headYaw);
         } else if (sm.isSliding) {
-            sm_animateSliding(limbSwing, limbSwingAmount);
+            sm_animateSliding(limbSwing, limbSwingAmount, headYaw);
         } else if (flyingCreative) {
             sm_animateFlying(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
@@ -503,15 +505,23 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isSliding: 미끄러지기.
-     * 원본: SmartMovingModel.setRotationAngles() 8번 분기 (isSlide).
-     * bipedOuter X 기울기(Quarter)는 setupTransforms에서 처리.
+     * 원본: SmartMovingModel.setRotationAngles() 8번 분기 (isSlide, L437-L478).
+     * bipedOuter X 기울기(Quarter) + outer.pivotY=+5F 는 sm_setupTransforms 에서 처리.
      * 원본 YZX 회전 순서 → setAnglesYZX 헬퍼로 정확하게 변환.
+     * 머리/몸통 피벗 (B-13 / §16-19):
+     *   - head.roll  = -headYaw * DEG_TO_RAD (원본 L442 -viewHorizontalAngelOffset/RadiantToAngle)
+     *   - head.pivotZ = -2F (원본 L444)
+     *   - body.pivotY = +6.5F (원본 L453, SR 다층 부재로 body 단일 노드 근사)
+     *   - body.offsetY = -0.4F (원본 L452): ModelPart 에 offsetY 필드 부재로 sm_setupTransforms 의
+     *     matrices.translate(0, -0.4F/16F, 0) 로 보정 (slide 분기 안에 통합)
      */
-    private void sm_animateSliding(float limbSwing, float limbSwingAmount) {
+    private void sm_animateSliding(float limbSwing, float limbSwingAmount, float headYaw) {
         float distance   = limbSwing * 0.7f;
         float walkFactor = smFactor(limbSwingAmount, 0f, 1f) * 0.8f;
 
-        head.pitch = -EIGHTH - SIXTEENTH;
+        head.pitch  = -EIGHTH - SIXTEENTH;
+        head.roll   = -headYaw * DEG_TO_RAD;   // 원본 bipedHead.rotateAngleZ = -viewHorizontalAngelOffset/RadiantToAngle (B-13)
+        head.pivotZ = -2f;                     // 원본 bipedHead.rotationPointZ = -2F (B-13)
 
         // 몸통 (YXZ 순서) — 원본 SmartMovingModel.java L672-L676:
         //   bipedBody.rotationOrder = YXZ
@@ -522,6 +532,7 @@ public abstract class MixinPlayerEntityModelClient {
                 MathHelper.cos(distance - EIGHTH) * SIXTYFOURTH * walkFactor,
                 MathHelper.cos(distance + EIGHTH) * SIXTYFOURTH * walkFactor,
                 0f);
+        body.pivotY = 6.5f;   // 원본 bipedBody.rotationPointY = +6.5F (B-13 / §16-19, SR 다층 부재로 body 단일 노드 근사)
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor + SIXTYFOURTH;
