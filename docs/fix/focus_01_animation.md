@@ -9,10 +9,10 @@
 
 | 필드 | 값 |
 |------|---|
-| 상태 | 🟡 진행 중 — 1차 선행 보강 (B-1/B-2/B-3) 완결, **라인별 전수 1:1 대응 작업 진입 (Phase R / 세션 3+)** |
-| 현재 단계 | Phase R — 애니메이션 관련 원본 모든 파일 라인별 read + 라인별 1.21.1 매핑 보강 |
-| 선행 의존 | #2 (애니메이션 입력 상태가 정확해야 의미 있음) — 완료 |
-| 자기 정정 | 세션 2 "AI 완결" 마킹은 **부적절** (3 누락만 메웠지 전수 1:1 감사 안 함) → 되돌림 |
+| 상태 | ✅ **AI 완결 / 통합테스트 인계** (세션 35 / Phase R + Phase B 모두 완료) |
+| 현재 단계 | Phase R 종료 (4,968 라인 라인별 매핑) + Phase B 완료 (16/16 원자 1:1 이식) + §14 회귀 감사 통과 |
+| 선행 의존 | #2 (애니메이션 입력 상태) — 완료 |
+| 통합테스트 | 사용자 in-game §3 16 케이스 매칭 확인 → 시각 차이 발견 시 후속 분석 |
 
 ---
 
@@ -434,6 +434,12 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] C-3. 회귀 방지 감사 (§14)
 - [x] C-4. `playtest_fixes.md` "현재 포커스" → (#1 AI 완결 / 통합테스트 인계) (세션 2)
 
+### C. 검증 (세션 35 — Phase B 16 원자 완결 후)
+- [x] C-5. 빌드 — Phase B 마지막 (B-17, 세션 34) BUILD SUCCESSFUL (5s) 확인
+- [x] C-6. §14 회귀 감사 — Phase B 누적 변경 13 항목 모두 [x] (세션 35 §14.1 표 추가)
+- [x] C-7. reset 인프라 4 필드 종합 (§14.2)
+- [x] C-8. `playtest_fixes.md` "현재 포커스" → (#1 AI 완결 / 통합테스트 인계 — 세션 35 갱신)
+
 ---
 
 ## 11. 호출 타이밍 검증
@@ -474,13 +480,13 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 ## 13. 완료 전 검증 체크리스트
 
-- [ ] §3 표의 모든 케이스 시각 매칭 (근사 한도 내)
-- [ ] 원본 공식이 sin/cos 분해 근사가 아닌 원본 그대로 사용
-- [ ] 회전 순서(YZX 등) 원본과 일치 (헬퍼 사용 또는 명시적 미이식 §7.1 등재)
-- [ ] 좌우 대칭/교차 패턴 원본과 일치
-- [ ] 스케일 함수(setArmScales/setLegScales) 가시 영향 평가 (B-3 처리 또는 §7.1 등재)
-- [ ] 회귀 방지 감사 통과
-- [ ] 빌드 성공
+- [ ] §3 표의 모든 케이스 시각 매칭 (근사 한도 내) — **인게임 통합테스트 단계**
+- [x] 원본 공식이 sin/cos 분해 근사가 아닌 원본 그대로 사용 (Phase R 4,968 라인 + Phase B 16 원자)
+- [x] 회전 순서(YZX 등) 원본과 일치 (B-1 YXZ + B-2 XZY 헬퍼 / setAnglesYZX 7 호출 / setAnglesZXY 2 호출)
+- [x] 좌우 대칭/교차 패턴 원본과 일치 (Phase B 모든 분기 라인별 검증)
+- [x] 스케일 함수(setArmScales/setLegScales) — B-3 (세션 2) 5 호출 지점 1:1 이식
+- [x] 회귀 방지 감사 통과 (§14.1 — Phase B 13 항목 + §14 기본 12 항목 = 모두 [x])
+- [x] 빌드 성공 (Phase B 매 원자 마다 BUILD SUCCESSFUL)
 
 ---
 
@@ -500,6 +506,36 @@ R-9 통합 누적 표 (4,968 라인 전수):
 | isHeadJumping/isFlying head pitch 역보정 (ANIM-01) | -(Quarter-angle)/2 | [x] (세션 2 grep — L536/L558) |
 | getPositionOffset isCrawling -scale*0.125 / isHeadJumping heightOffset | HEAD cancellable | [x] (세션 2 — 변경 없음) |
 | renderName isCrawling 차단 / sneakNameTag 64블록 | hasLabel @Redirect | [x] (세션 2 — 변경 없음) |
+
+### 14.1. Phase B 누적 변경 (세션 24-34 / 16 원자) — 회귀 감사
+
+| Phase B 변경 | 영향 포인트 | 회귀 안전성 근거 | 확인 |
+|---|---|---|---|
+| **B-8** RopeSliding head.pivotY=2 / arm.pivotY=0 | 매달림 자세 머리/팔 피벗 | vanilla setAngles 가 매 프레임 sneak 분기로 head/arm pivotY 명시적 reset (BipedEntityModel_detail.md L217-L230) → 다음 프레임 자동 정정 | [x] (세션 24 검증) |
+| **B-9 + reset 인프라** Climbing body.pivotZ=-6F + sm_setAngles HEAD reset (head.pivotZ + body.pivotZ) | 모든 sm 분기 진입 직전 안전 보장 | vanilla setAngles 가 매 프레임 head/body pivotZ reset 안 함 → SM 분기 진입 직전 = 0 reset 으로 누적 방지 | [x] (세션 25 검증) |
+| **B-10** Swim head.pivotZ=-2 + Dive head.pitch=-EIGHTH + head.pivotZ=-2 | 수영/잠수 자세 머리 위치/각도 | head.pivotZ = B-9 reset 인프라 안전, head.pitch = vanilla 매 프레임 j*PI/180 reset 안전 | [x] (세션 27 검증) |
+| **B-11 + body.yaw reset** Swim body.yaw cos + sm_setAngles HEAD body.yaw=0 reset | 자유형 영법 좌우 흔들림 + 다른 분기 누적 방지 | vanilla animateArms 가 handSwingProgress > 0 분기에서만 body.yaw 변경 → 평상시 미reset → 인프라로 보강 (모든 sm 분기 진입 시 reset) | [x] (세션 26 검증) |
+| **B-12** Crawl head.pivotZ=-2 + body.pivotY=+3 | 크롤링 머리 앞쪽 + 몸통 위치 | head.pivotZ = B-9 reset 인프라 / body.pivotY = vanilla 매 프레임 sneak 분기 reset 안전 | [x] (세션 26 검증) |
+| **B-13 + head.roll reset** Slide 다중 (head.roll/pivotZ + body.pivotY + matrices.translate body.offsetY) + sm_setAngles HEAD head.roll=0 reset | 슬라이딩 자세 + 미세 위치 보정 | head.roll = vanilla 미사용 → 인프라로 reset / matrices.translate = LivingEntityRenderer.render push/pop 자동 (slide 분기 안에서만 적용) | [x] (세션 28 검증) |
+| **B-14** sm_getPositionOffset 자기/타인 분기 분리 + 타인 plr crawl Y +0.125 | 다른 플레이어 sneak+crawl 시 지면 뚫림 방지 | 자기 자신 ClientPlayerEntity 분기 기존 로직 보존 (instanceof 분리) + 타인 분기는 신규 추가만 | [x] (세션 29 검증) |
+| **B-15** sm_captureBodyYaw 분기 위 isLevitating 우선 처리 | Levitation status effect 시 horizontal=camera 강제 | smBodyYawActive HEAD reset 으로 매 호출 안전 + isLevitating false 시 다른 분기 정상 진행 | [x] (세션 29 검증) |
+| **B-16** cloak.pitch=SIXTYFOURTH (PlayerEntityModelAccessor 경유) | 망토 기본 살짝 기울임 (≈5.6°) | vanilla PlayerEntityModel.setAngles 가 cloak.pitch 변경 안 함 (cloak.pivotZ/Y 만 sneak 분기) → = 직접 할당 누적 위험 없음. PlayerEntityModel 한정 캐스팅으로 갑옷 모델 영향 없음 | [x] (세션 30 검증) |
+| **B-17** Cape outer.X 클램프 (sm_setupTransforms 5 분기 capture + MixinCapeFeatureRenderer @ModifyArg) | SM 큰 X 기울기 상태에서 망토 과도 펴짐 방지 | 자기 자신 (ClientPlayerEntity) 한정 + smOuterTiltX==0 시 vanilla 그대로 fallback. static field render thread 단일 + HEAD/RETURN 안전 정리 | [x] (세션 34 검증) |
+| **B-18** Ceiling head.yaw 잉여 차감 제거 | 원본 L315 단순 절대 할당 1:1 정합 | 잉여 라인 제거만 (코드 단축 방향), 원본과 일치하므로 회귀 위험 없음 | [x] (세션 25 검증) |
+| **B-19** Climbing NoGrab+non-NoStep leg.pitch -= 0.5F | 매달림 자세 무릎 굽힘 보정 | vanilla setAngles 가 매 프레임 leg.pitch 를 cos 함수로 reset → 다음 프레임 자동 정리 | [x] (세션 27 검증) |
+| **B-X 검증 + B-4/B-5/B-6/B-7** verticalDistance/Speed + allDistance/Speed 입력값 교체 | climbing/diving/flying 입력 정합 (수직/3D) | SmartStatistics.calculate L60-L62 + L88-L91 = 1.7.10 SmartStatisticsData.calcualte L47-L50 정확히 1:1 (4× + 0.4 EMA + 누적). vanilla setAngles 영향 없음 | [x] (세션 31-32 검증) |
+
+**Phase B 회귀 감사 결과**: 13 항목 모두 [x]. 다른 SM 분기 영향 없음, vanilla setAngles 호환성 유지, push/pop/reset 인프라 안전.
+
+### 14.2. 누적 reset 인프라 종합
+
+sm_setAngles HEAD anySmState 분기에 4 필드 reset (vanilla 미reset 필드들):
+- `head.pivotZ = 0f` (B-9 / B-10/B-12 의존)
+- `body.pivotZ = 0f` (B-9 의존)
+- `body.yaw = 0f` (B-11 / B-13 의존)
+- `head.roll = 0f` (B-13 / B-8/B-12 호환)
+
+→ 모든 sm 분기 진입 시 vanilla 기본값으로 reset → 분기 종료 후 다른 자세 진입 시 vanilla 자동 reset (sneak 분기) 또는 본 인프라 (다음 sm 진입 시) 로 안전.
 | **세션 2 신규**: setArmScales/setLegScales 5 호출 | climbing arm/leg vine + swimming + diving + crawling | [x] grep 정합 |
 | **세션 2 신규**: setAnglesYXZ 호출 2회 | isSwim head + isSlide body | [x] grep 정합 |
 | **세션 2 신규**: setAnglesXZY 호출 2회 | isFlying arm + isFalling arm | [x] grep 정합 |
@@ -2287,6 +2323,70 @@ R-9 통합 누적 표 (4,968 라인 전수):
 1. **§14 회귀 방지 감사** — Phase B 누적 변경 (4 reset 인프라 + 11 분기 본체 + body.offsetY MatrixStack + cloak Accessor + 2 신규 분기 + 7 입력값 교체 + 망토 클램프) 가 vanilla / 다른 SM 분기 회귀 영향 점검.
 2. **`playtest_fixes.md` 현재 포커스** → `(#1 AI 완결 / 통합테스트 인계)` 업데이트.
 3. **인게임 통합테스트** — 사용자 in-game §3 16 케이스 매칭 확인 → 시각 차이 발견 시 후속 분석.
+
+---
+
+### 세션 35 — 2026-04-26 — Phase B 16/16 종료 후 §14 회귀 감사 + 인계 — **#1 AI 완결**
+
+**진행한 작업** (코드 변경 0 / docs 정리 + 인계):
+
+1. **§14.1 Phase B 회귀 감사 표 신규** — Phase B 누적 변경 13 항목 모두 [x] 등재:
+   - B-8 RopeSliding pivotY (vanilla sneak 분기 reset 안전)
+   - B-9 + reset 인프라 (head.pivotZ + body.pivotZ 누적 방지)
+   - B-10 Swim/Dive head 자세 (pivotZ + pitch 양쪽 vanilla reset 안전)
+   - B-11 + body.yaw reset 인프라 (vanilla animateArms 조건부 reset 보강)
+   - B-12 Crawl head/body 피벗 (B-9 + sneak 분기 reset)
+   - B-13 + head.roll reset 인프라 (Slide 다중 + body.offsetY MatrixStack push/pop)
+   - B-14 자기/타인 분기 분리 (instanceof 분리, 기존 자기 로직 보존)
+   - B-15 isLevitating 우선 처리 (smBodyYawActive HEAD reset)
+   - B-16 cloak.pitch SIXTYFOURTH (vanilla cloak.pitch 미사용 → = 직접 할당 안전)
+   - B-17 Cape outer.X 클램프 (자기 한정 + smOuterTiltX==0 시 fallback)
+   - B-18 Ceiling head.yaw 잉여 제거 (원본 1:1 정합)
+   - B-19 Climbing leg.pitch -= 0.5F (vanilla leg.pitch cos reset 안전)
+   - B-X 검증 + B-4/B-5/B-6/B-7 입력값 교체 (SmartStatistics 1:1 등가)
+
+2. **§14.2 누적 reset 인프라 종합** — sm_setAngles HEAD anySmState 분기 4 필드 reset:
+   `head.pivotZ + body.pivotZ + body.yaw + head.roll = 0` (모든 sm 분기 진입 시 안전 보장).
+
+3. **§10 C 검증 섹션 신규 4 항목 [x]**:
+   - C-5. 빌드 — 세션 34 B-17 BUILD SUCCESSFUL (5s) 확인
+   - C-6. §14 회귀 감사 — Phase B 13 항목 + 기본 12 항목 모두 [x]
+   - C-7. reset 인프라 4 필드 종합 (§14.2)
+   - C-8. playtest_fixes.md 현재 포커스 갱신
+
+4. **§13 완료 전 검증 체크리스트** — 7 항목 중 6 [x] (단 §3 표 시각 매칭은 인게임 통합테스트 단계로 deferred).
+
+5. **§1 진행 상황 갱신** — 상태 → ✅ AI 완결 / 통합테스트 인계, 단계 → Phase R + Phase B 모두 완료 + §14 통과.
+
+6. **`playtest_fixes.md` 현재 포커스 갱신**:
+   - `🎯 현재 포커스` 블록 → Phase R + Phase B 종합 결과 + 통합테스트 인계 안내
+   - `Phase R 산출물` 링크 추가 (research_animation_line_by_line.md)
+   - `📋 포커스 목록` 표 → #1 → ✅ AI 완결 (2026-04-26, 세션 35)
+
+7. **최종 빌드 검증** — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+**검증 체크리스트 (세션 35 종합)**:
+- [근거] ✓ Phase B 누적 변경 모든 항목 라인별 회귀 안전성 검증 (vanilla reset 패턴 + 분기 분리 + push/pop)
+- [전수] ✓ §14.1 표 13 항목 + §14 기존 12 항목 = 25 회귀 감사 항목 모두 [x]
+- [발견] 신규 발견 0건
+- [검증] ✓ 빌드 BUILD SUCCESSFUL + 모든 sm 분기 진입/종료 안전성 확인
+- [회귀] ✓ vanilla / 다른 SM 분기 / 다른 entity render 영향 없음
+- [빌드] ✓ BUILD SUCCESSFUL (5s)
+- [인계] ✓ playtest_fixes.md 현재 포커스 → AI 완결 / 통합테스트 인계
+
+**#1 AI 완결 (세션 1-35 / 35 세션 / 4,968 라인 매핑 + 16 원자 1:1 이식 + 13 회귀 감사 항목)**:
+
+| 단계 | 세션 | 작업 | 산출 |
+|------|------|------|------|
+| 사전 | 1-2 | 4 Agent 병렬 리서치 + 1차 선행 보강 (B-1/B-2/B-3) | focus_01 §5 + 235→409줄 + 7 원자 |
+| Phase R | 3-23 | 라인별 매핑 (31 파일) | research_animation_line_by_line.md 4,176 라인 |
+| Phase B | 24-34 | R-10+ 본격 1:1 이식 (16 원자) | 5 파일 + 1 신규 (PlayerEntityModelAccessor) + 1 신규 (MixinCapeFeatureRenderer) |
+| 인계 | 35 | §14 회귀 감사 + playtest_fixes.md | C-5~C-8 [x] / 통합테스트 대기 |
+
+**다음 단계 (세션 36+)**: 사용자 인게임 통합테스트:
+- §3 16 재현 케이스 시각 매칭 확인 (각 SM 상태별 / 회전 순서 위험 / 스케일 위험)
+- 시각 차이 발견 시 → 후속 신규 발견 등재 (§16) → 별도 B-N 원자 추가
+- 망토 (B-17) 시각 효과 평가 → outer.X 클램프 효과 확인
 
 ---
 

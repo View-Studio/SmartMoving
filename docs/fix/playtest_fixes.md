@@ -8,18 +8,32 @@
 ## 🎯 현재 포커스
 
 ```
-항목 #1 — 애니메이션 망가짐/이상 🟡 진행 중 (세션 3+, Phase R 진입)
-   세션 2 1차 선행 보강 (B-1 YXZ / B-2 XZY / B-3 scaleY) 완결.
-   세션 3+ 라인별 전수 1:1 대응 작업 — 애니메이션 관련 원본 모든 파일을
-   첫 라인부터 끝 라인까지 청크 분할 read → 라인별 1.21.1 대응 매핑 →
-   리서치/포커스 보강 → 그 결과로 1:1 누락/오역/잉여 전수 해소.
-   세션 2 "AI 완결" 마킹은 부적절 (3 누락만 메웠지 전수 1:1 감사 안 함) → 되돌림.
+항목 #1 — 애니메이션 망가짐/이상 ✅ AI 완결 / 통합테스트 인계 (세션 35)
+
+  Phase R (라인별 매핑 / 세션 3-23 / 21 세션):
+  - SmartMoving + SmartRender + SmartStatistics 31 파일 4,968 라인 라인별 read
+  - 8 R-단계 / 21 청크 / 5 분류 통계 (정합 680 / 오역 14 / 누락 20 / 잉여 0 / N/A 4,254)
+  - 발견 16 그룹 → R-10+ B-N 14 + 인프라 B-X 1 + 검토 1 정리
+
+  Phase B (R-10+ 본격 1:1 대응 / 세션 24-34 / 11 세션 / 16/16 = 100%):
+  - 단일 라인 (B-8/9/10/11/12/18) — 6/6
+  - B-19 (climbing 같은 분기) — 1/1
+  - 다중 라인 + MatrixStack (B-13) — 1/1
+  - 신규 분기 (B-14/B-15) — 2/2
+  - 누적 검증 후 (B-16) — 1/1
+  - 인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 5/5
+  - 신규 Mixin (B-17 — CapeFeatureRenderer) — 1/1
+
+  §14 회귀 감사 통과 (Phase B 13 항목 + 기존 12 항목 모두 [x]).
+  사용자 in-game §3 16 케이스 매칭 확인 후 시각 차이 발견 시 후속 분석.
 ```
 
 **작업 문서 (주)**: [`focus_01_animation.md`](focus_01_animation.md)
 **종합 리서치**: [`docs/research/mapping/animation_system.md`](../research/mapping/animation_system.md)
    — 원본 SmartMoving + SmartRender 렌더 파이프라인 vs 1.21.1 vanilla 4 메서드 매핑 1111 줄
    (세션 1 완료 / 세션 2 B-1/B-2/B-3 1:1 이식 완료)
+**Phase R 산출물**: [`docs/research/mapping/research_animation_line_by_line.md`](../research/mapping/research_animation_line_by_line.md)
+   — 31 파일 4,968 라인 라인별 매핑 표 + R-9 통합 + B-N 후보 정리 (4,176 라인)
 **완결 문서 (#2.5)**: [`focus_02_5_jumper_factor_infrastructure.md`](focus_02_5_jumper_factor_infrastructure.md)
    — Phase A/B 완결 + C skip + D/E 완결 + F-1~F-5 완결. F-6 통합 인게임 검증 대기.
 **대기 후보**:
@@ -103,7 +117,7 @@
 | 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 AI 완결 임박 (Phase A~H 22/23 = 96%, F-3 통합 인게임 deferred) | #2 완료 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ✅ AI 완결 (2026-04-25, 세션 6) — 14/14 원자 (감사 후 B-7 추가) / 인게임 통합 검증 deferred | #2 / #2.5 / #2.6 / #2.7 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | 🟢 진행 중 (P/A/C 8/10 = 80% 완결, 핵심 키 메커니즘 100% 1:1 / 8 채팅 옵션 결정 대기) | #2, #3 |
-| 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ⚪ 대기 (재현 케이스) | #2 (렌더 입력 상태 정확해야) |
+| 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ✅ AI 완결 (2026-04-26, 세션 35) — Phase R (4,968 라인) + Phase B (16/16 원자) + §14 회귀 감사 통과 / 통합테스트 인계 | #2 (렌더 입력 상태 정확해야) |
 
 **의존 해석**: 상태 자체가 틀린 상태(#2)에서 전환 조건(#3)이나 애니메이션(#1)을 손대면
 원인-결과를 혼동. 먼저 상태값을 정확히 만든 뒤 그 상태를 소비하는 로직을 고친다.
