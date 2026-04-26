@@ -398,7 +398,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [ ] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기, 다리 그룹 무릎 굽힘 보정).
 - [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
 - [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
-- [ ] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling `head.pivotZ = -2F; body.pivotY = +3F;` 추가
+- [x] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling 머리 후 `head.pivotZ = -2F;` / 몸통 후 `body.pivotY = +3F;` 2 라인 추가. head.pivotZ 는 B-9 reset 인프라 활용, body.pivotY 는 vanilla 매 프레임 sneak 분기 reset 안전. **세션 26 완료**.
 - [x] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L339) — `head.yaw -= headYaw * DEG_TO_RAD;` + 주석 1 라인 제거 (원본 L315 절대 할당 1:1). **세션 25 완료**.
 
 **[다중 라인 + MatrixStack 보정]**
@@ -1549,6 +1549,47 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **세션 25 누적 작업**: B-18 (잉여 제거) + B-9 (1 라인 추가 + reset 인프라) = 2 원자 진행. R-10+ 진행 = B-8/B-9/B-18 = 3 원자 완료. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 3 완료 / 3 남음 (B-10/B-11/B-12). 신규 §16-26 (B-19 후보) 추가 등록.
 
 **다음 단계 (세션 26+)**: 권장 시작 = **B-10** (swim/dive head 자세 — head.pivotZ + dive head.pitch 3 라인 추가 / 2 메서드) 또는 **B-12** (crawl head/body 피벗 — 2 라인 추가). 모두 reset 인프라 활용 가능.
+
+---
+
+### 세션 26 — 2026-04-26 — Phase B / R-10+ B-12 (crawl head/body 피벗) 1:1 이식
+
+**진행한 작업** (단일 라인 그룹 누락 보강 — 2 라인 추가):
+
+1. **원본 1차 자료 read** — `SmartMovingModel.java` L395-L407 (crawl 분기 머리/몸통):
+   - L399 `bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle;` (이미 매핑됨)
+   - L400 `bipedHead.rotateAngleX = -Eighth;` (이미 매핑됨)
+   - **L401 `bipedHead.rotationPointZ = -2F;` ← B-12 본 작업**
+   - L403 `bipedTorso.rotationOrder = ModelRotationRenderer.YZX;` (이미 매핑됨)
+   - L404 `bipedTorso.rotateAngleX = Quarter - Thirtytwoth;` (이미 매핑됨, body 단일 노드 근사)
+   - **L405 `bipedTorso.rotationPointY = 3F;` ← B-12 본 작업**
+
+2. **vanilla reset 패턴 사전 검증**:
+   - `head.pivotZ`: vanilla 매 프레임 reset 안 함 → **B-9 의 sm_setAngles HEAD reset 인프라**가 모든 sm 분기 진입 직전에 0 으로 reset 보장 → 안전.
+   - `body.pivotY`: vanilla 매 프레임 sneak 분기로 reset (BipedEntityModel_detail.md L222/L228 — sneak: 3.2 / 비sneak: 0) → sm 분기 종료 후 다른 자세 진입 시 vanilla 자동 reset → 안전.
+
+3. **B-12 코드 수정** (`MixinPlayerEntityModelClient.sm_animateCrawling` L444-L452):
+   - 머리 블록 끝에 `head.pivotZ = -2f;` 추가 (몸이 수평이므로 머리 앞쪽 2 픽셀 이동)
+   - 몸통 블록 끝에 `body.pivotY = 3f;` 추가 (수평 자세에서 몸통 위치 보정)
+   - 메서드 Javadoc 갱신: pivot 보정 (B-12 / §16-18) 명시 — 라인 출처 + SR 다층 부재로 body 단일 노드 근사.
+
+4. **값 정확성 검증**:
+   - **head.pivotZ = -2F**: 1.21.1 head.pivotZ 기본 0F → -2 직접 매핑 (원본 SR `bipedHead` 자체 pivotZ 기본 0). 정확.
+   - **body.pivotY = +3F**: 1.21.1 body.pivotY 기본 0F (비sneak) → +3 직접 매핑. 단 원본 SR `bipedTorso` 가 root(bipedOuter) 자식, 모든 visual 노드 (head/breast/neck/shoulder/arm/pelvic/leg) 거느림 → +3 = 전체 visual 이 +3 이동. 1.21.1 단일 PlayerEntityModel 에서는 body 단일 노드만 +3 = head/arm/leg 이동 누락 (= SR 다층 부재 근사). 발견 항목 본문대로 body 단일 적용 (B-9 와 동일 근사 패턴).
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**검증 체크리스트 (세션 26 B-12)**:
+- [근거] ✓ 원본 SmartMovingModel.java L395-L407 read 완료
+- [전수] ✓ 원본 변경 2 지점 (L401 head.pivotZ + L405 body.pivotY) 모두 1.21.1 매핑
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla reset 패턴 — head.pivotZ (B-9 reset 인프라) + body.pivotY (vanilla sneak 분기) 양쪽 안전 확인
+- [회귀] ✓ crawling 진입/종료 모두 안전 — 다른 분기에서 head.pivotZ 자동 reset, body.pivotY 자동 sneak/비sneak reset
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 15 원자 (B-N 14 + B-X 1) + 신규 B-19 = 16 원자 중 **4 완료** (B-8/B-9/B-12/B-18) / 12 남음. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 4 완료 / 2 남음 (**B-10/B-11**).
+
+**다음 단계 (세션 27+)**: 권장 시작 = **B-10** (swim/dive head 자세 — swim L329 head.pivotZ=-2 + dive L370/L371 head.pitch=-Eighth + head.pivotZ=-2 / 2 메서드 3 라인 추가) 또는 **B-11** (swim body yaw — 1 라인 추가) 또는 **B-19** (climbing leg.pitch -= 0.5F — 2 라인 / 같은 분기).
 
 ---
 

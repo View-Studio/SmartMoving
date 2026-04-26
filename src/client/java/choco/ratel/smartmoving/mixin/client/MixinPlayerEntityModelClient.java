@@ -432,9 +432,12 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isCrawling: 바닥 크롤링.
-     * 원본: SmartMovingModel.setRotationAngles() 7번 분기 (isCrawl).
+     * 원본: SmartMovingModel.setRotationAngles() 7번 분기 (isCrawl, L395-L431).
      * 몸통 X 기울기 (QUARTER-THIRTYTWOTH ≈ 79°)로 수평 자세 재현.
      * 원본 YZX 회전 순서 → setAnglesYZX 헬퍼로 정확하게 변환.
+     * pivot 보정 (B-12 / §16-18):
+     *   - head.pivotZ = -2F (원본 L401): 몸이 수평이므로 머리 앞쪽 2 픽셀 이동
+     *   - body.pivotY = +3F (원본 L405): 수평 자세에서 몸통 위치 보정 (SR bipedTorso 단일 노드 근사)
      */
     private void sm_animateCrawling(float limbSwing, float limbSwingAmount, float headYaw) {
         float distance    = limbSwing * 1.3f;
@@ -444,11 +447,13 @@ public abstract class MixinPlayerEntityModelClient {
         // 머리
         head.roll  = -headYaw * DEG_TO_RAD;
         head.pitch = -EIGHTH;
+        head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-12 / §16-18)
 
         // 몸통: 앞으로 78° 기울임 (수평 자세)
         body.pitch = QUARTER - THIRTYTWOTH;
         body.roll  = MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor;
         body.yaw   = MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor;
+        body.pivotY = 3f;    // 원본 bipedTorso.rotationPointY = +3F (B-12 / §16-18, SR 다층 부재로 body 단일 노드 근사)
 
         // 다리
         rightLeg.pitch = (MathHelper.cos(distance - QUARTER) * SIXTYFOURTH + THIRTYTWOTH) * walkFactor
