@@ -654,6 +654,16 @@ public abstract class MixinPlayerEntityModelClient {
                 : sm.stats.currentVerticalAngle;
         float theta = (QUARTER - verticalAngle) * currentSpeedLerped;
         head.pitch = -theta / 2f;
+
+        // 🔴 (세션 60): 원본 reset() 효과 매핑 — bipedHead.Y/Z = 0 강제.
+        //   원본 SmartRenderModel.setRotationAngles L166: `reset()` 호출 → 모든 ModelPart 의
+        //   rotation = 0 reset. SmartMovingModel.isFlying 분기 (L484-L488) 가 bipedHead.X 만 set,
+        //   bipedHead.Y/Z 는 reset 후 0 유지 → 머리 정면 (몸 정렬) 완전 고정.
+        //   1.21.1 vanilla setAngles 가 매 프레임 head.yaw = (headYaw - bodyYaw) * π/180 set →
+        //   우리 entity.bodyYaw = lerpedYaw 강제 후 head.yaw ≈ 0 이지만 미묘한 차이 (lerping 등).
+        //   원본 reset 효과 1:1 매핑 = 명시적 0 강제.
+        head.yaw  = 0f;
+        head.roll = 0f;
     }
 
     /**
