@@ -184,10 +184,10 @@ public abstract class MixinPlayerEntityClient {
     @Redirect(
         method = "travel",
         at = @At(value = "INVOKE",
-                 target = "Lnet/minecraft/entity/LivingEntity;setVelocity(DDD)V")
+                 target = "Lnet/minecraft/entity/Entity;setVelocity(DDD)V")
     )
-    private void sm_travel_setVelocity_flyFix(LivingEntity self, double x, double y, double z) {
-        if ((Object) self instanceof ClientPlayerEntity player
+    private void sm_travel_setVelocity_flyFix(net.minecraft.entity.Entity self, double x, double y, double z) {
+        if (self instanceof ClientPlayerEntity player
                 && SmartMovingConfig.Config.enabled
                 && SmartMovingClientState.get(player).isFlying) {
             // SM 비행 시 motionY *= 0.6 차단 — handleFlying 가 set 한 motionY 보존.
