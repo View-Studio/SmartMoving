@@ -1335,13 +1335,15 @@ public final class SmartMovingClientState {
                 double _vX = player.getVelocity().x;
                 double _vZ = player.getVelocity().z;
                 double _horizontalSpeedSquare = _vX * _vX + _vZ * _vZ;
-                // 🔴 BUG-26 정정 (사용자 요청 / 세션 41): "땅에 닿으면 비행이 해제되야 됨".
-                //   원본 SmartMovingSelf L2542 = `tryLanding = isFlying && !_flyCloseToGround &&
-                //   horizontalSpeedSquare < 0.003D && motionY > -0.03D` — flyCloseToGround=true
-                //   기본값 시 자동 착지 비활성 (의도된 동작). 사용자가 자동 착지 원함 →
-                //   `!cfg.flyCloseToGround` 가드 삭제 (1:1 번역 위반 — 사용자 의도 우선).
-                //   조건 잔존: 정지 (수평 속도 < 0.003) + motionY > -0.03 (낙하 거의 안 함).
+                // BUG-26 정정 취소 (세션 42): 사용자 핵심 지시 "원본 코드 보고 1:1 번역, 막 코드
+                //   넣지마" 따라 세션 41 의 `!cfg.flyCloseToGround` 가드 삭제 정정 취소 (1:1 위반).
+                //   원본 SmartMovingSelf 전수 grep (L2199 만 capabilities.isFlying=false) 결과
+                //   원본의 자동 착지 메커니즘 = standupIfPossible (tryLanding, flyCloseToGround=false
+                //   전제) 만. flyCloseToGround=true (기본값) = 의도된 자동 착지 비활성.
+                //   사용자 보고 "원본도 자동 착지" = 사용자가 1.7.10 에서 config 변경 사용 또는
+                //   인지 오류 가능. 자동 착지 원하면 config flyCloseToGround=false 설정 권장.
                 boolean tryLanding = isFlying
+                        && !cfg0.flyCloseToGround
                         && _horizontalSpeedSquare < 0.003D
                         && player.getVelocity().y > -0.03D;
                 if (restoreFromFlying || tryLanding) {

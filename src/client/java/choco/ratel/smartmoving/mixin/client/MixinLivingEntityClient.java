@@ -270,6 +270,15 @@ public abstract class MixinLivingEntityClient {
         //   완전 차단 + jumpAvoided/jumpPending 세팅 → 점프 자체 작동 안 함 (사용자 보고 직접 원인).
         //   해결: cfg.enabled false 시 즉시 return → vanilla 점프 ci.cancel 안 됨 → 정상 작동.
         if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 BUG-28 정정 (Flying Phase / 세션 42): vanilla 1.21.1 ClientPlayerEntity.tickMovement
+        //   디컴파일 L791-L800 — double-tap fly 진입 시 isOnGround=true 면 this.jump() 직접
+        //   호출 (1.21.1 특화 코드). 원본 1.7.10 EntityPlayerSP 에는 없음.
+        //   기존: 가드 부재 → 첫 비행 진입 (지면에서 더블탭) 시 sm_jump 발화 → jumpAvoided=true →
+        //   handleJumping 의 tryJump(UP) → motionY=0.42 + 매 틱 vanilla 비행 boost +0.15 +
+        //   SM handleFlying = 첫 비행 무한 상승 (사용자 BUG-28 직접 원인).
+        //   원본 1.7.10 의 vanilla jump() 호출 없음 = handleJumping 에 비행 가드 불필요.
+        //   해결: 1.21.1 차이 보정 — vanilla 비행 중 sm_jump 처리 skip → 원본 1:1 동작.
+        if (player.getAbilities().flying) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         sm.jumpAvoided = true;
         sm.jumpPending = true;

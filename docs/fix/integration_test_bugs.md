@@ -543,13 +543,13 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-25** 비행 속도 원본보다 느림 — Flying Phase F-6 (세션 40): SmartMovingFlyer 에 isFast 시 sprint 배수 곱셈 추가 (sprintFactor=1.5F 또는 sprintFactorLevitate). 원본 getNonSlowInputSpeedFactor (L197-L227) 누락 보강.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — Flying Phase F-6 (세션 41 사용자 요청 반영): SmartMovingClientState.tryLanding 의 `!cfg.flyCloseToGround` 가드 삭제 (1:1 번역 위반 — 사용자 의도 우선). 정지 시 자동 착지.
+- [⏪ 세션 41 정정 취소 (세션 42)] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — 사용자 핵심 지시 "원본 코드 보고 1:1 번역" 따라 세션 41 의 `!cfg.flyCloseToGround` 가드 삭제 정정 취소. 원본 SmartMovingSelf 전수 grep 결과 자동 착지 메커니즘 = standupIfPossible (tryLanding, !flyCloseToGround 전제) 만. flyCloseToGround=true (기본값) = 의도된 자동 착지 비활성. 사용자가 자동 착지 원하면 config flyCloseToGround=false 설정 권장.
 - [⏳ BUG-25 후 재평가] **BUG-27** 위아래 보면서 전진 속도 너무 느림 — F-2 결과: moveFlying 정확 1:1 → BUG-25 의 부분 증상 가능성.
-- [📋 등재] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — F-1 분석: jump 키 hold 시 motionY 누적 + 0.91F 감쇠. 추가 검증 필요 (vanilla gravity 영향 등).
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — Flying Phase F-7 (세션 42): vanilla 1.21.1 ClientPlayerEntity.tickMovement 디컴파일 L791-L800 = double-tap fly 진입 시 isOnGround=true 면 this.jump() 호출 (1.21.1 특화 — 원본 1.7.10 EntityPlayerSP 에는 없음) → sm_jump → jumpAvoided=true → handleJumping.tryJump(UP) → motionY=0.42 + 매 틱 vanilla 비행 boost +0.15 → 무한 상승. 두번째 비행은 mid-air double-tap (isOnGround=false → jump() 미호출) 정상. 해결: sm_jump 에 `if (player.getAbilities().flying) return;` 가드 추가 — 원본 1.7.10 의 vanilla 동작 (비행 중 jump() 미호출) 1:1 매칭.
 - [📋 등재] **BUG-29** 비행 진입 뚝 끊김 — F-1 청크 3 발견: L2511 setHeightOffset(-1) 첫 프레임 적용. timing 검토 필요.
-- [⏳ BUG-31 후 재평가] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — F-3 결과: sm_animateFlying setAnglesXZY 정확 1:1 → BUG-31 좌표계 영향 가능.
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — Flying Phase F-7 (세션 42): setAnglesXZY/YXZ/ZXY 3 헬퍼 모두 quaternion 곱 순서 reversal 오류 발견. 원본 ModelRotationRenderer.rotate XZY (L148/L151/L157) GL call 순서 = Y, Z, X → vertex 적용 순서 X, Z, Y → JOML qY * qZ * qX (right-most 부터 적용). 이전 매핑 = qX * qZ * qY (vertex 적용 Y, Z, X — 원본 반대). 큰 roll (π/2 비행 자세) 시 가시화 = 사용자 보고 "팔 방향과 같은 축으로 스크류 회전" 직접 원인. setAnglesYXZ/ZXY 도 동일 패턴 오류 정정 (isSwim head, isSlide body, animateAngleJumping 다리 영향).
 - [✅ 인게임 검증 완료 (세션 41)] **BUG-31** 몸 기울기 방향 다름 (몸 앞쪽이 하늘) — Flying Phase F-6 (세션 40): X 회전 부호 반전 (`-theta`). 사용자 확인 "기우는 방향 자체는 고쳐짐" ✅.
-- [⏳ BUG-31 후 재평가] **BUG-32** 머리 이상하게 고정 — F-3 결과: head.pitch = -theta/2 매핑 정확 → BUG-31 동일 좌표계 영향.
+- [⏳ BUG-30 후 재평가] **BUG-32** 머리 이상하게 고정 — F-3 결과: head.pitch = -theta/2 매핑 정확 → BUG-30 setAngles* 정정으로 함께 해소 가능 (사용처 isSwim head 등). 인게임 재확인 대기.
 - [⏳ BUG-25 후 재평가] **BUG-33** 비행 모든 애니메이션 부드럽지 않음 (프레임 끊김) — F-3 결과: sm.stats.calculate 정상 호출 → 다른 원인 (BUG-25 sprint 미적용 영향 가능).
 - [⏳ BUG-25/31 후 재평가] **BUG-34** 비행 디테일 (각도/움직임/속도/스무스함) 다름 — F-3 결과: sm_animateFlying 정확 1:1 → BUG-25/31 누적 효과.
 - [✅ AI 완결 / 인게임 검증 대기] **잉여 (BUG-25 부수)** sm_flyWhileOnGround `!cfg.flyCloseToGround` 가드 삭제 — F-6: 원본 L1827 에 없는 잉여 가드. flyCloseToGround=true 시 자동 비행 복원 차단 영향.

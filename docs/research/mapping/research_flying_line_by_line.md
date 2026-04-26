@@ -434,4 +434,54 @@ F-5 완료 후 일괄 정정 + 빌드 + 인게임 검증.
 - **세션 38+**: F-1~F-3 (원본 read + 매핑) 진입.
 - **세션 39**: F-4~F-5 (1.21.1 매핑 + BUG 매핑).
 - **세션 39+**: F-6 (정정).
-- **세션 40**: F-7 (인게임 검증 인계).
+- **세션 40**: F-7 1차 (BUG-25/31 + 잉여/누락 4 정정 / 인게임: BUG-31 ✅ 외 6건 잔존).
+- **세션 41**: BUG-26 정정 (사용자 의도 반영) — 자동 착지 가드 삭제. 사용자 검증 대기.
+- **세션 42**: 사용자 핵심 지시 "1:1 번역" 따라 BUG-26 정정 취소 + BUG-30 setAnglesXZY/YXZ/ZXY 3 헬퍼 quaternion 곱 순서 reversal 정정 + BUG-28 vanilla 1.21.1 ClientPlayerEntity.tickMovement L791-L800 (double-tap fly 진입 시 isOnGround → jump() 호출) 가드 추가. 인게임 재검증 대기.
+
+---
+
+## 세션 42 핵심 발견 — 1.21.1 vanilla 차이 보정
+
+### 발견 1: ClientPlayerEntity.tickMovement L791-L800 의 jump() 호출 (BUG-28)
+
+vanilla 1.21.1 디컴파일 (ClientPlayerEntity.class.json javap):
+```
+790: aload_0
+791: invokevirtual #274  // isOnGround()Z
+794: ifeq          801
+797: aload_0
+798: invokevirtual #1193 // jump()V    ← 1.21.1 특화
+```
+
+조건: double-tap Space → abilities.flying false→true 토글 + isOnGround → jump() 호출.
+원본 1.7.10 EntityPlayerSP 에는 없는 1.21.1 추가 코드.
+
+**부작용 체인**:
+1. vanilla jump() 호출 → sm_jump intercept → jumpAvoided=true.
+2. sm_travel_client → handleJumping → jumpAvoided=true 분기 → tryJump(UP, false, null, null).
+3. tryJump D-9 (vanilla 분기) → motionY=0.42.
+4. handleFlying 후속: 매 틱 vanilla 비행 boost +0.15 + SM moveFlying +0.05 + 0.91 감쇠.
+5. = 첫 비행 무한 상승 (사용자 BUG-28 직접 원인).
+
+**원본 1:1 매칭 보정**: sm_jump 진입에 `if (player.getAbilities().flying) return;` 가드 추가.
+원본 1.7.10 = vanilla 비행 중 jump() 호출 코드 자체 없음 = 동등 동작.
+
+### 발견 2: setAnglesXZY/YXZ/ZXY 3 헬퍼 quaternion 곱 순서 reversal (BUG-30)
+
+원본 ModelRotationRenderer.rotate (SmartRender L137-L159) 의 GL call 순서 분석:
+
+| rotationOrder | GL call (post-mul) | vertex 적용 (역순) | JOML 정답 (q*q*q) |
+|---------------|--------------------|--------------------|-------------------|
+| XZY (L148/L151/L157) | Y → Z → X | X → Z → Y | qY * qZ * qX |
+| YXZ (L143/L146/L155) | Z → X → Y | Y → X → Z | qZ * qX * qY |
+| ZXY (L140/L146/L152) | Y → X → Z | Z → X → Y | qY * qX * qZ |
+
+**JOML 규칙**: `q.mul(p)` = q * p (Hamilton). `q.transform(v)` 시 right-most 부터 적용.
+
+이전 R-17 매핑 = vertex 적용 순서가 원본과 정확히 반대 — 큰 각도 (π/2 비행 자세 등) 시
+가시 차이 = 사용자 보고 BUG-30 "팔 방향과 같은 축으로 스크류 회전" 직접 원인.
+
+**정정**:
+- setAnglesXZY (세션 41 1차 정정 완료): qX*qZ*qY → qY*qZ*qX
+- setAnglesYXZ (세션 42): qY*qX*qZ → qZ*qX*qY (isSwim head, isSlide body)
+- setAnglesZXY (세션 42): qZ*qX*qY → qY*qX*qZ (animateAngleJumping 다리)

@@ -802,21 +802,27 @@ public abstract class MixinPlayerEntityModelClient {
     }
 
     /**
-     * 원본 YXZ GL 순서(glRotate Y → X → Z) → ModelPart pitch/yaw/roll 변환.
-     * post-multiply 규칙: GL call 순서 = MatrixStack call 순서 = vertex 적용 역순.
-     * vertex 적용 Y→X→Z 가 필요하므로 GL call 순서는 Z, X, Y → JOML qY * qX * qZ.
-     * JOML: qY*qX*qZ → getEulerAnglesZYX → (e.x=pitch, e.y=yaw, e.z=roll).
+     * 원본 YXZ rotationOrder → ModelPart pitch/yaw/roll 변환.
      *
-     * R-17 검증 (ModelRotationRenderer.rotate() GitHub 직접):
-     *   YXZ(2): glRotatef(Z) → glRotatef(X) → glRotatef(Y) ✓
+     * 🔴 BUG-30 정정 확장 (Flying Phase / 세션 42):
+     *   원본 ModelRotationRenderer.rotate YXZ 분기 (L143/L146/L155) GL call 순서 = Z, X, Y.
+     *   GL post-multiply 규칙: vertex 적용 순서 = call 의 역순 = Y, X, Z.
+     *   JOML quaternion 곱 (q = qA * qB * qC) 의 vertex 적용 = right-most 부터 →
+     *     vertex 적용 순서 Y, X, Z 매칭 = qZ * qX * qY.
+     *
+     *   이전 R-17 매핑 = qY * qX * qZ → vertex 적용 Z, X, Y (원본과 반대 순서).
+     *   setAnglesXZY (세션 41) 에서 발견된 동일 패턴 오류 — YXZ/ZXY 헬퍼도 같은 reversal.
+     *   사용처 (isSwim head, isSlide body) 에서 큰 pitch/roll 시 가시 차이 가능.
+     *
+     *   정정: qZ * qX * qY 순서로 변경 → 원본 vertex 적용 Y → X → Z 1:1 매칭.
      *
      * 사용처: isSwim head, isSlide body.
      */
     private static void setAnglesYXZ(ModelPart part, float pitch, float yaw, float roll) {
         Quaternionf q = new Quaternionf()
-                .rotationY(yaw)
+                .rotationZ(roll)
                 .mul(new Quaternionf().rotationX(pitch))
-                .mul(new Quaternionf().rotationZ(roll));
+                .mul(new Quaternionf().rotationY(yaw));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
@@ -824,19 +830,27 @@ public abstract class MixinPlayerEntityModelClient {
     }
 
     /**
-     * 원본 XZY GL 순서(glRotate X → Z → Y) → ModelPart pitch/yaw/roll 변환.
-     * vertex 적용 X→Z→Y → GL call 순서 Y, Z, X → JOML qX * qZ * qY.
+     * 원본 XZY rotationOrder → ModelPart pitch/yaw/roll 변환.
      *
-     * R-17 검증 (ModelRotationRenderer.rotate() GitHub 직접):
-     *   XZY(1): glRotatef(Y) → glRotatef(Z) → glRotatef(X) ✓
+     * 🔴 BUG-30 정정 (Flying Phase / 세션 41):
+     *   원본 ModelRotationRenderer.rotate XZY 분기 (L148/L151/L157) GL call 순서 = Y, Z, X.
+     *   GL post-multiply 규칙: vertex 적용 순서 = call 의 역순 = X, Z, Y.
+     *   JOML quaternion 곱 (q = qA * qB * qC): vertex 가 right-most 부터 적용 →
+     *     vec → qC → qB → qA. 즉 vertex 적용 순서 X, Z, Y 매칭 = qY * qZ * qX.
+     *
+     *   이전 R-17 매핑 = qX * qZ * qY → vertex 적용 Y, Z, X (원본과 반대 순서).
+     *   small angle 시 차이 미세하지만 큰 roll (π/2 = 90°) 비행 자세에서 가시화 — 사용자
+     *   보고 BUG-30: "팔 방향과 같은 축으로 스크류 회전" (= 원본 X 회전이 아닌 잘못된 회전).
+     *
+     *   정정: qY * qZ * qX 순서로 변경 → 원본 vertex 적용 X → Z → Y 1:1 매칭.
      *
      * 사용처: isFlying arm, isFalling arm.
      */
     private static void setAnglesXZY(ModelPart part, float pitch, float yaw, float roll) {
         Quaternionf q = new Quaternionf()
-                .rotationX(pitch)
+                .rotationY(yaw)
                 .mul(new Quaternionf().rotationZ(roll))
-                .mul(new Quaternionf().rotationY(yaw));
+                .mul(new Quaternionf().rotationX(pitch));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
@@ -844,14 +858,25 @@ public abstract class MixinPlayerEntityModelClient {
     }
 
     /**
-     * 원본 ZXY GL 순서(glRotate Z → X → Y) → ModelPart pitch/yaw/roll 변환.
-     * JOML: qZ*qX*qY → getEulerAnglesZYX → (e.x=pitch, e.y=yaw, e.z=roll).
+     * 원본 ZXY rotationOrder → ModelPart pitch/yaw/roll 변환.
+     *
+     * 🔴 BUG-30 정정 확장 (Flying Phase / 세션 42):
+     *   원본 ModelRotationRenderer.rotate ZXY 분기 (L140/L146/L152) GL call 순서 = Y, X, Z.
+     *   GL post-multiply 규칙: vertex 적용 순서 = call 의 역순 = Z, X, Y.
+     *   JOML 의 vertex 적용 = right-most 부터 → vertex 적용 순서 Z, X, Y 매칭 = qY * qX * qZ.
+     *
+     *   이전 R-17 매핑 = qZ * qX * qY → vertex 적용 Y, X, Z (원본과 반대 순서).
+     *   setAnglesXZY/YXZ 동일 패턴 오류 — animateAngleJumping 다리 작은 각도라 차이 미세.
+     *
+     *   정정: qY * qX * qZ 순서로 변경 → 원본 vertex 적용 Z → X → Y 1:1 매칭.
+     *
+     * 사용처: animateAngleJumping 다리.
      */
     private static void setAnglesZXY(ModelPart part, float pitch, float yaw, float roll) {
         Quaternionf q = new Quaternionf()
-                .rotationZ(roll)
+                .rotationY(yaw)
                 .mul(new Quaternionf().rotationX(pitch))
-                .mul(new Quaternionf().rotationY(yaw));
+                .mul(new Quaternionf().rotationZ(roll));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
