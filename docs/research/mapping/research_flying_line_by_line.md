@@ -16,7 +16,7 @@
 
 | F-단계 | 대상 | 상태 | 세션 |
 |---|---|---|---|
-| F-1 | 원본 SmartMovingSelf 비행 처리 (handleAlternativeFlying + handleLand 비행 분기 + standupIfPossible + wasFlying 엣지 + flyWhileOnGround) | 🔄 진행 — 청크 1 (handleAlternativeFlying L602-L631) ✅ 완료 / 청크 2 (진입/종료) 대기 / 청크 3 (보조) 대기 | 38 진행 중 |
+| F-1 | 원본 SmartMovingSelf 비행 처리 (handleAlternativeFlying + handleLand 비행 분기 + standupIfPossible + wasFlying 엣지 + flyWhileOnGround) | 🔄 진행 — 청크 1 (handleAlternativeFlying) ✅ + 청크 2 (진입/종료 standupIfPossible/tryLanding/flyWhileOnGround/fallDistance) ✅ + getNonSlowInputSpeedFactor 정의 ✅ / 청크 3 (보조) ⏳ | 38 진행 중 |
 | F-2 | 원본 SmartMovingBase.moveFlying L56-L93 + HorizontalAirDamping | ⏳ 대기 | 38 예정 |
 | F-3 | 원본 SmartMovingModel isFlying 분기 L474-L520 | ⏳ 대기 | 38 예정 |
 | F-4 | 1.21.1 SmartMovingFlyer + sm_animateFlying + sm_setupTransforms + sm.isFlying 갱신 + standupIfPossible 모두 read + 매핑 | ⏳ 대기 | 39 예정 |
@@ -91,6 +91,114 @@ vs 1.21.1 `SmartMovingFlyer.handleFlying` L28-L77 (BUG-1+8 세션 37 수정 후 
 - BUG-28 (하늘 끝까지) → L616 jumping 필드 검토 + L613/L618 motionY 부호 검증 (sneak +0.15 / jump -0.15 — 원본 동일)
 
 **다음 청크**: F-1 청크 2 (비행 진입/종료 처리 — L1803-L1831 + L2186-L2212 + L2542+ + getNonSlowInputSpeedFactor 정의).
+
+### F-1 보조 — `getNonSlowInputSpeedFactor` 정의 (L197-L227, BUG-25 정확한 원인 확정)
+
+원본 `getNonSlowInputSpeedFactor(moveForward, moveStrafing)`:
+
+```java
+float speedFactor = 1f;
+if (isFast)
+    speedFactor *= (!isLevitating() ? Config._sprintFactor.value : Config._sprintFactorLevitate.value);
+if (isClimbing)
+    if (moveStrafing != 0F || moveForward != 0F)
+        speedFactor *= Config._freeClimbingHorizontalSpeedFactor.value;
+    else if (wantClimbDown && ...)
+        // 클라이밍 특수 처리 (비행 무관)
+return speedFactor;
+```
+
+**비행 (cfg.fly enabled, isLevitating false) 시 핵심**:
+- `isFast` = true (sprint 키 hold + 비행 가능 + 다른 조건) → `_sprintFactor.value` 곱셈 (기본 1.3F = 30% 가속)
+- `isFast` = false → 1.0F (변화 없음)
+- `isClimbing` = false (handleAlternativeFlying 진입 시 resetClimbing 호출됨) → 영향 없음
+
+**🔴 BUG-25 정확한 원인 (Agent 가설 정정)**:
+- Agent 가설 = "NonSlowInput 의 옆/뒤 0.6배 감속 누락" → ❌ **실제로는 NonSlow 가 옆/뒤 감속을 하지 않음**
+- 정확한 원인 = **isFast 시 sprint 배수 (`_sprintFactor` = 1.3F) 누락** → SM 비행 sprint 시 30% 느림 (사용자 보고 일치)
+
+**해결 방향** (F-6 정정):
+- `SmartMovingFlyer.handleFlying` 또는 `SmartMovingMover` 에 NonSlowInput 헬퍼 추가
+- `if (sm.isFast) flyingSpeed *= (sm.isLevitating ? cfg.sprintFactorLevitate : cfg.sprintFactor)`
+- 비행 sprint (Ctrl 또는 sprint 키 hold) 시 1.3F 가속 적용
+
+**정합 / 잉여**:
+- isFast / isLevitating / isClimbing 필드 모두 1.21.1 SmartMovingClientState 에 존재 ✓
+- cfg.sprintFactor / cfg.sprintFactorLevitate 모두 1.21.1 SmartMovingConfig 에 존재 ✓ (cfg.sprintFactorLevitate = 1.5F 확인됨)
+- → F-6 정정 = 단순 sprint 배수 곱셈 추가만 필요. 의존 없음.
+
+### F-1 청크 2 — 비행 진입/종료 처리 (세션 38)
+
+#### 2-1. `standupIfPossible` L2186-L2212 vs 1.21.1 SmartMovingClientState L2575-L2605
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L2186 | `private void standupIfPossible(boolean tryLanding, boolean restoreFromFlying)` | L2575 `public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying)` | [정합] | 시그니처 (player 추가) |
+| L2188-L2189 | `if (heightOffset >= 0) return;` | L2576 `if (this.heightOffset >= 0) return;` | [정합] | |
+| L2191 | `gapUnderneight = getGapUnderneight()` | L2578 동일 | [정합] | |
+| L2192 | `groundClose = gapUnderneight < 1D` | L2579 동일 | [정합] | |
+| L2193 | `gapOverneight = groundClose ? getGapOverneight() : -1D` | L2580 동일 | [정합] | |
+| L2194 | `standUpPossible = gapUnderneight + gapOverneight >= 1D` | L2581 동일 | [정합] | |
+| L2196-L2201 | `if (tryLanding && groundClose && standUpPossible) { isFlying=false; sp.capabilities.isFlying=false; restoreFromFlying=true; }` | L2583-L2591 `isFlying=false; player.getAbilities().flying=false; networkHandler.sendPacket(UpdatePlayerAbilitiesC2SPacket); restoreFromFlying=true;` | [정합] | 서버 sync 패킷 추가 (1.21.1 필수) |
+| L2203-L2204 | `if (!restoreFromFlying) return;` | L2593 동일 | [정합] | |
+| L2206 | `if (!groundClose && !sneakButton.Pressed) resetHeightOffset();` | L2595-L2599 `sneakPressed = player.isSneaking(); ... resetHeightOffset();` | [오역 후보] | ⚠️ sneakButton.Pressed (키 raw) vs isSneaking() (pose). L611 동일 패턴 |
+| L2208 | `else if (standUpPossible && !(sneakButton.Pressed && grabButton.Pressed)) standUp(...);` | L2600-L2601 동일 | [정합] | grabPressed = SmartMovingKeys.grab.isPressed() ✓ |
+| L2210-L2211 | `else toSlidingOrCrawling(...);` | L2602-L2604 동일 | [정합] | |
+
+**청크 2-1 결과**: 매우 정확한 1:1 매핑. sneakButton.Pressed → isSneaking() 차이는 잠재 BUG (BUG-26 자체가 아닌 다른 BUG 영향).
+
+#### 2-2. tryLanding 계산 L2542 vs 1.21.1 SmartMovingClientState L1338-L1344
+
+| 원본 L | 원본 코드 | 1.21.1 매핑 | 분류 |
+|---|---|---|---|
+| L2542 | `tryLanding = isFlying && !Options._flyCloseToGround.value && horizontalSpeedSquare < 0.003D && sp.motionY > -0.03D` | L1338-L1341 동일 (`!cfg0.flyCloseToGround`) | [정합] |
+| L2543-L2544 | `if (restoreFromFlying \|\| tryLanding) standupIfPossible(...)` | L1342-L1344 동일 | [정합] |
+
+**🟢 BUG-26 결론 — 원본과 정확한 1:1 매핑 (의도된 동작)**:
+- 원본 (1.7.10): `_flyCloseToGround` 기본값 = true → tryLanding 조건 false → 자동 착지 안 함
+- 원본 SmartMovingOptions L68 주석: "To switch on/off flying close to the ground" = true 면 지면 가까이 비행 가능 (의도)
+- 1.21.1: `cfg.flyCloseToGround = true` 기본값 (SmartMovingConfig L801) — 정확 1:1
+- 사용자 보고 "땅에 닿아도 착지 안 됨" = **원본 의도된 동작** (점프 두 번으로 비행 종료가 정상 방법)
+
+**해결 (F-6)**:
+- 옵션 1: 사용자에게 안내 — config 에서 `flyCloseToGround = false` 설정 시 자동 착지 가능
+- 옵션 2: 1:1 번역 위반하지 않는 한 기본값 변경 안 함
+
+#### 2-3. flyWhileOnGround L1820-L1834 vs 1.21.1 MixinClientPlayerEntity.sm_flyWhileOnGround L43-L56
+
+| 원본 L | 원본 코드 | 1.21.1 매핑 | 분류 |
+|---|---|---|---|
+| L1820-L1822 | `beforeOnLivingUpdate { wasCapabilitiesIsFlying = sp.capabilities.isFlying; }` | (별도 위치 — SmartMovingClientState L1302 `wasCapabilitiesIsFlying = player.getAbilities().flying;` tickEssential 안) | [정합] | 위치 분리 |
+| L1825 | `afterOnLivingUpdate()` | sm_flyWhileOnGround (`@Inject(method=tickMovement, at=TAIL, order=900)`) | [정합] | TAIL inject |
+| L1827 | `if (_flyWhileOnGround.value && !(sneakButton.Pressed && grabButton.Pressed) && wasCapabilitiesIsFlying && !sp.capabilities.isFlying && sp.onGround)` | L48-L52 `if (!cfg.enabled \|\| !cfg.flyCloseToGround \|\| !cfg.flyWhileOnGround) return; if (sneak+grab) return; if (sm.wasCapabilitiesIsFlying && !flying && isOnGround)` | [정합 / 의심] | ⚠️ **`!cfg.flyCloseToGround` 추가 가드** — 원본 L1827 에는 `_flyCloseToGround` 가드 없음! 1.21.1 = flyCloseToGround=true 시 sm_flyWhileOnGround skip → 자동 비행 복원 안 함. **잠재 BUG**. |
+| L1829-L1830 | `sp.cameraYaw = 0; sp.prevCameraYaw = 0;` | (1.21.1 cameraYaw 필드 부재) | [N/A] | 1.21.1 vanilla 미존재 |
+| L1831 | `sp.capabilities.isFlying = true;` | L53 `player.getAbilities().flying = true;` | [정합] | |
+| L1832 | `sendQueue.addToSendQueue(C13PacketPlayerAbilities)` | L54 `player.sendAbilitiesUpdate();` | [정합] | 서버 sync |
+
+**🔴 추가 발견 — sm_flyWhileOnGround 의 `!cfg.flyCloseToGround` 가드 잉여**:
+- 원본 L1827 = `_flyWhileOnGround.value` 만 가드 (flyCloseToGround 무관)
+- 1.21.1 L48 = `!cfg.flyCloseToGround` 추가 가드 → flyCloseToGround=true 시 자동 비행 복원 안 함
+- → **flyCloseToGround=true 기본값 시 vanilla 가 자동으로 flying false 해도 SM 이 복원 안 함 → 사용자가 자동 착지 못 함 (위 BUG-26 진단 보강)**
+
+**[잉여] 가드 제거 필요** — `!cfg.flyCloseToGround` 가드 삭제 (또는 의도적 추가라면 주석 명시 필요).
+
+#### 2-4. fallDistance 비행 중 0 reset L1803-L1804
+
+| 원본 L | 원본 코드 | 1.21.1 매핑 | 분류 |
+|---|---|---|---|
+| L1803-L1804 | `if (sp.capabilities.isFlying) sp.fallDistance = 0F;` | (1.21.1 grep 결과 = SmartMovingClimber L317 만, 비행 중 reset 누락) | **[누락]** | 🔴 비행 중 fallDistance reset 누락 → 비행 종료 직후 착지 시 누적 fallDistance 로 낙하 데미지 가능 |
+
+**[누락] 잠재 BUG** — 비행 중 fallDistance reset 매핑 누락. 단 사용자 보고 (BUG-25~34) 와 직접 연관 없음 (게임플레이 영향만).
+
+**청크 2 통계 (47 라인 / 4 분기)**: 정합 23 / 오역 후보 1 (sneak 검사) / 잉여 1 (sm_flyWhileOnGround flyCloseToGround 가드) / 누락 1 (fallDistance reset) / N/A 1
+
+**핵심 발견 (F-1 청크 2)**:
+1. 🟢 **BUG-26 = 원본 1:1 매핑 (의도된 동작)** — flyCloseToGround=true 기본값 시 자동 착지 안 함이 원본 동작
+2. 🔴 **sm_flyWhileOnGround `!cfg.flyCloseToGround` 가드 잉여** — 원본에 없는 추가 가드. 자동 비행 복원 차단. **F-6 정정 = 가드 삭제**
+3. 🔴 **비행 중 fallDistance reset 누락** — 원본 L1803-L1804 미매핑. F-6 정정 = MixinLivingEntityClient 또는 적절한 위치에 추가
+4. ⚠️ **sneakButton.Pressed → isSneaking() 차이** — L611 / L2206 동일 패턴 잠재 영향
+
+**다음 청크**: F-1 청크 3 (보조 — L80 + L633-L640 + L2320 + L2404 + L2509+) 또는 F-2 (moveFlying) / F-3 (isFlying 분기).
 
 ---
 
