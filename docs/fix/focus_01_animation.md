@@ -405,7 +405,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-13. Slide 다중 피벗 (§16-19 / SmartMovingModel L442/L444/L448/L452/L453) — sm_animateSliding 시그니처에 headYaw 추가 + 호출처 갱신 / `head.roll = -headYaw * DEG_TO_RAD; head.pivotZ = -2F; body.pivotY = +6.5F;` 3 라인 / sm_setupTransforms isSliding 분기에 `matrices.translate(0, -0.4F/16F, 0)` 1 라인 (body.offsetY 부재 보정) / outer.pivotY=+5F 는 기존 sm_setupTransforms L221 에 이미 이식 / head.roll reset 인프라 1 라인 확장. **세션 28 완료**.
 
 **[신규 분기 추가]**
-- [ ] B-14. 타인 플레이어 crawl Y 보정 (§16-22 / SmartMovingRender L124-L125) — sm_getPositionOffset 분기 추가 `else if (!isOwnPlayer && entity.isSneaking() && sm.isCrawling) cir.setReturnValue(new Vec3d(0, 0.125, 0));`
+- [x] B-14. 타인 플레이어 crawl Y 보정 (§16-22 / SmartMovingRender L124-L125) — sm_getPositionOffset 자기/타인 분기 분리 + 타인 분기 `entity.isSneaking() && sm.isCrawling → Vec3d(0, 0.125, 0)` 추가. SmartMovingClientState.get(UUID) 로 타인 sm 상태 조회 (C-24 State 패킷 동기화). **세션 29 완료**.
 - [ ] B-15. Levitate horizontal=camera (§16-23 / SmartMovingRender L132-L134) — sm_captureBodyYaw 끝부분 `if (sm.isLevitating) smBodyYawOverride = MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw());`
 
 **[누적 위험 검증 후]**
@@ -1791,6 +1791,76 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **reset 인프라 누적** (sm_setAngles HEAD anySmState 분기): `head.pivotZ + body.pivotZ + body.yaw + head.roll = 0` 4 필드.
 
 **다음 단계 (세션 29+)**: 권장 시작 = **B-14** (sm_getPositionOffset 분기 — 타인 플레이어 crawl Y +0.125 / 신규 분기 추가) 또는 **B-15** (sm_captureBodyYaw 끝 보정 — levitate horizontal=camera / 신규 분기 추가). 신규 분기 그룹 진입.
+
+---
+
+### 세션 29 — 2026-04-26 — Phase B / R-10+ B-14 (타인 플레이어 crawl Y 보정) 1:1 이식 — **신규 분기 그룹 진입**
+
+**진행한 작업** (자기/타인 분기 분리 + 신규 타인 분기 추가):
+
+1. **원본 1차 자료 read** — `SmartMovingRender.java` L124-L125:
+   ```java
+   if (!isInventory && entityplayer.isSneaking() && !(entityplayer instanceof EntityPlayerSP) && isCrawl)
+       d1 += 0.125D;
+   ```
+   조건: 인벤토리 아님 + sneak 자세 + **자기 자신이 아닌 다른 플레이어** + 크롤링 → 렌더 Y +0.125 (지면 뚫림 방지).
+
+2. **1.21.1 sm_getPositionOffset 본체 read** (`MixinPlayerEntityRenderer` L46-L63):
+   - 현재 `if (!(entity instanceof ClientPlayerEntity player)) return;` 첫 줄에서 다른 플레이어 즉시 return → **B-14 적용 못 함**.
+   - `SmartMovingClientState.get(ClientPlayerEntity)` (자기 자신용) + `SmartMovingClientState.get(UUID)` (타인용 / C-24 State 패킷 수신) 양쪽 메서드 존재 확인 (SmartMovingClientState L741-L748).
+
+3. **분기 분리 전략**:
+   - 자기 자신 (`entity instanceof ClientPlayerEntity`): 헤드점프 + 크롤링 (기존 로직)
+   - 타인 플레이어 (else): sneak + isCrawling → Vec3d(0, 0.125, 0)
+   - 자기 자신 분기 진입 시 return 으로 종료, 타인 분기는 entity.getUuid() 로 sm 상태 조회.
+
+4. **isInventory 조건 검토**:
+   - 원본 의도: InventoryScreen 의 3D 플레이어 미리보기에서 +0.125 적용 막기.
+   - 1.21.1 InventoryScreen 미리보기는 보통 자기 자신 (ClientPlayerEntity) 으로 분류 → 자기 자신 분기로 빠지므로 본 타인 분기 영향 없음.
+   - 다른 플레이어 미리보기는 매우 드문 케이스 (InventoryScreen 보통 자기 자신만) → 단순화로 isInventory 별도 검사 생략.
+   - 부작용 발견 시 후속 보강 검토 (별도 신규 발견 후보).
+
+5. **B-14 코드 수정** (sm_getPositionOffset 본체 재구성):
+   ```java
+   // 자기 자신: 헤드점프 + 크롤링 (기존)
+   if (entity instanceof ClientPlayerEntity player) {
+       SmartMovingClientState sm = SmartMovingClientState.get(player);
+       // ... (헤드점프 / 크롤링)
+       return;
+   }
+   // 타인 플레이어 (B-14 / §16-22)
+   SmartMovingClientState sm = SmartMovingClientState.get(entity.getUuid());
+   if (entity.isSneaking() && sm.isCrawling) {
+       cir.setReturnValue(new Vec3d(0D, 0.125D, 0D));
+   }
+   ```
+   메서드 Javadoc 도 갱신 — 자기/타인 분기 + B-14 명시.
+
+6. **값 정확성 검증**:
+   - 원본 `d1 += 0.125D` → 1.21.1 `cir.setReturnValue(new Vec3d(0, 0.125, 0))`. 단위 변환 없음 (vanilla 좌표계 1D = 1 블록).
+   - getPositionOffset 의 반환값은 `LivingEntityRenderer.render` 가 entity 위치에 더하는 오프셋 → 원본 d1 += 와 정확히 등가.
+   - `entity.isSneaking()` (vanilla Entity 메서드) = `bipedplayer.isSneaking()` 등가.
+   - `sm.isCrawling` (UUID 기반) = C-24 State 패킷으로 동기화된 타인 SM 상태 → 원본 isCrawl 등가.
+
+7. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**검증 체크리스트 (세션 29 B-14)**:
+- [근거] ✓ 원본 SmartMovingRender L124-L125 read 완료 + SmartMovingClientState L741-L748 (UUID 기반 조회) 확인
+- [전수] ✓ 원본 변경 1 분기 → 1.21.1 1 분기 매핑 (자기 자신 분기와 분리)
+- [발견] 신규 발견 0건 (단 InventoryScreen 다른 플레이어 미리보기는 영향 검토 후속 후보)
+- [검증] ✓ entity.getUuid() 모든 PlayerEntity 안전 / SmartMovingClientState.get(UUID) 메서드 존재 / Vec3d 단위 변환 없음
+- [회귀] ✓ 자기 자신 분기 (헤드점프 + 크롤링) 변경 없음, 타인 분기는 신규 추가만 — 기존 동작 보존
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 16 원자 중 **9 완료** (B-8/B-9/B-10/B-11/B-12/B-13/B-14/B-18/B-19) / 7 남음. **신규 분기 그룹 1/2 (B-14 완료, B-15 남음)**.
+
+**남은 7 원자**:
+- 신규 분기: **B-15** (sm_captureBodyYaw levitate)
+- 누적 검증 후: B-16 (cloak.pitch)
+- 인프라 + 입력값: B-X / B-4 / B-5 / B-6 / B-7
+- 신규 Mixin: B-17 (CapeFeatureRenderer)
+
+**다음 단계 (세션 30+)**: 권장 시작 = **B-15** (sm_captureBodyYaw 끝 보정 — levitate horizontal=camera 강제 정렬 / 신규 분기 마무리). 같은 그룹 마지막 1 원자.
 
 ---
 

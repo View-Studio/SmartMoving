@@ -36,29 +36,42 @@ public class MixinPlayerEntityRenderer {
     /**
      * [9-6][12-6] getPositionOffset() 오버라이드.
      *
-     * SM 크롤링: SWIMMING 포즈 오프셋(setupTransforms translate(0,-1,0.3) 제거됨) 대신
-     *             vanilla 웅크리기 오프셋(-scale × 0.125)을 반환.
-     * SM 헤드점프: heightOffset(-1F) 렌더 적용 (타인 플레이어 렌더 위치 보정).
+     * SM 크롤링 (자기 자신): SWIMMING 포즈 오프셋(setupTransforms translate(0,-1,0.3) 제거됨)
+     *             대신 vanilla 웅크리기 오프셋(-scale × 0.125) 반환.
+     * SM 헤드점프 (자기 자신): heightOffset(-1F) 렌더 적용.
+     * SM 타인 플레이어 sneak+crawl (B-14 / §16-22): 렌더 Y 위치 +0.125 보정 (지면 뚫림 방지).
      *
      * 원본: SmartMovingRender.renderPlayerAt() → d1 += heightOffset
      *       SmartMovingPlayerBase.getYOffset() → -0.125F
+     *       SmartMovingRender L124-L125: 타인 플레이어 sneak+crawl → d1 += 0.125
      */
     @Inject(method = "getPositionOffset(Lnet/minecraft/client/network/AbstractClientPlayerEntity;F)Lnet/minecraft/util/math/Vec3d;",
             at = @At("HEAD"), cancellable = true)
     private void sm_getPositionOffset(AbstractClientPlayerEntity entity, float tickDelta,
                                        CallbackInfoReturnable<Vec3d> cir) {
-        if (!(entity instanceof ClientPlayerEntity player)) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        // 자기 자신 (ClientPlayerEntity): 헤드점프 + 크롤링 분기
+        if (entity instanceof ClientPlayerEntity player) {
+            SmartMovingClientState sm = SmartMovingClientState.get(player);
 
-        // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
-        if (sm.isHeadJumping && sm.heightOffset != 0f) {
-            cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
+            // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
+            if (sm.isHeadJumping && sm.heightOffset != 0f) {
+                cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
+                return;
+            }
+
+            // 크롤링: SWIMMING 포즈 오프셋 대신 SM 크롤링 오프셋
+            if (sm.isCrawling) {
+                cir.setReturnValue(new Vec3d(0D, -entity.getScale() * 0.125D, 0D));
+            }
             return;
         }
 
-        // 크롤링: SWIMMING 포즈 오프셋 대신 SM 크롤링 오프셋
-        if (sm.isCrawling) {
-            cir.setReturnValue(new Vec3d(0D, -entity.getScale() * 0.125D, 0D));
+        // 타인 플레이어 (B-14 / §16-22 / 원본 SmartMovingRender L124-L125):
+        // !isOwnPlayer && entity.isSneaking() && isCrawl → d1 += 0.125 (지면 뚫림 방지)
+        // SM 상태는 C-24 State 패킷으로 동기화 (UUID 기반 조회).
+        SmartMovingClientState sm = SmartMovingClientState.get(entity.getUuid());
+        if (entity.isSneaking() && sm.isCrawling) {
+            cir.setReturnValue(new Vec3d(0D, 0.125D, 0D));
         }
     }
 
