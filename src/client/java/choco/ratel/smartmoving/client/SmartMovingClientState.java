@@ -833,6 +833,10 @@ public final class SmartMovingClientState {
     public void tickEssential(ClientPlayerEntity player) {
         // 이전 틱 값 초기화 — vanilla jump() 가로채기(sm_jump)에서 당 틱에 새로 설정됨
         jumpAvoided = false;
+        // 🔴 (세션 55): isJumping 매 틱 false reset (원본 SmartMovingSelf L1744 1:1).
+        //   원본: tryJump 시 true (L2132), updateEntityActionState 시작 시 false reset.
+        //   tryJump 안에서만 true → 한 틱만 유지 (다음 틱 시작 시 reset).
+        isJumping = false;
 
         // H-15 (세션 22): 2상태 토글 강제 복원. 원본 `initializeForGameIfNeccessary` 가
         // setKeys({"e","m","h"}) 로 configKeys 를 덮어써 configToggle 이 4상태 순환하는
@@ -2881,7 +2885,15 @@ public final class SmartMovingClientState {
 
         // 로컬 플레이어 인스턴스 필드 갱신 — sendStatePacket 호출 시점에 즉석 계산된 값을
         // 자신의 상태 필드에도 반영하여 로컬 렌더/애니메이션(isDive 분기 등)에서 참조 가능하게 한다.
-        isJumping          = !player.isOnGround() && !isClimbing && !isSwimming_sm && !isDiving && !isDipping;
+        // 🔴 (세션 55): 이전 잘못 매핑 `isJumping = !onGround && !climb && !swim && !dive && !dipping`
+        //   완전 제거. 원본 SmartMovingSelf.isJumping 은 tryJump 시 true (L2132), tickEssential
+        //   시작 시 false reset (L1744). 매 틱 흐름:
+        //     1) tickEssential HEAD: isJumping = false reset.
+        //     2) handleJumping → tryJump (조건 충족 시): isJumping = true (한 틱 동안 유지).
+        //     3) sendStatePacket TAIL: 현재 isJumping (true 또는 false) 그대로 packet 전송.
+        //   = 우리 1.21.1 매핑: tickEssential L835+ 에 `isJumping = false` 추가 (이미 적용),
+        //     SmartMovingJumper.tryJump L316 `sm.isJumping = true` (이미 적용).
+        //   sendStatePacket 에서는 매핑 안 함 — 현재 값 그대로 전송.
         doFallingAnimation = !player.isOnGround() && player.getVelocity().y < -0.1D
                               && !isClimbing && !isSwimming_sm && !isDiving;
         // B-10d (세션 71): isLevitating 강제 false 제거. 원본 L505 `isLevitating = diving &&
