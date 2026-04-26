@@ -318,7 +318,12 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isCeilingClimbing: 천장 매달리기 클라이밍.
-     * 원본: SmartMovingModel.setRotationAngles() 4번 분기.
+     * 원본: SmartMovingModel.setRotationAngles() 4번 분기 (L284-L316).
+     * head.yaw 는 원본 L315 `bipedHead.rotateAngleY = -rotateY;` 절대 할당으로
+     *   vanilla setAngles 의 net head yaw (i*PI/180) 결과를 덮어쓴다 — 매달림 자세에서
+     *   머리는 ceiling climb 동작에만 따르며 마우스 head yaw 입력 무시 (의도).
+     * B-18 / §16-17: 이전 구현의 `head.yaw -= headYaw * DEG_TO_RAD` 차감은 원본에 없는
+     *   잉여 보정이었으므로 제거 (세션 25).
      */
     private void sm_animateCeilingClimbing(float limbSwing, float limbSwingAmount, float headYaw) {
         float distance    = limbSwing * 0.7f;
@@ -334,9 +339,7 @@ public abstract class MixinPlayerEntityModelClient {
         float rotateY = MathHelper.cos(distance) * 0.44f * walkFactor;
         rightArm.yaw = leftArm.yaw = -rotateY;
         rightLeg.yaw = leftLeg.yaw = -rotateY;
-        head.yaw      = -rotateY;
-        // head.yaw는 headYaw * DEG_TO_RAD + rotateY 보정
-        head.yaw -= headYaw * DEG_TO_RAD;
+        head.yaw     = -rotateY;
     }
 
     /**

@@ -398,7 +398,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
 - [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
 - [ ] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling `head.pivotZ = -2F; body.pivotY = +3F;` 추가
-- [ ] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L332) — `head.yaw -= headYaw * DEG_TO_RAD;` 라인 제거 또는 의도 검증
+- [x] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L339) — `head.yaw -= headYaw * DEG_TO_RAD;` + 주석 1 라인 제거 (원본 L315 절대 할당 1:1). **세션 25 완료**.
 
 **[다중 라인 + MatrixStack 보정]**
 - [ ] B-13. Slide 다중 피벗 (§16-19 / SmartMovingModel L442/L444/L448/L452/L453) — sm_animateSliding `head.roll = -viewHorizontalAngelOffset/RadiantToAngle; head.pivotZ = -2F; body.pivotY = +6.5F;` + sm_setupTransforms 별도 `matrices.translate(0, -0.4F/16, 0)` 보정 (body.offsetY 부재 우회) + outer.pivotY = +5F 등가 (entity-level translate 또는 sm_getPositionOffset 분기)
@@ -1455,6 +1455,45 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [빌드] ✓ BUILD SUCCESSFUL
 
 **다음 단계 (세션 25+)**: 권장 시작 = **B-18** (ceiling head.yaw 잉여 제거 — 1 라인 삭제) 또는 **B-9** (climbing NoGrab+non-NoStep body.pivotZ = -6F — 1 라인 추가). 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 5 남음.
+
+---
+
+### 세션 25 — 2026-04-26 — Phase B / R-10+ B-18 (ceiling head.yaw 잉여 차감 제거) 1:1 정정
+
+**진행한 작업** (잉여 제거 원자):
+
+1. **원본 1차 자료 read** — `sm_original/SmartMoving/.../SmartMovingModel.java` L307-L316 (ceiling climb 분기 후반):
+   - L312 `bipedRightArm.rotateAngleY = bipedLeftArm.rotateAngleY = -rotateY;` (양팔 Y 절대 할당)
+   - L313 `bipedRightLeg.rotateAngleY = bipedLeftLeg.rotateAngleY = -rotateY;` (양다리 Y 절대 할당)
+   - L315 `bipedHead.rotateAngleY = -rotateY;` ← **단순 절대 할당, headYaw 차감 없음**
+
+2. **1.21.1 sm_animateCeilingClimbing read** (`MixinPlayerEntityModelClient` L323-L340):
+   - L335-L337: 양팔/양다리/머리 yaw = -rotateY 절대 할당 (= 원본 L312/L313/L315 1:1)
+   - **L339 `head.yaw -= headYaw * DEG_TO_RAD;` ← 원본에 없는 추가 차감 (잉여)**
+
+3. **잉여 분석 + 의도 검증**:
+   - vanilla `BipedEntityModel.setAngles` 진입 시 `head.yaw = i * (Math.PI/180.0)` 로 net head yaw 입력 적용.
+   - sm_setAngles TAIL inject → sm_animateCeilingClimbing → `head.yaw = -rotateY` (절대 할당) 으로 vanilla 결과 덮어쓰기 = 원본 의도 (천장 매달림 시 머리는 ceiling climb 동작에만 따르며 마우스 head yaw 입력 무시).
+   - 추가 차감 (`-= headYaw * DEG_TO_RAD`) 은 원본 L315 패턴에 없음 + 절대 할당 직후 차감하는 의미 없음 (의도된 구조 깨짐) → **잉여 확정 / 제거 결정**.
+
+4. **B-18 코드 수정** (`MixinPlayerEntityModelClient` L337-L339):
+   - L338 주석 `// head.yaw는 headYaw * DEG_TO_RAD + rotateY 보정` 제거 (잉여 라인 설명 주석)
+   - L339 `head.yaw -= headYaw * DEG_TO_RAD;` 제거
+   - 메서드 Javadoc 갱신: 원본 L315 절대 할당 의도 + B-18 잉여 제거 근거 명시.
+   - **차감 2 라인 제거 = 코드 단축 방향**.
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (7s).
+
+**검증 체크리스트 (세션 25 B-18)**:
+- [근거] ✓ 원본 SmartMovingModel.java L307-L316 read 완료 (ceiling climb 분기 본체 직접 비교)
+- [전수] ✓ 원본 head.yaw 라인 1 지점 (L315) → 1.21.1 1 지점 (L337) 매핑 검증 후 잉여 1 지점 (L339) 제거
+- [분류] N/A (Phase B 잉여 제거)
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla `BipedEntityModel.setAngles` 의 head.yaw 적용 패턴 (net head yaw → sm 덮어쓰기) 의도 정합 확인
+- [회귀] ✓ headYaw 매개변수 다른 sm_animate* 헬퍼들과 동일 시그니처 유지 (호출처 변경 없음, 본 헬퍼만 미사용)
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**다음 단계 (세션 26+)**: 권장 시작 = **B-9** (climbing NoGrab+non-NoStep body.pivotZ = -6F — 1 라인 추가). 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 4 남음 (B-9/B-10/B-11/B-12).
 
 ---
 
