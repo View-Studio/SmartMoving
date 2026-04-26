@@ -61,6 +61,13 @@ public abstract class MixinLivingEntityClient {
         // 1.7.10 Compat 엘리트라: Et Futurum Requiem IElytraPlayer → 1.21.1은 vanilla isFallFlying()
         if (player.isSpectator() || player.isFallFlying()) return;
 
+        // BUG-11 (세션 36): SM disabled 시 travel 전체 작동 안 함 → vanilla 정상.
+        //   기존: cfg.enabled 가드 없이 L67 vanilla flying motionY 0.6 감쇠 작동 → SM disabled
+        //   상태에서도 creative 비행 약화 (50%). 또한 handleSwimming/handleLava/handleSliding/
+        //   handleFlying/climbing 등 모든 SM 분기 진입 가능 (sm.* 필드는 false 이지만 무용 계산).
+        //   해결: cfg.enabled false 면 즉시 return — vanilla travel 정상 작동.
+        if (!cfg.enabled) return;
+
         // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
         // 1.21.1: jumpMovementFactor 필드 없음 → getOffGroundSpeed() 메서드(PlayerEntity) (A-30 확인)
         // C-41: getOffGroundSpeed() @HEAD Mixin으로 0.05F 반환하여 공중 이동 억제

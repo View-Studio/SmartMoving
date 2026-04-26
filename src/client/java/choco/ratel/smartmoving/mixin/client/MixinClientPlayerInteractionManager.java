@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.util.ActionResult;
@@ -30,6 +31,9 @@ public abstract class MixinClientPlayerInteractionManager {
     @Inject(method = "interactBlock", at = @At("HEAD"))
     private void sm_beforeInteractBlock(ClientPlayerEntity player, Hand hand, BlockHitResult hitResult,
                                          CallbackInfoReturnable<ActionResult> cir) {
+        // BUG-10 (세션 36): SM disabled 시 forceIsSneaking 강제 안 함 →
+        //   sm_isSneaking() override 가 vanilla isSneaking() 결과 그대로 반환 (BUG-7 확장).
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         sm.forceIsSneaking = player.isSneaking();
     }
@@ -37,6 +41,8 @@ public abstract class MixinClientPlayerInteractionManager {
     @Inject(method = "interactBlock", at = @At("RETURN"))
     private void sm_afterInteractBlock(ClientPlayerEntity player, Hand hand, BlockHitResult hitResult,
                                         CallbackInfoReturnable<ActionResult> cir) {
+        // BUG-10 (세션 36): RETURN 도 동일 가드 — disabled 시 null 강제 안 함 (이미 null 일 가능성).
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState.get(player).forceIsSneaking = null;
     }
 }

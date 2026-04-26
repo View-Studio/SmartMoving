@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -27,6 +28,9 @@ public abstract class MixinClientPlayNetworkHandler {
 
     @Inject(method = "onPlayerPositionLook", at = @At("HEAD"))
     private void sm_beforePlayerPositionLook(PlayerPositionLookS2CPacket packet, CallbackInfo ci) {
+        // BUG-9 (세션 36): SM disabled 시 multiPlayerInitialized 갱신 안 함 →
+        //   sm_travel_client 의 pushOutOfBlocks 억제가 작동하지 않도록 보장 (BUG-7 확장).
+        if (!SmartMovingConfig.Config.enabled) return;
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
         if (player == null) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);

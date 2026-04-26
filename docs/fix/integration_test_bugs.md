@@ -271,6 +271,60 @@
 
 ---
 
+## BUG-9. SM disabled 시 multiPlayerInitialized 갱신 잔존 (BUG-7 확장 / 세션 36 전수 감사)
+
+**증상**: SM disabled 상태에서 서버→클라이언트 위치 동기화 시 (`onPlayerPositionLook`) `sm.multiPlayerInitialized = 5` 강제 세팅 → 다음 5 틱 동안 sm_travel_client 의 pushOutOfBlocks 억제가 작동 (간접 영향).
+
+**위치**: `MixinClientPlayNetworkHandler.java` L28-34 `sm_beforePlayerPositionLook`.
+
+**해결 (세션 36 AI 완결)**: 진입 시 `if (!SmartMovingConfig.Config.enabled) return;` 추가. SmartMovingConfig import 추가.
+
+**우선순위**: 🔴 매우 높음 (BUG-7 확장 패턴).
+
+---
+
+## BUG-10. SM disabled 시 forceIsSneaking 강제 잔존 (BUG-7 확장 / 세션 36 전수 감사)
+
+**증상**: SM disabled 상태에서도 블록 상호작용 시 `sm.forceIsSneaking = player.isSneaking()` 강제 세팅 → `sm_isSneaking()` override 가 vanilla 결과 그대로 반환되도록 영향. 외부 모드/플러그인 호환성 영향 가능.
+
+**위치**: `MixinClientPlayerInteractionManager.java` L30-42 `sm_beforeInteractBlock` + `sm_afterInteractBlock`.
+
+**해결 (세션 36 AI 완결)**: HEAD/RETURN 양쪽에 `if (!SmartMovingConfig.Config.enabled) return;` 추가 (4 라인). SmartMovingConfig import 추가.
+
+**우선순위**: 🔴 매우 높음 (BUG-7 확장 패턴).
+
+---
+
+## BUG-11. SM disabled 시 sm_travel_client 의 vanilla flying 억제 작동 (BUG-7 확장 / 세션 36 전수 감사)
+
+**증상** (가장 심각): SM disabled 상태에서 Creative 비행 시 `sm_travel_client` L67 `if (player.getAbilities().flying && !cfg.fly)` 가 작동 → `motionY *= 0.5999...` (50% 감쇠) → vanilla creative 비행 약화. SM disabled 사용자가 비행 약화 경험.
+
+**위치**: `MixinLivingEntityClient.java` L53-L207 `sm_travel_client` 전체 메서드. L67 vanilla flying 억제 + handleSwimming/handleLava/handleSliding/handleFlying/climbing 모든 분기.
+
+**해결 (세션 36 AI 완결)**: L62 `if (player.isSpectator() || player.isFallFlying()) return;` 다음에 `if (!cfg.enabled) return;` 추가. SM disabled 시 travel 전체 작동 안 함 → vanilla 정상.
+
+**회귀 안전성**: SM enabled 시 기존 동작 그대로. SM disabled 시 vanilla travel 정상 작동 + sm.* 필드는 resetState 로 false 유지 → 다른 SM 분기 영향 없음.
+
+**우선순위**: 🔴 매우 높음 (BUG-7 패턴 + 게임플레이 즉시 영향 — Creative 비행 약화).
+
+---
+
+## BUG-12. SM disabled 시 sm_captureBodyYaw + sm_setupTransforms 진입점 가드 부재 (BUG-7 확장 / 세션 36 전수 감사)
+
+**증상**: SM disabled 상태에서도 `sm_captureBodyYaw` 와 `sm_setupTransforms` 가 진입 → 내부 sm.* 필드 false 이므로 실제 변환은 적용 안 되지만 무용 계산 + 명시성 부재. 추가로 `smOuterTiltX = 0f;` reset 만 작동 (matrices 변환은 모든 분기 false 로 skip).
+
+**위치**:
+- `MixinPlayerEntityRenderer.java` L87 `sm_captureBodyYaw` (HEAD)
+- `MixinPlayerEntityRenderer.java` L207 `sm_setupTransforms` (TAIL)
+
+**해결 (세션 36 AI 완결)**:
+- `sm_captureBodyYaw`: `localPlayer` 캐스팅 직후 `if (!SmartMovingConfig.Config.enabled) return;` 추가. smBodyYawActive 는 진입 시 이미 false 로 reset (L92).
+- `sm_setupTransforms`: `sm.smOuterTiltX = 0f;` reset 후 `if (!SmartMovingConfig.Config.enabled) return;` 추가. 매 호출마다 0 reset 으로 cape 클램프 fallback 보장.
+
+**우선순위**: 🟠 높음 (간접 가드로 실제 동작 영향 낮지만 명시성 + 성능).
+
+---
+
 ## BUG-7. SM disabled 시 — 애니메이션 초기화 안 됨 + 비행 시 SM 비행 애니메이션
 
 **증상**:
@@ -352,6 +406,10 @@
 ## 후속 작업 큐
 
 - [✅ AI 완결 / 인게임 검증 대기] BUG-7 sm_setAngles flyingCreative 가드 + cloak.pitch 가드 + reset 인프라 분기 확장 — 세션 36. 3 가드 추가로 SM disabled 시 잔존 정리.
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-9** MixinClientPlayNetworkHandler.sm_beforePlayerPositionLook — multiPlayerInitialized 갱신 가드 (세션 36)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-10** MixinClientPlayerInteractionManager.sm_beforeInteractBlock + sm_afterInteractBlock — forceIsSneaking 강제 가드 (세션 36)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-11** MixinLivingEntityClient.sm_travel_client — vanilla flying 억제 + 모든 SM 분기 진입 가드 (세션 36 / Creative 비행 약화 해결)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-12** MixinPlayerEntityRenderer.sm_captureBodyYaw + sm_setupTransforms — 진입점 가드 (세션 36)
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)

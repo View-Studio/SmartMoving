@@ -90,6 +90,8 @@ public class MixinPlayerEntityRenderer {
                                     CallbackInfo ci) {
         smBodyYawActive = false;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
+        // BUG-12 (세션 36): SM disabled 시 bodyYaw 오버라이드 안 함 → vanilla bodyYaw 그대로 (BUG-7 확장).
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
 
         // 원본 SmartMovingRender.rotatePlayer L271-274 조건 1:1.
@@ -211,10 +213,14 @@ public class MixinPlayerEntityRenderer {
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
 
+        // BUG-12 (세션 36): SM disabled 시 모든 SM 분기 skip + smOuterTiltX = 0 reset →
+        //   매 호출마다 0 으로 정리하므로 cape 클램프도 vanilla fallback (BUG-7 확장).
+        sm.smOuterTiltX = 0f;
+        if (!SmartMovingConfig.Config.enabled) return;
+
         // B-17 capture (§16-25): outer.X 등가 tiltAngle 을 SmartMovingClientState.smOuterTiltX 에
         //   저장해 MixinCapeFeatureRenderer 에서 망토 X 회전 클램프 (70.523° - outerX_deg) 적용.
         //   진입 시 reset — 5 분기 중 한 분기만 활성 시 = 으로 할당, 비활성 시 0 (vanilla 망토 그대로).
-        sm.smOuterTiltX = 0f;
 
         // SM 수영(isSwimming_sm): bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor
         // 원본: fadeRotateAngleX = true + rotateAngleX = Quarter - Sixteenth * standSneakFactor
