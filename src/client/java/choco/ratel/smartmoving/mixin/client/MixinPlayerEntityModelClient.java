@@ -604,6 +604,24 @@ public abstract class MixinPlayerEntityModelClient {
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
     private void sm_animateFlying(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+        // 🔴 (세션 62): vanilla animateArms swing 효과 reset — 비행 중 공격 시 잔존 차단.
+        //   vanilla BipedEntityModel.setAngles L612-L616 가 마지막에 animateArms 호출.
+        //   animateArms (L1444+, handSwingProgress > 0 시):
+        //     body.yaw = sin(sqrt(swing) * 2π) * 0.2F
+        //     rightArm.pivotZ = sin(body.yaw) * 5F, pivotX = -cos(body.yaw) * 5F
+        //     leftArm.pivotZ = -sin(body.yaw) * 5F, pivotX = cos(body.yaw) * 5F
+        //     arm.pitch/yaw/roll += swing 진행 효과
+        //   원본 SmartMovingModel 이 super.setAngles 호출 안 함 → vanilla 의 animateArms 효과 0.
+        //   우리 sm_animateFlying TAIL inject 는 vanilla setAngles 후 → animateArms 실행 후 우리가
+        //   회전 (setAnglesXZY) 만 덮어씀, **pivot (pivotZ/pivotX) + body.yaw 잔존** → swing 시 어깨 위치
+        //   + 몸 yaw 변화 = 사용자 보고 "비행 중 공격 시 애니메이션 이상" 직접 원인.
+        //   정정: vanilla setAngles default 값으로 reset (swing 전 상태).
+        body.yaw          = 0f;
+        rightArm.pivotZ   = 0f;
+        rightArm.pivotX   = -5f;
+        leftArm.pivotZ    = 0f;
+        leftArm.pivotX    = 5f;
+
         // 🔴 (세션 52): partial tick lerp 적용 — 원본 SmartRenderRender.renderPlayer L56-L57:
         //   `totalDistance = statistics.getTotalDistance(renderPartialTicks)` —
         //   `currentSpeed = statistics.getCurrentSpeed(renderPartialTicks)` 매 프레임 lerped 값.
