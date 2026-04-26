@@ -396,7 +396,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = 2F; rightArm.pivotY = leftArm.pivotY = 0F;` 3 라인 추가 + 주석 갱신 (vanilla setAngles 가 매 프레임 sneak 분기로 reset → TAIL inject 안전 검증). **세션 24 완료**.
 - [x] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 1 라인 추가 + sm_setAngles HEAD pivotZ reset 인프라 2 라인 추가 (head/body — vanilla 미reset 안전 보장). **세션 25 완료**.
 - [ ] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기, 다리 그룹 무릎 굽힘 보정).
-- [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
+- [x] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming 머리 처리 후 `head.pivotZ = -2F;` 1 라인 + sm_animateDiving 본체 시작에 `head.pitch = -EIGHTH; head.pivotZ = -2F;` 2 라인 = 총 3 라인. head.pivotZ 는 B-9 reset 인프라, head.pitch 는 vanilla 매 프레임 reset → 양쪽 안전. **세션 27 완료**.
 - [x] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming 머리 처리 후 `body.yaw = cos(limbSwing/2 - QUARTER) * walkFactor;` 1 라인 추가 + sm_setAngles HEAD reset 인프라에 `body.yaw = 0f` 추가 (vanilla animateArms 조건부 reset 만 → SM 분기 누적 방지). **세션 26 완료**.
 - [x] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling 머리 후 `head.pivotZ = -2F;` / 몸통 후 `body.pivotY = +3F;` 2 라인 추가. head.pivotZ 는 B-9 reset 인프라 활용, body.pivotY 는 vanilla 매 프레임 sneak 분기 reset 안전. **세션 26 완료**.
 - [x] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L339) — `head.yaw -= headYaw * DEG_TO_RAD;` + 주석 1 라인 제거 (원본 L315 절대 할당 1:1). **세션 25 완료**.
@@ -1627,6 +1627,52 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **Phase B 진행 누적**: 16 원자 중 **5 완료** / 11 남음. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 5 완료 / 1 남음 (**B-10**).
 
 **다음 단계 (세션 27+)**: 권장 시작 = **B-10** (swim/dive head 자세 — swim L329 head.pivotZ=-2 + dive L370/L371 head.pitch=-Eighth + head.pivotZ=-2 / 2 메서드 3 라인 추가). 단일 라인 그룹 마지막 1 원자 + 다중/신규 그룹 진입.
+
+---
+
+### 세션 27 — 2026-04-26 — Phase B / R-10+ B-10 (swim/dive head 자세) 1:1 이식
+
+**진행한 작업** (단일 라인 그룹 마지막 1 원자 — 2 메서드 3 라인 추가):
+
+1. **원본 1차 자료 read** — SmartMovingModel.java L329 (swim) + L363-L371 (dive 시작):
+   - **swim L329**: `bipedHead.rotationPointZ = -2F;` (수영 자세 머리 앞으로 2px)
+   - **dive L370**: `bipedHead.rotateAngleX = -Eighth;` (다이빙 시 머리 살짝 위로 들기 ≈ -22.5°)
+   - **dive L371**: `bipedHead.rotationPointZ = -2F;` (다이빙 머리 앞으로 2px)
+
+2. **vanilla reset 패턴 사전 검증**:
+   - `head.pivotZ`: vanilla 매 프레임 reset 안 함 → **B-9 의 sm_setAngles HEAD reset 인프라**가 0 으로 reset 보장 → 안전.
+   - `head.pitch`: vanilla `setAngles` 가 매 프레임 `head.pitch = j * (Math.PI/180.0)` (네트워크 head pitch 입력) 으로 명시적 할당 → 다음 프레임 자동 reset → 안전.
+
+3. **B-10 코드 수정** (2 메서드 / 3 라인):
+   - `sm_animateSwimming` 머리 setAnglesYXZ 호출 직후 (body.yaw 추가 직전): `head.pivotZ = -2f;` 1 라인 추가
+   - `sm_animateDiving` 본체 시작 (다리 처리 직전): `head.pitch = -EIGHTH; head.pivotZ = -2f;` 2 라인 추가
+   - 메서드 Javadoc 갱신: 머리 자세 (B-10 / §16-15) 명시 + vanilla reset 안전성 근거.
+
+4. **값 정확성 검증**:
+   - `head.pivotZ = -2F`: 1.21.1 head.pivotZ 기본 0F → -2 직접 매핑. 원본 SR `bipedHead` 자체 pivotZ 기본 0 → 변경 -2 = 절대 위치 -2 (동일 매핑). 정확.
+   - `head.pitch = -EIGHTH (≈ -22.5° = -π/8)`: 다이빙 시 vanilla net head pitch 를 무시하고 절대 -π/8 할당 (원본 의도 = 다이빙 자세 고정). 라디안 그대로 사용 (도 단위 변환 없음).
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**검증 체크리스트 (세션 27 B-10)**:
+- [근거] ✓ 원본 SmartMovingModel.java L329 (swim) + L370/L371 (dive) read 완료
+- [전수] ✓ 원본 변경 3 지점 모두 1.21.1 매핑 (skip 0)
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla reset 패턴 — head.pivotZ (B-9 reset 인프라) + head.pitch (vanilla 매 프레임 reset) 양쪽 안전 확인
+- [회귀] ✓ swim/dive 진입/종료 모두 안전 — 다른 분기에서 자동 reset
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 16 원자 중 **6 완료** (B-8/B-9/B-10/B-11/B-12/B-18) / 10 남음. **단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 모두 완료** — 단일 라인 그룹 종료.
+
+**남은 그룹**:
+- 같은 분기 추가 (B-9/B-12 와 같은 분기): **B-19** (climbing leg.pitch -= 0.5F / 2 라인)
+- 다중 라인 + MatrixStack 보정: **B-13** (slide 다중 피벗 / 5 라인 + matrices.translate)
+- 신규 분기 (Mixin 메서드 추가): **B-14** (sm_getPositionOffset 분기) / **B-15** (sm_captureBodyYaw 끝 보정)
+- 누적 검증 후: **B-16** (cloak.pitch SIXTYFOURTH)
+- 인프라 선행 + 입력값 4 일괄 교체: **B-X** → **B-4 / B-5 / B-6 / B-7**
+- 신규 Mixin 클래스: **B-17** (CapeFeatureRenderer)
+
+**다음 단계 (세션 28+)**: 권장 시작 = **B-19** (climbing 같은 분기 추가 — 2 라인) 또는 **B-13** (slide 다중 피벗 — 5 라인 + MatrixStack 보정으로 신규 영역). B-19 = 짧은 작업, B-13 = 단일 분기 라인 묶음 + MatrixStack 보정 학습 (B-X 이후 작업의 좋은 준비).
 
 ---
 

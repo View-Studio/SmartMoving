@@ -376,6 +376,7 @@ public abstract class MixinPlayerEntityModelClient {
                 -EIGHTH * standSneakFactor,
                 MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor,
                 0f);
+        head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-10 / §16-15, 수영 자세 머리 앞으로 2px)
 
         // 몸통 yaw (B-11 / §16-16): 자유형 영법 좌우 흔들림.
         // 원본 SmartMovingModel.java L335: bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance/2 - Quarter) * walkFactor
@@ -410,13 +411,21 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isDiving: SM 완전 잠수.
-     * 원본: SmartMovingModel.setRotationAngles() 6번 분기 (isDive).
+     * 원본: SmartMovingModel.setRotationAngles() 6번 분기 (isDive, L363-L390).
      * bipedOuter X 기울기는 setupTransforms에서 처리.
+     * 머리 자세 (B-10 / §16-15):
+     *   - head.pitch = -EIGHTH (원본 L370): 다이빙 시 머리 살짝 위로 들기
+     *   - head.pivotZ = -2F (원본 L371): 머리 앞으로 2px 이동
+     *   vanilla 가 매 프레임 head.pitch (j*PI/180) 와 head.pivotZ (B-9 reset 인프라) 모두 reset → 안전.
      */
     private void sm_animateDiving(float limbSwing, float limbSwingAmount) {
         float distance    = limbSwing * 0.7f;
         float walkFactor  = smFactor(limbSwingAmount, 0f, 0.15679921f);
         float standFactor = smFactor(limbSwingAmount, 0.15679921f, 0f);
+
+        // 머리 자세 (원본 L370-L371)
+        head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth
+        head.pivotZ = -2f;       // 원본 bipedHead.rotationPointZ = -2F
 
         // 다리 Z (발차기)
         rightLeg.roll = (MathHelper.cos(distance) + 1f) * 0.52264464f * walkFactor + SIXTEENTH * standFactor;
