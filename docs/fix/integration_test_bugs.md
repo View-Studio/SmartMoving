@@ -271,6 +271,48 @@
 
 ---
 
+## BUG-17. 🔴 sm_jump cfg.enabled 가드 부재 — 점프 자체 차단 (점프 안 됨 직접 원인 / 세션 36 3차 감사)
+
+**증상** (사용자 보고): BUG-14 (handleJumping 가드) 추가 후에도 SM disabled 시 점프 작동 안 함.
+
+**원인 (3차 감사)**: `MixinLivingEntityClient.java` L255-L262 `sm_jump` 가 vanilla `LivingEntity.jump()` 메서드 자체를 `@Inject(HEAD, cancellable=true)` + `ci.cancel()` 으로 **완전 차단** + jumpAvoided/jumpPending 세팅. **cfg.enabled 가드 부재** → SM disabled 시에도 vanilla 점프 차단 → 점프 자체 작동 안 함.
+
+**해결 (세션 36 AI 완결)**: sm_jump 진입 직후 `if (!SmartMovingConfig.Config.enabled) return;` 추가. SM disabled 시 ci.cancel 안 됨 → vanilla 점프 정상.
+
+**우선순위**: 🔴 매우 높음 (점프 안 됨 직접 원인 — BUG-14 보다 더 깊은 원인).
+
+---
+
+## BUG-18. sm_jumpingFilter cfg.enabled 가드 (보완 / 세션 36 3차 감사)
+
+**위치**: `MixinLivingEntityClient.java` L232 `sm_jumpingFilter` (tickMovement HEAD).
+
+**원인**: sm.* 조건 시 `this.jumping = false` 강제. sm.* 자체가 disabled 시 false 라 영향 거의 없으나 jumpCharge/blockJumpTillButtonRelease 잔존 가능성 차단 + 명시성.
+
+**해결 (세션 36 AI 완결)**: 진입 직후 `if (!SmartMovingConfig.Config.enabled) return;` 추가.
+
+**우선순위**: 🟠 높음 (보완 / BUG-19 resetState 보강과 함께).
+
+---
+
+## BUG-19. resetState 점프 잔존 필드 reset (안전망 / 세션 36 3차 감사)
+
+**위치**: `SmartMovingClientState.java` resetState() L1947 부근.
+
+**원인**: jumpAvoided / jumpPending / blockJumpTillButtonRelease / jumpCharge 가 resetState 에서 미reset → BUG-17/18 가드 추가 후에도 disabled 진입 시 잔존 가능 (단 sm_jump/sm_jumpingFilter 자체 작동 안 함 → 영향 적음).
+
+**해결 (세션 36 AI 완결)**: resetState 에 4 필드 reset 추가 (안전망):
+```java
+jumpAvoided                  = false;
+jumpPending                  = false;
+blockJumpTillButtonRelease   = false;
+jumpCharge                   = 0F;
+```
+
+**우선순위**: 🟠 높음 (안전망 / 잔존 차단).
+
+---
+
 ## BUG-13. SM disabled 시 sm_animateFalling 잔존 (낙하 모션 / 세션 36 2차 감사)
 
 **증상** (사용자 보고): SM disabled 인데도 공중 낙하 시 sm_animateFalling 모션 작동.
@@ -473,6 +515,9 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-14** SmartMovingJumper.handleJumping cfg.enabled 가드 — 점프 작동 안 함 해결 (세션 36 2차 감사)
 - [✅ 검증 완료 — 추가 수정 불필요] **BUG-15** SmartMovingClientState.tickEssential disabled→enabled 전환 — resetState 호출 정상 ✅ (세션 36 2차 감사)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-16** sm_setAngles 11 분기 + isFalling + isAngleJumping 통합 가드 — 진입점 cfgEnabled return + cloak.pitch 처리 위로 이동 (세션 36 2차 감사 / BUG-13 통합)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-17 (점프 안 됨 직접 원인)** sm_jump cfg.enabled 가드 — vanilla jump() ci.cancel 차단을 SM disabled 시 skip → vanilla 점프 정상 (세션 36 3차 감사)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-18** sm_jumpingFilter cfg.enabled 가드 — this.jumping=false 강제 가드 보완 (세션 36 3차 감사)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-19** resetState 점프 잔존 4 필드 reset 추가 — jumpAvoided/jumpPending/blockJumpTillButtonRelease/jumpCharge 안전망 (세션 36 3차 감사)
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)

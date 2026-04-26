@@ -232,6 +232,10 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "tickMovement", at = @At("HEAD"))
     private void sm_jumpingFilter(CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-18 (세션 36): SM disabled 시 jumping 필터 안 함 → vanilla jumping 그대로 보존.
+        //   기존: sm.* 자체가 disabled 시 false 라 영향 거의 없으나 명시성 + jumpCharge/
+        //   blockJumpTillButtonRelease 잔존 가능성 차단 (resetState 가 reset 하지만 안전망).
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isSliding || sm.isHeadJumping
                 || sm.jumpCharge > 0 || sm.blockJumpTillButtonRelease) {
@@ -255,6 +259,11 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "jump", at = @At("HEAD"), cancellable = true)
     private void sm_jump(CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // 🔴 BUG-17 (세션 36): SM disabled 시 vanilla jump() 차단 안 함 → vanilla 점프 정상 작동.
+        //   기존: cfg.enabled 가드 부재 → SM disabled 시에도 ci.cancel() 으로 vanilla 점프
+        //   완전 차단 + jumpAvoided/jumpPending 세팅 → 점프 자체 작동 안 함 (사용자 보고 직접 원인).
+        //   해결: cfg.enabled false 시 즉시 return → vanilla 점프 ci.cancel 안 됨 → 정상 작동.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         sm.jumpAvoided = true;
         sm.jumpPending = true;

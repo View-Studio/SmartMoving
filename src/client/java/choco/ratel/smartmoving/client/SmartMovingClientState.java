@@ -1947,6 +1947,12 @@ public final class SmartMovingClientState {
         wasCapabilitiesIsFlying = false;
         wasCollidedHorizontally = false;
         isAerodynamic = false;
+        // BUG-19 (세션 36): 점프 관련 잔존 상태 reset — sm_jump 가로채기 / handleJumping 의
+        //   세팅 잔존이 SM disabled 진입 후에도 유지되는 위험 차단.
+        jumpAvoided                  = false;
+        jumpPending                  = false;
+        blockJumpTillButtonRelease   = false;
+        jumpCharge                   = 0F;
         dippingDepth = -1F;
         multiPlayerInitialized  = 0;
         initialized             = false;
