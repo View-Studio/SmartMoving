@@ -681,16 +681,24 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65k revert 65j): vanilla 효과 직접 set 매핑은 모든 vanilla setAngles 효과
-        //   (limbSwing 진폭, ArmPose ITEM offset, sneaking 등) 를 cancel → 사용자 보고
-        //   "전체적으로 휘두르는게 아예 이상해짐". 65h 매핑 (= setAnglesXZY skip + X cancel)
-        //   으로 되돌림. vanilla setAngles + animateArms 가 set 한 모든 효과 그대로 보존.
-        //   X/Z 시 미세 차이는 더 자세한 보고 후 추가 조정.
+        // 🔴 (세션 65l): preferred arm 의 비행 자세 X 회전 cancel — 회전 + 위치 모두 cancel.
+        //   사용자 보고 (세션 65h 후): "휘두르는 방향이 90도 뒤로 젖혀진 느낌".
+        //   원인: 우리 preCancelParentXRotation 은 arm 의 회전만 cancel, 위치 (arm pivot) 는
+        //     부모 R_x(-θ) 영향 받음. 수평 비행 시 (θ ≈ π/2) arm pivot = 슈퍼맨 자세 어깨
+        //     위치 → arm 이 그 위치에서 직립 휘두름 → "90° 뒤로 젖혀진 느낌".
+        //   정정: arm pivot 도 R_x(theta) 회전 (회전 중심 0, 1.5, 0) → 부모 R_x(-θ) 적용 시
+        //     원래 위치 복귀. 회전 + 위치 모두 cancel → 진정한 "직립 자세 swing".
         if (swing > 0F) {
             float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
                                               sm.smOuterFade_prevTime, totalTime);
-            if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
-            if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
+            if (preserveRight) {
+                preCancelParentXPivot(rightArm, thetaCancel);
+                preCancelParentXRotation(rightArm, thetaCancel);
+            }
+            if (preserveLeft) {
+                preCancelParentXPivot(leftArm, thetaCancel);
+                preCancelParentXRotation(leftArm, thetaCancel);
+            }
         }
     }
 
@@ -933,6 +941,35 @@ public abstract class MixinPlayerEntityModelClient {
         part.pitch = e.x;
         part.yaw   = e.y;
         part.roll  = e.z;
+    }
+
+    /**
+     * 부모 setupTransforms 의 X 회전 (회전 중심 0, 1.5, 0) 으로 인한 arm pivot 위치 변환을 cancel.
+     *
+     * 부모 transform = T(0, 1.5, 0) * R_x(-theta) * T(0, -1.5, 0).
+     * arm pivot 의 회전 중심 기준 상대 위치 (ModelPart 단위, 16배):
+     *   relY = pivotY - 24,  relZ = pivotZ.   (24 = 1.5 * 16)
+     * R_x(-theta) 적용 후 arm pivot 이 직립 위치에서 벗어남 (90° 비행 시 슈퍼맨 자세 어깨 위치).
+     *
+     * cancel: arm pivot 을 R_x(theta) 회전한 위치로 미리 set →
+     *   부모 R_x(-theta) 적용 시 R_x(-theta) * R_x(theta) = I → 원래 위치로 복귀.
+     *
+     * R_x(theta):
+     *   new_y = relY * cos(theta) - relZ * sin(theta)
+     *   new_z = relY * sin(theta) + relZ * cos(theta)
+     *
+     * pivotX 는 X 축 회전 영향 받지 않음 (그대로).
+     *
+     * 사용처: 비행 swing 진행 중 preferred arm — 회전 cancel (preCancelParentXRotation) 와 함께
+     * 위치 cancel 로 진정한 직립 자세 달성. 사용자 보고 "90도 뒤로 젖혀진 느낌" 직접 해결.
+     */
+    private static void preCancelParentXPivot(ModelPart part, float theta) {
+        float relY = part.pivotY - 24f;
+        float relZ = part.pivotZ;
+        float cos = MathHelper.cos(theta);
+        float sin = MathHelper.sin(theta);
+        part.pivotY = relY * cos - relZ * sin + 24f;
+        part.pivotZ = relY * sin + relZ * cos;
     }
 
     /**
