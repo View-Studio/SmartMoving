@@ -891,11 +891,16 @@ public final class SmartMovingClientState {
         // _speedUser.value` 에서 `_speedUser` 가 Creative 때만 true 이므로 Creative 아니면
         // 키 입력 자체가 차단됨. 원본 SmartMovingSelf L2326 `if(Config.isUserSpeedEnabled()
         // && !Config.isUserSpeedAlwaysDefault() && ...)` 와 등가.
-        boolean userSpeedEnabled = SmartMovingConfig.Config.enabled
-                && SmartMovingConfig.Config.speedUser
-                && MinecraftClient.getInstance().interactionManager != null
-                && MinecraftClient.getInstance().interactionManager.getCurrentGameMode()
-                        == net.minecraft.world.GameMode.CREATIVE;
+        //
+        // ⚠️ DEFER (세션 35 통합테스트 BUG-6): I/O 키 비활성화 — 사용자 임시 비활성화 요청.
+        //   재활성화 = 아래 `boolean userSpeedEnabled = false;` 라인 삭제 + 원래 조건 주석 복원.
+        //   상세 = docs/fix/integration_test_bugs.md §BUG-6 참조.
+        boolean userSpeedEnabled = false;   // 임시 비활성화 (세션 35)
+        // boolean userSpeedEnabled = SmartMovingConfig.Config.enabled
+        //         && SmartMovingConfig.Config.speedUser
+        //         && MinecraftClient.getInstance().interactionManager != null
+        //         && MinecraftClient.getInstance().interactionManager.getCurrentGameMode()
+        //                 == net.minecraft.world.GameMode.CREATIVE;
         if (userSpeedEnabled) {
             if (SmartMovingKeys.speedIncrease.wasPressed()) {
                 if (ClientPlayNetworking.canSend(SmartMovingNetwork.SpeedChangePayload.ID)) {

@@ -7,6 +7,11 @@
 
 ## 🎯 현재 포커스
 
+> **세션 35 통합테스트 결과**: 인게임 7 버그 발견 → [`integration_test_bugs.md`](integration_test_bugs.md).
+> 본 버그는 #1 단독 해결 불가 — 다수가 #2/#2.5/#2.6/#2.7 의 입력 상태/동기화 의존.
+> 우선순위 순서: BUG-7 (sm disabled reset) → BUG-6 ✅ (I/O 비활성화) → BUG-1 (비행) →
+> BUG-3 (crawl) → BUG-5 (swim) → BUG-2 (climbing) → BUG-4 (다이빙).
+
 ```
 항목 #1 — 애니메이션 망가짐/이상 ✅ AI 완결 / 통합테스트 인계 (세션 35)
 
@@ -117,7 +122,8 @@
 | 3.7 | **#2.7** | BBox/POSE/EyeHeight 서버 sync | [focus_02_7_bbox_server_sync](focus_02_7_bbox_server_sync.md) | 🟢 AI 완결 임박 (Phase A~H 22/23 = 96%, F-3 통합 인게임 deferred) | #2 완료 |
 | 4 | **#3** | 상태 전환 조건 이상 | [focus_03](focus_03_transition_conditions.md) | ✅ AI 완결 (2026-04-25, 세션 6) — 14/14 원자 (감사 후 B-7 추가) / 인게임 통합 검증 deferred | #2 / #2.5 / #2.6 / #2.7 완료 |
 | 5 | **#4** | 키 커맨드 조합 이상 | [focus_04](focus_04_key_combos.md) | 🟢 진행 중 (P/A/C 8/10 = 80% 완결, 핵심 키 메커니즘 100% 1:1 / 8 채팅 옵션 결정 대기) | #2, #3 |
-| 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ✅ AI 완결 (2026-04-26, 세션 35) — Phase R (4,968 라인) + Phase B (16/16 원자) + §14 회귀 감사 통과 / 통합테스트 인계 | #2 (렌더 입력 상태 정확해야) |
+| 6 | **#1** | 애니메이션 망가짐/이상 | [focus_01](focus_01_animation.md) | ✅ AI 완결 (2026-04-26, 세션 35) — Phase R (4,968 라인) + Phase B (16/16 원자) + §14 회귀 감사 통과 / 통합테스트 인계. ⚠️ 세션 35 통합테스트 7 버그 발견 ([integration_test_bugs.md](integration_test_bugs.md)) — BUG-1/3/5 = 다른 포커스 의존 | #2 (렌더 입력 상태 정확해야) |
+| ⚠️ | **버그** | 통합테스트 발견 7 버그 | [integration_test_bugs.md](integration_test_bugs.md) | 🔴 BUG-7/1/2/3/5 = 매우 높음 / 🟠 BUG-4 / 🟢 BUG-6 ✅ (I/O 비활성화 완료) | #2/#2.5/#2.6/#2.7 |
 
 **의존 해석**: 상태 자체가 틀린 상태(#2)에서 전환 조건(#3)이나 애니메이션(#1)을 손대면
 원인-결과를 혼동. 먼저 상태값을 정확히 만든 뒤 그 상태를 소비하는 로직을 고친다.
