@@ -9,6 +9,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.Arm;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -674,32 +675,44 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 64): 비행 중 공격 swing 1:1 매핑.
-        //   원본 SmartRenderModel.setRotationAngles L227-L231 (mp.onGround > -9990F 항상 true):
-        //     imp.animateWorkingBody(...);
-        //     imp.animateWorkingArms(...);
-        //   SmartMovingModel.animateWorkingArms L675-L679: isStandard || isWorking() 시
-        //     imp.superAnimateWorkingArms 호출 = 원본 SmartRenderModel.animateWorkingArms
-        //     (vanilla 1.7.10 swing arm 회전 += 효과).
-        //   비행 시 isStandard=false, isWorking()=mp.onGround>0 (= handSwingProgress>0).
-        //   → swing 진행 중 vanilla swing 효과 적용. 비행 자세 (절대값) + swing += 결합.
+        // 🔴 (세션 65): 비행 중 공격 swing — vanilla 1.21.1 animateArms 효과 1:1 직접 적용.
+        //   사용자 요구: 비행 시 공격 모션은 vanilla 1.21.1 기본 swing 모션 그대로 보이게 함.
+        //   원본 1.7.10 SmartRenderModel.animateWorkingArms 는 1.7.10 vanilla swing 매핑이지만,
+        //   1.21.1 매핑은 1.21.1 vanilla 기본 swing 을 사용 (animateArms — BipedEntityModel).
         //
-        //   vanilla 1.21.1 animateArms 매 프레임 호출 (handSwingProgress > 0 시) → body.yaw,
-        //     arm.pivot 변경. 우리 setAnglesXZY 가 회전 절대값 set → vanilla swing arm 회전 +=
-        //     효과 무시 (덮어씀) → 사용자 보고 "팔이 어깨 앞뒤로만 흔들림" (pivot 효과만 보임).
+        //   배경:
+        //   - vanilla setAngles TAIL 에서 animateArms 호출 → body.yaw, arm.pivot,
+        //     arm.yaw/pitch/roll += swing 효과 적용.
+        //   - 그러나 sm_setAngles reset 인프라 (L107) 가 body.yaw=0 reset.
+        //   - sm_animateFlying 의 setAnglesXZY 가 arm.yaw/roll 절대값 set → vanilla 의
+        //     arm rotation += 효과 덮어씀.
+        //   - 결과: pivot 효과만 잔존 → 사용자 보고 "팔이 어깨 앞뒤로만 흔들림".
         //
-        //   정정: setAnglesXZY 후 원본 1.7.10 vanilla swing arm 회전 += 직접 적용 (preferred=right).
-        //     원본 SmartRenderModel.animateWorkingArms L306-L315 1:1.
+        //   정정: vanilla 1.21.1 animateArms 의 arm rotation 효과를 setAnglesXZY 후 1:1 다시 적용.
+        //     body.yaw 값은 swing 으로부터 vanilla 와 동일 공식으로 재계산
+        //     (reset 으로 0 됐기 때문).
+        //   참조: docs/research/vanilla/BipedEntityModel_detail.md B-06.
         float swing = player.handSwingProgress;
         if (swing > 0F) {
-            // 원본 animateWorkingArms (preferred = right; 일반적 player main arm)
-            float f6 = 1F - swing;
-            f6 = 1F - f6 * f6 * f6;
-            float f7 = (float) Math.sin(f6 * HALF);  // sin(_ * π)
-            float f8 = (float) Math.sin(swing * HALF) * -(head.pitch - 0.7F) * 0.75F;
-            rightArm.pitch -= f7 * 1.2F + f8;
-            rightArm.yaw   += (float) Math.sin(Math.sqrt(swing) * WHOLE) * 0.4F;  // sin(sqrt(swing) * 2π)
-            rightArm.roll  -= (float) Math.sin(swing * HALF) * 0.4F;
+            Arm preferred = player.getMainArm();
+            float bodyYawSwing = MathHelper.sin(MathHelper.sqrt(swing) * (float)(Math.PI * 2)) * 0.2F;
+            if (preferred == Arm.LEFT) bodyYawSwing = -bodyYawSwing;
+
+            rightArm.yaw  += bodyYawSwing;
+            leftArm.yaw   += bodyYawSwing;
+            leftArm.pitch += bodyYawSwing;
+
+            float f = 1F - swing;
+            f *= f;
+            f *= f;                 // (1 - swing)^4
+            f = 1F - f;
+            float g = MathHelper.sin(f * (float) Math.PI);
+            float h = MathHelper.sin(swing * (float) Math.PI) * -(head.pitch - 0.7F) * 0.75F;
+
+            ModelPart preferredArm = (preferred == Arm.LEFT) ? leftArm : rightArm;
+            preferredArm.pitch -= g * 1.2F + h;
+            preferredArm.yaw   += bodyYawSwing * 2F;
+            preferredArm.roll  += MathHelper.sin(swing * (float) Math.PI) * -0.4F;
         }
     }
 
