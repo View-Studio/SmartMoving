@@ -681,19 +681,32 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65h): preferred arm 의 비행 자세 X 회전 cancel — 같은 frame fade 보간.
-        //   사용자 요구: "이동방향 향한 직립 플레이어의 오른팔이 휘두르는 모션".
-        //   부모 setupTransforms 의 POSITIVE_X(-thetaLerped) 가 swing arm 에도 적용 →
-        //   X 기울기 영향. 자식 ModelPart 단계에서 quaternion 합성으로 cancel:
-        //     q_new = R_x(theta) * R_arm_orig.
-        //   Y 회전 (이동 방향) 은 cancel 안 함 → arm 도 모델과 같이 이동 방향 향함.
+        // 🔴 (세션 65i): preferred arm 의 limbSwing 보행 swing 진폭 cancel + X 회전 cancel.
         //
-        //   세션 65g 의 thetaCancel = sm.smOuterTiltX (직전 프레임 lerped) 는 1-frame delay →
-        //   부모 X 회전과 미세 어긋남. 정정: 같은 frame 의 fade 보간 직접 계산 (setupTransforms
-        //   가 같은 input 으로 같은 thetaLerped 산출하므로 정확 매칭).
+        //   사용자 보고: "X/Z 축 이동 시 휘두름 이상함, Y 축 시 잘 됨".
+        //   원인: vanilla setAngles (BipedEntityModel) 가 X/Z 축 이동 시 limbSwingAmount > 0
+        //   라서 preferred arm.pitch 에 보행 swing 진폭
+        //     `cos(limbSwing*0.6662 + π) * 2 * limbSwingAmount * 0.5 / k` (right)
+        //     `cos(limbSwing*0.6662) * 2 * limbSwingAmount * 0.5 / k` (left)
+        //   set. 우리는 vanilla animateArms 의 attack swing 효과만 원하나 보행 진폭이 잔존.
+        //   Y 축 이동 시 limbSwingAmount = 0 (수평 이동만 limbSwing 갱신) → 깔끔.
+        //
+        //   원본 매핑: SmartMovingModel.animateNonStandardWorking L592 `bipedRightArm.reset()` →
+        //   vanilla setRotationAngles 가 set 한 모든 회전 reset → super animateWorkingArms 가
+        //   vanilla swing 효과만 += 추가. 즉 limbSwing 보행 진폭 없음.
+        //   1.21.1 1:1: 보행 진폭만 빼서 vanilla animateArms attack swing 효과만 남김.
+        //   k (sneaking/swimming 분모) = 1 가정 (비행 중 sneaking/swimming 안 됨).
+        //
+        //   세션 65h: 부모 X 회전 cancel — 같은 frame fade 보간 (1-frame delay 제거).
         if (swing > 0F) {
-            float thetaTarget = theta;  // (QUARTER - verticalAngle) * currentSpeedLerped (위에서 계산됨)
-            float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, thetaTarget,
+            // limbSwing 보행 진폭 cancel (vanilla setAngles step 3 만 빼기)
+            float limbRight = MathHelper.cos(limbSwing * 0.6662f + (float)Math.PI) * limbSwingAmount;
+            float limbLeft  = MathHelper.cos(limbSwing * 0.6662f) * limbSwingAmount;
+            if (preserveRight) rightArm.pitch -= limbRight;
+            if (preserveLeft)  leftArm.pitch  -= limbLeft;
+
+            // 부모 X 회전 cancel (같은 frame fade 보간)
+            float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
                                               sm.smOuterFade_prevTime, totalTime);
             if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
             if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
