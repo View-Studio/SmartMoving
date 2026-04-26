@@ -177,6 +177,61 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 | MixinPlayerEntityRenderer | renderName | @Inject(HEAD, cancellable) | isCrawling 이름표 차단 / heightOffset Y / sneak Y |
 | MixinLivingEntityRenderer | hasLabel | @Redirect(isSneaky) | sneakNameTag 64블록 거리 제어 |
 
+### 5.7. Phase R 라인별 매핑 인덱스 (R-1~R-8 / 세션 3-22 / R-9 통합 — 세션 23)
+
+산출물: `docs/research/mapping/research_animation_line_by_line.md` (4,176 라인 — 본 §5.7 인덱스의 1차 자료).
+
+R-9 통합 누적 표 (4,968 라인 전수):
+
+| R-N | 대상 | 라인 | 정합 | 오역 | 누락 | 잉여 | N/A | §15 세션 |
+|-----|---|---|---|---|---|---|---|---|
+| R-1 | SmartMovingModel.java (4 청크) | 797 | 346 | 14 | 14 | 0 | 423 | 3-6 |
+| R-2 | SmartMovingRender.java + SM render Context/IModel/IRender/ModelPlayer/RenderPlayer (3 청크) | 731 | 60 | 0 | 3 | 0 | 668 | 7-9 |
+| R-3 | SM render/playerapi 3 파일 | 376 | 14 | 0 | 0 | 0 | 362 | 10 |
+| R-4 | SmartRenderModel.java (3 청크) | 469 | 62 | 0 | 1 | 0 | 406 | 11-13 |
+| R-5 | ModelRotationRenderer.java (2 청크) + RendererData/Cape/Ears/Special | 607 | 71 | 0 | 2 | 0 | 534 | 14-16 |
+| R-6 | SmartRenderRender.java + Utilities + Mod/Info/Install/Context/IModel/IRender (2 청크) | 626 | 61 | 0 | 0 | 0 | 565 | 17-18 |
+| R-7 | SR ModelPlayer/RenderPlayer + SR playerapi 3 파일 (2 청크) | 793 | 22 | 0 | 0 | 0 | 771 | 19-20 |
+| R-8 | SmartStatistics 일체 (7 파일, 2 청크) | 569 | 44 | 0 | 0 | 0 | 525 | 21-22 |
+| **합계** | **31 파일 / 21 청크 / 8 R-단계** | **4,968** | **680** | **14** | **20** | **0** | **4,254** | — |
+
+**비율**: 정합 13.7% / 오역 0.3% / 누락 0.4% / 잉여 0.0% / N/A 85.6%.
+**N/A 4,254 = 라이선스/패키지/import (~837) + SR 다층 노드 7개 부재 + SR 인프라 자동 (총 ~3,400 구조적 N/A)**. 실제 애니메이션 본체 ~1,500 라인 중 정합 680 + 오역 14 + 누락 20 = 714 (47.6%) 가 본체 정합/문제 식별.
+
+**핵심 1차 자료 (R-8 결정타)**: `SmartStatisticsData.calcualte()` (4배 곱 + 0.4 저역 보간 + 누적) = vanilla 1.21.1 `LivingEntity.tickMovement` 의 `limbAnimator` 갱신 공식과 정확히 일치 → horizontal 측 vanilla 자동 처리 [정합]. **vertical 측 + all 측 vanilla 부재** → §16-10/12/13/15 [오역] (climbing/diving/flying 입력값) 진단 결정타 (B-X 인프라 필요).
+
+발견 16 그룹 → R-10+ B-N 14 + 인프라 B-X 1 + 검토 1 (정렬: 우선순위 / 의존):
+
+| 분류 | B-N | 발견 # | 분기 / 입력값 | 대응 위치 |
+|------|---|---|---|---|
+| [오역] | B-4 | §16-10 | climbing arm/feet vertical 입력값 | sm_animateClimbing (B-X 의존) |
+| [오역] | B-5 | §16-12 | climbing feet vine 3D 입력값 | sm_animateClimbing (B-X 의존) |
+| [오역] | B-6 | §16-13 | diving 3D 입력값 | sm_animateDiving (B-X 의존) |
+| [오역] | B-7 | §16-20 | flying 3D 입력값 | sm_animateFlying (B-X 의존) |
+| [오역 인프라] | B-X | (B-4~7 공통) | verticalDistance/Speed + allDistance/Speed capture | SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick |
+| [누락] | B-8 | §16-11 | rope sliding head/arm pivotY | sm_animateRopeSliding |
+| [누락] | B-9 | §16-14 | climbing NoGrab+non-NoStep body.pivotZ -6F | sm_animateClimbing |
+| [누락] | B-10 | §16-15 | swim/dive head 자세 (head.pivotZ + dive head.pitch) | sm_animateSwimming/Diving |
+| [누락] | B-11 | §16-16 | swim body yaw (자유형 영법) | sm_animateSwimming |
+| [누락] | B-12 | §16-18 | crawl head.pivotZ + body.pivotY | sm_animateCrawling |
+| [누락] | B-13 | §16-19 | slide 다중 피벗 (head.roll + head.pivotZ + body.pivotY + outer.pivotY + body.offsetY MatrixStack 보정) | sm_animateSliding + 별도 setupTransforms |
+| [누락] | B-14 | §16-22 | 타인 플레이어 crawl Y +0.125 | sm_getPositionOffset |
+| [누락] | B-15 | §16-23 | levitate horizontal=camera | sm_captureBodyYaw |
+| [누락] | B-16 | §16-24 | cloak.pitch SIXTYFOURTH 기본 기울임 | sm_setAngles TAIL (vanilla reset 검증 필요) |
+| [누락] | B-17 | §16-25 | cape outer.X 클램프 (70.523° - outerX) | 신규 MixinCapeFeatureRenderer |
+| [잉여] | B-18 | §16-17 | sm_animateCeilingClimbing head.yaw 추가 차감 | 제거 또는 검증 |
+| [정합근사] | (검토만) | §16-21 | head jump overGroundBlock material → smallOverGroundHeight | 우선순위 매우 낮음, B-N 미등록 |
+
+**B-N 의존 / 권장 진행 순서**:
+1) 단일 라인 (1-3 줄): B-8, B-9, B-10, B-11, B-12, B-18
+2) 다중 라인 (5+ + MatrixStack 별도): B-13
+3) 신규 분기: B-14 (sm_getPositionOffset), B-15 (sm_captureBodyYaw)
+4) cloak 누적 검증 후: B-16
+5) 인프라 선행 후 입력값 교체: B-X → B-4, B-5, B-6, B-7
+6) 신규 Mixin: B-17 (CapeFeatureRenderer)
+
+세부 의존 그래프는 `research_animation_line_by_line.md` §R-9.3 참고.
+
 ---
 
 ## 6. 1:1 매핑 테이블
@@ -331,11 +386,42 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
   - [x] R-8 청크 1 (SmartStatistics 198 + Factory 143 = 341) — 세션 21 (정합 16 / 오역 0 / 누락 0 / 잉여 0 / N/A 325)
   - [x] R-8 청크 2 (Datas 76 + Data 61 + Context 38 + Other 30 + IEntityPlayerSP 23 = 228) — 세션 22 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
   - **R-8 누적**: 정합 44 / 오역 0 / 누락 0 / 잉여 0 / N/A 525 = 569 라인 전수
-- [ ] R-9. 통합 라인별 매핑 표 (animation_system.md 보강 또는 신규 research_animation_line_by_line.md) + focus_01 §5/§10 대폭 보강
-- [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입
+- [x] R-9. 통합 라인별 매핑 표 (research_animation_line_by_line.md §R-9 신규 섹션) + focus_01 §5.7/§10 대폭 보강 — **세션 23 완료** (4,968 라인 통합 / 발견 16 그룹 / B-N 14 + B-X 1 + 검토 1 정리)
+- [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입 — **세션 24+ 진입 가능 상태** (아래 B 섹션 참고)
 
-### B. 본격 1:1 대응 (R-10 이후)
-- [ ] B-N. (라인별 발견 시 atom 단위로 추가)
+### B. 본격 1:1 대응 (R-10 이후, 세션 23 R-9 등록)
+권장 진행 순서 (의존 / 우선순위):
+
+**[단일 라인 보강 — 1-3줄, 의존 없음]**
+- [ ] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = +2F; rightArm.pivotY = leftArm.pivotY = -2F;` 추가
+- [ ] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 추가
+- [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
+- [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
+- [ ] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling `head.pivotZ = -2F; body.pivotY = +3F;` 추가
+- [ ] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L332) — `head.yaw -= headYaw * DEG_TO_RAD;` 라인 제거 또는 의도 검증
+
+**[다중 라인 + MatrixStack 보정]**
+- [ ] B-13. Slide 다중 피벗 (§16-19 / SmartMovingModel L442/L444/L448/L452/L453) — sm_animateSliding `head.roll = -viewHorizontalAngelOffset/RadiantToAngle; head.pivotZ = -2F; body.pivotY = +6.5F;` + sm_setupTransforms 별도 `matrices.translate(0, -0.4F/16, 0)` 보정 (body.offsetY 부재 우회) + outer.pivotY = +5F 등가 (entity-level translate 또는 sm_getPositionOffset 분기)
+
+**[신규 분기 추가]**
+- [ ] B-14. 타인 플레이어 crawl Y 보정 (§16-22 / SmartMovingRender L124-L125) — sm_getPositionOffset 분기 추가 `else if (!isOwnPlayer && entity.isSneaking() && sm.isCrawling) cir.setReturnValue(new Vec3d(0, 0.125, 0));`
+- [ ] B-15. Levitate horizontal=camera (§16-23 / SmartMovingRender L132-L134) — sm_captureBodyYaw 끝부분 `if (sm.isLevitating) smBodyYawOverride = MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw());`
+
+**[누적 위험 검증 후]**
+- [ ] B-16. Cloak 기본 기울임 SIXTYFOURTH (§16-24 / SmartRenderModel L251) — vanilla setAngles 가 매 프레임 cloak.pitch reset 여부 검증 → reset 없으면 sm_setAngles TAIL 이전에 reset 필요. 안전하면 `cloak.pitch = SIXTYFOURTH;` 추가. 우선순위 낮음.
+
+**[인프라 선행 → 입력값 교체]**
+- [ ] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick 진입 지점에 4 필드 추가 + 1.7.10 SmartStatisticsData.calcualte() 공식 그대로 갱신 (`distance*4F`, `legYaw += (distance - legYaw) * 0.4F`, `total += legYaw`). 입력값: `verticalDistance` = abs(getY() - prevY) / `allDistance` = sqrt((getX()-prevX)² + (getY()-prevY)² + (getZ()-prevZ)²).
+- [ ] B-4. Climbing 입력값 교체 (§16-10 / B-X 의존) — sm_animateClimbing 시그니처에 verticalDistance/verticalSpeed 인자 추가, L191/L214/L242-L244 수직 입력값 교체
+- [ ] B-5. Climbing feet vine 입력값 교체 (§16-12 / B-X 의존) — sm_animateClimbing L260/L264 feet vine `totalDistance` 입력값을 `allDistance` 로 교체
+- [ ] B-6. Diving 입력값 교체 (§16-13 / B-X 의존) — sm_animateDiving L389-L391 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
+- [ ] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying L507-L509 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
+
+**[신규 Mixin]**
+- [ ] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — 신규 MixinCapeFeatureRenderer + 자체 outer.X(setupTransforms theta) capture → `cloak.pitch = clamp(cloak.pitch, ..., max(70.523° - outerX, 6°))`. 우선순위 중간 (메인 외 망토).
+
+**[정합 근사 검토만 — B-N 미등록]**
+- ~~§16-21. Head jump overGroundBlock material → smallOverGroundHeight 단순 높이~~ 5블록 스캔 첫 고체 블록 거리 ≈ material.isSolid() 등가. material 분류 손실은 매우 희귀 케이스. **R-10+ 추가 작업 없음**.
 
 ### C. 검증 (세션 2 부분 완결, 전수 감사 후 재검증 필요)
 - [x] C-1. 빌드 — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (세션 2 한정)
@@ -1285,6 +1371,52 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 2. R-10+ B-N 후보 17 그룹 종합 정리
 3. focus_01 §5 (원본 근거)/§10 (작업 목록) 대폭 보강
 4. R-10+ 본격 1:1 대응 진입 준비.
+
+---
+
+### 세션 23 — 2026-04-26 — Phase R / R-9 (통합 매핑 표 + §5.7/§10 대폭 보강) — **R-9 완료 / Phase R 종료**
+
+**진행한 작업** (코드 수정 0 / 문서 정리 단계):
+
+1. **research_animation_line_by_line.md §R-9 신규 섹션 추가** (4 하위 섹션):
+   - **§R-9.1 통합 누적 통계표** — R-1~R-8 8 R-단계 / 31 파일 / 21 청크 / 4,968 라인 합산. 정합 680 / 오역 14 / 누락 20 / 잉여 0 / N/A 4,254 (13.7% / 0.3% / 0.4% / 0.0% / 85.6%). N/A 4,254 = 라이선스/import (~837) + SR 다층 노드 부재 + SR 인프라 자동 (구조적 ~3,400). 본체 ~1,500 라인 중 정합/문제 식별 47.6%.
+   - **§R-9.2 B-N 원자 후보 종합** — 16 그룹 → 14 B-N + 1 인프라 B-X + 1 검토. [오역] 4 (B-4~B-7) + B-X 인프라 / [누락] 11 (B-8~B-17) / [잉여] 1 (B-18) / [정합근사] 1 (검토만).
+   - **§R-9.3 의존/실행 순서 그래프** — B-X 선행 (B-4~B-7 공통) / 11 독립 보강 / 권장 진행 순서 6 단계.
+   - **§R-9.4 Phase R 종료 / R-10+ 진입 게이트** — 4 조건 충족 (R-1~R-8 / 발견 종합 / B-N 정리 / focus_01 §5/§10 보강).
+
+2. **focus_01 §5.7 신규 — Phase R 라인별 매핑 인덱스** 추가:
+   - 통합 누적 표 (R-1~R-8 / §15 세션 매핑) + N/A 비중 해석.
+   - **핵심 1차 자료 결정타** 명시 — `SmartStatisticsData.calcualte()` = vanilla 1.21.1 LivingEntity.tickMovement limbAnimator 갱신 공식 정확히 일치 (horizontal 자동 처리) / vertical+all 측 vanilla 부재 (B-X 인프라 필요).
+   - 발견 16 그룹 → R-10+ 매트릭스 (분류 / B-N / 발견 # / 분기 / 대응 위치) 표.
+
+3. **focus_01 §10 대폭 보강** (R 섹션 + B 본격 1:1 대응 섹션):
+   - R-9 [x] 마킹 / R-10+ "세션 24+ 진입 가능 상태" 명시.
+   - **B 섹션 = R-10+ 진입 후 작업 목록 14 B-N + B-X 등록**, 6 단계 권장 진행 순서로 그룹화:
+     - 단일 라인 (1-3줄): B-8/B-9/B-10/B-11/B-12/B-18 = 6 원자
+     - 다중 라인 + MatrixStack 보정: B-13 = 1 원자
+     - 신규 분기 (sm_getPositionOffset / sm_captureBodyYaw): B-14/B-15 = 2 원자
+     - 누적 위험 검증 후: B-16 = 1 원자
+     - 인프라 선행 + 입력값 교체: B-X / B-4/B-5/B-6/B-7 = 5 원자
+     - 신규 Mixin (CapeFeatureRenderer): B-17 = 1 원자
+   - 정합 근사 §16-21 (head jump material) 은 우선순위 매우 낮음으로 B-N 미등록 명시.
+
+**검증 체크리스트 (세션 23 R-9 정리 단계)**:
+- [근거] ✓ R-1~R-8 §15 세션 로그 + research_animation_line_by_line.md §R-1~§R-8 직접 합산
+- [전수] ✓ R-1~R-8 4,968 라인 (skip 0) — 8 R-단계 통계표 합계 정확 검증
+- [분류] ✓ 5 분류 합산 정확 (정합 680 + 오역 14 + 누락 20 + 잉여 0 + N/A 4,254 = 4,968)
+- [발견] ✓ §16-1~§16-25 25 발견 중 [오역]/[누락]/[잉여]/[정합근사] 16 그룹 → R-10+ B-N 14 + B-X 1 + 검토 1 매핑. (§16-1~§16-9 는 세션 1-2 사전 발견 / B-1~B-3 으로 이미 완결)
+- [통계] ✓ R-9 통합 표 양쪽 (mapping 파일 + focus_01 §5.7) 동일 데이터
+- [검증] ✓ 의존 그래프 (B-X → B-4~B-7) + 권장 순서 6 단계 정합
+- [회귀] N/A (코드 변경 없음)
+- [빌드] N/A (코드 변경 없음)
+
+**Phase R 종료 (세션 3-23 / 21 세션 / 4,968 라인 라인별 1:1 대응 매핑)**:
+- R-1 ~ R-8 [x] 4,968 라인 전수 매핑 완료
+- R-9 [x] 통합 표 + §5/§10 보강 + B-N 14 + B-X 1 등록
+- 발견 16 그룹 모두 R-10+ B-N 원자로 등록 (의존 그래프 + 권장 순서 정리)
+- → **R-10+ 진입 가능**. 다음 세션 (24+) 부터 B-N 원자 단위 코드 수정 작업 시작.
+
+**다음 단계 (세션 24+)**: R-10+ 본격 1:1 대응 진입. 권장 시작 = **B-8** (rope sliding head/arm pivotY) — 가장 단순한 단일 라인 보강 (의존 없음 / 1-3줄 / 호출 1 지점). 또는 **B-18** (ceiling head.yaw 잉여 제거) — 코드 단축 방향.
 
 ---
 
