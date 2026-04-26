@@ -395,7 +395,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **[단일 라인 보강 — 1-3줄, 의존 없음]**
 - [x] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = 2F; rightArm.pivotY = leftArm.pivotY = 0F;` 3 라인 추가 + 주석 갱신 (vanilla setAngles 가 매 프레임 sneak 분기로 reset → TAIL inject 안전 검증). **세션 24 완료**.
 - [x] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 1 라인 추가 + sm_setAngles HEAD pivotZ reset 인프라 2 라인 추가 (head/body — vanilla 미reset 안전 보장). **세션 25 완료**.
-- [ ] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기, 다리 그룹 무릎 굽힘 보정).
+- [x] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `rightLeg.pitch -= 0.5F; leftLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기 / B-9 if 블록 내부에 누적 추가). vanilla setAngles 가 매 프레임 leg.pitch 를 cos 함수로 reset → -=0.5 차감 후 다음 프레임 다시 reset 안전. **세션 27 완료**.
 - [x] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming 머리 처리 후 `head.pivotZ = -2F;` 1 라인 + sm_animateDiving 본체 시작에 `head.pitch = -EIGHTH; head.pivotZ = -2F;` 2 라인 = 총 3 라인. head.pivotZ 는 B-9 reset 인프라, head.pitch 는 vanilla 매 프레임 reset → 양쪽 안전. **세션 27 완료**.
 - [x] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming 머리 처리 후 `body.yaw = cos(limbSwing/2 - QUARTER) * walkFactor;` 1 라인 추가 + sm_setAngles HEAD reset 인프라에 `body.yaw = 0f` 추가 (vanilla animateArms 조건부 reset 만 → SM 분기 누적 방지). **세션 26 완료**.
 - [x] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling 머리 후 `head.pivotZ = -2F;` / 몸통 후 `body.pivotY = +3F;` 2 라인 추가. head.pivotZ 는 B-9 reset 인프라 활용, body.pivotY 는 vanilla 매 프레임 sneak 분기 reset 안전. **세션 26 완료**.
@@ -1673,6 +1673,46 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - 신규 Mixin 클래스: **B-17** (CapeFeatureRenderer)
 
 **다음 단계 (세션 28+)**: 권장 시작 = **B-19** (climbing 같은 분기 추가 — 2 라인) 또는 **B-13** (slide 다중 피벗 — 5 라인 + MatrixStack 보정으로 신규 영역). B-19 = 짧은 작업, B-13 = 단일 분기 라인 묶음 + MatrixStack 보정 학습 (B-X 이후 작업의 좋은 준비).
+
+**세션 27 추가 작업 — B-19 도 함께 진행 (토큰 여유)**:
+
+1. **원본 1차 자료** — SmartMovingModel.java L283: `bipedPelvic.rotateAngleX -= 0.5F;` (NoGrab+non-NoStep 분기에서 다리 그룹 -0.5 차감 = 무릎 굽힘).
+
+2. **vanilla reset 패턴**:
+   - `leg.pitch`: vanilla setAngles 가 매 프레임 leg.pitch 를 cos 함수로 reset (`MathHelper.cos(f * 0.6662F + π) * 1.4F * g / k` 등). sm_setAngles TAIL inject 에서 우리가 -=0.5 차감 → 다음 프레임 vanilla 가 다시 reset → 안전.
+
+3. **B-19 코드 수정** (B-9 의 if 블록 내부에 2 라인 추가 — 같은 분기):
+   ```java
+   if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0) {
+       body.pitch = 0.5f;
+       head.pitch -= 0.5f;
+       body.pivotZ = -6f;            // B-9 / §16-14
+       rightLeg.pitch -= 0.5f;       // B-19 / §16-26 (pelvic 부재로 다리 그룹 직접 차감)
+       leftLeg.pitch  -= 0.5f;
+   }
+   ```
+   주석에 pelvic 부재 보정 명시.
+
+4. **값 정확성 검증**:
+   - 원본 SR `bipedPelvic` 은 `bipedTorso` 의 자식 → 양다리의 부모. `bipedPelvic.rotateAngleX -= 0.5F` = 양다리 그룹 -0.5 회전 (무릎 굽힘 효과).
+   - 1.21.1 다리는 root 직접 자식 (pelvic 노드 부재) → 양다리 leg.pitch 에 직접 -0.5 차감 = 1:1 등가 (회전 누적).
+   - 직전에 적용된 leg.pitch (climbing 분기 본체의 legAngleX) 후 추가 차감 → 누적 안전.
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**B-19 검증 체크리스트**:
+- [근거] ✓ 원본 SmartMovingModel.java L283 read 완료 (B-9 의 같은 분기 본체 직접 비교)
+- [전수] ✓ 원본 1 라인 → 1.21.1 2 라인 (양다리 분리) 매핑
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla leg.pitch 매 프레임 reset 안전 + 본 분기 본체의 legAngleX 적용 후 차감 누적 안전
+- [회귀] ✓ climbing 진입/종료 모두 안전 (vanilla 자동 reset)
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**세션 27 누적 작업**: B-10 (3 라인) + B-19 (2 라인) = 2 원자 진행. R-10+ 진행 = B-8/B-9/B-10/B-11/B-12/B-18/B-19 = 7 원자 완료.
+
+**Phase B 진행 누적**: 16 원자 중 **7 완료** / 9 남음. 단일 라인 그룹 6 원자 + B-19 (climbing 같은 분기 누락) = 7 모두 완료. **남은 9 원자 = 다중/신규/누적/인프라/Mixin 그룹**.
+
+**다음 단계 (세션 28+)**: 권장 시작 = **B-13** (slide 다중 피벗 — 5 라인 + MatrixStack 보정 / body.offsetY 부재 우회). 다중 라인 그룹 진입.
 
 ---
 

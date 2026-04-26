@@ -317,7 +317,7 @@ public abstract class MixinPlayerEntityModelClient {
             // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286)
             // 원본: bipedTorso.X=0.5F (L281), head.X-=0.5F (L282), bipedPelvic.X-=0.5F (L283),
             //       bipedTorso.rotationPointZ = -6F (L285).
-            // bipedPelvic.X-=0.5F: 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 필요 (§16-26 후속).
+            // bipedPelvic.X-=0.5F: 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 (B-19 / §16-26).
             // body.pivotZ = -6F: B-9 / §16-14 — 원본 bipedTorso 가 root(bipedOuter)의 자식으로 모든
             //   visual 노드를 자식으로 거느리므로 -6 = 전체 visual 이동. 1.21.1 단일 PlayerEntityModel
             //   에서는 body 단일 노드만 대응 (head/arm/leg 이동 누락 = SR 다층 부재 근사).
@@ -325,6 +325,9 @@ public abstract class MixinPlayerEntityModelClient {
                 body.pitch = 0.5f;
                 head.pitch -= 0.5f;
                 body.pivotZ = -6f;   // 원본 bipedTorso.rotationPointZ = -6F (B-9 / §16-14)
+                // 원본 bipedPelvic.rotateAngleX -= 0.5F (L283) — pelvic 부재로 다리 그룹에 직접 차감
+                rightLeg.pitch -= 0.5f;   // B-19 / §16-26
+                leftLeg.pitch  -= 0.5f;
             }
         }
     }
