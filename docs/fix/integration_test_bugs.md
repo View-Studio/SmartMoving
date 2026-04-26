@@ -541,27 +541,38 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-22** sm_updatePose_client cfg.enabled 가드 — 비행 진입 첫 프레임 SLIDING POSE 강제 차단 (세션 36 4차 감사)
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-23** sm_isClimbing_client + sm_applyClimbingSpeed + sm_updateLimbs_client + sm_isInSwimmingPose_client cfg.enabled 가드 — sm.* 잔존 timing 차단 (4 inject) (세션 36 4차 감사)
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-25** 비행 속도 원본보다 느림 — Flying Phase F-6 (세션 40): SmartMovingFlyer 에 isFast 시 sprint 배수 곱셈 추가 (sprintFactor=1.5F 또는 sprintFactorLevitate). 원본 getNonSlowInputSpeedFactor (L197-L227) 누락 보강.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — Flying Phase F-7 (세션 43-44): 세션 43 default 값 정정 (true→false) 후에도 사용자 환경 disk 의 이전 값 우선 → 자동 마이그레이션 추가 (세션 44). load() 후 marker `move.config.migration.flying` 미존재 시 강제 false reset + save → 다음 로드부터는 새 default 적용. 사용자 의도적 true 설정 시 마이그레이션 후 다시 수동 변경 가능.
-- [⏳ BUG-25 후 재평가] **BUG-27** 위아래 보면서 전진 속도 너무 느림 — F-2 결과: moveFlying 정확 1:1 → BUG-25 의 부분 증상 가능성.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — Flying Phase F-7 (세션 44 진짜 원인): 세션 42/43 motionY 관련 fix들 (sm_jump 가드, vanilla boost cancel, jumping=raw input) 모두 유지 — 1:1 보강. **그러나 진짜 직접 원인은 heightOffset 매핑 오류**: 원본 SmartMovingSelf.setHeightOffset (L1694-L1704) = `boundingBox.minY -= heightOffset + height += heightOffset` (박스 크기만 변경, player 위치 불변). 1.21.1 매핑 (MixinEntityClient.afterMoveEntity L99-L101) = `player.setPos(y - heightOffset)` (**player 위치 변경**) + 매 틱 호출 = **매 틱 +1 누적 → 매 틱 +1 블록 = 20 블록/초 무한 상승**. 비행 진입 시 heightOffset=-1F set 되어 매 틱 누적. 정정: SmartMovingClientState L1312-L1323 의 isFlying/isLevitating 진입 엣지 setHeightOffset(-1F) **제거** (1.21.1 vanilla 자동 hitbox 처리 → SM 보정 불필요). 누적 0 → 무한 상승 해소.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-29** 비행 시 몸 중심점 발끝 느낌 + 카메라 내려옴 — Flying Phase F-7 (세션 45 진짜 원인 추가): 세션 44 의 setHeightOffset(-1F) 제거에 더해 **POSE/dimensions 매핑 자체 잘못 발견**. 원본 SmartMovingSelf.setHeightOffset = 충돌 박스만 변경 (eyeHeight 영향 없음, 1.7.10 vanilla 에 EntityPose 시스템 자체 없음). 1.21.1 매핑 = sm_updatePose_client/server 가 비행 시 SLIDING POSE 강제 + sm_getBaseDimensions 가 0.6×0.8 + eyeHeight 0.62F 강제 → vanilla 가 카메라 위치 0.62 적용 → 카메라 발끝 + 모델 작게. 사용자 보고 "몸 중심점이 발끝으로" 직접 원인. 정정: sm_updatePose_client/server 의 isFlying/isLevitating 분기 제거 + sm_getBaseDimensions_client/server 에서도 동일 조건 제거 → vanilla 1.21.1 STANDING POSE + 1.8 height + 1.62 eyeHeight 그대로 = 원본 1.7.10 동작 1:1 매칭.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — Flying Phase F-7 (세션 42): setAnglesXZY/YXZ/ZXY 3 헬퍼 모두 quaternion 곱 순서 reversal 오류 발견. 원본 ModelRotationRenderer.rotate XZY (L148/L151/L157) GL call 순서 = Y, Z, X → vertex 적용 순서 X, Z, Y → JOML qY * qZ * qX (right-most 부터 적용). 이전 매핑 = qX * qZ * qY (vertex 적용 Y, Z, X — 원본 반대). 큰 roll (π/2 비행 자세) 시 가시화 = 사용자 보고 "팔 방향과 같은 축으로 스크류 회전" 직접 원인. setAnglesYXZ/ZXY 도 동일 패턴 오류 정정 (isSwim head, isSlide body, animateAngleJumping 다리 영향).
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-25** 비행 속도 원본보다 느림 — Flying Phase F-6 (세션 40): SmartMovingFlyer 에 isFast 시 sprint 배수 곱셈 추가 (sprintFactor=1.5F 또는 sprintFactorLevitate). 원본 getNonSlowInputSpeedFactor (L197-L227) 누락 보강.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — Flying Phase F-7 (세션 43-44): 세션 43 default 값 정정 (true→false) 후에도 사용자 환경 disk 의 이전 값 우선 → 자동 마이그레이션 추가 (세션 44). load() 후 marker `move.config.migration.flying` 미존재 시 강제 false reset + save → 다음 로드부터는 새 default 적용. 사용자 의도적 true 설정 시 마이그레이션 후 다시 수동 변경 가능.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-27** 위아래 보면서 전진 속도 너무 느림 — F-2 결과: moveFlying 정확 1:1 → BUG-25 의 부분 증상 가능성. BUG-25 해결로 함께 해소.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — Flying Phase F-7 (세션 44 진짜 원인): 세션 42/43 motionY 관련 fix들 (sm_jump 가드, vanilla boost cancel, jumping=raw input) 모두 유지 — 1:1 보강. **그러나 진짜 직접 원인은 heightOffset 매핑 오류**: 원본 SmartMovingSelf.setHeightOffset (L1694-L1704) = `boundingBox.minY -= heightOffset + height += heightOffset` (박스 크기만 변경, player 위치 불변). 1.21.1 매핑 (MixinEntityClient.afterMoveEntity L99-L101) = `player.setPos(y - heightOffset)` (**player 위치 변경**) + 매 틱 호출 = **매 틱 +1 누적 → 매 틱 +1 블록 = 20 블록/초 무한 상승**. 비행 진입 시 heightOffset=-1F set 되어 매 틱 누적. 정정: SmartMovingClientState L1312-L1323 의 isFlying/isLevitating 진입 엣지 setHeightOffset(-1F) **제거** (1.21.1 vanilla 자동 hitbox 처리 → SM 보정 불필요). 누적 0 → 무한 상승 해소.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-29** 비행 시 몸 중심점 발끝 느낌 + 카메라 내려옴 — Flying Phase F-7 (세션 45 진짜 원인 추가): 세션 44 의 setHeightOffset(-1F) 제거에 더해 **POSE/dimensions 매핑 자체 잘못 발견**. 원본 SmartMovingSelf.setHeightOffset = 충돌 박스만 변경 (eyeHeight 영향 없음, 1.7.10 vanilla 에 EntityPose 시스템 자체 없음). 1.21.1 매핑 = sm_updatePose_client/server 가 비행 시 SLIDING POSE 강제 + sm_getBaseDimensions 가 0.6×0.8 + eyeHeight 0.62F 강제 → vanilla 가 카메라 위치 0.62 적용 → 카메라 발끝 + 모델 작게. 사용자 보고 "몸 중심점이 발끝으로" 직접 원인. 정정: sm_updatePose_client/server 의 isFlying/isLevitating 분기 제거 + sm_getBaseDimensions_client/server 에서도 동일 조건 제거 → vanilla 1.21.1 STANDING POSE + 1.8 height + 1.62 eyeHeight 그대로 = 원본 1.7.10 동작 1:1 매칭.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — Flying Phase F-7 (세션 42): setAnglesXZY/YXZ/ZXY 3 헬퍼 모두 quaternion 곱 순서 reversal 오류 발견. 원본 ModelRotationRenderer.rotate XZY (L148/L151/L157) GL call 순서 = Y, Z, X → vertex 적용 순서 X, Z, Y → JOML qY * qZ * qX (right-most 부터 적용). 이전 매핑 = qX * qZ * qY (vertex 적용 Y, Z, X — 원본 반대). 큰 roll (π/2 비행 자세) 시 가시화 = 사용자 보고 "팔 방향과 같은 축으로 스크류 회전" 직접 원인. setAnglesYXZ/ZXY 도 동일 패턴 오류 정정 (isSwim head, isSlide body, animateAngleJumping 다리 영향).
 - [✅ 인게임 검증 완료 (세션 41)] **BUG-31** 몸 기울기 방향 다름 (몸 앞쪽이 하늘) — Flying Phase F-6 (세션 40): X 회전 부호 반전 (`-theta`). 사용자 확인 "기우는 방향 자체는 고쳐짐" ✅.
-- [⏳ BUG-30 후 재평가] **BUG-32** 머리 이상하게 고정 — F-3 결과: head.pitch = -theta/2 매핑 정확 → BUG-30 setAngles* 정정으로 함께 해소 가능 (사용처 isSwim head 등). 인게임 재확인 대기.
-- [⏳ BUG-25 후 재평가] **BUG-33** 비행 모든 애니메이션 부드럽지 않음 (프레임 끊김) — F-3 결과: sm.stats.calculate 정상 호출 → 다른 원인 (BUG-25 sprint 미적용 영향 가능).
-- [⏳ BUG-25/31 후 재평가] **BUG-34** 비행 디테일 (각도/움직임/속도/스무스함) 다름 — F-3 결과: sm_animateFlying 정확 1:1 → BUG-25/31 누적 효과.
-- [✅ AI 완결 / 인게임 검증 대기] **잉여 (BUG-25 부수)** sm_flyWhileOnGround `!cfg.flyCloseToGround` 가드 삭제 — F-6: 원본 L1827 에 없는 잉여 가드. flyCloseToGround=true 시 자동 비행 복원 차단 영향.
-- [✅ AI 완결 / 인게임 검증 대기] **누락 (BUG-25 부수)** 비행 중 fallDistance reset 추가 — F-6: 원본 L1803-L1804 매핑. MixinLivingEntityClient.sm_jumpingFilter 에 `if (player.getAbilities().flying) player.fallDistance = 0F;` 추가.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-32** 머리 이상하게 고정 — 세션 60 에서 명시 head.yaw=0/head.roll=0 강제 (원본 reset() 효과 1:1) 추가 + 세션 47b head.pitch = -theta/2 매핑 유지로 해결.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-33** 비행 모든 애니메이션 부드럽지 않음 (프레임 끊김) — 세션 48 SmartStatistics partial tick lerp 60Hz 매핑 + 세션 49 fade 보간 (factor 0.2 * deltaTime) + 세션 52 currentSpeedLerped 매 프레임 적용으로 해결.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **BUG-34** 비행 디테일 (각도/움직임/속도/스무스함) 다름 — 세션 47b ~ 65q 의 누적 매핑 (isJumping abs, fade 보간, mouseRotation delay, head 고정, 공격 swing 직립 등) 으로 해결.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **잉여 (BUG-25 부수)** sm_flyWhileOnGround `!cfg.flyCloseToGround` 가드 삭제 — F-6: 원본 L1827 에 없는 잉여 가드. flyCloseToGround=true 시 자동 비행 복원 차단 영향.
+- [✅ 인게임 검증 완료 (세션 65q, 비행 시스템 완결 2026-04-27)] **누락 (BUG-25 부수)** 비행 중 fallDistance reset 추가 — F-6: 원본 L1803-L1804 매핑. MixinLivingEntityClient.sm_jumpingFilter 에 `if (player.getAbilities().flying) player.fallDistance = 0F;` 추가.
+
+---
+
+### 🎉 비행 시스템 (Flying Phase F-1 ~ F-7) 전체 완결 — 세션 65q (2026-04-27)
+
+사용자 명시적 선언: "비행시스템은 완결이야 이제".
+
+세션 37 (BUG-1+8) ~ 세션 65q (비행 공격 swing arm 직립) 까지 비행 관련 모든 BUG 인게임 검증 완료. 추가 매핑 (세션 41 ~ 65q):
+- 세션 47b: isJumping abs(verticalAngle) 처리.
+- 세션 48: SmartStatistics prev 필드 + partial tick lerp (60Hz 부드러움).
+- 세션 49: fade 보간 매 프레임 적용 (ModelRotationRenderer.fadeIntermediate 1:1).
+- 세션 52: currentSpeedLerped 매 프레임 사용.
+- 세션 60: head.yaw/roll = 0 강제 (원본 reset() 효과 매핑).
+- 세션 61: 마우스 회전 delay 효과 (smBodyYawOverride=0 + smFlyingExtraYaw + fade 보간).
+- 세션 65q: 비행 중 공격 swing arm 직립 매핑 (preCancelParentXRotation + preCancelParentXPivot, scale(-1,-1,1) 부호 보정).
+
+상세 기록: `docs/research/research_flying_swing_arm_cancel.md` 참조.
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
-- [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
-    - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)
-    - sm.isFlying 갱신 위치 grep (`SmartMovingClientState.java`)
-    - SmartMovingConfig.fly 기본값 검증
-    - vanilla travel() 와의 inject 순서 검증
-    - getCombinedSpeedFactor 비행 시 결과 검증 (Mover.java)
-    - SmartMovingSelf.java L602-L631 + L1803-L1831 + L2198-L2199 + L2320 + L2404 라인별 read
+- [x] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — 세션 37 (player.move() 추가) ~ 세션 65q (비행 시스템 완결) 으로 해결.
 - [ ] BUG-3 crawl 진동 — #2.7 POSE/BBox 동기화 검증 + isCrawling 종료 조건
 - [ ] BUG-5 swim 진동 — #2.6 lava liquid border + 수면 경계 판정 정확성
 - [ ] BUG-2 climbing 작동 안 함 — handsClimbType/feetClimbType 갱신 + grab 키 처리
