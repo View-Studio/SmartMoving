@@ -151,14 +151,14 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 | SM 분기 | 노드 | rotationOrder | call 순서 (post-multiply 역순) | 1.21.1 헬퍼 |
 |---|---|---|---|---|
 | isClimb / isCrawlClimb | leg | YZX | X, Z, Y | `setAnglesYZX()` L607 |
-| isSwim | head | YXZ | Z, X, Y | (수동 MatrixStack — 미이식) |
+| isSwim | head | YXZ | Z, X, Y | ✅ `setAnglesYXZ()` (B-1, 세션 2) |
 | isSwim | arm | YZX | X, Z, Y | `setAnglesYZX()` |
 | isCrawl | torso | YZX | X, Z, Y | (구조 부재 — body 단일 근사) |
 | isCrawl | arm | YZX | X, Z, Y | `setAnglesYZX()` |
-| isSlide | body | YXZ | Z, X, Y | (미이식 — 일반 XYZ) |
+| isSlide | body | YXZ | Z, X, Y | ✅ `setAnglesYXZ()` (B-1, 세션 2) |
 | isSlide | arm | YZX | X, Z, Y | `setAnglesYZX()` |
-| isFlying | arm | XZY | Y, Z, X | (미이식 — 일반 XYZ) |
-| isFalling | arm | XZY | Y, Z, X | (미이식 — 일반 XYZ) |
+| isFlying | arm | XZY | Y, Z, X | ✅ `setAnglesXZY()` (B-2, 세션 2) |
+| isFalling | arm | XZY | Y, Z, X | ✅ `setAnglesXZY()` (B-2, 세션 2) |
 | animateAngleJumping | leg | ZXY | Y, X, Z | `setAnglesZXY()` L622 |
 | animateNonStandardWorking | rightShoulder | ZYX | X, Y, Z | (구조 부재 — N/A) |
 | animateNonStandardBowAiming | both shoulders | ZYX | X, Y, Z | (구조 부재 — N/A) |
@@ -176,6 +176,10 @@ bipedOuter (0,0,0, root, fadeEnabled=true)
 | MixinPlayerEntityRenderer | sm_setupTransforms | @Inject(setupTransforms TAIL) | 5 상태 X 기울기 (isSwim/isDive/isSlide/isFlying/isHeadJump) |
 | MixinPlayerEntityRenderer | renderName | @Inject(HEAD, cancellable) | isCrawling 이름표 차단 / heightOffset Y / sneak Y |
 | MixinLivingEntityRenderer | hasLabel | @Redirect(isSneaky) | sneakNameTag 64블록 거리 제어 |
+| **MixinCapeFeatureRenderer** (B-17, 세션 34) | sm_captureCapeEntity | @Inject(render HEAD) | entity → static field capture (cape 단일 thread) |
+| **MixinCapeFeatureRenderer** | sm_clampCapeXAngle | @ModifyArg(rotationDegrees, ordinal=0) | 망토 X 회전 인자 가로채기 → `min(angleDeg, max(70.523° - outerXDeg, 6°))` 클램프 |
+| **MixinCapeFeatureRenderer** | sm_clearCapeEntity | @Inject(render RETURN) | static field 정리 (방어적) |
+| **PlayerEntityModelAccessor** (B-16, 세션 30) | sm_getCloak | @Accessor("cloak") | private cloak field 접근 → `cloak.pitch = SIXTYFOURTH` 적용 |
 
 ### 5.7. Phase R 라인별 매핑 인덱스 (R-1~R-8 / 세션 3-22 / R-9 통합 — 세션 23)
 
@@ -200,37 +204,42 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 **핵심 1차 자료 (R-8 결정타)**: `SmartStatisticsData.calcualte()` (4배 곱 + 0.4 저역 보간 + 누적) = vanilla 1.21.1 `LivingEntity.tickMovement` 의 `limbAnimator` 갱신 공식과 정확히 일치 → horizontal 측 vanilla 자동 처리 [정합]. **vertical 측 + all 측 vanilla 부재** → §16-10/12/13/15 [오역] (climbing/diving/flying 입력값) 진단 결정타 (B-X 인프라 필요).
 
-발견 16 그룹 → R-10+ B-N 14 + 인프라 B-X 1 + 검토 1 (정렬: 우선순위 / 의존):
+발견 26 그룹 → R-10+ B-N 15 + 인프라 B-X 1 + 검토 1 (Phase B 16/16 = 100% 완료 / 세션 24-34):
 
-| 분류 | B-N | 발견 # | 분기 / 입력값 | 대응 위치 |
-|------|---|---|---|---|
-| [오역] | B-4 | §16-10 | climbing arm/feet vertical 입력값 | sm_animateClimbing (B-X 의존) |
-| [오역] | B-5 | §16-12 | climbing feet vine 3D 입력값 | sm_animateClimbing (B-X 의존) |
-| [오역] | B-6 | §16-13 | diving 3D 입력값 | sm_animateDiving (B-X 의존) |
-| [오역] | B-7 | §16-20 | flying 3D 입력값 | sm_animateFlying (B-X 의존) |
-| [오역 인프라] | B-X | (B-4~7 공통) | verticalDistance/Speed + allDistance/Speed capture | SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick |
-| [누락] | B-8 | §16-11 | rope sliding head/arm pivotY | sm_animateRopeSliding |
-| [누락] | B-9 | §16-14 | climbing NoGrab+non-NoStep body.pivotZ -6F | sm_animateClimbing |
-| [누락] | B-10 | §16-15 | swim/dive head 자세 (head.pivotZ + dive head.pitch) | sm_animateSwimming/Diving |
-| [누락] | B-11 | §16-16 | swim body yaw (자유형 영법) | sm_animateSwimming |
-| [누락] | B-12 | §16-18 | crawl head.pivotZ + body.pivotY | sm_animateCrawling |
-| [누락] | B-13 | §16-19 | slide 다중 피벗 (head.roll + head.pivotZ + body.pivotY + outer.pivotY + body.offsetY MatrixStack 보정) | sm_animateSliding + 별도 setupTransforms |
-| [누락] | B-14 | §16-22 | 타인 플레이어 crawl Y +0.125 | sm_getPositionOffset |
-| [누락] | B-15 | §16-23 | levitate horizontal=camera | sm_captureBodyYaw |
-| [누락] | B-16 | §16-24 | cloak.pitch SIXTYFOURTH 기본 기울임 | sm_setAngles TAIL (vanilla reset 검증 필요) |
-| [누락] | B-17 | §16-25 | cape outer.X 클램프 (70.523° - outerX) | 신규 MixinCapeFeatureRenderer |
-| [잉여] | B-18 | §16-17 | sm_animateCeilingClimbing head.yaw 추가 차감 | 제거 또는 검증 |
-| [정합근사] | (검토만) | §16-21 | head jump overGroundBlock material → smallOverGroundHeight | 우선순위 매우 낮음, B-N 미등록 |
+| 분류 | B-N | 발견 # | 분기 / 입력값 | 대응 위치 | 상태 |
+|------|---|---|---|---|------|
+| [오역] | B-4 | §16-10 | climbing arm/feet vertical 입력값 | sm_animateClimbing | ✅ 세션 31 |
+| [오역] | B-5 | §16-12 | climbing feet vine 3D 입력값 | sm_animateClimbing vine | ✅ 세션 32 |
+| [오역] | B-6 | §16-13 | diving 3D 입력값 | sm_animateDiving | ✅ 세션 32 |
+| [오역] | B-7 | §16-20 | flying 3D 입력값 | sm_animateFlying | ✅ 세션 32 |
+| [오역 인프라] | B-X | (B-4~7 공통) | verticalDistance/Speed + allDistance/Speed capture | SmartStatistics.calculate L60-L62 + L88-L91 | ✅ 사전 구현 (SmartStatistics 에 이미 완성, 세션 31 검증) |
+| [누락] | B-8 | §16-11 | rope sliding head/arm pivotY | sm_animateRopeSliding | ✅ 세션 24 |
+| [누락] | B-9 | §16-14 | climbing NoGrab+non-NoStep body.pivotZ -6F + reset 인프라 (head/body pivotZ) | sm_animateClimbing + sm_setAngles HEAD | ✅ 세션 25 |
+| [누락] | B-10 | §16-15 | swim/dive head 자세 (head.pivotZ + dive head.pitch) | sm_animateSwimming/Diving | ✅ 세션 27 |
+| [누락] | B-11 | §16-16 | swim body yaw (자유형 영법) + body.yaw reset 인프라 | sm_animateSwimming + sm_setAngles HEAD | ✅ 세션 26 |
+| [누락] | B-12 | §16-18 | crawl head.pivotZ + body.pivotY | sm_animateCrawling | ✅ 세션 26 |
+| [누락] | B-13 | §16-19 | slide 다중 피벗 + body.offsetY MatrixStack + head.roll reset 인프라 | sm_animateSliding + sm_setupTransforms + sm_setAngles HEAD | ✅ 세션 28 |
+| [누락] | B-14 | §16-22 | 타인 플레이어 crawl Y +0.125 (자기/타인 분기 분리) | sm_getPositionOffset | ✅ 세션 29 |
+| [누락] | B-15 | §16-23 | levitate horizontal=camera 우선 처리 | sm_captureBodyYaw | ✅ 세션 29 |
+| [누락] | B-16 | §16-24 | cloak.pitch SIXTYFOURTH 기본 기울임 + Accessor 인프라 | sm_setAngles TAIL + PlayerEntityModelAccessor | ✅ 세션 30 |
+| [누락] | B-17 | §16-25 | cape outer.X 클램프 (70.523° - outerX) | 신규 MixinCapeFeatureRenderer + sm_setupTransforms 5 분기 capture (smOuterTiltX) | ✅ 세션 34 |
+| [잉여] | B-18 | §16-17 | sm_animateCeilingClimbing head.yaw 잉여 차감 제거 | sm_animateCeilingClimbing 라인 2 줄 제거 | ✅ 세션 25 |
+| [누락] | B-19 | §16-26 | climbing NoGrab+non-NoStep leg.pitch -= 0.5F (pelvic 부재 보정) | sm_animateClimbing (B-9 같은 분기) | ✅ 세션 27 |
+| [정합근사] | (검토만) | §16-21 | head jump overGroundBlock material → smallOverGroundHeight | 우선순위 매우 낮음, B-N 미등록 | ✅ R-1 청크 3 검토 완료 — 정합 근사 |
 
-**B-N 의존 / 권장 진행 순서**:
-1) 단일 라인 (1-3 줄): B-8, B-9, B-10, B-11, B-12, B-18
-2) 다중 라인 (5+ + MatrixStack 별도): B-13
-3) 신규 분기: B-14 (sm_getPositionOffset), B-15 (sm_captureBodyYaw)
-4) cloak 누적 검증 후: B-16
-5) 인프라 선행 후 입력값 교체: B-X → B-4, B-5, B-6, B-7
-6) 신규 Mixin: B-17 (CapeFeatureRenderer)
+**Phase B 누적 reset 인프라** (sm_setAngles HEAD anySmState 분기 4 필드 = 0):
+`head.pivotZ + body.pivotZ + body.yaw + head.roll` — vanilla 미reset 필드 보강. 모든 sm 분기 진입 시 안전 보장.
 
-세부 의존 그래프는 `research_animation_line_by_line.md` §R-9.3 참고.
+**진행 결과 (세션 24-34 / 11 세션)**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 (climbing 같은 분기) — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ 누적 검증 후 (B-16) — 1/1
+- ✅ 인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 5/5
+- ✅ 신규 Mixin (B-17 — CapeFeatureRenderer) — 1/1
+
+세부 의존 그래프 + 권장 순서 (이미 완료) 는 `research_animation_line_by_line.md` §R-9.3 참고.
 
 ---
 
@@ -249,9 +258,11 @@ R-9 통합 누적 표 (4,968 라인 전수):
 | `rotationPointX/Y/Z` | `pivotX/Y/Z` | ✓ |
 | `rotationOrder = YZX` | `setAnglesYZX()` 헬퍼 | ✓ Quaternionf qY*qZ*qX → getEulerAnglesZYX |
 | `rotationOrder = ZXY` | `setAnglesZXY()` 헬퍼 | ✓ Quaternionf qZ*qX*qY → getEulerAnglesZYX |
-| `rotationOrder = YXZ/XZY/ZYX` | **헬퍼 부재** | ⚠️ 일반 XYZ 근사 (isSwim head, isSlide body, isFlying/isFalling arm 영향) |
-| `setArmScales(rx, ry, rz, lx, ly, lz)` | (구현 안됨) | ⚠️ ModelPart `xScale/yScale/zScale` 가능 (B-08 확인) — 미이식 |
-| `setLegScales(rx, ry, rz, lx, ly, lz)` | (구현 안됨) | ⚠️ 동일 |
+| `rotationOrder = YXZ` | `setAnglesYXZ()` 헬퍼 | ✅ B-1 (세션 2) 이식 — isSwim head / isSlide body 적용 (qY*qX*qZ → getEulerAnglesZYX) |
+| `rotationOrder = XZY` | `setAnglesXZY()` 헬퍼 | ✅ B-2 (세션 2) 이식 — isFlying/isFalling arm 적용 (qX*qZ*qY → getEulerAnglesZYX) |
+| `rotationOrder = ZYX` | (어깨 노드 부재 → N/A) | animateNonStandardWorking/BowAiming 어깨 ZYX = 1.21.1 어깨 노드 부재로 구조적 N/A (§17 잔여) |
+| `setArmScales(rx, ry, rz, lx, ly, lz)` | `setArmScales(rightArm, leftArm, rs, ls)` 헬퍼 | ✅ B-3 (세션 2) 이식 — `rightArm.yScale=rs; leftArm.yScale=ls;` (메인 모델 = Scale 타입). climbing/swim/dive/crawl 4 호출 |
+| `setLegScales(rx, ry, rz, lx, ly, lz)` | `setLegScales(rightLeg, leftLeg, rs, ls)` 헬퍼 | ✅ B-3 (세션 2) 이식 — 동일. climbing vine/swim/dive/crawl 4 호출 |
 | `bipedOuter.fadeRotateAngleY` (보간) | entity.bodyYaw / prevBodyYaw lerpAngleDegrees | 계수 `0.2F * timeDelta` 차이 (vanilla는 tickDelta) |
 | `mp.onGround` (도구 사용 진행도) | 미확인 — entity.isUsingItem() / getActiveHand() / ArmPose | C-09 잔존 |
 | `actualRotation = 0` (vanilla 회전 차단) | setupTransforms @ModifyArg index=3 직접 교체 | ✓ |
@@ -387,7 +398,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
   - [x] R-8 청크 2 (Datas 76 + Data 61 + Context 38 + Other 30 + IEntityPlayerSP 23 = 228) — 세션 22 (정합 28 / 오역 0 / 누락 0 / 잉여 0 / N/A 200)
   - **R-8 누적**: 정합 44 / 오역 0 / 누락 0 / 잉여 0 / N/A 525 = 569 라인 전수
 - [x] R-9. 통합 라인별 매핑 표 (research_animation_line_by_line.md §R-9 신규 섹션) + focus_01 §5.7/§10 대폭 보강 — **세션 23 완료** (4,968 라인 통합 / 발견 16 그룹 / B-N 14 + B-X 1 + 검토 1 정리)
-- [ ] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입 — **세션 24+ 진입 가능 상태** (아래 B 섹션 참고)
+- [x] R-10+. 발견된 [오역]/[누락]/[잉여] B-N 원자로 등록 + 본격 1:1 대응 진입 — **세션 24-34 Phase B 16/16 = 100% 완료**. 아래 B 섹션 참고.
 
 ### B. 본격 1:1 대응 (R-10 이후, 세션 23 R-9 등록)
 권장 진행 순서 (의존 / 우선순위):
@@ -454,8 +465,13 @@ R-9 통합 누적 표 (4,968 라인 전수):
 | leaningPitch (vanilla 충돌) | (해당 없음 — vanilla 1.7.10에 leaningPitch 미존재) | sm_setAngles TAIL Line 88: `model.leaningPitch = 0F` 강제 → setupTransforms Branch 2 차단 |
 | limbSwing 입력 | totalHorizontalDistance / currentHorizontalSpeed (SmartStatistics) | entity.limbAnimator.getPos/getSpeed(tickDelta) |
 | animationProgress 입력 | totalTime (SmartStatistics) | entity.age + tickDelta (LivingEntityRenderer.render Step 8) |
+| **vertical/3D 입력** (B-X / B-4~B-7, 세션 31-32) | totalVerticalDistance/currentVerticalSpeed/totalDistance/currentSpeed (SmartStatistics) | sm.stats.* (SmartStatistics.calculate L60-L62 + L88-L91 — 1.7.10 calcualte 1:1 등가) — climbing/diving/flying 입력값 정합 |
+| **isLevitating horizontal=camera** (B-15, 세션 29) | rotatePlayer 마지막 모든 모델 currentHorizontalAngle = currentCameraAngle | sm_captureBodyYaw 분기 위 우선 처리 (smActive 직후) |
+| **타인 plr crawl Y +0.125** (B-14, 세션 29) | renderPlayerAt 자기/타인 분기 d1 += 0.125 | sm_getPositionOffset 자기/타인 instanceof 분리 + 타인 분기 |
+| **cape outer.X 클램프** (B-17, 세션 34) | ModelCapeRenderer L72-L73 localAngleMax = max(70.523° - outer.X°, 6°) | sm_setupTransforms 5 분기 capture (smOuterTiltX) → MixinCapeFeatureRenderer @ModifyArg(rotationDegrees, ordinal=0) — 자기 ClientPlayerEntity 한정 |
+| **cloak.pitch 기본 기울임** (B-16, 세션 30) | SmartRenderModel L251 cloak.rotateAngleX = Sixtyfourth | sm_setAngles TAIL — PlayerEntityModelAccessor 경유 cloak.pitch = SIXTYFOURTH 매 프레임 = 직접 할당 |
 
-일치: ✓ (Agent C 검증 — 95% bodyYaw 무결성 / 100% X tilt 무결성)
+일치: ✓ (Agent C 검증 — 95% bodyYaw 무결성 / 100% X tilt 무결성). Phase B 16 원자 추가 후 vanilla / 다른 SM 분기 / 다른 entity render 회귀 영향 없음 (§14.1 검증).
 
 ---
 
@@ -2520,12 +2536,29 @@ sm_setAngles HEAD anySmState 분기에 4 필드 reset (vanilla 미reset 필드�
 
 ## 17. 잔여 / 후속
 
-- SR 전용 노드(bipedOuter/torso 등 7개) 시각 재현을 위한 다층 모델 렌더는 1.21.1 단일 PlayerEntityModel 구조상 근본적으로 불가 → 구조적 N/A
-- 애니메이션 속도(스윙 주기) 세밀 조정 — vanilla limbAnimator 기반이므로 #6 회귀(증가/감소 속도) 영향 가능 → 통합테스트 후 분리 평가
-- ~~ModelPart xScale/yScale/zScale 활용 setArmScales/setLegScales 이식 (B-3 선행 후보)~~ ✅ 세션 2 완료
-- ~~YXZ/XZY/ZYX 헬퍼 추가 (B-1/B-2 선행 후보)~~ ✅ 세션 2 완료 (YXZ + XZY). ZYX 헬퍼는 어깨 N/A 로 미이식.
-- bipedTorso isCrawl ≈79° 기울기를 자식 노드(head/arm) 일괄 보정으로 근사 (선택)
-- fade 보간 0.2F*timeDelta 계수 vanilla lerpAngleDegrees 차이 — bodyYaw 부드러움 영향 (저우선)
+### 17.1. 완결 항목 (참고용 — 세션 진행 기록)
+
+- ✅ ~~ModelPart xScale/yScale/zScale 활용 setArmScales/setLegScales~~ — B-3 (세션 2)
+- ✅ ~~YXZ/XZY 헬퍼~~ — B-1/B-2 (세션 2). ZYX 헬퍼는 §17.3 (구조 부재 N/A) 로 이동.
+- ✅ ~~B-17 deferred (Cape outer.X 클램프)~~ — 세션 34 완료. vanilla CapeFeatureRenderer.class 디스어셈블리 (`javap -p -c -l`) 로 시그니처 + ordinal 검증 후 본격 진행.
+
+### 17.2. 진정한 잔여 (포커스 #1 외 / 통합테스트 후 평가)
+
+- **애니메이션 속도(스윙 주기) 세밀 조정** — vanilla limbAnimator 기반이므로 #6 회귀(증가/감소 속도) 영향 가능 → 통합테스트 후 분리 평가
 - **NoScaleEnd 갑옷 흉갑 다리 offsetY 보정** — ArmorFeatureRenderer Mixin 별도 작업 (포커스 #1 외, 갑옷 레이어 영역). ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정 필요.
-- **animateNonStandardWorking / BowAiming 어깨 ZYX** — 1.21.1 PlayerEntityModel 에 어깨 노드 부재로 구조적 N/A. SM 비표준 상태(클라이밍/수영) 중 활/석궁 사용 시 어깨 고정 불가. 우선순위 낮음.
-- ~~B-17 deferred (Cape outer.X 클램프 / §16-25 / ModelCapeRenderer L72-L73)~~ ✅ **세션 34 완료** — 사용자 지시에 따라 vanilla CapeFeatureRenderer.class 디스어셈블리 (`javap -p -c -l`) 로 정확 시그니처 + ordinal 검증 후 본격 진행. 코드 변경 = SmartMovingClientState.smOuterTiltX 필드 + sm_setupTransforms 5 분기 capture + 신규 MixinCapeFeatureRenderer + mixins.json 등록. 자기 자신 한정 적용 (타인 plr 은 sm tilt 0 이므로 vanilla 그대로).
+- **bipedTorso isCrawl ≈79° 기울기 자식 일괄 보정** — body 단일 노드 근사 (B-12 부분 처리) 후 정밀화 후보. 통합테스트에서 isCrawl head/arm 정합 부족 시 평가 (선택, 시각 효과 평가 후).
+- **fade 보간 0.2F*timeDelta 계수** — vanilla lerpAngleDegrees 차이. bodyYaw 부드러움 영향 (저우선).
+
+### 17.3. 구조적 N/A (1.21.1 PlayerEntityModel 부재로 근본적 불가)
+
+- **SR 전용 노드** (bipedOuter/torso/breast/neck/pelvic/rightShoulder/leftShoulder 7개) 다층 모델 렌더 — 1.21.1 단일 PlayerEntityModel 구조상 근본적 불가 → body 단일 노드 근사 (B-9/B-12/B-13 의 SR 다층 부재 보정 패턴)
+- **animateNonStandardWorking / BowAiming 어깨 ZYX** — 1.21.1 어깨 노드 부재 → SM 비표준 상태 (클라이밍/수영) 중 활/석궁 사용 시 어깨 고정 불가. ZYX 헬퍼 추가도 어깨 노드 없으면 무의미. 우선순위 낮음 (희귀 케이스).
+
+### 17.4. 후속 발견 후보 (Phase B 자기 한정의 비대칭 — 다른 플레이어)
+
+B-16 / B-17 은 자기 자신 (`ClientPlayerEntity`) 한정 적용. 다른 플레이어 (`OtherClientPlayerEntity`) 영향 분석:
+
+- **B-16 cloak.pitch 다른 플레이어 미적용** — sm_setAngles 의 첫 줄 ClientPlayerEntity 캐스팅으로 다른 plr 미진입 → 다른 plr cloak 기본 기울임 (≈5.6°) 누락. **영향**: 다른 plr 망토 살짝 기울임 부재 (미세 시각 차이). **우선순위 낮음** (메인 외 망토 / 자기 외 시점만).
+- **B-17 cape outer.X 클램프 다른 플레이어 무관** — 다른 plr 은 sm_setupTransforms 가 SM tilt 적용 안 함 → smOuterTiltX = 0 → MixinCapeFeatureRenderer 의 `if (sm.smOuterTiltX == 0f) return angleDeg;` fallback → vanilla 그대로. **영향 없음** (다른 plr 은 SM 자세 자체 미적용이므로 망토 클램프 의미 없음).
+
+→ 다른 플레이어 cloak 기본 기울임 (B-16-OPL) 만 등재 가능. 통합테스트 후 시각 차이 평가 후 진행 결정 권장 (현재는 후속 후보).
