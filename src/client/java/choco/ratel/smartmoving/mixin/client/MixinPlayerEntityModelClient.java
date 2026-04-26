@@ -681,15 +681,20 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65g): preferred arm 의 비행 자세 X 회전 cancel — 직립 자세로 swing.
-        //   사용자 요구: "이동방향으로 똑바로 서서 휘두르는 거처럼" (preferred arm 한정).
-        //   부모 setupTransforms POSITIVE_X(-thetaLerped) 가 모든 모델에 적용 → swing arm 도
-        //   비행 자세로 회전. 이걸 자식 ModelPart 단계에서 quaternion 합성으로 cancel:
+        // 🔴 (세션 65h): preferred arm 의 비행 자세 X 회전 cancel — 같은 frame fade 보간.
+        //   사용자 요구: "이동방향 향한 직립 플레이어의 오른팔이 휘두르는 모션".
+        //   부모 setupTransforms 의 POSITIVE_X(-thetaLerped) 가 swing arm 에도 적용 →
+        //   X 기울기 영향. 자식 ModelPart 단계에서 quaternion 합성으로 cancel:
         //     q_new = R_x(theta) * R_arm_orig.
         //   Y 회전 (이동 방향) 은 cancel 안 함 → arm 도 모델과 같이 이동 방향 향함.
-        //   thetaCancel = sm.smOuterTiltX (직전 프레임 thetaLerped 의 fade 보간된 값).
+        //
+        //   세션 65g 의 thetaCancel = sm.smOuterTiltX (직전 프레임 lerped) 는 1-frame delay →
+        //   부모 X 회전과 미세 어긋남. 정정: 같은 frame 의 fade 보간 직접 계산 (setupTransforms
+        //   가 같은 input 으로 같은 thetaLerped 산출하므로 정확 매칭).
         if (swing > 0F) {
-            float thetaCancel = (sm.smOuterTiltX != 0f) ? sm.smOuterTiltX : theta;
+            float thetaTarget = theta;  // (QUARTER - verticalAngle) * currentSpeedLerped (위에서 계산됨)
+            float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, thetaTarget,
+                                              sm.smOuterFade_prevTime, totalTime);
             if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
             if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
         }
@@ -934,6 +939,32 @@ public abstract class MixinPlayerEntityModelClient {
         part.pitch = e.x;
         part.yaw   = e.y;
         part.roll  = e.z;
+    }
+
+    /**
+     * setupTransforms 의 fade 보간 (lerpFadeAngle) 과 동일한 계산.
+     *
+     * sm_setAngles 가 setupTransforms 보다 먼저 호출되므로, 같은 frame 의 fade 결과를
+     * setAngles 시점에 직접 계산해야 정확한 X cancel 이 가능. setupTransforms 도 같은
+     * input (smOuterTiltX_prev, smOuterFade_prevTime) 으로 같은 결과 산출 후 prev 갱신.
+     *
+     * 원본 ModelRotationRenderer.GetIntermediateAngle (L347-L364) 1:1.
+     */
+    private static float lerpFadeAngle(float prev, float target, float prevTime, float currentTime) {
+        if (prevTime < -100f) return target;
+        float deltaTime = currentTime - prevTime;
+        if (deltaTime > 2f || deltaTime < 0f) return target;
+        if (target == prev) return target;
+        final float W = (float) (2.0 * Math.PI);
+        final float H = (float) Math.PI;
+        float p = prev, s = target;
+        while (p >= W) p -= W;
+        while (p < 0f) p += W;
+        while (s >= W) s -= W;
+        while (s < 0f) s += W;
+        if (s > p && (s - p) > H) p += W;
+        if (s < p && (p - s) > H) s += W;
+        return p + (s - p) * deltaTime * 0.2f;
     }
 
     /**
