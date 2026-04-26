@@ -7,10 +7,12 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -152,6 +154,49 @@ public abstract class MixinPlayerEntityClient {
         //   정정: 분기 제거 → vanilla 1.21.1 STANDING POSE 그대로 → 카메라 정상 (1.62 eyeHeight)
         //   + 모델 정상 (1.8 height) = 원본 1.7.10 동작 1:1 매칭.
         // isFlying/isLevitating/isDipping/그 외 → vanilla updatePose() 통과 (STANDING 등)
+    }
+
+    /**
+     * 🔴 BUG-27 진짜 원인 정정 (Flying Phase / 세션 51): vanilla PlayerEntity.travel() 의 비행
+     *   분기 motionY 덮어쓰기 차단.
+     *
+     * vanilla PlayerEntity.travel(Vec3d) 디컴파일:
+     * <pre>
+     *   if (this.getAbilities().flying && !this.hasVehicle()) {
+     *       double d = this.getVelocity().y;          // 이전 motionY 저장
+     *       super.travel(movementInput);               // → LivingEntity.travel
+     *                                                  //   → sm_travel_client (HEAD inject)
+     *                                                  //   → handleFlying (motionY 변경) + ci.cancel
+     *                                                  //   → LivingEntity.travel 본체 skip
+     *       Vec3d vec3d = this.getVelocity();          // 우리 SM 변경된 velocity
+     *       this.setVelocity(vec3d.x, d * 0.6, vec3d.z); // ← motionY = 이전 * 0.6 강제!
+     *       this.onLanding();
+     *       this.setFlag(7, false);
+     *   }
+     * </pre>
+     *
+     * setVelocity(vec3d.x, **d * 0.6**, vec3d.z) 가 우리 SM motionY 변경 덮어씀 → SM 비행 시
+     * 마우스 pitch → W 진행 방향 (motionY +0.0322) 효과 완전 무시 = 사용자 보고 BUG-27 직접 원인.
+     *
+     * 정정: setVelocity 호출 가로채서 SM 비행 활성 시 y 인자 무시 (현재 SM motionY 유지).
+     * X/Z 는 vanilla 처리 그대로.
+     */
+    @Redirect(
+        method = "travel",
+        at = @At(value = "INVOKE",
+                 target = "Lnet/minecraft/entity/LivingEntity;setVelocity(DDD)V")
+    )
+    private void sm_travel_setVelocity_flyFix(LivingEntity self, double x, double y, double z) {
+        if ((Object) self instanceof ClientPlayerEntity player
+                && SmartMovingConfig.Config.enabled
+                && SmartMovingClientState.get(player).isFlying) {
+            // SM 비행 시 motionY *= 0.6 차단 — handleFlying 가 set 한 motionY 보존.
+            // X/Z 는 vanilla 인자 그대로 (handleFlying 결과와 동일).
+            self.setVelocity(x, self.getVelocity().y, z);
+            return;
+        }
+        // 비SM 비행 (vanilla) → 원본 동작 그대로 (motionY *= 0.6).
+        self.setVelocity(x, y, z);
     }
 
 }
