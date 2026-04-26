@@ -9,7 +9,6 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.Arm;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -605,14 +604,15 @@ public abstract class MixinPlayerEntityModelClient {
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
     private void sm_animateFlying(SmartMovingClientState sm, ClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
-        // 🔴 (세션 63 revert 세션 62): pivot reset 제거.
-        //   세션 62 의 body.yaw/arm.pivot reset 은 vanilla animateArms swing 효과 자체를 cancel
-        //   → 사용자 보고 "비행 중 공격 시 애니메이션 아예 없음".
-        //   사용자 요구: 비행 중 공격 시 vanilla swing 모션 그대로 적용 (원본 1:1).
-        //   원본은 super.setAngles 호출 안 함 → vanilla swing 무시 였으나, 사용자가 vanilla swing
-        //   효과 원함 → vanilla 처리 유지.
-        //   sm_animateFlying 은 회전만 덮어씀 (XZY arm rotation, leg pitch/roll, head pitch).
-        //   vanilla animateArms 의 pivot/body.yaw 변화는 그대로 잔존 → swing 효과 보임.
+        // 🔴 (세션 65f): swing 진행 중 sm_animateFlying 자체 회전 set 모두 skip.
+        //   사용자 요구: "똑바로 서있는 플레이어가 이동방향으로 검을 휘두르는거".
+        //   = 비행 자세 회전 (X 기울기 + 다리/팔 날개짓 + head 보정) 모두 cancel,
+        //     vanilla setAngles + animateArms 가 set 한 직립 자세 + swing 효과 그대로.
+        //   설계: sm_animateFlying skip + sm_setupTransforms 에서도 X 회전 skip (그 곳에서 처리).
+        //         Y 회전 (이동 방향) 만 적용 → 모델이 movement direction 향한 채 vanilla swing.
+        if (player.handSwingProgress > 0F) {
+            return;
+        }
 
         // 🔴 (세션 52): partial tick lerp 적용 — 원본 SmartRenderRender.renderPlayer L56-L57:
         //   `totalDistance = statistics.getTotalDistance(renderPartialTicks)` —
@@ -635,27 +635,14 @@ public abstract class MixinPlayerEntityModelClient {
         //   rotateAngleY = cos(time*0.15) * Sixteenth * standFactor   (정지 시 미세 흔들림)
         //   rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Half - Sixteenth) * walkFactor + Quarter * standFactor   (날개짓)
         // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
-        //
-        // 🔴 (세션 65b): 비행 중 공격 시 preferred arm 만 setAnglesXZY skip.
-        //   사용자 요구: "비행 중에도 그냥 땅에서 오른팔 휘두르는 그 모션 그대로".
-        //   vanilla setAngles TAIL 의 animateArms 가 preferred arm 에 적용한 full
-        //   vanilla swing 모션 (기본 setAngles arm.pitch + animateArms 효과) 을 그대로
-        //   잔존시키기 위해 setAnglesXZY 자체를 skip. 다른 팔만 날개짓 자세 적용.
-        //   세션 65 의 += 재적용 방식은 setAnglesXZY 가 vanilla 기본 arm.pitch 를 0 reset
-        //   한 후에 animateArms 효과만 += 하는 결과 → vanilla swing 의 절반만 보임.
-        float swing = player.handSwingProgress;
-        Arm preferredArm = player.getMainArm();
-        boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
-        boolean preserveLeft  = swing > 0F && preferredArm == Arm.LEFT;
-
         float rYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float lYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float rRoll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH + HALF - SIXTEENTH) * walkFactor
                 + QUARTER * standFactor;
         float lRoll = (MathHelper.cos(distance) * SIXTYFOURTH - HALF + SIXTEENTH) * walkFactor
                 - QUARTER * standFactor;
-        if (!preserveRight) setAnglesXZY(rightArm, 0f, rYaw, rRoll);
-        if (!preserveLeft)  setAnglesXZY(leftArm,  0f, lYaw, lRoll);
+        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance) * SIXTYFOURTH * walkFactor
@@ -687,33 +674,6 @@ public abstract class MixinPlayerEntityModelClient {
         //   원본 reset 효과 1:1 매핑 = 명시적 0 강제.
         head.yaw  = 0f;
         head.roll = 0f;
-
-        // 🔴 (세션 65e): 원본 ignoreSuperRotation 정확 1:1 — 부모 X+Y cancel + mouseYaw 효과.
-        //   사용자 요구 (세션 65d 후): "원본 정확 1:1로". 세션 65d 의 X-only cancel 은 swing
-        //   arm 이 movement direction (yawLerped) 따라감 → 사용자 보고 "앞으로 갈 때 이상함".
-        //
-        //   원본 흐름 (SmartMovingModel.animateNonStandardWorking L586-L594):
-        //   - bipedRightShoulder.ignoreSuperRotation = true → 부모 (bipedOuter) X+Y 모두 무시.
-        //     bipedOuter.X = 비행 수직 기울기, bipedOuter.Y = horizontalAngle (movement direction).
-        //   - shoulder.Y = workingAngle = mouseYaw - horizontalAngle (라디안).
-        //   - shoulder.X = mouse_pitch (사용자 "상하 무시" 의도 → 적용 안 함).
-        //   - shoulder.Z = π (1.7.10 어깨 뒤집힘 — 1.21.1 vanilla 기본 공격에 없음 → 적용 안 함).
-        //   순효과: arm 이 mouseYaw 향함 (몸은 movement direction 비행 자세 유지).
-        //
-        //   1.21.1 매핑: helper preCancelParentXAddYaw 가 quaternion 합성으로
-        //     q_new = R_x(theta) * R_y(mouseYaw_rad) * q_arm_orig
-        //   적용. yawLerped + workingAngle = mouseYaw 단순화.
-        //
-        //   mouseYaw_rad = entity.getYaw() lerped (= 마우스 카메라 yaw, 원본 actualRotation 등가).
-        //   thetaCancel = sm.smOuterTiltX (직전 프레임 thetaLerped, fade 보간된 값).
-        if (swing > 0F) {
-            float lerpedYawDeg = MathHelper.lerpAngleDegrees(partialTicks, player.prevYaw, player.getYaw());
-            float mouseYawRad = lerpedYawDeg * (float)(Math.PI / 180.0);
-            float thetaCancel = (sm.smOuterTiltX != 0f) ? sm.smOuterTiltX : theta;
-
-            if (preserveRight) preCancelParentXAddYaw(rightArm, thetaCancel, mouseYawRad);
-            if (preserveLeft)  preCancelParentXAddYaw(leftArm,  thetaCancel, mouseYawRad);
-        }
     }
 
     /**
@@ -934,38 +894,6 @@ public abstract class MixinPlayerEntityModelClient {
         part.roll  = e.z;
     }
 
-    /**
-     * 부모 setupTransforms POSITIVE_Y(-yawLerped) * POSITIVE_X(-theta) 회전을 자식 ModelPart
-     * 단계에서 cancel + mouseYaw 효과 추가 (원본 ignoreSuperRotation + shoulder.Y 1:1).
-     *
-     * 수학:
-     *   부모 회전 (vanilla + 우리 추가) = R_y(π - yawLerped) * R_x(-theta).
-     *   원하는 swing arm 회전 = R_y(π + workingAngle) * q_swing.
-     *     workingAngle = mouseYaw - horizontalAngle (= mouseYaw - yawLerped).
-     *     q_swing = vanilla 1.21.1 setAngles + animateArms 가 set 한 arm 회전 (그대로).
-     *   자식 q_new = R_x(theta) * R_y(yawLerped + workingAngle) * q_swing
-     *             = R_x(theta) * R_y(mouseYaw) * q_swing.
-     *
-     * vanilla ModelPart.rotate 의 ZYX 순서 (q = R_z*R_y*R_x) 와 일치하는 Euler 분해 사용.
-     *
-     * 사용처: 비행 swing 진행 중 preferred arm.
-     *   원본 SmartMovingModel.animateNonStandardWorking L586-L594 1:1 매핑:
-     *   - bipedRightShoulder.ignoreSuperRotation = true (부모 X+Y 모두 cancel)
-     *   - shoulder.Y = workingAngle (mouseYaw 효과)
-     *   - shoulder.X = mouse_pitch (사용자 "상하 무시" 의도 → 적용 안 함)
-     *   - shoulder.Z = π (1.7.10 어깨 뒤집힘, 1.21.1 vanilla 기본 공격에 없음 → 적용 안 함)
-     */
-    private static void preCancelParentXAddYaw(ModelPart part, float thetaCancel, float yawAdd) {
-        Quaternionf qOrig = new Quaternionf().rotationZYX(part.roll, part.yaw, part.pitch);
-        // q_pre = R_x(theta) * R_y(yawAdd) — vertex 에 Y 먼저 적용 후 X 적용.
-        Quaternionf qPre = new Quaternionf().rotationX(thetaCancel)
-                .mul(new Quaternionf().rotationY(yawAdd));
-        Quaternionf qNew = qPre.mul(qOrig);
-        Vector3f e = qNew.getEulerAnglesZYX(new Vector3f());
-        part.pitch = e.x;
-        part.yaw   = e.y;
-        part.roll  = e.z;
-    }
 
     /**
      * 원본 ZXY rotationOrder → ModelPart pitch/yaw/roll 변환.
