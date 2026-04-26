@@ -688,26 +688,28 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65c): swing arm 의 비행 자세 X 회전 cancel — 원본 ignoreSuperRotation 1:1.
+        // 🔴 (세션 65d): swing arm 의 비행 자세 X 회전 cancel — quaternion 합성으로 정확 매핑.
         //   사용자 보고: "원본은 몸 향하는 방향의 좌우만 수용, 상하축은 수용 안 함".
         //   원본 SmartMovingModel.animateNonStandardWorking L586-L594:
         //     bipedRightShoulder.ignoreSuperRotation = true → ModelRotationRenderer.preTransform
         //     L114-L122 가 GL_MODELVIEW_MATRIX 의 회전을 LoadIdentity 로 reset (translation 만
         //     유지) → 부모 (bipedOuter) 의 X (= 비행 수직 기울기) + Y 회전 모두 무시.
-        //     그 후 shoulder 의 X = viewVerticalAngelOffset, Y = workingAngle 적용.
         //   = swing arm 이 비행 자세 X 기울기 영향 안 받음.
         //
         //   1.21.1 매핑: setupTransforms 에서 POSITIVE_X(-thetaLerped) 가 모든 모델에 적용.
-        //   부모 X 회전 cancel 위해 자식 arm.pitch 에 += theta (R_x(-theta)*R_x(theta)=I).
-        //   Y 회전은 그대로 두기 (사용자 요구 "좌우만 수용").
+        //   세션 65c 의 단순 `pitch += theta` 는 회전 비교환성 때문에 vanilla animateArms 가
+        //   set 한 yaw/roll (특히 roll = sin(swing*π)*-0.4 ~ -23°) 과 합성 시 부정확
+        //   → 사용자 보고 "축이랑 속도가 이상함".
+        //   정정: preCancelParentXRotation — quaternion 으로 R_x(theta) * R_arm_orig 정확 합성
+        //   후 ZYX Euler 분해. Y 회전은 그대로 둠 (좌우 수용 유지).
         //
-        //   값 출처: setupTransforms 에서 cache 된 sm.smOuterTiltX (직전 프레임 thetaLerped,
-        //   1-frame delay 있지만 fade 보간이 천천히 변하므로 실용적 차이 미미).
+        //   theta 값: setupTransforms 가 cache 한 sm.smOuterTiltX (직전 프레임 thetaLerped,
+        //   1-frame delay 있지만 fade 가 천천히 변하므로 실용적 차이 미미).
         //   첫 프레임 (cache=0) 에는 raw theta 사용.
         if (swing > 0F) {
             float thetaCancel = (sm.smOuterTiltX != 0f) ? sm.smOuterTiltX : theta;
-            if (preserveRight) rightArm.pitch += thetaCancel;
-            if (preserveLeft)  leftArm.pitch  += thetaCancel;
+            if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
+            if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
         }
     }
 
@@ -924,6 +926,32 @@ public abstract class MixinPlayerEntityModelClient {
                 .mul(new Quaternionf().rotationZ(roll))
                 .mul(new Quaternionf().rotationX(pitch));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
+        part.pitch = e.x;
+        part.yaw   = e.y;
+        part.roll  = e.z;
+    }
+
+    /**
+     * 부모 setupTransforms POSITIVE_X(-theta) 회전을 자식 ModelPart 단계에서 정확히 cancel.
+     *
+     * vanilla ModelPart.rotate: matrices.multiply(Quaternionf.rotationZYX(roll, yaw, pitch))
+     *   → 자식 회전 q_arm = R_z(roll) * R_y(yaw) * R_x(pitch) (vertex 에 X 가 가장 먼저 적용).
+     * 부모 R_x(-theta) 적용 후 자식 q_arm → 결과 R_x(-theta) * q_arm * v.
+     * 원하는 효과 = q_arm * v (부모 X 회전 무시) → 새 자식 q_new = R_x(theta) * q_arm.
+     * ZYX Euler 분해 → (pitch, yaw, roll).
+     *
+     * 단순 `pitch += theta` 보정은 회전 비교환성 때문에 yaw/roll 이 0 이 아닐 때 부정확
+     * (사용자 보고 세션 65c "축이랑 속도가 이상함" 직접 원인). vanilla animateArms 가
+     * preferred arm 의 roll 에 sin(swing*π) * -0.4 (~-23° 까지) 적용 → 큰 roll 발생 → 단순
+     * += pitch cancel 으론 합성 오차 누적.
+     *
+     * 사용처: 비행 swing 진행 중 preferred arm (원본 SmartMovingModel.animateNonStandardWorking
+     * L586-L594 의 bipedRightShoulder.ignoreSuperRotation = true 1:1 매핑).
+     */
+    private static void preCancelParentXRotation(ModelPart part, float theta) {
+        Quaternionf qOrig = new Quaternionf().rotationZYX(part.roll, part.yaw, part.pitch);
+        Quaternionf qNew = new Quaternionf().rotationX(theta).mul(qOrig);
+        Vector3f e = qNew.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
         part.roll  = e.z;
