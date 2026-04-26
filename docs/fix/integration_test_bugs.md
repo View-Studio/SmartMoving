@@ -485,7 +485,7 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 
 | 순서 | 버그 | 우선순위 | 의존 | 비고 |
 |------|------|---------|------|------|
-| 1 | ✅ BUG-7 SM disabled reset 실패 | 🔴 매우 높음 | 없음 (단순 가드) | **세션 36 AI 완결 / 인게임 검증 대기** — 3 가드 추가 (flyingCreative + cloak.pitch + reset 인프라) |
+| 1 | ✅ BUG-7+9~24 SM disabled 가드 전수 보강 (17 BUG) | 🔴 매우 높음 | 없음 | **세션 36 인게임 검증 완료** — sm_setAngles + sm_jump + handleJumping + 17 inject 가드 + resetState 4 필드 reset + sm_setAngles 통합 가드 (cloak.pitch 위로 이동 + return 가드) |
 | 2 | BUG-6 I/O 키 비활성화 | ✅ 완료 | 없음 (단순) | 세션 35 완료 |
 | 3 | **BUG-1 + BUG-8** 비행 고정 + 비행 시스템 미작동 | 🔴 매우 높음 | #2/#2.5 / SmartMovingFlyer | **함께 진단** — 동일 원인 가능성 매우 높음 |
 | 4 | BUG-3 crawl 진동 | 🔴 매우 높음 | #2.7 (POSE/BBox 동기화) | |
@@ -506,23 +506,23 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 
 ## 후속 작업 큐
 
-- [✅ AI 완결 / 인게임 검증 대기] BUG-7 sm_setAngles flyingCreative 가드 + cloak.pitch 가드 + reset 인프라 분기 확장 — 세션 36. 3 가드 추가로 SM disabled 시 잔존 정리.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-9** MixinClientPlayNetworkHandler.sm_beforePlayerPositionLook — multiPlayerInitialized 갱신 가드 (세션 36)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-10** MixinClientPlayerInteractionManager.sm_beforeInteractBlock + sm_afterInteractBlock — forceIsSneaking 강제 가드 (세션 36)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-11** MixinLivingEntityClient.sm_travel_client — vanilla flying 억제 + 모든 SM 분기 진입 가드 (세션 36 / Creative 비행 약화 해결)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-12** MixinPlayerEntityRenderer.sm_captureBodyYaw + sm_setupTransforms — 진입점 가드 (세션 36)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-13** sm_animateFalling 잔존 (낙하 모션) — sm_setAngles 진입점 cfgEnabled return 가드로 통합 해결 (세션 36 2차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-14** SmartMovingJumper.handleJumping cfg.enabled 가드 — 점프 작동 안 함 해결 (세션 36 2차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] BUG-7 sm_setAngles flyingCreative 가드 + cloak.pitch 가드 + reset 인프라 분기 확장 — 세션 36. 3 가드 추가로 SM disabled 시 잔존 정리.
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-9** MixinClientPlayNetworkHandler.sm_beforePlayerPositionLook — multiPlayerInitialized 갱신 가드 (세션 36)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-10** MixinClientPlayerInteractionManager.sm_beforeInteractBlock + sm_afterInteractBlock — forceIsSneaking 강제 가드 (세션 36)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-11** MixinLivingEntityClient.sm_travel_client — vanilla flying 억제 + 모든 SM 분기 진입 가드 (세션 36 / Creative 비행 약화 해결)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-12** MixinPlayerEntityRenderer.sm_captureBodyYaw + sm_setupTransforms — 진입점 가드 (세션 36)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-13** sm_animateFalling 잔존 (낙하 모션) — sm_setAngles 진입점 cfgEnabled return 가드로 통합 해결 (세션 36 2차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-14** SmartMovingJumper.handleJumping cfg.enabled 가드 — 점프 작동 안 함 해결 (세션 36 2차 감사)
 - [✅ 검증 완료 — 추가 수정 불필요] **BUG-15** SmartMovingClientState.tickEssential disabled→enabled 전환 — resetState 호출 정상 ✅ (세션 36 2차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-16** sm_setAngles 11 분기 + isFalling + isAngleJumping 통합 가드 — 진입점 cfgEnabled return + cloak.pitch 처리 위로 이동 (세션 36 2차 감사 / BUG-13 통합)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-17 (점프 안 됨 직접 원인)** sm_jump cfg.enabled 가드 — vanilla jump() ci.cancel 차단을 SM disabled 시 skip → vanilla 점프 정상 (세션 36 3차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-18** sm_jumpingFilter cfg.enabled 가드 — this.jumping=false 강제 가드 보완 (세션 36 3차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-19** resetState 점프 잔존 4 필드 reset 추가 — jumpAvoided/jumpPending/blockJumpTillButtonRelease/jumpCharge 안전망 (세션 36 3차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-20** sm_getBaseDimensions_client cfg.enabled 가드 — 비행 진입 첫 프레임 0.6×0.8 bbox 강제 차단 (세션 36 4차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-21** sm_getOffGroundSpeed cfg.enabled 가드 — cfg.fly=false 사용자 SM disabled 시 비행 속도 0.05F 강제 차단 (세션 36 4차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-22** sm_updatePose_client cfg.enabled 가드 — 비행 진입 첫 프레임 SLIDING POSE 강제 차단 (세션 36 4차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-23** sm_isClimbing_client + sm_applyClimbingSpeed + sm_updateLimbs_client + sm_isInSwimmingPose_client cfg.enabled 가드 — sm.* 잔존 timing 차단 (4 inject) (세션 36 4차 감사)
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-16** sm_setAngles 11 분기 + isFalling + isAngleJumping 통합 가드 — 진입점 cfgEnabled return + cloak.pitch 처리 위로 이동 (세션 36 2차 감사 / BUG-13 통합)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-17 (점프 안 됨 직접 원인)** sm_jump cfg.enabled 가드 — vanilla jump() ci.cancel 차단을 SM disabled 시 skip → vanilla 점프 정상 (세션 36 3차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-18** sm_jumpingFilter cfg.enabled 가드 — this.jumping=false 강제 가드 보완 (세션 36 3차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-19** resetState 점프 잔존 4 필드 reset 추가 — jumpAvoided/jumpPending/blockJumpTillButtonRelease/jumpCharge 안전망 (세션 36 3차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-20** sm_getBaseDimensions_client cfg.enabled 가드 — 비행 진입 첫 프레임 0.6×0.8 bbox 강제 차단 (세션 36 4차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-21** sm_getOffGroundSpeed cfg.enabled 가드 — cfg.fly=false 사용자 SM disabled 시 비행 속도 0.05F 강제 차단 (세션 36 4차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-22** sm_updatePose_client cfg.enabled 가드 — 비행 진입 첫 프레임 SLIDING POSE 강제 차단 (세션 36 4차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-23** sm_isClimbing_client + sm_applyClimbingSpeed + sm_updateLimbs_client + sm_isInSwimmingPose_client cfg.enabled 가드 — sm.* 잔존 timing 차단 (4 inject) (세션 36 4차 감사)
+- [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)
