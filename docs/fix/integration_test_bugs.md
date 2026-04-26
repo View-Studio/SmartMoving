@@ -271,6 +271,65 @@
 
 ---
 
+## BUG-13. SM disabled 시 sm_animateFalling 잔존 (낙하 모션 / 세션 36 2차 감사)
+
+**증상** (사용자 보고): SM disabled 인데도 공중 낙하 시 sm_animateFalling 모션 작동.
+
+**위치**: `MixinPlayerEntityModelClient.java` L143-L152 — sm_setAngles 의 else (isFalling) 분기.
+
+**원인**: else 분기의 `if (isFalling)` 조건이 vanilla 만 검사 (`!player.isOnGround() && fallDistance > 1.5f`) → SM disabled 시에도 sm_animateFalling 호출. 11 sm.* 분기는 sm.* 자체가 disabled 시 false 라 안전했지만 isFalling 은 sm.* 무관.
+
+**해결 (세션 36 AI 완결)**: BUG-13/16 통합 해결 — sm_setAngles 진입점에 reset 인프라 + cloak.pitch 처리 후 `if (!cfgEnabled) return;` 추가. 모든 SM 분기 + isFalling + isAngleJumping 한 번에 skip.
+
+**우선순위**: 🔴 매우 높음 (사용자 보고 직접 영향).
+
+---
+
+## BUG-14. SmartMovingJumper.handleJumping cfg.enabled 가드 부재 (점프 안 됨 / 세션 36 2차 감사)
+
+**증상** (사용자 보고): SM disabled 시 점프 자체 안 됨.
+
+**위치**: `SmartMovingJumper.java` L354 `handleJumping(player, sm)` 진입.
+
+**원인**: cfg.enabled 가드 부재 → SM disabled 시에도 jumpPending 클리어 / jumpAvoided 세팅 / vanilla jump 가로챔 등 모든 처리 작동. vanilla jump() 차단 + SM 점프도 disabled (jumpAvoided 만 세팅) → 점프 자체 작동 안 함.
+
+**해결 (세션 36 AI 완결)**: handleJumping 진입 직후 `if (!cfg.enabled) return;` 추가. SM disabled 시 vanilla 점프 그대로 정상 작동.
+
+**호출처 검증**: `MixinLivingEntityClient.sm_travel_client` L80 (BUG-11 가드 후 도달 안 함이지만, 다른 호출처 가능성 + handleJumping 자체 가드가 안전).
+
+**우선순위**: 🔴 매우 높음 (사용자 보고 직접 영향).
+
+---
+
+## BUG-15. SmartMovingClientState.tickEssential disabled→enabled 전환 잔존 (엣지 / 세션 36 2차 감사)
+
+**위치**: `SmartMovingClientState.java` L920-L921.
+
+**상태**: 검증 결과 — disabled 진입 시 resetState() 호출 정상 ✅. enabled 전환 후 매 틱 sm.* 재계산 → 잔존 상태 있어도 다음 프레임 정상.
+
+**해결**: 추가 수정 불필요. sm_setAngles 의 cfgEnabled return 가드 (BUG-13/16) 로 SM 분기 자체 작동 안 함. 안전.
+
+**우선순위**: 🟢 낮음 (엣지 / 실제 영향 없음).
+
+---
+
+## BUG-16. sm_setAngles 11 분기 + isFalling + isAngleJumping cfgEnabled 통합 가드 (세션 36 2차 감사 / BUG-13 통합)
+
+**증상**: 사용자 보고 — SM disabled 시 SM 기능들 다 꺼져야 하는데 안 그렇다.
+
+**원인**: sm_setAngles 의 if-else 체인 본체에 cfgEnabled 가드 부재. 각 sm.* 분기는 sm.* 자체가 disabled 시 false 라 안전했지만 isFalling (else 분기) + isAngleJumping (별도 if) 은 sm.* 무관 또는 SmartMovingJumper 잔존 상태 기반 → 작동 가능.
+
+**해결 (세션 36 AI 완결)**: 진입점에 reset 인프라 + cloak.pitch 처리 후 `if (!cfgEnabled) return;` 추가:
+- reset 인프라 (`if (anySmState || !cfgEnabled)` 4 필드 = 0) → SM 잔존 정리
+- cloak.pitch (`cfgEnabled ? SIXTYFOURTH : 0f`) → SM 잔존 정리
+- 그 후 `if (!cfgEnabled) return;` → smallOverGroundHeight + 11 분기 + isFalling + isAngleJumping 한 번에 skip
+
+cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서 → return 가드 위로).
+
+**우선순위**: 🔴 매우 높음 (BUG-13 통합 해결).
+
+---
+
 ## BUG-9. SM disabled 시 multiPlayerInitialized 갱신 잔존 (BUG-7 확장 / 세션 36 전수 감사)
 
 **증상**: SM disabled 상태에서 서버→클라이언트 위치 동기화 시 (`onPlayerPositionLook`) `sm.multiPlayerInitialized = 5` 강제 세팅 → 다음 5 틱 동안 sm_travel_client 의 pushOutOfBlocks 억제가 작동 (간접 영향).
@@ -410,6 +469,10 @@
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-10** MixinClientPlayerInteractionManager.sm_beforeInteractBlock + sm_afterInteractBlock — forceIsSneaking 강제 가드 (세션 36)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-11** MixinLivingEntityClient.sm_travel_client — vanilla flying 억제 + 모든 SM 분기 진입 가드 (세션 36 / Creative 비행 약화 해결)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-12** MixinPlayerEntityRenderer.sm_captureBodyYaw + sm_setupTransforms — 진입점 가드 (세션 36)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-13** sm_animateFalling 잔존 (낙하 모션) — sm_setAngles 진입점 cfgEnabled return 가드로 통합 해결 (세션 36 2차 감사)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-14** SmartMovingJumper.handleJumping cfg.enabled 가드 — 점프 작동 안 함 해결 (세션 36 2차 감사)
+- [✅ 검증 완료 — 추가 수정 불필요] **BUG-15** SmartMovingClientState.tickEssential disabled→enabled 전환 — resetState 호출 정상 ✅ (세션 36 2차 감사)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-16** sm_setAngles 11 분기 + isFalling + isAngleJumping 통합 가드 — 진입점 cfgEnabled return + cloak.pitch 처리 위로 이동 (세션 36 2차 감사 / BUG-13 통합)
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)

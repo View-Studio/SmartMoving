@@ -353,6 +353,11 @@ public final class SmartMovingJumper {
      */
     public static void handleJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
+        // BUG-14 (세션 36): SM disabled 시 점프 처리 안 함 → vanilla 점프 정상 작동.
+        //   기존: 가드 부재 → SM disabled 시에도 jumpPending 클리어 / jumpAvoided 세팅 등 →
+        //   vanilla jump() 가로챔 + SM 점프도 작동 안 함 → 점프 자체 작동 안 함 (사용자 보고).
+        //   해결: cfg.enabled false 시 즉시 return → vanilla 점프 그대로.
+        if (!cfg.enabled) return;
         MinecraftClient mc = MinecraftClient.getInstance();
 
         boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();

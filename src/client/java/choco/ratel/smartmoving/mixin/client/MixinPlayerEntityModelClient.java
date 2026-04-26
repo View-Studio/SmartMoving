@@ -108,6 +108,23 @@ public abstract class MixinPlayerEntityModelClient {
             head.roll   = 0f;
         }
 
+        // ── cloak.pitch 처리 (cfgEnabled 분기) — disabled 시 0 reset 작동 보장 ──
+        // BUG-7 (세션 36): cfgEnabled 무관 매 호출 적용. cfgEnabled true → SIXTYFOURTH /
+        //   false → 0 reset (vanilla 미reset 필드 — disabled 진입 시 잔존 정리).
+        // 위치: 아래 cfgEnabled return 가드 위에 두어 disabled 시에도 적용 보장.
+        if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
+            ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = cfgEnabled ? SIXTYFOURTH : 0f;
+        }
+
+        // BUG-13/16 (세션 36): SM disabled 시 모든 SM 분기 + isFalling + isAngleJumping 한 번에 skip.
+        //   기존: if-else 체인의 sm.* 분기는 sm.* 자체가 cfg.enabled 후만 true 라 안전했지만,
+        //   else 분기 (isFalling) 는 vanilla 조건만 검사 → SM disabled 시에도 sm_animateFalling
+        //   호출 (사용자 보고 = 낙하 모션 잔존). 또한 isAngleJumping 도 SmartMovingJumper
+        //   잔존 상태 기반이므로 disabled 시에도 false 보장 어려움.
+        //   해결: cfgEnabled false 시 진입점에서 즉시 return — 모든 SM 분기 skip + vanilla 정상.
+        //   reset 인프라 + cloak.pitch 는 위에서 이미 처리되었으므로 잔존 정리는 보장.
+        if (!cfgEnabled) return;
+
         // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
         // 원본: SmartMovingRender.rotatePlayer() → moving.getOverGroundHeight(5D)
         // isCrawlClimbing/isHeadJumping 상태에서만 발 아래 지면까지의 거리를 계산한다.
@@ -156,19 +173,8 @@ public abstract class MixinPlayerEntityModelClient {
             sm_animateAngleJumping(sm);
         }
 
-        // ── [B-16 / §16-24] 망토 기본 기울임 ─────────────────────────────────
-        // 원본 SmartRenderModel.setRotationAngles L251 끝부분:
-        //   bipedCloak.rotateAngleX = Sixtyfourth (≈5.6° 살짝 뒤로 기울임).
-        // SM 상태 무관 항상 적용 (원본 SR 모델 모든 호출).
-        // vanilla PlayerEntityModel.setAngles 가 cloak.pivotZ/pivotY 만 매 프레임 변경하고
-        //   cloak.pitch 는 변경 안 함 → 매 프레임 = 직접 할당하면 누적 위험 없음 (사전 검증).
-        // BipedEntityModel 의 다른 자식 (갑옷 등) 은 cloak 필드 부재 → PlayerEntityModel 한정 적용.
-        // cloak 은 private 필드 → PlayerEntityModelAccessor (Mixin Accessor) 경유.
-        // BUG-7 (세션 36): SM disabled 시 cloak.pitch = 0 으로 명시 reset (vanilla 미reset 필드).
-        //   cfgEnabled true → SIXTYFOURTH 적용, false → 0 reset 으로 SM 잔존 정리.
-        if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
-            ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = cfgEnabled ? SIXTYFOURTH : 0f;
-        }
+        // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
+        //   원본 SmartRenderModel L251 = SM 상태 무관 항상 적용. cfgEnabled false 시에도 0 reset 보장.
     }
 
     // ─────────────────────────────────────────────────────────────────────────
