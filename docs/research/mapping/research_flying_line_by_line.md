@@ -16,13 +16,13 @@
 
 | F-단계 | 대상 | 상태 | 세션 |
 |---|---|---|---|
-| F-1 | 원본 SmartMovingSelf 비행 처리 (handleAlternativeFlying + handleLand 비행 분기 + standupIfPossible + wasFlying 엣지 + flyWhileOnGround) | 🔄 진행 — 청크 1 (handleAlternativeFlying) ✅ + 청크 2 (진입/종료 standupIfPossible/tryLanding/flyWhileOnGround/fallDistance) ✅ + getNonSlowInputSpeedFactor 정의 ✅ / 청크 3 (보조) ⏳ | 38 진행 중 |
-| F-2 | 원본 SmartMovingBase.moveFlying L56-L93 + HorizontalAirDamping | ⏳ 대기 | 38 예정 |
-| F-3 | 원본 SmartMovingModel isFlying 분기 L474-L520 | ⏳ 대기 | 38 예정 |
-| F-4 | 1.21.1 SmartMovingFlyer + sm_animateFlying + sm_setupTransforms + sm.isFlying 갱신 + standupIfPossible 모두 read + 매핑 | ⏳ 대기 | 39 예정 |
-| F-5 | 차이점 표 + 사용자 보고 10건 → BUG 매핑 | ⏳ 대기 | 39 예정 |
-| F-6 | 일괄 정정 (분할 가능) | ⏳ 대기 | 39+ 예정 |
-| F-7 | 빌드 + 사용자 인게임 검증 인계 | ⏳ 대기 | 40 예정 |
+| F-1 | 원본 SmartMovingSelf 비행 처리 (전체 청크 1+2+3) | ✅ 완료 (세션 38-39) | 38-39 |
+| F-2 | 원본 SmartMovingBase.moveFlying L56-L93 + 1.21.1 비교 | ✅ 완료 — 정확 1:1 매핑 (차이 없음) | 39 |
+| F-3 | 원본 SmartMovingModel isFlying 분기 L474-L520 + 1.21.1 매핑 | ✅ 완료 — BUG-31 직접 원인 확정 | 39 |
+| F-4 | 1.21.1 모두 read (F-1~F-3 매핑 표에 통합 완료) | ✅ 완료 | 39 |
+| F-5 | 차이점 표 + 사용자 보고 10건 → BUG 매핑 | ✅ 완료 — F-5 통합 표 작성 | 39 |
+| F-6 | 일괄 정정 (분할 가능) | ⏳ 대기 — 5 정정 항목 + 사용자 결정 | 40 예정 |
+| F-7 | 빌드 + 사용자 인게임 검증 인계 | ⏳ 대기 | 40+ 예정 |
 
 ---
 
@@ -199,6 +199,81 @@ return speedFactor;
 4. ⚠️ **sneakButton.Pressed → isSneaking() 차이** — L611 / L2206 동일 패턴 잠재 영향
 
 **다음 청크**: F-1 청크 3 (보조 — L80 + L633-L640 + L2320 + L2404 + L2509+) 또는 F-2 (moveFlying) / F-3 (isFlying 분기).
+
+### F-1 청크 3 — 비행 보조 분기 (세션 39)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 |
+|---|---|---|---|
+| L80-L84 | `if (sp.capabilities.isFlying && !Config.isFlyingEnabled()) jumpMovementFactor = 0.05F;` (vanilla 비행 + SM disabled 시 공중 속도 억제) | `MixinPlayerEntityClient.sm_getOffGroundSpeed` L84-L90 — `if (player.getAbilities().flying && !cfg.fly) cir.setReturnValue(0.05F);` (BUG-21 가드 추가됨) | [정합] |
+| L633-L640 | `handleLand`: `if (movementInput.jump && isSprintingEnabled && sprintButton.Pressed && capabilities.isFlying) motionY += sprintFactorLevitate * sprintFactorLevitateVertical;` (vanilla 비행 + sprint+jump 수직 가속) | `MixinLivingEntityClient` L172-L178 — 정확 1:1 매핑 | [정합] |
+| L2320 | `boolean isLevitating = sp.capabilities.isFlying && !isFlying;` (vanilla flying + SM isFlying false = Levitate effect) | `SmartMovingClientState.isLevitating` 갱신 위치 (별도 함수) | [정합 — 추가 검증 권장] |
+| L2404-L2405 | `if (esp.capabilities.isFlying && (isFlyingEnabled \|\| isLevitateSmallEnabled)) mustCrawl = false;` | `SmartMovingClientState.tickEssential` L984-L987 — 정확 1:1 매핑 | [정합] |
+| L2507-L2514 | `restoreFromFlying = false; wasFlying = isFlying; isFlying = isFlyingEnabled && capabilities.isFlying && !isSwimming && !isDiving; if (isFlying && !wasFlying) setHeightOffset(-1); else if (!isFlying && wasFlying) restoreFromFlying = true;` | `SmartMovingClientState` L1297-L1300 + L1310+ 매핑 | [정합 / **잠재 BUG-29 원인**] | ⚠️ **L2511-L2512: isFlying && !wasFlying → setHeightOffset(-1)** — 비행 진입 첫 프레임 heightOffset = -1 적용 → sm_afterMove_client 의 player.setPos(y - heightOffset) = +1 보정 = **Y 1블록 점프 가능 = BUG-29 (뚝 끊김)**. 1.21.1 매핑 검증 필요. |
+
+**청크 3 통계 (5 분기)**: 정합 5 / 잠재 BUG 1 (L2511 setHeightOffset 진입 끊김)
+
+## F-2: 원본 SmartMovingBase.moveFlying L56-L93 (세션 39 — 정밀 1:1 매핑 결과)
+
+| 원본 L | 원본 코드 | 1.21.1 매핑 (SmartMovingFlyer L79-L128) | 분류 |
+|---|---|---|---|
+| L56-L93 (전체) | yaw 기반 수평 + pitch 기반 수직 + 비표준 정규화 `sqrt(sqrt(x²+z²) + y²)` + speedFactor / total | 정확 1:1 매핑 | **[정합 — 차이 없음]** |
+
+**🟢 F-2 결론**: SmartMovingFlyer.moveFlying = 원본 1:1 정확. 비표준 정규화 + sin/cos / signum / pitch 보정 모두 동일.
+
+→ **BUG-27 (위아래 보면서 전진 속도 너무 느림) = moveFlying 자체 정확. BUG-25 (sprint 누락) 의 부분 증상 가능성** (sprint 미적용으로 위아래 비행 시 더 두드러짐).
+
+## F-3: 원본 SmartMovingModel isFlying 분기 L474-L520 + 1.21.1 sm_animateFlying / sm_setupTransforms 매핑 (세션 39)
+
+| 원본 L | 원본 코드 (요약) | 1.21.1 매핑 | 분류 | 비고 |
+|---|---|---|---|---|
+| L477 | `distance = totalDistance * 0.08F` | `MixinPlayerEntityModelClient.sm_animateFlying` L578 `distance = sm.stats.totalDistance * 0.08f` (B-7 세션 32) | [정합] | |
+| L478 | `walkFactor = Factor(currentSpeed, 0F, 1)` | L579 `walkFactor = smFactor(sm.stats.currentSpeed, 0f, 1f)` | [정합] | |
+| L479 | `standFactor = Factor(currentSpeed, 1F, 0F)` | L580 동일 | [정합] | |
+| L480 | `time = totalTime * 0.15F` | L585+ `cos(totalTime * 0.15f)` 직접 사용 | [정합] | time 변수 안 쓰고 inline |
+| L481 | `verticalAngle = isJump ? Math.abs(currentVerticalAngle) : currentVerticalAngle` | (1.21.1 sm_setupTransforms 직접 currentVerticalAngle 사용) | **[누락]** | 🔴 **isJump 분기 누락** — sm.isJumping 시 abs() 적용 안 함 |
+| L482 | `horizontalAngle = horizontalDistance < 0.05F ? currentCameraAngle : currentHorizontalAngle` | `MixinPlayerEntityRenderer.sm_captureBodyYaw` L148-L154 isFlying 분기 — 정확 1:1 매핑 (threshold 0.05F) | [정합] | |
+| L484-L485 | `bipedOuter.fadeRotateAngleX = true; bipedOuter.rotateAngleX = (Quarter - verticalAngle) * walkFactor;` | `MixinPlayerEntityRenderer.sm_setupTransforms` L254-L258 `theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor; matrices.multiply(POSITIVE_X.rotation(theta));` | **🔴 [오역 — BUG-31 직접 원인]** | ⚠️ **vanilla setupTransforms 가 먼저 POSITIVE_Y.rotation(180 - bodyYaw) 적용 = 캐릭터 Y 180° 뒤집음 → SM 의 추가 POSITIVE_X 회전이 좌표계 뒤집힌 상태에서 적용 → 회전 방향 반대 = 사용자 보고 "몸 앞쪽이 하늘"** |
+| L486 | `bipedOuter.rotateAngleY = horizontalAngle` | `sm_captureBodyYaw` (위 L482 매핑 동일) | [정합] | |
+| L488 | `bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2F` | `sm_animateFlying` 끝부분 ANIM-01 (head.pitch 처리) | [정합 / **검증 필요 — BUG-32**] | head.pitch = -theta/2 매핑 정확 단 vanilla 좌표계 차이로 효과 다를 수 있음 |
+| L490-L491 | `bipedRightArm.rotationOrder = XZY; bipedLeftArm.rotationOrder = XZY;` | `sm_animateFlying` `setAnglesXZY(rightArm, ...)` (B-2 세션 2 헬퍼) | [정합] | |
+| L493-L494 | `arm.rotateAngleY = (cos(time) * Sixteenth) * standFactor` (정지 시 미세 흔들림) | `sm_animateFlying` L585-L586 동일 | [정합] | |
+| L496-L497 | `arm.rotateAngleZ = (cos(distance + offset) * Sixtyfourth + (Half - Sixteenth)) * walkFactor + Quarter * standFactor` | `sm_animateFlying` L587-L590 동일 | [정합] | |
+| L499-L500 | `leg.rotateAngleX = cos(distance) * Sixtyfourth * walkFactor + cos(time + offset) * Sixtyfourth * standFactor` | `sm_animateFlying` L595-L598 동일 | [정합] | |
+| L502-L503 | `leg.rotateAngleZ = ±Sixtyfourth` | `sm_animateFlying` L599-L600 동일 | [정합] | |
+
+**F-3 통계 (16 분기)**: 정합 13 / 오역 1 (BUG-31) / 누락 1 (isJump 분기)
+
+**🔴 핵심 발견 (F-3)**:
+
+1. **BUG-31 직접 원인 확정** — vanilla setupTransforms 의 `POSITIVE_Y.rotation(180 - bodyYaw)` 좌표계 뒤집힘 + SM 의 추가 POSITIVE_X 회전 = 방향 반대.
+   - 해결 (F-6): `matrices.multiply(POSITIVE_X.rotation(-theta))` 부호 반전 (또는 회전 적용 위치 변경)
+2. **BUG-32 검증 필요** — head.pitch = -theta/2 매핑 정확하지만 좌표계 차이로 시각 효과 다를 수 있음. BUG-31 정정 후 재검토.
+3. **L481 isJump 분기 누락** — sm.isJumping 시 `verticalAngle = Math.abs(currentVerticalAngle)` 적용 안 함. 점프 중 비행 (이중 입력) 시 영향.
+
+## F-5 통합 — 사용자 보고 10건 → BUG 매핑 (세션 39 정밀 매핑 결과)
+
+| BUG | 사용자 보고 | 진단 결과 (F-1~F-3) | F-6 정정 방향 |
+|-----|---|---|---|
+| **BUG-25** | 비행 속도 느림 | `getNonSlowInputSpeedFactor` 누락 = sprint 시 1.3F 가속 부재 (L622) | SmartMovingFlyer 또는 Mover 에 isFast 시 sprint 배수 곱셈 추가 |
+| **BUG-26** | 땅에 닿아도 착지 안 됨 | 원본 1:1 매핑 (flyCloseToGround=true 기본값 = 의도된 동작) | 사용자 안내 (config 변경) |
+| **BUG-27** | 위아래 전진 너무 느림 | F-2 moveFlying 정확 1:1 → BUG-25 의 부분 증상 가능성 | BUG-25 해결 후 재평가 |
+| **BUG-28** | 처음 비행 시 하늘 끝까지 | jump 키 hold 시 motionY 누적 + 0.91F 감쇠 만 — 누적 속도 매우 큼 가능. **추가 검증 필요** | jump 키 한 번만 가속 (Phase A 같은) 옵션 검토 |
+| **BUG-29** | 비행 진입 뚝 끊김 | L2511 setHeightOffset(-1) 첫 프레임 적용 + sm_afterMove_client 의 player.setPos(+1 보정) = Y 점프 | heightOffset 적용 timing 또는 1 프레임 지연 |
+| **BUG-30** | 팔 회전 축 다름 | sm_animateFlying setAnglesXZY 정확 1:1 → vanilla Y 180° 좌표계 영향 가능 (BUG-31 동일) | BUG-31 정정 후 재평가 |
+| **BUG-31** | 몸 기울기 방향 다름 | **🔴 vanilla setupTransforms POSITIVE_Y 180° 뒤집힘 + SM POSITIVE_X 누적 = 방향 반대 (직접 원인 확정)** | sm_setupTransforms 의 X 회전 부호 반전 (또는 적용 위치 변경) |
+| **BUG-32** | 머리 고정 다름 | head.pitch = -theta/2 매핑 정확 → BUG-31 동일 좌표계 영향 | BUG-31 정정 후 재평가 |
+| **BUG-33** | 애니메이션 프레임 끊김 | sm.stats.calculate 호출 정상 (sm_afterMove_client TAIL inject) → 다른 원인 | BUG-25 해결 후 재평가 |
+| **BUG-34** | 디테일 다름 | sm_animateFlying 정확 1:1 → BUG-25/31 의 누적 효과 | BUG-25/31 해결 후 재평가 |
+
+## F-6 일괄 정정 권장 순서
+
+1. **🔴 BUG-31** (몸 기울기 방향) — sm_setupTransforms isFlying 분기 X 회전 부호 반전 (또는 적용 위치 변경). 모든 비행 자세에 영향. 다른 분기 (Swim/Dive/Slide/HeadJump) 도 동일 패턴 가능 → 각 분기 검토.
+2. **🔴 BUG-25** (속도 느림) — SmartMovingFlyer 또는 Mover 에 sprint 배수 곱셈 추가 (`if (isFast) speedFactor *= cfg.sprintFactor`).
+3. **🔴 잉여** — sm_flyWhileOnGround 의 `!cfg.flyCloseToGround` 가드 삭제.
+4. **🔴 누락** — 비행 중 `fallDistance = 0` reset 추가 (MixinLivingEntityClient 적절 위치).
+5. **⚠️ BUG-29** (진입 끊김) — heightOffset 적용 timing 검토 (1 프레임 지연 또는 다른 메커니즘).
+6. **🟡 BUG-26** (착지) — 사용자 안내.
+7. **🟢 잔존 (BUG-27/28/30/32/33/34)** — 위 1-5 정정 후 사용자 인게임 재평가.
 
 ---
 
