@@ -55,6 +55,11 @@ public abstract class MixinPlayerEntityClient {
     @Inject(method = "getBaseDimensions", at = @At("HEAD"), cancellable = true)
     private void sm_getBaseDimensions_client(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-20 (세션 36): SM disabled 시 vanilla dimensions 그대로 사용.
+        //   기존: sm.* 필드 (sm.isFlying/isLevitating 등) 조건만 검사 → sm.* 갱신 timing
+        //   차이로 disabled 진입 첫 프레임에 잔존 true 시 비행 진입 0.6×0.8 bbox 강제 →
+        //   vanilla 비행 motion 영향 (사용자 보고: 비행 진입 뚜둑).
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
         // 원본 setHeightOffset(-1F) 상태 전수 — 모두 0.6 × 0.8 + eyeHeight 0.62F.
@@ -84,6 +89,10 @@ public abstract class MixinPlayerEntityClient {
     @Inject(method = "getOffGroundSpeed", at = @At("HEAD"), cancellable = true)
     private void sm_getOffGroundSpeed(CallbackInfoReturnable<Float> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-21 (세션 36): SM disabled 시 vanilla 공중 속도 그대로 사용.
+        //   기존: cfg.fly 만 가드 → cfg.fly=false 사용자가 SM disabled 시 0.05F 강제 →
+        //   vanilla 비행 속도 약화. 추가 cfg.enabled 가드로 SM disabled 시 vanilla 정상.
+        if (!SmartMovingConfig.Config.enabled) return;
         if (player.getAbilities().flying && !SmartMovingConfig.Config.fly) {
             cir.setReturnValue(0.05F);
         }
@@ -109,6 +118,9 @@ public abstract class MixinPlayerEntityClient {
     @Inject(method = "updatePose", at = @At("HEAD"), cancellable = true)
     private void sm_updatePose_client(CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-22 (세션 36): SM disabled 시 vanilla updatePose 그대로 — sm.* 잔존 timing
+        //   영향 차단. 비행 진입 첫 프레임에 SLIDING POSE 강제 잔존 가능 → motion 영향.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
         if (sm.isCrawling || sm.isClimbCrawling) {

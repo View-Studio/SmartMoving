@@ -282,6 +282,8 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "isClimbing", at = @At("HEAD"), cancellable = true)
     private void sm_isClimbing_client(CallbackInfoReturnable<Boolean> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-23 (세션 36): SM disabled 시 vanilla isClimbing 그대로 — sm.* 잔존 timing 차단.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(false);
@@ -298,6 +300,8 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "applyClimbingSpeed", at = @At("HEAD"), cancellable = true)
     private void sm_applyClimbingSpeed(Vec3d velocity, CallbackInfoReturnable<Vec3d> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-23 (세션 36): SM disabled 시 vanilla applyClimbingSpeed 그대로 — sm.* 잔존 차단.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(velocity);
@@ -312,6 +316,8 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "updateLimbs(Z)V", at = @At("HEAD"), cancellable = true)
     private void sm_updateLimbs_client(boolean serverSide, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-23 (세션 36): SM disabled 시 vanilla updateLimbs 그대로 — sm.* 잔존 차단.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isSliding) {
             ci.cancel();
@@ -388,6 +394,8 @@ public abstract class MixinLivingEntityClient {
     @Inject(method = "isInSwimmingPose", at = @At("HEAD"), cancellable = true)
     private void sm_isInSwimmingPose_client(CallbackInfoReturnable<Boolean> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-23 (세션 36): SM disabled 시 vanilla isInSwimmingPose 그대로 — sm.* 잔존 차단.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         // [6-2][8-3] 크롤링/수영/잠수/크롤클라이밍 중 setupTransforms Branch 2 진입 차단.
         // isCrawling/isCrawlClimbing: SWIMMING 포즈 사용하되 vanilla -90° 자동 회전 방지

@@ -42,6 +42,8 @@ public abstract class MixinEntityClient {
     @Inject(method = "move", at = @At("HEAD"))
     private void sm_beforeMove_client(MovementType type, Vec3d movement, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // BUG-24 (세션 36): SM disabled 시 STEP_HEIGHT 변경 안 함 → vanilla 정상.
+        if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
@@ -66,12 +68,17 @@ public abstract class MixinEntityClient {
     private void sm_afterMove_client(MovementType type, Vec3d movement, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
 
-        // STEP_HEIGHT 복원
+        // STEP_HEIGHT 복원 (cfg.enabled 무관 — 이전 SM enabled 시 저장된 값 복원 보장)
         if (sm_savedStepHeight_client >= 0) {
             EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
             if (attr != null) attr.setBaseValue(sm_savedStepHeight_client);
             sm_savedStepHeight_client = -1.0;
         }
+
+        // BUG-24 (세션 36): SM disabled 시 SmartStatistics 갱신 + heightOffset 보정 + climb 거리
+        //   누적 + swim 소리 모두 skip → vanilla 정상. 잔존 sm.heightOffset 으로 인한 player.setPos
+        //   영향 차단 (비행 진입 뚜둑 가능 원인 1).
+        if (!SmartMovingConfig.Config.enabled) return;
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
