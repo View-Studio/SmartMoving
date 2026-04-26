@@ -51,6 +51,24 @@
 
 **우선순위**: 🔴 매우 높음 (이동 자체 차단 — 게임플레이 결정적). **BUG-8 과 함께 진단 권장**.
 
+**해결 (세션 37 AI 완결 / 인게임 검증 대기)**:
+
+원인 진단 = 의심 지점 5 (BUG-8 SmartMovingFlyer 충돌) 가 핵심. 원본 SmartMovingSelf L624 `sp.moveEntity(sp.motionX, sp.motionY, sp.motionZ)` 매핑 누락:
+
+- `sm_travel_client` 가 handleFlying true 시 `ci.cancel()` → vanilla travel() 본체 작동 안 함 → vanilla `move()` 호출 안 됨
+- `SmartMovingFlyer.handleFlying` 가 motion 계산 + `setVelocity` 만 하고 **실제 `player.move()` 호출 누락** → motion 적용 안 됨 = **비행 시 몸 고정 (BUG-1) + SM 비행 시스템 미작동 (BUG-8)**
+
+수정 (`SmartMovingFlyer.java`):
+- import `net.minecraft.entity.MovementType` 추가
+- `moveFlying` 호출 직후 `player.move(MovementType.SELF, motion)` 추가
+- 0.91F 감쇠는 move() 후 적용 (원본 L626-L628 동일 순서)
+
+회귀 안전성: SM disabled 시 sm_travel_client return (BUG-11 가드) 으로 handleFlying 도달 안 함 → 영향 없음. SM enabled 시 vanilla move() 처리 (collision + 위치 갱신) 정상 → 비행 motion 적용.
+
+빌드 검증 — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+**세션 37 AI 완결 / 인게임 검증 대기**.
+
 ---
 
 ## BUG-2. 그랩 클라이밍 + 사다리 등반 + 머리 위 레더 잡기 — 기능 + 애니메이션 모두 안 됨
@@ -523,6 +541,7 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-22** sm_updatePose_client cfg.enabled 가드 — 비행 진입 첫 프레임 SLIDING POSE 강제 차단 (세션 36 4차 감사)
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-23** sm_isClimbing_client + sm_applyClimbingSpeed + sm_updateLimbs_client + sm_isInSwimmingPose_client cfg.enabled 가드 — sm.* 잔존 timing 차단 (4 inject) (세션 36 4차 감사)
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)

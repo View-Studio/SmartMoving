@@ -2,6 +2,7 @@ package choco.ratel.smartmoving.client;
 
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.MovementType;
 import net.minecraft.util.math.Vec3d;
 
 /**
@@ -60,9 +61,17 @@ public class SmartMovingFlyer {
         // 원본: moveFlying(moveUpward, moveStrafing, moveForward, speed, Options._flyControlVertical)
         moveFlying(player, moveUpward, moveStrafe, moveForward, flyingSpeed, cfg.flyControlVertical);
 
-        // 감쇠 (HorizontalAirDamping = 0.91F)
-        vel = player.getVelocity();
-        player.setVelocity(vel.x * 0.91F, vel.y * 0.91F, vel.z * 0.91F);
+        // 🔴 BUG-1+8 (세션 37): 원본 SmartMovingSelf.handleAlternativeFlying L624
+        //   `sp.moveEntity(sp.motionX, sp.motionY, sp.motionZ)` 매핑 — **이전 누락**.
+        //   sm_travel_client 가 ci.cancel() 으로 vanilla travel() 차단 → vanilla move() 호출 안 됨
+        //   → 기존 setVelocity 만으로는 motion 적용 안 됨 = 비행 시 몸 고정 (BUG-1).
+        //   수정: motion 계산 후 player.move() 명시 호출 → vanilla collision/위치 갱신 처리.
+        Vec3d motion = player.getVelocity();
+        player.move(MovementType.SELF, motion);
+
+        // 감쇠 (HorizontalAirDamping = 0.91F) — 원본 L626-L628
+        Vec3d velAfterMove = player.getVelocity();
+        player.setVelocity(velAfterMove.x * 0.91F, velAfterMove.y * 0.91F, velAfterMove.z * 0.91F);
 
         return true;
     }
