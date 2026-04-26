@@ -146,7 +146,9 @@ public abstract class MixinPlayerEntityModelClient {
      * 원본: SmartMovingModel.setRotationAngles() 1번 분기 (isRopeSliding).
      * bipedOuter.rotateAngleY(이동 방향 정렬)는 MixinPlayerEntityRenderer bodyYaw에서 처리.
      * bipedPelvic.rotateAngleX: bipedPelvic 없음 → 생략.
-     * rotationPointY 변경: 피벗 이동 생략.
+     * pivotY 보정 (B-8 / §16-11): vanilla setAngles 가 매 프레임 sneak 분기로 head/arm pivotY 를
+     *   명시적 할당하므로 TAIL inject 에서 덮어쓰기 안전 (다음 프레임 자동 reset).
+     *   원본 SR 어깨 노드(pivotY=2) 부재로 1.21.1 arm pivotY 기본=2 → -2 차감 = 0 (어깨 절대 위치 0 등가).
      */
     private void sm_animateRopeSliding(float animationProgress, ClientPlayerEntity player) {
         float time = animationProgress * 0.15f;
@@ -179,6 +181,11 @@ public abstract class MixinPlayerEntityModelClient {
         leftLeg.roll   = -THIRTYTWOTH;
         rightLeg.pitch =  SIXTYFOURTH * MathHelper.cos(time - QUARTER);
         leftLeg.pitch  =  SIXTYFOURTH * MathHelper.cos(time + QUARTER);
+
+        // 매달린 자세 pivotY 보정 (원본 SmartMovingModel L106/L117)
+        head.pivotY     =  2f;   // 원본 bipedHead.rotationPointY = 2F
+        rightArm.pivotY =  0f;   // 원본 bipedRightArm.rotationPointY = -2F (어깨 노드 부재로 vanilla 기본 2F - 2 = 0)
+        leftArm.pivotY  =  0f;   // 원본 bipedLeftArm.rotationPointY = -2F
     }
 
     /**

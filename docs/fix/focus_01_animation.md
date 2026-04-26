@@ -393,7 +393,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 권장 진행 순서 (의존 / 우선순위):
 
 **[단일 라인 보강 — 1-3줄, 의존 없음]**
-- [ ] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = +2F; rightArm.pivotY = leftArm.pivotY = -2F;` 추가
+- [x] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = 2F; rightArm.pivotY = leftArm.pivotY = 0F;` 3 라인 추가 + 주석 갱신 (vanilla setAngles 가 매 프레임 sneak 분기로 reset → TAIL inject 안전 검증). **세션 24 완료**.
 - [ ] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 추가
 - [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
 - [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
@@ -1417,6 +1417,44 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - → **R-10+ 진입 가능**. 다음 세션 (24+) 부터 B-N 원자 단위 코드 수정 작업 시작.
 
 **다음 단계 (세션 24+)**: R-10+ 본격 1:1 대응 진입. 권장 시작 = **B-8** (rope sliding head/arm pivotY) — 가장 단순한 단일 라인 보강 (의존 없음 / 1-3줄 / 호출 1 지점). 또는 **B-18** (ceiling head.yaw 잉여 제거) — 코드 단축 방향.
+
+---
+
+### 세션 24 — 2026-04-26 — Phase R / R-10+ B-8 (rope sliding head/arm pivotY) 1:1 이식
+
+**진행한 작업** (B-N 첫 코드 수정 원자):
+
+1. **사전 검증 — vanilla setAngles 의 pivotY reset 패턴**:
+   - `docs/research/vanilla/BipedEntityModel_detail.md` L217-L230 확인 — vanilla `BipedEntityModel.setAngles()` 가 매 프레임 sneak 분기로 `head.pivotY` / `body.pivotY` / `rightArm.pivotY` / `leftArm.pivotY` 명시적 할당 (sneak: 4.2/3.2/5.2/5.2 / 비sneak: 0/0/2/2).
+   - 결론: sm_setAngles @Inject(TAIL) 에서 pivotY 변경 안전 — 다음 프레임 vanilla 가 자동 reset 하므로 누적 위험 없음.
+
+2. **B-8 코드 수정** (`src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java` L182-L187):
+   - sm_animateRopeSliding 본체 끝부분에 매달린 자세 pivotY 보정 3 라인 추가:
+     ```java
+     head.pivotY     =  2f;   // 원본 bipedHead.rotationPointY = 2F
+     rightArm.pivotY =  0f;   // 원본 bipedRightArm.rotationPointY = -2F (어깨 노드 부재로 vanilla 기본 2F - 2 = 0)
+     leftArm.pivotY  =  0f;   // 원본 bipedLeftArm.rotationPointY = -2F
+     ```
+   - 메서드 Javadoc 의 `pivotY 변경: 피벗 이동 생략` 주석 → `pivotY 보정 (B-8 / §16-11)` 으로 갱신, vanilla reset 안전성 근거 명시.
+
+3. **값 정확성 검증**:
+   - 원본 SR 노드: bipedRightShoulder pivotY=2F → bipedRightArm pivotY=0F (어깨 자식). 어깨 -2 변경 = 절대 위치 (0+2)-2 = 0.
+   - 1.21.1 어깨 노드 부재 → arm 자체 pivotY=2F (어깨 등가). 절대 위치 0 등가 → arm.pivotY = 0F.
+   - head 는 1.21.1 자체 pivotY=0F → 원본 +2 변경 직접 매핑 → head.pivotY = 2F.
+
+4. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (17s).
+
+**검증 체크리스트 (세션 24 B-8)**:
+- [근거] ✓ 원본 SmartMovingModel.java L106/L117 read 완료 (line-exact)
+- [전수] ✓ 원본 변경 3 지점 (head 1 + 양팔 2) 모두 1.21.1 매핑 (skip 0)
+- [분류] N/A (코드 수정 단계 — R 단계 아님)
+- [발견] 신규 발견 0건
+- [통계] N/A
+- [검증] ✓ vanilla `BipedEntityModel.setAngles` pivotY reset 패턴 (BipedEntityModel_detail.md L217-L230) 사전 검증
+- [회귀] ✓ 다른 분기 (Climb/Swim/Dive 등) 진입 시 vanilla 자동 reset → 누적 위험 없음
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**다음 단계 (세션 25+)**: 권장 시작 = **B-18** (ceiling head.yaw 잉여 제거 — 1 라인 삭제) 또는 **B-9** (climbing NoGrab+non-NoStep body.pivotZ = -6F — 1 라인 추가). 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 5 남음.
 
 ---
 
