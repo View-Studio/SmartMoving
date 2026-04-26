@@ -86,6 +86,12 @@ public abstract class MixinPlayerEntityModelClient {
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
             this.leaningPitch = 0f;
+            // pivotZ reset 인프라 (B-9 부속): vanilla setAngles 는 head/body pivotZ 를 매 프레임
+            //   reset 하지 않으므로 (sneak 분기는 leg.pivotZ 만 변경), 이전 sm 분기의 변경이
+            //   다음 분기까지 누적되는 위험이 있다. SM 분기 진입 직전에 vanilla 기본값(0) 으로
+            //   reset 하여 모든 sm 분기에서 안전하게 head.pivotZ / body.pivotZ 변경 가능.
+            head.pivotZ = 0f;
+            body.pivotZ = 0f;
         }
 
         // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
@@ -306,12 +312,17 @@ public abstract class MixinPlayerEntityModelClient {
             rightLeg.roll  =  legAngleZ;
             leftLeg.roll   = -legAngleZ;
 
-            // NoGrab + non-NoStep 추가 보정 (SmartMovingModel L415-421)
-            // 원본: bipedTorso.X=0.5F, head.X-=0.5F, bipedPelvic.X-=0.5F
-            // bipedPelvic/rotationPointZ는 1.21.1 대응 없음 → body.pitch/head.pitch만 적용
+            // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286)
+            // 원본: bipedTorso.X=0.5F (L281), head.X-=0.5F (L282), bipedPelvic.X-=0.5F (L283),
+            //       bipedTorso.rotationPointZ = -6F (L285).
+            // bipedPelvic.X-=0.5F: 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 필요 (§16-26 후속).
+            // body.pivotZ = -6F: B-9 / §16-14 — 원본 bipedTorso 가 root(bipedOuter)의 자식으로 모든
+            //   visual 노드를 자식으로 거느리므로 -6 = 전체 visual 이동. 1.21.1 단일 PlayerEntityModel
+            //   에서는 body 단일 노드만 대응 (head/arm/leg 이동 누락 = SR 다층 부재 근사).
             if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0) {
                 body.pitch = 0.5f;
                 head.pitch -= 0.5f;
+                body.pivotZ = -6f;   // 원본 bipedTorso.rotationPointZ = -6F (B-9 / §16-14)
             }
         }
     }

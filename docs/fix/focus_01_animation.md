@@ -394,7 +394,8 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 **[단일 라인 보강 — 1-3줄, 의존 없음]**
 - [x] B-8. RopeSliding head/arm pivotY (§16-11 / SmartMovingModel L106/L117) — sm_animateRopeSliding 에 `head.pivotY = 2F; rightArm.pivotY = leftArm.pivotY = 0F;` 3 라인 추가 + 주석 갱신 (vanilla setAngles 가 매 프레임 sneak 분기로 reset → TAIL inject 안전 검증). **세션 24 완료**.
-- [ ] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 추가
+- [x] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 1 라인 추가 + sm_setAngles HEAD pivotZ reset 인프라 2 라인 추가 (head/body — vanilla 미reset 안전 보장). **세션 25 완료**.
+- [ ] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기, 다리 그룹 무릎 굽힘 보정).
 - [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
 - [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
 - [ ] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling `head.pivotZ = -2F; body.pivotY = +3F;` 추가
@@ -1495,6 +1496,60 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 **다음 단계 (세션 26+)**: 권장 시작 = **B-9** (climbing NoGrab+non-NoStep body.pivotZ = -6F — 1 라인 추가). 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 4 남음 (B-9/B-10/B-11/B-12).
 
+**세션 25 추가 작업 — B-9 도 함께 진행 (토큰 여유)**:
+
+1. **원본 1차 자료 read** — SmartMovingModel.java L279-L286 (NoGrab + non-NoStep 분기):
+   - L281 `bipedTorso.rotateAngleX = 0.5F;` (이미 1.21.1 body.pitch=0.5 로 매핑됨)
+   - L282 `bipedHead.rotateAngleX -= 0.5F;` (이미 head.pitch -= 0.5 매핑)
+   - L283 `bipedPelvic.rotateAngleX -= 0.5F;` ← **§16-26 신규 [누락] 발견 (다리 별도 처리 필요, 본 B-9 외)**
+   - L285 `bipedTorso.rotationPointZ = -6F;` ← **B-9 본 작업 대상**
+
+2. **vanilla pivotZ reset 패턴 사전 검증** — `BipedEntityModel_detail.md` L217-L230 재확인:
+   - sneak: `rightLeg.pivotZ = 4F; leftLeg.pivotZ = 4F;` (leg 만 변경)
+   - 비sneak: `rightLeg.pivotZ = 0F; leftLeg.pivotZ = 0F;` (leg 만 reset)
+   - **head/body/arm pivotZ 변경 없음** → vanilla 가 매 프레임 reset 안 함 → 누적 위험.
+
+3. **B-9 인프라 reset 추가** (sm_setAngles 본체 anySmState 분기 안 / L88-L96 영역):
+   ```java
+   if (anySmState) {
+       this.leaningPitch = 0f;
+       head.pivotZ = 0f;   // B-9 부속: vanilla 미reset 안전 보장
+       body.pivotZ = 0f;
+   }
+   ```
+   모든 sm 분기 진입 직전에 vanilla 기본값(0)으로 reset → climbing/swim/dive 등 모든 분기에서 head.pivotZ / body.pivotZ 안전하게 변경 가능 (B-10/B-12/B-13 미래 작업도 동일 인프라 활용).
+
+4. **B-9 본 분기 코드 수정** (sm_animateClimbing 의 NoGrab+non-NoStep 분기 / L312-L319):
+   ```java
+   if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0) {
+       body.pitch = 0.5f;
+       head.pitch -= 0.5f;
+       body.pivotZ = -6f;   // 원본 bipedTorso.rotationPointZ = -6F (B-9 / §16-14)
+   }
+   ```
+   주석에 SR 다층 부재 보정 (body 단일 노드 근사) + §16-26 후속 명시.
+
+5. **값 정확성 검증**:
+   - 원본 SR `bipedTorso` = root(bipedOuter)의 자식 → 모든 visual (head/breast/neck/shoulder/arm/pelvic/leg) 자식. -6 = 전체 visual 이동.
+   - 1.21.1 단일 PlayerEntityModel — body 단일 노드만 -6 = head/arm/leg 이동 누락 (= SR 다층 부재 근사).
+   - 추가 정확성 향상 = head.pivotZ + body.pivotZ + arm.pivotZ + leg.pivotZ 모두 -6F 적용 가능 (단 pivotZ reset 인프라 확장 필요). 본 B-9 에서는 발견 항목 본문대로 body 단일 노드만 적용. 시각 효과 평가 후 정밀화 검토 (별도 신규 발견 후보).
+
+6. **신규 발견 §16-26 등재** — climbing NoGrab+non-NoStep `bipedPelvic.rotateAngleX -= 0.5F;` (원본 L283) 미이식. 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 필요 → `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 추가가 1:1 매핑. **새 B-19 후보**.
+
+7. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**B-9 검증 체크리스트**:
+- [근거] ✓ 원본 SmartMovingModel.java L279-L286 read 완료
+- [전수] ✓ 원본 L285 1 지점 → 1.21.1 1 지점 매핑 + reset 인프라 추가
+- [발견] ✓ §16-26 신규 [누락] 등재 (B-19 후보 / pelvic.X → leg.pitch 미이식)
+- [검증] ✓ vanilla `BipedEntityModel.setAngles` head/body pivotZ reset 부재 사전 검증 → 인프라 reset 안전 보장
+- [회귀] ✓ pivotZ reset 인프라로 모든 sm 분기 안전 (climbing 종료 후 다른 분기 영향 없음)
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**세션 25 누적 작업**: B-18 (잉여 제거) + B-9 (1 라인 추가 + reset 인프라) = 2 원자 진행. R-10+ 진행 = B-8/B-9/B-18 = 3 원자 완료. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 3 완료 / 3 남음 (B-10/B-11/B-12). 신규 §16-26 (B-19 후보) 추가 등록.
+
+**다음 단계 (세션 26+)**: 권장 시작 = **B-10** (swim/dive head 자세 — head.pivotZ + dive head.pitch 3 라인 추가 / 2 메서드) 또는 **B-12** (crawl head/body 피벗 — 2 라인 추가). 모두 reset 인프라 활용 가능.
+
 ---
 
 ## 16. 신규 발견
@@ -1612,6 +1667,16 @@ R-9 통합 누적 표 (4,968 라인 전수):
     - 자체 outer.X 등가 값(sm_setupTransforms theta)을 capture 하여 sm_setAngles 또는 별도 Mixin (CapeFeatureRenderer)에서 cloak.pitch 클램프 보정.
     - 또는 MixinCapeFeatureRenderer @Inject로 vanilla render 호출 후 추가 보정.
     - 우선순위 중간 — 메인 애니메이션 외이지만 망토 시각 차이 가능.
+
+### 세션 25 (2026-04-26) — Phase B / B-9 작업 중 발견
+
+26. **[누락] climbing NoGrab+non-NoStep `bipedPelvic.rotateAngleX -= 0.5F` → leg.pitch -= 0.5F 미이식** (R-10+ B-19 후보, B-9 와 동일 분기). 원본 SmartMovingModel.java L283: `bipedPelvic.rotateAngleX -= 0.5F;` (NoGrab+non-NoStep 분기에서 다리 그룹을 -0.5 라디안 차감 — 매달림 자세에서 무릎이 안쪽으로 굽힘).
+
+    1.21.1 sm_animateClimbing NoGrab+non-NoStep 분기 (L312-L319 / B-9 작업 후): body.pitch=0.5 + head.pitch-=0.5 + body.pivotZ=-6 만 적용. SR `bipedPelvic` 은 다리 그룹의 부모 노드 → -0.5 라디안 = 양다리 모두 -0.5. 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 필요.
+
+    이식 방안 (B-19): NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가. legAngleX 가 적용된 후 추가 차감이므로 누적 적용 안전 (sm_setAngles 진입 시 vanilla setAngles 가 leg.pitch 를 매 프레임 reset).
+
+    영향: 매달림 자세 (벽에서 떨어진 NoGrab+non-NoStep) 시 무릎 굽힘 -0.5 누락 → 다리가 펴진 채로 남음. 우선순위 중간 (B-9 와 같은 분기 / 자세 정합성 영향).
 
 ---
 
