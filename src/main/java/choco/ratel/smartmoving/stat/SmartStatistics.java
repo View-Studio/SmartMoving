@@ -18,6 +18,19 @@ public class SmartStatistics {
     public float currentVerticalSpeed;
     public float currentSpeed;
 
+    // ── 🔴 prev 필드 (Flying Phase / 세션 48): partial tick lerp 보간용 ─────
+    //   원본 SmartStatisticsData (SmartRender) 는 prevLegYaw / legYaw 두 필드 + 매 프레임
+    //   getter 가 `prevLegYaw + (legYaw - prevLegYaw) * partialTicks` lerp 적용.
+    //   매 틱 EMA 갱신 + 매 프레임 lerp 처리 = 60Hz 부드러움.
+    //   이전 1.21.1 매핑은 단일 필드 (current 만) → 매 틱 20Hz 띡띡 = 사용자 보고
+    //   "원본보다 부드럽지 않음" 직접 원인. prev 필드 추가 + lerp getter 매핑.
+    public float prevCurrentHorizontalSpeed;
+    public float prevCurrentVerticalSpeed;
+    public float prevCurrentSpeed;
+    public float prevTotalHorizontalDistance;
+    public float prevTotalVerticalDistance;
+    public float prevTotalDistance;
+
     // ── 프레임 단위 이동량 ────────────────────────────────────
     public double horizontalDistance;
     public double verticalDistance;
@@ -53,6 +66,16 @@ public class SmartStatistics {
         horizontalDistance = Math.sqrt(diffX * diffX + diffZ * diffZ);
         verticalDistance = Math.abs(diffY);
         distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
+
+        // 🔴 (세션 48): prev 필드 갱신 — 매 틱 EMA 적용 전 이전 값 저장 (lerp 보간용).
+        //   원본 SmartStatisticsDatas.initialize: prevLegYaw = previous.legYaw, legYaw = previous.legYaw.
+        //   1.21.1 동등: prev = 이번 틱 시작 시점의 current (= 이전 틱 EMA 결과).
+        prevCurrentHorizontalSpeed = currentHorizontalSpeed;
+        prevCurrentVerticalSpeed   = currentVerticalSpeed;
+        prevCurrentSpeed           = currentSpeed;
+        prevTotalHorizontalDistance = totalHorizontalDistance;
+        prevTotalVerticalDistance   = totalVerticalDistance;
+        prevTotalDistance           = totalDistance;
 
         // 원본: SmartStatisticsData.calcualte() — distance *= 4F; legYaw += (dist - legYaw) * 0.4F
         // legYaw = EMA(rawDistance * 4, factor=0.4). 일반 보행(~0.22 b/t) → ~0.88, 비행(~0.3 b/t) → 1.0(clamp).
@@ -91,6 +114,39 @@ public class SmartStatistics {
         totalDistance += (float) distance;
     }
 
+    // ── 🔴 partial tick lerp getter (Flying Phase / 세션 48): 60Hz 부드러움 보간 ────
+    //   원본 SmartStatisticsData.getCurrentSpeed:
+    //     return Math.min(1.0F, prevLegYaw + (legYaw - prevLegYaw) * renderPartialTicks);
+    //   원본 SmartStatisticsData.getTotalDistance:
+    //     return total - legYaw * (1.0F - renderPartialTicks);
+    //   매 프레임 호출 시 prev/current 사이 partial tick 비율로 보간 = 부드러움.
+
+    public float getCurrentSpeed(float partialTicks) {
+        return Math.min(1.0F, prevCurrentSpeed + (currentSpeed - prevCurrentSpeed) * partialTicks);
+    }
+
+    public float getCurrentHorizontalSpeed(float partialTicks) {
+        return Math.min(1.0F, prevCurrentHorizontalSpeed
+                + (currentHorizontalSpeed - prevCurrentHorizontalSpeed) * partialTicks);
+    }
+
+    public float getCurrentVerticalSpeed(float partialTicks) {
+        return Math.min(1.0F, prevCurrentVerticalSpeed
+                + (currentVerticalSpeed - prevCurrentVerticalSpeed) * partialTicks);
+    }
+
+    public float getTotalDistance(float partialTicks) {
+        return totalDistance - currentSpeed * (1.0F - partialTicks);
+    }
+
+    public float getTotalHorizontalDistance(float partialTicks) {
+        return totalHorizontalDistance - currentHorizontalSpeed * (1.0F - partialTicks);
+    }
+
+    public float getTotalVerticalDistance(float partialTicks) {
+        return totalVerticalDistance - currentVerticalSpeed * (1.0F - partialTicks);
+    }
+
     public void reset() {
         totalHorizontalDistance = 0;
         totalVerticalDistance = 0;
@@ -99,6 +155,12 @@ public class SmartStatistics {
         currentHorizontalSpeedFlattened = 0;
         currentVerticalSpeed = 0;
         currentSpeed = 0;
+        prevCurrentHorizontalSpeed = 0;
+        prevCurrentVerticalSpeed = 0;
+        prevCurrentSpeed = 0;
+        prevTotalHorizontalDistance = 0;
+        prevTotalVerticalDistance = 0;
+        prevTotalDistance = 0;
         horizontalDistance = 0;
         verticalDistance = 0;
         distance = 0;

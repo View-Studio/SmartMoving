@@ -306,7 +306,8 @@ public class MixinPlayerEntityRenderer {
         //   해결: -theta 적용 (POSITIVE_X 부호 반전) → 슈퍼맨 자세 (배 아래, 등 위).
         //   smOuterTiltX 는 그대로 (cape 클램프 — B-17 — 별도 의미 보존).
         if (sm.isFlying) {
-            float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
+            // 🔴 (세션 48): partial tick lerp 적용 — 60Hz 부드러움 (원본 매 프레임 보간 1:1).
+            float walkFactor = sm.stats.getCurrentSpeed(tickDelta);
             // 🔴 1:1 정정 (세션 47b): 원본 SmartMovingModel L481 `verticalAngle =
             //   isJump ? Math.abs(currentVerticalAngle) : currentVerticalAngle`. 이전 매핑 누락.
             float verticalAngle = sm.isJumping
