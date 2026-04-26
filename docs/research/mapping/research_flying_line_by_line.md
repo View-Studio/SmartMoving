@@ -306,9 +306,75 @@ return speedFactor;
 - config 파일에서 `flyCloseToGround = false` 설정 시 자동 착지 가능
 - 원본 1:1 (의도된 동작)
 
-### ⏳ 잔존 BUG 인게임 검증 대기 (BUG-27/28/30/32/33/34)
+### 사용자 인게임 검증 결과 (세션 41)
 
-위 정정 (BUG-25/31/잉여/누락) 의 인게임 검증 결과 + 잔존 BUG 평가 → 다음 단계 결정.
+**확인된 정정 효과**:
+- ✅ **BUG-31** (몸 기울기 방향) — "기우는 방향 자체는 고쳐짐"
+- 🟡 **BUG-25** (속도) — "비행 속도 자체는 원본보다 좀더 빠른데" — 일부 개선 (sprint 효과 확인) 단 위/아래 비행은 잔존 (BUG-27 분리)
+
+**잔존 BUG 사용자 보고**:
+
+#### BUG-27 (위아래 W키 이동 너무 느림) — 잔존 + 신규 정밀 정보
+- 사용자: "비행 속도 자체는 좀더 빠른데, 위아래 보고 앞으로 가기 키로 움직이면 엄청엄청 느리게 해당 방향으로 움직임. 즉 y축 보고 w키로 이동하는게 원본이랑 많이 다름"
+- 분석:
+  - moveFlying 정확 1:1 (F-2 결과)
+  - divingHorizontalFactor = cos(pitch_rad), divingVerticalFactor = -sin(pitch_rad) * signum(moveForward)
+  - pitch=45° + W키 = 수평 0.707, 수직 0.707 → 비표준 정규화 영향으로 motion 작음
+  - 원본도 동일 처리 — **차이 = vanilla 1.21.1 의 다른 처리?** (예: vanilla flying speed 처리)
+- 추가 진단 필요
+
+#### BUG-28 (처음 비행 시 하늘 끝까지) — 잔존 / 정정 시도 X
+- 사용자: "처음 점프두번 눌러서 비행진입하면 그냥 아무거도 조작 안해도 하늘끝까지 올라가는거 안고쳐짐"
+- 분석:
+  - SmartMovingFlyer motion 흐름: setVelocity(y - 0.15) + moveFlying(motionY += 0.98 * 0.05) + 0.91F 감쇠
+  - 평형 motion = -1.02 (1.02 m/s 상승) → 무한 상승 X 이론상
+  - 원본 1.7.10 = 같은 처리 → 동일 결과 예상
+  - 사용자 보고 "처음" 한정 → 첫 비행만 무한 상승, 두 번째는 정상?
+- 가설:
+  - sm_jump (vanilla jump cancel + jumpAvoided=true) → handleJumping 이 jump 분기 진입 → tryJump 추가 motion
+  - 비행 진입 시 jumpAvoided 잔존 가능성
+- 추가 정보 필요 (사용자 = 두 번째 비행 확인 / 키 release 영향 / 게임 재접속 동작)
+
+#### BUG-29 (진입 시점 아래로 내려감) — 사용자 명시 추가 정보
+- 사용자: "비행 진입시 시점이 아래로 좀 내려가는 느낌인데 이 부분 원본확인해야됨"
+- 분석:
+  - 이전 분석 (sm_afterMove_client setPos +1) = 시점 위로 점프 가설
+  - 사용자 = "아래로 내려감" = 반대 방향
+  - 가능: heightOffset = -1F + sm_afterMove_client setPos(y +1) → 발 +1 (시점 +1) → eyeHeight 차이 (-0.18) 적용 후 시점 변화
+  - 또는 다른 처리 영향 (vanilla EyeHeight 계산)
+- 추가 진단 필요 — 원본 1.7.10 의 시점 처리 확인
+
+#### BUG-30 (팔 회전 축) / BUG-32 (머리 고정) — 잔존
+- 사용자: "비행시 가만히 있을 때 팔회전 축이 여전히 원본과 다름. 머리도 여전히 이상함"
+- 분석:
+  - sm_animateFlying setAnglesXZY 헬퍼 정확 1:1 (F-3 결과)
+  - head.pitch = -theta/2 (ANIM-01) 정확 1:1
+  - BUG-31 정정 (좌표계) 후에도 잔존 → setAnglesXZY 헬퍼 재검증 또는 다른 차이
+- 추가 진단 필요
+
+#### BUG-33/34 (부드러움 / 디테일) — 잔존 + 정밀 정보
+- 사용자: "원본이랑 엄청 퀄리티가 달라. 각 동작 자체도 스무스해야되는데, 각 동작에서 다른 동작으로 넘어갈 때 모든 동작이 이어지는 느낌으로 스무스 해야됨"
+- 분석:
+  - sm.stats.calculate 정상 호출 (sm_afterMove_client TAIL — player.move 후)
+  - sm_animateFlying 입력값 정확 1:1
+  - 차이 = vanilla limbAnimator 의 보간 처리 차이?
+  - 또는 vanilla 의 다른 보간 메커니즘 (예: leaningPitch, headPitch lerp)
+- 추가 진단 필요 — 보간 처리 정밀 비교
+
+#### BUG-26 (땅 닿으면 비행 해제) — 사용자 요청 반영 정정 (세션 41)
+- 사용자: "비행하다가 '땅에 닿으면' 비행이 해제되야되는데 아직도 안됨"
+- 정정: SmartMovingClientState.tryLanding 의 `!cfg.flyCloseToGround` 가드 삭제 (1:1 번역 위반 — 사용자 의도 우선)
+- 조건 잔존: 정지 (수평 속도 < 0.003) + motionY > -0.03 → 정지 시 자동 착지
+- 사용자 의도가 더 적극적 (지면 도달 즉시 착지) 면 추가 조건 변경 필요
+
+### 다음 작업 우선순위 (사용자 보고 기반)
+
+1. 🔴 **BUG-28** (하늘 끝까지) — 비행 사용 불가. jumping/jumpAvoided 흐름 정밀 진단.
+2. 🔴 **BUG-26** ✅ 정정 완료 (세션 41) — 인게임 검증 대기.
+3. 🟠 **BUG-30/32** (팔축/머리) — sm_animateFlying setAnglesXZY 재검증.
+4. 🟠 **BUG-27** (위아래 W키) — moveFlying 정밀 비교 + vanilla 차이 확인.
+5. 🟠 **BUG-29** (시점 아래로) — heightOffset + EyeHeight 정밀 진단.
+6. 🟢 **BUG-33/34** (부드러움) — 보간 처리 정밀 비교 (BUG-25/27/30 후 재평가).
 
 ---
 

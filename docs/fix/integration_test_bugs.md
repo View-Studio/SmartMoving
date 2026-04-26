@@ -543,7 +543,7 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [✅ 인게임 검증 완료 (세션 36)] **BUG-24** sm_beforeMove_client + sm_afterMove_client cfg.enabled 가드 — sm.heightOffset 잔존으로 인한 player.setPos 영향 차단 (비행 진입 뚜둑 핵심 원인 가능) (세션 36 4차 감사)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-1+8** SmartMovingFlyer.handleFlying — player.move() 호출 누락 — 원본 L624 `sp.moveEntity` 매핑 부재 — SM 비행 motion 적용 안 됨 = 몸 고정 (세션 37)
 - [✅ AI 완결 / 인게임 검증 대기] **BUG-25** 비행 속도 원본보다 느림 — Flying Phase F-6 (세션 40): SmartMovingFlyer 에 isFast 시 sprint 배수 곱셈 추가 (sprintFactor=1.5F 또는 sprintFactorLevitate). 원본 getNonSlowInputSpeedFactor (L197-L227) 누락 보강.
-- [📋 사용자 안내] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — Flying Phase F-2-2 매핑 결과: 원본 1:1 (flyCloseToGround=true 기본값 = 의도된 동작). config 파일에서 `flyCloseToGround = false` 설정 시 자동 착지.
+- [✅ AI 완결 / 인게임 검증 대기] **BUG-26** 비행 시 땅에 닿아도 착지 안 됨 — Flying Phase F-6 (세션 41 사용자 요청 반영): SmartMovingClientState.tryLanding 의 `!cfg.flyCloseToGround` 가드 삭제 (1:1 번역 위반 — 사용자 의도 우선). 정지 시 자동 착지.
 - [⏳ BUG-25 후 재평가] **BUG-27** 위아래 보면서 전진 속도 너무 느림 — F-2 결과: moveFlying 정확 1:1 → BUG-25 의 부분 증상 가능성.
 - [📋 등재] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — F-1 분석: jump 키 hold 시 motionY 누적 + 0.91F 감쇠. 추가 검증 필요 (vanilla gravity 영향 등).
 - [📋 등재] **BUG-29** 비행 진입 뚝 끊김 — F-1 청크 3 발견: L2511 setHeightOffset(-1) 첫 프레임 적용. timing 검토 필요.
