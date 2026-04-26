@@ -681,13 +681,17 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65p): X cancel 제거 — 사용자 단순 요청.
-        //   사용자 의견: "Y 시 결과 값 정확. X/Z 시도 같은 값 나오게".
-        //   = arm 의 ModelPart 회전 (pitch, yaw, roll) 이 수직/수평 시 동일해야.
-        //   수직 시 우리 cancel = R_x(0) = identity → arm = vanilla swing 그대로.
-        //   수평 시도 같은 값 = cancel 자체 제거 → arm = vanilla swing 그대로.
-        //   = setAnglesXZY skip 만 적용 (preferred arm 의 vanilla setAngles + animateArms
-        //     결과 잔존). 추가 X cancel 매핑 없음.
+        // 🔴 (세션 65k revert 65j): vanilla 효과 직접 set 매핑은 모든 vanilla setAngles 효과
+        //   (limbSwing 진폭, ArmPose ITEM offset, sneaking 등) 를 cancel → 사용자 보고
+        //   "전체적으로 휘두르는게 아예 이상해짐". 65h 매핑 (= setAnglesXZY skip + X cancel)
+        //   으로 되돌림. vanilla setAngles + animateArms 가 set 한 모든 효과 그대로 보존.
+        //   X/Z 시 미세 차이는 더 자세한 보고 후 추가 조정.
+        if (swing > 0F) {
+            float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
+                                              sm.smOuterFade_prevTime, totalTime);
+            if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
+            if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
+        }
     }
 
     /**
