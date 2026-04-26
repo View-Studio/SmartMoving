@@ -681,71 +681,12 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65j): preferred arm 회전을 vanilla animateArms 효과로 직접 set.
-        //
-        //   세션 65i 의 limbSwing 진폭만 cancel 은 부정확. vanilla setAngles 디스어셈블리
-        //   (BipedEntityModel L478-L612) 분석:
-        //   1. limbSwing 진폭 set: arm.pitch = cos(f*0.6662 [+π]) * g / k
-        //   2. arm.yaw = 0 reset
-        //   3. positionRightArm/LeftArm 호출 — ArmPose.ITEM (검 들고 있을 때):
-        //      arm.pitch = arm.pitch * 0.5 - π/10  (limbSwing 진폭 *0.5 + offset)
-        //   4. animateArms 호출 — swing 효과 += (preferred arm pitch -= g*1.2+h, etc).
-        //   5. sneaking 시 arm.pitch += 0.4.
-        //
-        //   세션 65i cancel 양 (= limbSwing 전체) 은 ITEM pose 시 0.5 만큼 과도 cancel +
-        //   offset/sneaking 무시 → 사용자 보고 "X/Z 시 해결 안됨" 직접 원인.
-        //
-        //   사용자 의도 ("그냥 서서 휘두르는") = vanilla setAngles 의 limbSwing/ITEM/sneaking
-        //   영향 모두 cancel + vanilla animateArms attack swing 효과만 남기기.
-        //   가장 정확하고 단순한 매핑 = preferred arm 회전을 직접 set.
-        //
-        //   원본 SmartMovingModel.animateNonStandardWorking L592 `bipedRightArm.reset()` +
-        //   super animateWorkingArms (= vanilla swing 효과만) 1:1 매핑.
-        //
-        //   vanilla animateArms (BipedEntityModel_detail.md B-06) 효과:
-        //     body.yaw = sin(sqrt(swing)*2π) * 0.2 (preferred=LEFT 시 *-1)
-        //     rightArm.yaw += body.yaw, leftArm.yaw += body.yaw, leftArm.pitch += body.yaw
-        //     preferred arm.pitch -= g*1.2 + h  (g = sin((1-(1-swing)^4)*π))
-        //     preferred arm.yaw += body.yaw * 2
-        //     preferred arm.roll += sin(swing*π) * -0.4
-        //
-        //   결과 (preferred=right 가정, arm 초기값 0 reset 후):
-        //     rightArm.pitch = -(g*1.2 + h)
-        //     rightArm.yaw   = body.yaw + body.yaw*2 = 3*body.yaw
-        //     rightArm.roll  = sin(swing*π) * -0.4
-        //   (left preferred 시: leftArm.pitch = body.yaw - (g*1.2+h), 나머지 대칭)
-        //
-        //   head.pitch (h 계산용) = vanilla setAngles 가 set 한 mouse_pitch_rad.
-        //     vanilla render() 흐름: setAngles 인자 headPitch = lerp(prevPitch, getPitch()).
-        //     setAngles step 1 에서 head.pitch = headPitch * π/180 set → animateArms 시점 그 값.
-        //     우리는 그 값 직접 계산 (player.getPitch() lerped → 라디안).
+        // 🔴 (세션 65k revert 65j): vanilla 효과 직접 set 매핑은 모든 vanilla setAngles 효과
+        //   (limbSwing 진폭, ArmPose ITEM offset, sneaking 등) 를 cancel → 사용자 보고
+        //   "전체적으로 휘두르는게 아예 이상해짐". 65h 매핑 (= setAnglesXZY skip + X cancel)
+        //   으로 되돌림. vanilla setAngles + animateArms 가 set 한 모든 효과 그대로 보존.
+        //   X/Z 시 미세 차이는 더 자세한 보고 후 추가 조정.
         if (swing > 0F) {
-            float bodyYaw = MathHelper.sin(MathHelper.sqrt(swing) * (float)(2.0 * Math.PI)) * 0.2f;
-            if (preferredArm == Arm.LEFT) bodyYaw = -bodyYaw;
-
-            float headPitchRad = MathHelper.lerp(partialTicks, player.prevPitch, player.getPitch())
-                    * (float)(Math.PI / 180.0);
-
-            float fSwing = 1f - swing;
-            fSwing *= fSwing;
-            fSwing *= fSwing;            // (1 - swing)^4
-            fSwing = 1f - fSwing;
-            float gSwing = MathHelper.sin(fSwing * (float)Math.PI);
-            float hSwing = MathHelper.sin(swing * (float)Math.PI) * -(headPitchRad - 0.7f) * 0.75f;
-            float rollSwing = MathHelper.sin(swing * (float)Math.PI) * -0.4f;
-
-            if (preserveRight) {
-                rightArm.pitch = -(gSwing * 1.2f + hSwing);
-                rightArm.yaw   = bodyYaw * 3f;
-                rightArm.roll  = rollSwing;
-            }
-            if (preserveLeft) {
-                leftArm.pitch = bodyYaw - (gSwing * 1.2f + hSwing);
-                leftArm.yaw   = bodyYaw * 3f;
-                leftArm.roll  = rollSwing;
-            }
-
-            // 부모 X 회전 cancel (같은 frame fade 보간 — 세션 65h)
             float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
                                               sm.smOuterFade_prevTime, totalTime);
             if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
