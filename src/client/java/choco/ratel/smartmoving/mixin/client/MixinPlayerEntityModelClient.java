@@ -604,12 +604,20 @@ public abstract class MixinPlayerEntityModelClient {
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
     private void sm_animateFlying(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+        // 🔴 (세션 52): partial tick lerp 적용 — 원본 SmartRenderRender.renderPlayer L56-L57:
+        //   `totalDistance = statistics.getTotalDistance(renderPartialTicks)` —
+        //   `currentSpeed = statistics.getCurrentSpeed(renderPartialTicks)` 매 프레임 lerped 값.
+        //   이전 1.21.1 매핑은 sm.stats.totalDistance/currentSpeed 직접 사용 (lerp 안 함) →
+        //   매 틱 띡 변경 → 팔/다리/모든 애니메이션 부드럽지 않음 = 사용자 보고 직접 원인.
+        //   정정: setupTransforms 에서 cached tickDelta 사용 → lerped getter 호출.
+        float partialTicks = MixinPlayerEntityRenderer.smCachedTickDelta;
+
         // B-7 / §16-20: 원본 L477-L479 = totalDistance (3D 누적) + currentSpeed (3D 속도).
-        //   이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 → sm.stats.totalDistance/currentSpeed.
-        //   비행 walk/stand factor 계수 분기로 영향 큼 (수직+수평 운동 모두 반영).
-        float distance    = sm.stats.totalDistance * 0.08f;
-        float walkFactor  = smFactor(sm.stats.currentSpeed, 0f, 1f);
-        float standFactor = smFactor(sm.stats.currentSpeed, 1f, 0f);
+        //   원본 SmartRenderRender L56-L57: getTotalDistance/getCurrentSpeed(renderPartialTicks).
+        float currentSpeedLerped = sm.stats.getCurrentSpeed(partialTicks);
+        float distance    = sm.stats.getTotalDistance(partialTicks) * 0.08f;
+        float walkFactor  = smFactor(currentSpeedLerped, 0f, 1f);
+        float standFactor = smFactor(currentSpeedLerped, 1f, 0f);
 
         // 팔 (XZY 순서) — 원본 SmartMovingModel.java L696-L733:
         //   bipedRightArm.rotationOrder = XZY
@@ -635,11 +643,11 @@ public abstract class MixinPlayerEntityModelClient {
 
         // ANIM-01: head pitch 보정 — setupTransforms theta의 절반 역보정
         // 🔴 1:1 정정 (세션 47b): 원본 SmartMovingModel L481 isJump 분기 추가.
-        float speedFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
+        // 🔴 (세션 52): currentSpeedLerped 사용 — 매 프레임 부드러운 변화.
         float verticalAngle = sm.isJumping
                 ? Math.abs(sm.stats.currentVerticalAngle)
                 : sm.stats.currentVerticalAngle;
-        float theta = (QUARTER - verticalAngle) * speedFactor;
+        float theta = (QUARTER - verticalAngle) * currentSpeedLerped;
         head.pitch = -theta / 2f;
     }
 
