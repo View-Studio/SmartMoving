@@ -548,7 +548,7 @@ cloak.pitch 처리 위치도 진입점 위로 이동 (기존 메서드 끝에서
 - [📋 등재] **BUG-28** 처음 비행 시 하늘 끝까지 날아감 — F-1 분석: jump 키 hold 시 motionY 누적 + 0.91F 감쇠. 추가 검증 필요 (vanilla gravity 영향 등).
 - [📋 등재] **BUG-29** 비행 진입 뚝 끊김 — F-1 청크 3 발견: L2511 setHeightOffset(-1) 첫 프레임 적용. timing 검토 필요.
 - [⏳ BUG-31 후 재평가] **BUG-30** 비행 가만히 있을 때 팔 회전 축 다름 — F-3 결과: sm_animateFlying setAnglesXZY 정확 1:1 → BUG-31 좌표계 영향 가능.
-- [✅ AI 완결 / 인게임 검증 대기] **BUG-31** 몸 기울기 방향 다름 (몸 앞쪽이 하늘) — Flying Phase F-6 (세션 40): vanilla setupTransforms POSITIVE_Y 180° 뒤집힘 + SM POSITIVE_X 누적 = 좌표계 반전 → sm_setupTransforms isFlying 분기 X 회전 부호 반전 (`-theta`).
+- [✅ 인게임 검증 완료 (세션 41)] **BUG-31** 몸 기울기 방향 다름 (몸 앞쪽이 하늘) — Flying Phase F-6 (세션 40): X 회전 부호 반전 (`-theta`). 사용자 확인 "기우는 방향 자체는 고쳐짐" ✅.
 - [⏳ BUG-31 후 재평가] **BUG-32** 머리 이상하게 고정 — F-3 결과: head.pitch = -theta/2 매핑 정확 → BUG-31 동일 좌표계 영향.
 - [⏳ BUG-25 후 재평가] **BUG-33** 비행 모든 애니메이션 부드럽지 않음 (프레임 끊김) — F-3 결과: sm.stats.calculate 정상 호출 → 다른 원인 (BUG-25 sprint 미적용 영향 가능).
 - [⏳ BUG-25/31 후 재평가] **BUG-34** 비행 디테일 (각도/움직임/속도/스무스함) 다름 — F-3 결과: sm_animateFlying 정확 1:1 → BUG-25/31 누적 효과.

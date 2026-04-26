@@ -275,6 +275,41 @@ return speedFactor;
 6. **🟡 BUG-26** (착지) — 사용자 안내.
 7. **🟢 잔존 (BUG-27/28/30/32/33/34)** — 위 1-5 정정 후 사용자 인게임 재평가.
 
+## F-6 정정 결과 (세션 40-41)
+
+### ✅ BUG-31 (몸 기울기) — 사용자 인게임 검증 완료 (세션 41)
+- 정정: sm_setupTransforms isFlying 분기 `POSITIVE_X.rotation(theta)` → `POSITIVE_X.rotation(-theta)`
+- 사용자 보고: "기우는 방향 자체는 고쳐짐" ✅
+- 다른 자세 분기 (Swim/Dive/Slide/HeadJump) 부호 검증: **사용자 인게임 검증 결과 받기 전 deferred** — Swim/Dive/Slide/HeadJump 사용자 보고는 별도 BUG-3/4/5 (진동/뚝뚝뚝/망가짐) 이므로 자세 자체 X 회전 부호 영향 검증 불가능 (자세가 보이지 않을 만큼 깨진 상태). BUG-3/4/5 진단 후 결정.
+
+### ✅ BUG-25 (속도 느림) / 잉여 / 누락 — 정정 완료 / 인게임 검증 대기 (세션 40)
+
+### ⏳ BUG-29 (진입 끊김) — 추가 분석 결과 / 정정 deferred (세션 41)
+
+**추가 분석**:
+- 원본 SmartMovingSelf afterMoveEntity L1608-L1609: `if (heightOffset != 0F) sp.posY = sp.posY + heightOffset;` — heightOffset(-1) 시 posY -1 (매 프레임)
+- 원본 setHeightOffset (L1694-L1704): boundingBox.minY -= heightOffset + height += heightOffset 만 (posY 변경 없음)
+- 1.21.1 sm_afterMove_client L99-L101: `player.setPos(... y - heightOffset ...)` — heightOffset(-1) 시 y +1 (반대 방향)
+- 1.21.1 매핑자 주석: "원본: setPosition(x, y - heightOffset, z) / heightOffset = -1F 시: y - (-1F) = y + 1F → 플레이어를 1블록 위로 보정" → 의도된 동작 명시
+
+**진단 결과**:
+- 부호 자체는 의도된 (vanilla 1.21.1 처리 차이로 +1 보정 필요)
+- 첫 프레임 적용 = 시각적 한 프레임 +1 점프 = "뚝 끊김"
+- 단순 부호 정정 X — 정정 = heightOffset 적용 timing 변경 (1 프레임 지연 / 보간) 또는 다른 메커니즘 필요
+
+**deferred 사유**:
+- BUG-31 정정으로 자세 정상화 → 사용자 체감 시각적 영향 줄어들 가능성
+- 정정 = 큰 작업 (timing 변경 = 다른 SM 분기 영향)
+- BUG-25/잉여/누락 + 잔존 BUG (BUG-27/28/30/32/33/34) 인게임 검증 결과 받은 후 우선순위 재평가 권장
+
+### 🟡 BUG-26 (착지) — 사용자 안내
+- config 파일에서 `flyCloseToGround = false` 설정 시 자동 착지 가능
+- 원본 1:1 (의도된 동작)
+
+### ⏳ 잔존 BUG 인게임 검증 대기 (BUG-27/28/30/32/33/34)
+
+위 정정 (BUG-25/31/잉여/누락) 의 인게임 검증 결과 + 잔존 BUG 평가 → 다음 단계 결정.
+
 ---
 
 ## F-2: 원본 SmartMovingBase.moveFlying + HorizontalAirDamping (대기 — 세션 38 예정)
