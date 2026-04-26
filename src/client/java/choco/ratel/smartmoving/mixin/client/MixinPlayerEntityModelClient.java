@@ -688,9 +688,27 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65b): swing 처리 = preferred arm 의 setAnglesXZY skip (위 팔 블록 참조).
-        //   vanilla setAngles + animateArms 가 preferred arm 에 적용한 full vanilla swing
-        //   모션이 그대로 보존됨. 추가 += 적용 불필요.
+        // 🔴 (세션 65c): swing arm 의 비행 자세 X 회전 cancel — 원본 ignoreSuperRotation 1:1.
+        //   사용자 보고: "원본은 몸 향하는 방향의 좌우만 수용, 상하축은 수용 안 함".
+        //   원본 SmartMovingModel.animateNonStandardWorking L586-L594:
+        //     bipedRightShoulder.ignoreSuperRotation = true → ModelRotationRenderer.preTransform
+        //     L114-L122 가 GL_MODELVIEW_MATRIX 의 회전을 LoadIdentity 로 reset (translation 만
+        //     유지) → 부모 (bipedOuter) 의 X (= 비행 수직 기울기) + Y 회전 모두 무시.
+        //     그 후 shoulder 의 X = viewVerticalAngelOffset, Y = workingAngle 적용.
+        //   = swing arm 이 비행 자세 X 기울기 영향 안 받음.
+        //
+        //   1.21.1 매핑: setupTransforms 에서 POSITIVE_X(-thetaLerped) 가 모든 모델에 적용.
+        //   부모 X 회전 cancel 위해 자식 arm.pitch 에 += theta (R_x(-theta)*R_x(theta)=I).
+        //   Y 회전은 그대로 두기 (사용자 요구 "좌우만 수용").
+        //
+        //   값 출처: setupTransforms 에서 cache 된 sm.smOuterTiltX (직전 프레임 thetaLerped,
+        //   1-frame delay 있지만 fade 보간이 천천히 변하므로 실용적 차이 미미).
+        //   첫 프레임 (cache=0) 에는 raw theta 사용.
+        if (swing > 0F) {
+            float thetaCancel = (sm.smOuterTiltX != 0f) ? sm.smOuterTiltX : theta;
+            if (preserveRight) rightArm.pitch += thetaCancel;
+            if (preserveLeft)  leftArm.pitch  += thetaCancel;
+        }
     }
 
     /**
