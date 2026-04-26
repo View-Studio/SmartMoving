@@ -185,38 +185,39 @@ public class MixinPlayerEntityRenderer {
         //       setAngles 의 head.yaw 계산 영향)
         //     - 추가 Y 회전 (horizontalAngle - lerpedYaw) 은 sm_setupTransforms TAIL 에서 처리
         //       (smFlyingExtraYaw 캐시 통해 전달).
-        // 🔴 BUG-27/32 (Flying Phase / 세션 47) 정확 매핑.
-        //   세션 58 revert (세션 59): smBodyYawOverride = 180 → vanilla POSITIVE_Y(0) →
-        //   모델 default 좌표계 (north 향함) = 정면 반대 사용자 보고.
-        //   원본 SmartRenderRender 가 actualRotation=0 cancel 하지만 1.21.1 vanilla 의 좌표계
-        //   처리가 다름 — 단순 cancel 시 정면 반대. 이전 매핑 복원.
+        // 🔴 마우스 회전 delay 정밀 매핑 (Flying Phase / 세션 61):
+        //   원본 흐름:
+        //     1. SmartRenderRender.rotatePlayer L162-L167: actualRotation=0 강제
+        //        → vanilla super.rotatePlayer 가 GL 회전 cancel.
+        //     2. SmartMovingModel.isFlying L486: bipedOuter.rotateAngleY = horizontalAngle
+        //        (절대값, fade 보간 적용).
+        //     3. SmartRenderModel L247: fadeIntermediate → bipedOuter.Y_lerped 추적.
+        //     4. 모델 회전 = bipedOuter.Y_lerped = horizontalAngle 추적 (fade).
+        //   = 마우스 회전 시 모델 fade 천천히 추적 (delay + smooth).
         //
-        //   원본 SmartMovingRender.rotatePlayer L145-L148:
-        //     entityplayer.renderYawOffset = forwardRotation (= lerpedYaw)
-        //   = player.bodyYaw 를 lerpedYaw (마우스) 강제.
-        //   원본 SmartMovingModel L486:
-        //     bipedOuter.rotateAngleY = horizontalAngle (이동 방향)
-        //   = 모델 root 추가 Y 회전.
+        //   1.21.1 vanilla 차이: setupTransforms 의 POSITIVE_Y(180-bodyYaw) cancel 하면
+        //   (bodyYaw=180 시 POSITIVE_Y(0)) 모델 정면 = vanilla model default (north = -Z 좌표) →
+        //   정면 반대 (세션 58 사용자 보고).
+        //   1.21.1 vanilla 가 POSITIVE_Y(180) 적용 시 모델 정면 = south (정상). 즉 vanilla 의
+        //   "no rotation" 효과 = bodyYaw=0 (POSITIVE_Y(180-0)=POSITIVE_Y(180)).
         //
-        //   1.21.1 매핑:
-        //     - smBodyYawOverride = lerpedYawDeg (vanilla bodyYaw = lerpedYaw, 마우스).
-        //     - entity.bodyYaw / prevBodyYaw = lerpedYawDeg 강제 (vanilla setAngles head.yaw = 0).
-        //     - smFlyingExtraYaw = horizontalAngle - lerpedYaw_rad (차이값, fade 보간).
-        //   결과: 모델 회전 = lerpedYaw + extraYaw_lerped (= horizontalAngle 수렴).
-        //
-        //   사용자 "마우스 회전 시 delay" 효과 = 원본 fade 시스템 만들지 못함 (1.21.1 vanilla 즉시
-        //   회전 영향). 후속 세션 검토 (vanilla bodyYaw 자연 처리 + head.yaw 강제 0 등).
+        //   매핑:
+        //     - smBodyYawOverride = 0f → vanilla POSITIVE_Y(180) = 모델 정면 정상.
+        //     - entity.bodyYaw / prevBodyYaw 강제 제거 (vanilla 자연 처리, ModifyArg 가 0 으로 무력화).
+        //     - smFlyingExtraYaw = horizontalAngle (절대값) — fade 보간 추적.
+        //     - sm_animateFlying head.yaw = 0 강제 (세션 60 — bipedHead reset 효과).
+        //   결과: 모델 회전 = POSITIVE_Y(180) (정면 정상) + extraYaw_lerped (= horizontalAngle 추적, fade).
+        //         vanilla 자연 bodyYaw 무력화 (ModifyArg 0).
+        //         마우스 회전 시 horizontalAngle 변화 → fade 천천히 추적 → 모델 delay.
         if (sm.isFlying) {
-            float lerpedYawDeg = localPlayer.prevYaw
-                    + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
-            smBodyYawActive = true;
-            smBodyYawOverride = lerpedYawDeg;
-            localPlayer.bodyYaw = lerpedYawDeg;
-            localPlayer.prevBodyYaw = lerpedYawDeg;
             float horizontalAngle = sm.stats.horizontalDistance < 0.05F
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
-            smFlyingExtraYaw = horizontalAngle - (float) Math.toRadians(lerpedYawDeg);
+            smBodyYawActive = true;
+            smBodyYawOverride = 0f;  // vanilla POSITIVE_Y(180-0)=POSITIVE_Y(180) → 모델 정면 정상.
+            // entity.bodyYaw / prevBodyYaw 강제 제거 — vanilla 자연 처리 (ModifyArg 가 0 적용).
+            // bipedOuter.rotateAngleY 효과: horizontalAngle (절대값, fade 보간).
+            smFlyingExtraYaw = horizontalAngle;
             return;
         }
 
