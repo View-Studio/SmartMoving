@@ -672,6 +672,17 @@ public final class SmartMovingClientState {
      */
     public float swimStandSneakFactor = 0f;
 
+    /**
+     * 원본 SmartRender bipedOuter.rotateAngleX (라디안) 등가 — sm_setupTransforms 의 X tilt
+     * (isSwim/isDive/isSlide/isFlying/isHeadJumping 5 분기 마지막 활성 값).
+     * 사용처: B-17 — MixinCapeFeatureRenderer 의 망토 X 회전 클램프
+     *   `localAngleMax = max(70.523° - smOuterTiltX_deg, 6°)` 적용 (원본
+     *   ModelCapeRenderer.java L72-L73).
+     * 갱신: sm_setupTransforms 진입 시 0 reset → 5 분기에서 = 으로 할당.
+     * 한 분기만 활성 (SM 11-state if-else 우선순위).
+     */
+    public float smOuterTiltX = 0f;
+
     // ── FOV / perspective ──────────────────────────────────────────────
     /**
      * 속도 기반 FOV 배율의 EMA 누적값 (원본: SmartMovingSelf.fadingPerspectiveFactor).

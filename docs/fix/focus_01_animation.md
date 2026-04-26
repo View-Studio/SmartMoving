@@ -419,7 +419,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying 본체 `distance = limbSwing * 0.08f` + `walkFactor/standFactor = smFactor(limbSwingAmount, ...)` 3 라인 → `sm.stats.totalDistance` / `sm.stats.currentSpeed` 교체. sm 인자 이미 있음. **세션 32 완료**.
 
 **[신규 Mixin]**
-- [-] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — **§17 잔여로 deferred (세션 33)**. 사유: vanilla CapeFeatureRenderer 가 `matrices.multiply(POSITIVE_X.rotationDegrees(angleDeg))` 로 망토 X 회전 직접 적용 (cloak.pitch 무시) → `@ModifyArg` 로 angleDeg 가로채야 하나, 그 안에서 entity/sm 접근 어려움 → ThreadLocal capture + `@Inject(HEAD)` 분리 필요 + 1.21.1 vanilla 정확 시그니처 확인 필요 (sources jar 부재). 우선순위 중간 (메인 외 망토). 본 작업 별도 세션 / Phase B 외 처리.
+- [x] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — **세션 34 완료**. SmartMovingClientState.smOuterTiltX 신규 capture 필드 + sm_setupTransforms 5 분기 (isSwim/isDive/isSlide/isFlying/isHeadJumping) 진입 reset + 갱신 + 신규 MixinCapeFeatureRenderer (HEAD/RETURN entity capture + @ModifyArg ordinal=0 으로 X 회전 인자 클램프) + mixins.json 등록. vanilla CapeFeatureRenderer.class 디스어셈블리로 시그니처/ordinal 검증.
 
 **[정합 근사 검토만 — B-N 미등록]**
 - ~~§16-21. Head jump overGroundBlock material → smallOverGroundHeight 단순 높이~~ 5블록 스캔 첫 고체 블록 거리 ≈ material.isSolid() 등가. material 분류 손실은 매우 희귀 케이스. **R-10+ 추가 작업 없음**.
@@ -2187,6 +2187,109 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 ---
 
+### 세션 34 — 2026-04-26 — Phase B / R-10+ B-17 (Cape outer.X 클램프) 1:1 이식 — **Phase B 완전 종료 (16/16 = 100%)**
+
+**진행한 작업** (사용자 지시에 따라 deferred 취소 + 본격 진행):
+
+**사용자 지시 정정 (2026-04-26)**:
+- SmartMoving/SmartRender 원본 = `C:\Work\minecraft\porting\sm_original\` 로컬 경로 (WebFetch 금지, 메모리 reference 일치).
+- "해당 작업을 위해 필요한 모든 것을 다 찾아 라인 하나하나 다 읽어 분석. 1:1 번역."
+- 세션 33 의 deferred 결정 = 보수적 회피 / 일관성 부족 → 본격 진행.
+
+1. **vanilla 1.21.1 CapeFeatureRenderer 본체 추출 + 라인별 read**:
+   - `.gradle/loom-cache/minecraftMaven/.../minecraft-clientOnly-...jar` 안 `net/minecraft/client/render/entity/feature/CapeFeatureRenderer.class` 추출.
+   - `javap -p -c -l` 로 디스어셈블리 (LineNumberTable + LocalVariableTable 포함).
+   - 정확 메서드 시그니처: `render(MatrixStack, VertexConsumerProvider, int, AbstractClientPlayerEntity, F, F, F, F, F, F)V`
+   - **line 69**: `matrixStack.multiply(POSITIVE_X.rotationDegrees(6.0F + r/2 + q));` ← X 회전 (클램프 대상, ordinal=0)
+   - **line 70**: Z 회전 `s/2`
+   - **line 71**: Y 회전 `180 - s/2`
+   - vanilla 가 이미 q∈[-6,32], r∈[0,150], s∈[-20,20] clamp 하지만 `localAngleMax = max(70.523° - outer.X°, 6°)` 추가 상한은 미적용.
+   - **결론**: vanilla X 회전 식 = 1.7.10 원본 `6F + f3/2 + f2` 와 정확히 동일 패턴 → 클램프만 추가 적용.
+
+2. **SmartRender ModelCapeRenderer + 의존 트리 라인별 read**:
+   - `ModelCapeRenderer.java` 전체 90 라인 read 완료 (세션 33 분석 활용).
+   - `ModelSpecialRenderer.java` (super, 56 라인) read — beforeRender/doRender/afterRender + ignoreRender 패턴.
+   - `ModelRotationRenderer.java` L98-L105 — preTransforms 호출 흐름 (base/outer 부모 transform 후 자체 preTransform).
+   - **호출처**: `SmartRenderModel.java L55` `bipedCloak = new ModelCapeRenderer(mp, 0, 0, bipedBreast, bipedOuter);` → **outer = bipedOuter (root, 전체 몸 회전 노드) 확정**.
+
+3. **sm_setupTransforms 5 분기 + capture 위치 분석**:
+   - 5 분기 모두 if-block (else if 아님) 이지만 SM 11-state 우선순위 체인으로 한 분기만 활성 보장 → `=` 으로 할당 안전.
+   - 자기 자신 (ClientPlayerEntity) 한정 — 다른 플레이어는 sm_setupTransforms 가 SM tilt 적용 안 함 → outer.X = 0 → 클램프 무관 → vanilla 그대로 (일관성).
+
+4. **B-17 코드 수정** (4 파일 변경 + 1 신규):
+
+   a. **`SmartMovingClientState.java`** — `public float smOuterTiltX = 0f;` 신규 필드 추가 (swimStandSneakFactor 다음).
+
+   b. **`MixinPlayerEntityRenderer.sm_setupTransforms`** — 5 분기 갱신:
+      - 진입 직후 (ClientPlayerEntity 캐스팅 후) `sm.smOuterTiltX = 0f;` reset.
+      - isSwimming_sm: `sm.smOuterTiltX = tiltAngle;` (matrices.multiply 직후)
+      - isDiving: 동일 (3 sub-분기 모두 적용)
+      - isSliding: 동일
+      - isFlying: `sm.smOuterTiltX = theta;` (theta = (π/2 - currentVerticalAngle) * walkFactor)
+      - isHeadJumping: 동일
+
+   c. **신규 `MixinCapeFeatureRenderer.java`** (98 라인):
+      - `@Mixin(CapeFeatureRenderer.class)` + 3 inject:
+        - `@Inject(method=render, at=HEAD)` `sm_captureCapeEntity` — entity 받아 static field `sm_currentCapeEntity` 저장 (cape 렌더 단일 thread 보장 → static 안전).
+        - `@ModifyArg(method=render, target=POSITIVE_X.rotationDegrees(F), ordinal=0)` `sm_clampCapeXAngle` — angleDeg 가로채기:
+          ```java
+          if (!(entity instanceof ClientPlayerEntity)) return angleDeg;
+          if (sm.smOuterTiltX == 0f) return angleDeg;
+          float outerXDeg = (float) Math.toDegrees(sm.smOuterTiltX);
+          float localAngleMax = Math.max(70.523f - outerXDeg, 6f);
+          return Math.min(angleDeg, localAngleMax);
+          ```
+        - `@Inject(method=render, at=RETURN)` `sm_clearCapeEntity` — static 정리.
+
+   d. **`smartmoving.client.mixins.json`** — `MixinCapeFeatureRenderer` client 배열 등록.
+
+5. **값 정확성 검증**:
+   - 원본 `localAngleMax = max(70.523F - outer.rotateAngleX * RadiantToAngle, 6F)`:
+     - `outer.rotateAngleX` (라디안) → `Math.toDegrees(sm.smOuterTiltX)` (도)
+     - `RadiantToAngle = 180/π = DEGREES_PER_RADIAN` 등가 (Math.toDegrees 가 자동 변환)
+     - `70.523F` (도) = SR 상수 그대로 사용
+   - 원본 `realLocalAngle = min(localAngle, localAngleMax)`:
+     - `localAngle` (도) = vanilla `6.0F + r/2 + q` (이미 인자로 들어옴)
+     - `Math.min(angleDeg, localAngleMax)` 적용 1:1
+   - 라디안 그대로 보존 (smOuterTiltX 라디안), 도 변환은 클램프 적용 직전 1회.
+
+6. **회귀 안전성**:
+   - 자기 자신 (ClientPlayerEntity) 한정 (else 즉시 return).
+   - SM tilt 없음 (smOuterTiltX == 0) 시 즉시 return → vanilla 그대로.
+   - static field `sm_currentCapeEntity` = render thread 단일 (cape 는 nested 없음). HEAD 진입/RETURN 정리 보장.
+   - 다른 entity render 영향 없음 (CapeFeatureRenderer 만 inject).
+
+7. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**검증 체크리스트 (세션 34 B-17)**:
+- [근거] ✓ vanilla CapeFeatureRenderer.class 디스어셈블리 (정확 시그니처 + LineNumberTable) + ModelCapeRenderer.java + ModelSpecialRenderer.java + ModelRotationRenderer.java + SmartRenderModel.java L55 호출처 모두 read
+- [전수] ✓ vanilla render 메서드 line 69 X 회전 (ordinal=0) 정확 식별 + 5 분기 capture 모두 매핑
+- [발견] 신규 발견 0건
+- [검증] ✓ vanilla X 회전 식 = 1.7.10 원본 등가 검증 + 라디안↔도 변환 정확 + 자기/타인 분리 안전
+- [회귀] ✓ ClientPlayerEntity 한정 + SM tilt 0 시 vanilla 그대로 + render thread 단일 보장
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 완전 종료 (세션 24-34 / 11 세션 / 16/16 = 100%)**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ 누적 검증 후 (B-16) — 1/1
+- ✅ 인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 5/5
+- ✅ **신규 Mixin (B-17 — CapeFeatureRenderer) — 1/1 완료**
+
+**Phase B 누적 코드 변경 (10 commits)**:
+- 수정 파일 (3): MixinPlayerEntityModelClient + MixinPlayerEntityRenderer + SmartMovingClientState
+- 신규 파일 (2): PlayerEntityModelAccessor (B-16) + MixinCapeFeatureRenderer (B-17)
+- 신규 등록 (1): smartmoving.client.mixins.json (Accessor + CapeFeatureRenderer)
+
+**다음 단계 (세션 35+)**:
+1. **§14 회귀 방지 감사** — Phase B 누적 변경 (4 reset 인프라 + 11 분기 본체 + body.offsetY MatrixStack + cloak Accessor + 2 신규 분기 + 7 입력값 교체 + 망토 클램프) 가 vanilla / 다른 SM 분기 회귀 영향 점검.
+2. **`playtest_fixes.md` 현재 포커스** → `(#1 AI 완결 / 통합테스트 인계)` 업데이트.
+3. **인게임 통합테스트** — 사용자 in-game §3 16 케이스 매칭 확인 → 시각 차이 발견 시 후속 분석.
+
+---
+
 ## 16. 신규 발견
 
 ### 세션 1 (2026-04-25)
@@ -2325,12 +2428,4 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - fade 보간 0.2F*timeDelta 계수 vanilla lerpAngleDegrees 차이 — bodyYaw 부드러움 영향 (저우선)
 - **NoScaleEnd 갑옷 흉갑 다리 offsetY 보정** — ArmorFeatureRenderer Mixin 별도 작업 (포커스 #1 외, 갑옷 레이어 영역). ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정 필요.
 - **animateNonStandardWorking / BowAiming 어깨 ZYX** — 1.21.1 PlayerEntityModel 에 어깨 노드 부재로 구조적 N/A. SM 비표준 상태(클라이밍/수영) 중 활/석궁 사용 시 어깨 고정 불가. 우선순위 낮음.
-- **B-17 deferred (Cape outer.X 클램프 / §16-25 / ModelCapeRenderer L72-L73)** — 세션 33 deferred. 1.21.1 vanilla `CapeFeatureRenderer.render` 가 `matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(angleDeg))` 로 망토 X 회전 직접 적용 (cloak.pitch 미사용). 클램프 적용 위해 `@ModifyArg(target=rotationDegrees, ordinal=0)` 필요하나, 그 안에서 entity 접근 어려움 → ThreadLocal capture + `@Inject(HEAD)` 분리 + 1.21.1 vanilla CapeFeatureRenderer 정확 시그니처 확인 (sources jar 부재로 추측 위험) 필요. **별도 세션 작업** — 작업 진행 시:
-    1. 1.21.1 vanilla CapeFeatureRenderer 본체 read (sources jar / yarn API 직접)
-    2. SmartMovingClientState 에 `smOuterTiltX` (라디안) capture 필드 추가 + sm_setupTransforms 의 모든 outer.X 적용 분기 (isSwim/isDive/isSlide/isFlying/isHeadJumping) 에서 갱신
-    3. 신규 `MixinCapeFeatureRenderer` 생성:
-       - `@Inject(method=render, at=HEAD)` — entity 받아서 ThreadLocal 에 sm 저장
-       - `@ModifyArg(method=render, target=POSITIVE_X.rotationDegrees, ordinal=0)` — angleDeg 가로채서 `Math.min(angleDeg, Math.max(70.523f - outerXDeg, 6f))` 클램프 적용
-       - `@Inject(method=render, at=RETURN)` — ThreadLocal 정리
-    4. mixins.json 등록 + 빌드 검증
-    - 우선순위 중간 (메인 애니메이션 외 망토). 인게임 통합테스트 후 시각 차이 평가 후 진행 결정 가능.
+- ~~B-17 deferred (Cape outer.X 클램프 / §16-25 / ModelCapeRenderer L72-L73)~~ ✅ **세션 34 완료** — 사용자 지시에 따라 vanilla CapeFeatureRenderer.class 디스어셈블리 (`javap -p -c -l`) 로 정확 시그니처 + ordinal 검증 후 본격 진행. 코드 변경 = SmartMovingClientState.smOuterTiltX 필드 + sm_setupTransforms 5 분기 capture + 신규 MixinCapeFeatureRenderer + mixins.json 등록. 자기 자신 한정 적용 (타인 plr 은 sm tilt 0 이므로 vanilla 그대로).

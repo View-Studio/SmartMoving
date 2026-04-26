@@ -211,12 +211,18 @@ public class MixinPlayerEntityRenderer {
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
 
+        // B-17 capture (§16-25): outer.X 등가 tiltAngle 을 SmartMovingClientState.smOuterTiltX 에
+        //   저장해 MixinCapeFeatureRenderer 에서 망토 X 회전 클램프 (70.523° - outerX_deg) 적용.
+        //   진입 시 reset — 5 분기 중 한 분기만 활성 시 = 으로 할당, 비활성 시 0 (vanilla 망토 그대로).
+        sm.smOuterTiltX = 0f;
+
         // SM 수영(isSwimming_sm): bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor
         // 원본: fadeRotateAngleX = true + rotateAngleX = Quarter - Sixteenth * standSneakFactor
         // standSneakFactor: 정지/스니킹=1 → 67.5°, 보행=0 → 90°(완전 수평)
         if (sm.isSwimming_sm) {
             float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 8f * sm.swimStandSneakFactor;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            sm.smOuterTiltX = tiltAngle;
         }
 
         // SM 잠수(isDiving): 원본 SmartMovingModel.md L542 —
@@ -235,12 +241,14 @@ public class MixinPlayerEntityRenderer {
                 tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             }
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            sm.smOuterTiltX = tiltAngle;
         }
 
         // SM 슬라이딩(isSliding): bipedOuter.rotateAngleX = Quarter
         if (sm.isSliding) {
             float tiltAngle = (float) Math.PI / 2f; // Quarter
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            sm.smOuterTiltX = tiltAngle;
             // bipedOuter.rotationPointY = 5F
             matrices.translate(0f, 5f / 16f, 0f);
             // bipedBody.offsetY = -0.4F (원본 SmartMovingModel.java L452, B-13 / §16-19)
@@ -255,12 +263,14 @@ public class MixinPlayerEntityRenderer {
             float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
             float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+            sm.smOuterTiltX = theta;
         }
 
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
         if (sm.isHeadJumping) {
             float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+            sm.smOuterTiltX = theta;
         }
     }
 

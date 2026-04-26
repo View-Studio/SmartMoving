@@ -12,6 +12,7 @@
     "MixinLivingEntityClient",
     "MixinLivingEntityRenderer",
     "MixinPlayerEntityClient",
+    "MixinCapeFeatureRenderer",
     "MixinPlayerEntityModelClient",
     "MixinPlayerEntityRenderer",
     "PlayerEntityModelAccessor"
