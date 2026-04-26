@@ -9,6 +9,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.Arm;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -604,15 +605,12 @@ public abstract class MixinPlayerEntityModelClient {
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
     private void sm_animateFlying(SmartMovingClientState sm, ClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
-        // 🔴 (세션 65f): swing 진행 중 sm_animateFlying 자체 회전 set 모두 skip.
-        //   사용자 요구: "똑바로 서있는 플레이어가 이동방향으로 검을 휘두르는거".
-        //   = 비행 자세 회전 (X 기울기 + 다리/팔 날개짓 + head 보정) 모두 cancel,
-        //     vanilla setAngles + animateArms 가 set 한 직립 자세 + swing 효과 그대로.
-        //   설계: sm_animateFlying skip + sm_setupTransforms 에서도 X 회전 skip (그 곳에서 처리).
-        //         Y 회전 (이동 방향) 만 적용 → 모델이 movement direction 향한 채 vanilla swing.
-        if (player.handSwingProgress > 0F) {
-            return;
-        }
+        // 🔴 (세션 65g): preferred arm 만 vanilla swing 처리. 다른 모델 (몸/다리/다른 팔/head)
+        //   은 sm 비행 자세 그대로 유지.
+        //   사용자 요구: "오른팔 (휘두르는 팔만 그런거야). 모든 에니메이션을 갑자기 초기화하지
+        //   말고. 휘두르는 에니메이션만 처리".
+        //   = preferred arm 만 setAnglesXZY skip (vanilla swing 잔존) + 부모 X 회전 cancel
+        //     (직립 자세). Y 회전은 그대로 (이동 방향 따라감, 모델과 같이 회전).
 
         // 🔴 (세션 52): partial tick lerp 적용 — 원본 SmartRenderRender.renderPlayer L56-L57:
         //   `totalDistance = statistics.getTotalDistance(renderPartialTicks)` —
@@ -635,14 +633,22 @@ public abstract class MixinPlayerEntityModelClient {
         //   rotateAngleY = cos(time*0.15) * Sixteenth * standFactor   (정지 시 미세 흔들림)
         //   rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Half - Sixteenth) * walkFactor + Quarter * standFactor   (날개짓)
         // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
+        //
+        // 🔴 (세션 65g): preferred arm 의 setAnglesXZY skip → vanilla setAngles + animateArms
+        //   가 set 한 swing 모션 잔존. 다른 팔만 날개짓 자세 적용.
+        float swing = player.handSwingProgress;
+        Arm preferredArm = player.getMainArm();
+        boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
+        boolean preserveLeft  = swing > 0F && preferredArm == Arm.LEFT;
+
         float rYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float lYaw  = MathHelper.cos(totalTime * 0.15f) * SIXTEENTH * standFactor;
         float rRoll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH + HALF - SIXTEENTH) * walkFactor
                 + QUARTER * standFactor;
         float lRoll = (MathHelper.cos(distance) * SIXTYFOURTH - HALF + SIXTEENTH) * walkFactor
                 - QUARTER * standFactor;
-        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
-        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
+        if (!preserveRight) setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        if (!preserveLeft)  setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance) * SIXTYFOURTH * walkFactor
@@ -674,6 +680,19 @@ public abstract class MixinPlayerEntityModelClient {
         //   원본 reset 효과 1:1 매핑 = 명시적 0 강제.
         head.yaw  = 0f;
         head.roll = 0f;
+
+        // 🔴 (세션 65g): preferred arm 의 비행 자세 X 회전 cancel — 직립 자세로 swing.
+        //   사용자 요구: "이동방향으로 똑바로 서서 휘두르는 거처럼" (preferred arm 한정).
+        //   부모 setupTransforms POSITIVE_X(-thetaLerped) 가 모든 모델에 적용 → swing arm 도
+        //   비행 자세로 회전. 이걸 자식 ModelPart 단계에서 quaternion 합성으로 cancel:
+        //     q_new = R_x(theta) * R_arm_orig.
+        //   Y 회전 (이동 방향) 은 cancel 안 함 → arm 도 모델과 같이 이동 방향 향함.
+        //   thetaCancel = sm.smOuterTiltX (직전 프레임 thetaLerped 의 fade 보간된 값).
+        if (swing > 0F) {
+            float thetaCancel = (sm.smOuterTiltX != 0f) ? sm.smOuterTiltX : theta;
+            if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
+            if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
+        }
     }
 
     /**
@@ -894,6 +913,28 @@ public abstract class MixinPlayerEntityModelClient {
         part.roll  = e.z;
     }
 
+    /**
+     * 부모 setupTransforms POSITIVE_X(-theta) 회전을 자식 ModelPart 단계에서 정확히 cancel.
+     *
+     * vanilla ModelPart.rotate: matrices.multiply(Quaternionf.rotationZYX(roll, yaw, pitch))
+     *   → 자식 회전 q_arm = R_z(roll) * R_y(yaw) * R_x(pitch) (vertex 에 X 가 가장 먼저 적용).
+     * 부모 R_x(-theta) 적용 후 자식 q_arm → 결과 R_x(-theta) * q_arm * v.
+     * 원하는 효과 = q_arm * v (부모 X 회전 무시) → 새 자식 q_new = R_x(theta) * q_arm.
+     * ZYX Euler 분해 → (pitch, yaw, roll).
+     *
+     * 단순 `pitch += theta` 는 회전 비교환성으로 yaw/roll 이 0 이 아닐 때 부정확
+     * (vanilla animateArms 의 roll = sin(swing*π)*-0.4 ~ -23° 와 합성 시 오차).
+     *
+     * 사용처: 비행 swing 진행 중 preferred arm — 직립 자세로 vanilla swing 효과 잔존.
+     */
+    private static void preCancelParentXRotation(ModelPart part, float theta) {
+        Quaternionf qOrig = new Quaternionf().rotationZYX(part.roll, part.yaw, part.pitch);
+        Quaternionf qNew = new Quaternionf().rotationX(theta).mul(qOrig);
+        Vector3f e = qNew.getEulerAnglesZYX(new Vector3f());
+        part.pitch = e.x;
+        part.yaw   = e.y;
+        part.roll  = e.z;
+    }
 
     /**
      * 원본 ZXY rotationOrder → ModelPart pitch/yaw/roll 변환.

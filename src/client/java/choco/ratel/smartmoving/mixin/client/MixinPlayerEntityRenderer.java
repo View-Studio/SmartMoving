@@ -360,16 +360,7 @@ public class MixinPlayerEntityRenderer {
             if (yawLerped != 0f) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-yawLerped));
             }
-            // 🔴 (세션 65f): swing 진행 중 X 회전 skip — 모델 직립 자세 유지.
-            //   사용자 요구: "똑바로 서있는 플레이어가 이동방향으로 검을 휘두르는거".
-            //   sm_animateFlying 의 자체 회전 set 도 swing 시 skip (early return). 결과:
-            //   비행 자세 (X 기울기 + 다리/팔 날개짓 + head 보정) 모두 cancel, vanilla
-            //   setAngles + animateArms 가 set 한 직립 자세 + swing 효과 그대로. Y 회전
-            //   (이동 방향) 만 적용 → 모델이 movement direction 향한 채 vanilla swing.
-            boolean swingActive = localPlayer.handSwingProgress > 0F;
-            if (!swingActive) {
-                matrices.multiply(RotationAxis.POSITIVE_X.rotation(-thetaLerped));
-            }
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-thetaLerped));
             matrices.translate(0f, -1.5f, 0f);
 
             // fade prev 갱신 (다음 프레임 보간용)
@@ -377,8 +368,7 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterExtraYaw_prev = yawLerped;
             sm.smOuterFade_prevTime = animationProgress;
 
-            // cape 클램프 (B-17) 도 swing 시 X 회전 skip 일관 — 0 으로 set.
-            sm.smOuterTiltX = swingActive ? 0f : thetaLerped;
+            sm.smOuterTiltX = thetaLerped;  // cape 클램프 (B-17) 도 보간된 값 사용
         }
 
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
