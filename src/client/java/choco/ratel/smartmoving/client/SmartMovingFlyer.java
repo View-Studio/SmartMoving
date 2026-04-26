@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.client;
 
 import choco.ratel.smartmoving.config.SmartMovingConfig;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.util.math.Vec3d;
@@ -30,6 +31,17 @@ public class SmartMovingFlyer {
                                        Vec3d movementInput, boolean jumping) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (!sm.isFlying || !cfg.fly) return false;
+
+        // 🔴 BUG-28 진짜 원인 정정 (Flying Phase / 세션 44): jumping 인자 (= LivingEntity.jumping
+        //   필드) 가 sm_jumpingFilter 에 의해 false 로 강제될 수 있음 — 비행 시작 시 vanilla
+        //   L797 jump() 호출 → tryJump → D-18 `blockJumpTillButtonRelease=true` set →
+        //   다음 틱부터 sm_jumpingFilter 의 `if (blockJumpTillButtonRelease) this.jumping=false`
+        //   가 매 틱 LivingEntity.jumping 을 false 로 강제 → handleFlying 의 jumping 인자도
+        //   false → vanilla boost cancel + SM 점프 분기 모두 skip → vanilla L1037-L1095 boost
+        //   (motionY += 0.15) 만 net 잔존 → 평형 ~30 m/s 무한 상승.
+        //   원본 SmartMovingSelf 의 esp.movementInput.jump = vanilla input 직접값 (필터 전).
+        //   해결: handleFlying 안에서는 raw input (jumpKey.isPressed()) 사용 = 원본 1:1 매칭.
+        jumping = MinecraftClient.getInstance().options.jumpKey.isPressed();
 
         float moveUpward = 0F;
         Vec3d vel = player.getVelocity();

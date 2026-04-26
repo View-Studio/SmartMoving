@@ -1309,15 +1309,22 @@ public final class SmartMovingClientState {
             //     해제 엣지 → restoreFromFlying = true
             //   isLevitating 전환 (원본 L2516-L2522, flying 비활성 + levitateSmall 시):
             //     동일 패턴.
-            if (isFlying && !wasFlying) {
-                heightOffset = -1F;
-            } else if (!isFlying && wasFlying) {
+            //
+            // 🔴 BUG-28 + BUG-29 진짜 원인 정정 (Flying Phase / 세션 44): 비행/Levitate 진입 시
+            //   heightOffset=-1F set 자체 제거.
+            //   원본 SmartMovingSelf.setHeightOffset (L1694-L1704) = `boundingBox.minY -= heightOffset
+            //   + height += heightOffset` — **박스 크기만 변경 (player 위치 불변)**.
+            //   1.21.1 매핑 = MixinEntityClient.afterMoveEntity L99-L101 의 `player.setPos(y -
+            //   heightOffset)` — **player 위치 변경 + 매 틱 호출 = 매 틱 +1 누적 → 무한 상승**!
+            //   사용자 보고 BUG-28 (첫 비행 무한 상승) + BUG-29 (몸 중심점이 발끝으로 바뀐 느낌)
+            //   의 진짜 직접 원인. 1.21.1 vanilla Creative 비행 자동 hitbox 처리 → SM 박스 보정
+            //   불필요. 진입 엣지 setHeightOffset 호출 제거 = 1.21.1 vanilla 정상 동작 + 누적 0.
+            //   해제 엣지 restoreFromFlying = true 는 그대로 유지 (다른 메커니즘 영향 없음).
+            if (!isFlying && wasFlying) {
                 restoreFromFlying = true;
             }
             if (!cfg0.isFlyingEnabled() && cfg0.isLevitateSmallEnabled()) {
-                if (isLevitating && !wasLevitating) {
-                    heightOffset = -1F;
-                } else if (!isLevitating && wasLevitating) {
+                if (!isLevitating && wasLevitating) {
                     restoreFromFlying = true;
                 }
             }

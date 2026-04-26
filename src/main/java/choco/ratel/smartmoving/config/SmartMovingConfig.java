@@ -1371,6 +1371,22 @@ public class SmartMovingConfig {
             return;
         }
         INSTANCE.readFrom(props);
+        // 🔴 BUG-26 자동 마이그레이션 (Flying Phase / 세션 44): 이전 잘못된 default (true) 가
+        //   사용자 환경에 저장된 경우 강제 false 로 마이그레이션 + save.
+        //   원본 net.smart.properties.Properties.getDefaultValue(Modified) = false 가 정답인데
+        //   1.21.1 매핑이 true 로 잘못 저장되어 있으면 vanilla 자동 착지 무효화 (BUG-26 직접 원인).
+        //   마이그레이션 마커: move.config.migration.flying = "session_44_done".
+        String marker = props.getProperty("move.config.migration.flying", "");
+        if (!"session_44_done".equals(marker)) {
+            INSTANCE.flyCloseToGround = false;
+            INSTANCE.flyWhileOnGround = false;
+            save();
+            try (FileOutputStream out = new FileOutputStream(configFile.toFile(), true)) {
+                Properties marker2 = new Properties();
+                marker2.setProperty("move.config.migration.flying", "session_44_done");
+                marker2.store(out, null);
+            } catch (IOException ignored) {}
+        }
     }
 
     /**
