@@ -184,9 +184,9 @@ public abstract class MixinPlayerEntityClient {
     @Redirect(
         method = "travel",
         at = @At(value = "INVOKE",
-                 target = "Lnet/minecraft/entity/Entity;setVelocity(DDD)V")
+                 target = "Lnet/minecraft/entity/player/PlayerEntity;setVelocity(DDD)V")
     )
-    private void sm_travel_setVelocity_flyFix(net.minecraft.entity.Entity self, double x, double y, double z) {
+    private void sm_travel_setVelocity_flyFix(PlayerEntity self, double x, double y, double z) {
         if (self instanceof ClientPlayerEntity player
                 && SmartMovingConfig.Config.enabled
                 && SmartMovingClientState.get(player).isFlying) {
