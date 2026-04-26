@@ -154,7 +154,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isSliding) {
             sm_animateSliding(limbSwing, limbSwingAmount, headYaw);
         } else if (flyingCreative) {
-            sm_animateFlying(sm, limbSwing, limbSwingAmount, animationProgress);
+            sm_animateFlying(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
             sm_animateHeadJumping(sm);
         } else {
@@ -603,7 +603,7 @@ public abstract class MixinPlayerEntityModelClient {
      * 원본: bipedHead.X = -bipedOuter.X / 2 = -θ/2 → world-space head X = θ/2
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
-    private void sm_animateFlying(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateFlying(SmartMovingClientState sm, ClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
         // 🔴 (세션 63 revert 세션 62): pivot reset 제거.
         //   세션 62 의 body.yaw/arm.pivot reset 은 vanilla animateArms swing 효과 자체를 cancel
         //   → 사용자 보고 "비행 중 공격 시 애니메이션 아예 없음".
@@ -673,6 +673,34 @@ public abstract class MixinPlayerEntityModelClient {
         //   원본 reset 효과 1:1 매핑 = 명시적 0 강제.
         head.yaw  = 0f;
         head.roll = 0f;
+
+        // 🔴 (세션 64): 비행 중 공격 swing 1:1 매핑.
+        //   원본 SmartRenderModel.setRotationAngles L227-L231 (mp.onGround > -9990F 항상 true):
+        //     imp.animateWorkingBody(...);
+        //     imp.animateWorkingArms(...);
+        //   SmartMovingModel.animateWorkingArms L675-L679: isStandard || isWorking() 시
+        //     imp.superAnimateWorkingArms 호출 = 원본 SmartRenderModel.animateWorkingArms
+        //     (vanilla 1.7.10 swing arm 회전 += 효과).
+        //   비행 시 isStandard=false, isWorking()=mp.onGround>0 (= handSwingProgress>0).
+        //   → swing 진행 중 vanilla swing 효과 적용. 비행 자세 (절대값) + swing += 결합.
+        //
+        //   vanilla 1.21.1 animateArms 매 프레임 호출 (handSwingProgress > 0 시) → body.yaw,
+        //     arm.pivot 변경. 우리 setAnglesXZY 가 회전 절대값 set → vanilla swing arm 회전 +=
+        //     효과 무시 (덮어씀) → 사용자 보고 "팔이 어깨 앞뒤로만 흔들림" (pivot 효과만 보임).
+        //
+        //   정정: setAnglesXZY 후 원본 1.7.10 vanilla swing arm 회전 += 직접 적용 (preferred=right).
+        //     원본 SmartRenderModel.animateWorkingArms L306-L315 1:1.
+        float swing = player.handSwingProgress;
+        if (swing > 0F) {
+            // 원본 animateWorkingArms (preferred = right; 일반적 player main arm)
+            float f6 = 1F - swing;
+            f6 = 1F - f6 * f6 * f6;
+            float f7 = (float) Math.sin(f6 * HALF);  // sin(_ * π)
+            float f8 = (float) Math.sin(swing * HALF) * -(head.pitch - 0.7F) * 0.75F;
+            rightArm.pitch -= f7 * 1.2F + f8;
+            rightArm.yaw   += (float) Math.sin(Math.sqrt(swing) * WHOLE) * 0.4F;  // sin(sqrt(swing) * 2π)
+            rightArm.roll  -= (float) Math.sin(swing * HALF) * 0.4F;
+        }
     }
 
     /**
