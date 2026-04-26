@@ -406,7 +406,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 
 **[신규 분기 추가]**
 - [x] B-14. 타인 플레이어 crawl Y 보정 (§16-22 / SmartMovingRender L124-L125) — sm_getPositionOffset 자기/타인 분기 분리 + 타인 분기 `entity.isSneaking() && sm.isCrawling → Vec3d(0, 0.125, 0)` 추가. SmartMovingClientState.get(UUID) 로 타인 sm 상태 조회 (C-24 State 패킷 동기화). **세션 29 완료**.
-- [ ] B-15. Levitate horizontal=camera (§16-23 / SmartMovingRender L132-L134) — sm_captureBodyYaw 끝부분 `if (sm.isLevitating) smBodyYawOverride = MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw());`
+- [x] B-15. Levitate horizontal=camera (§16-23 / SmartMovingRender L132-L134) — sm_captureBodyYaw 분기 처리 위에 `if (sm.isLevitating) { smBodyYawActive = true; smBodyYawOverride = Math.toDegrees(sm.stats.currentCameraAngle); return; }` 추가. 원본 마지막 덮어쓰기와 결과 등가 (모든 분기 결과를 카메라로 덮어쓰기 = 분기 진입 전 단독 적용). **세션 29 완료**.
 
 **[누적 위험 검증 후]**
 - [ ] B-16. Cloak 기본 기울임 SIXTYFOURTH (§16-24 / SmartRenderModel L251) — vanilla setAngles 가 매 프레임 cloak.pitch reset 여부 검증 → reset 없으면 sm_setAngles TAIL 이전에 reset 필요. 안전하면 `cloak.pitch = SIXTYFOURTH;` 추가. 우선순위 낮음.
@@ -1861,6 +1861,66 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - 신규 Mixin: B-17 (CapeFeatureRenderer)
 
 **다음 단계 (세션 30+)**: 권장 시작 = **B-15** (sm_captureBodyYaw 끝 보정 — levitate horizontal=camera 강제 정렬 / 신규 분기 마무리). 같은 그룹 마지막 1 원자.
+
+**세션 29 추가 작업 — B-15 도 함께 진행 (토큰 여유)**:
+
+1. **원본 1차 자료 read** — `SmartMovingRender.java` L132-L134:
+   ```java
+   if (moving.isLevitating && modelPlayers != null)
+       for(int i = 0; i < modelPlayers.length; i++)
+           modelPlayers[i].getMovingModel().md.currentHorizontalAngle = modelPlayers[i].getMovingModel().md.currentCameraAngle;
+   ```
+   Levitating(공중부양 status effect) 시 모든 모델의 currentHorizontalAngle 을 currentCameraAngle 로 강제 정렬 (= 카메라 방향으로 고정).
+
+2. **1.21.1 sm_captureBodyYaw + isLevitating 검증**:
+   - `SmartMovingClientState.isLevitating` boolean field (L407) 존재 — State 패킷 bit 19 동기화 (L784).
+   - `sm.stats.currentCameraAngle` 라디안 단위 — sm_captureBodyYaw 의 isCeilingClimbing/isSwim/isDive 분기에서 이미 사용.
+   - smBodyYawOverride 는 도 단위 (vanilla bodyYaw 와 일치) → Math.toDegrees() 변환 필요.
+
+3. **분기 위치 결정**:
+   - 원본은 모든 분기 처리 후 마지막에 덮어쓰기 (L132-L134 가 메서드 끝부분).
+   - 1.21.1 sm_captureBodyYaw 는 각 분기에서 return 하므로 마지막 덮어쓰기 패턴 사용 어려움.
+   - **결과 등가**: 모든 분기 결과를 카메라로 덮어쓰기 = 분기 진입 전 카메라 단독 적용. 따라서 분기 흐름 위에 isLevitating 우선 처리 추가 (smActive 검사 직후, 다른 분기들 전).
+
+4. **B-15 코드 수정** (sm_captureBodyYaw 의 smActive 검사 직후 / isCeilingClimbing 분기 직전 / 5 라인):
+   ```java
+   if (sm.isLevitating) {
+       smBodyYawActive = true;
+       smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentCameraAngle);
+       return;
+   }
+   ```
+   주석에 원본 마지막 덮어쓰기 등가성 + Levitate status effect 와 dive 자세 함께 발생 명시.
+
+5. **값 정확성 검증**:
+   - 원본 currentCameraAngle (라디안) → 1.21.1 Math.toDegrees(sm.stats.currentCameraAngle) (도). 단순 단위 변환 1:1.
+   - currentCameraAngle = lerp(tickDelta, prevCameraAngle, cameraAngle) = lerp(prevYaw_rad, getYaw_rad) — 발견 항목 본문의 `MathHelper.lerp(tickDelta, player.prevYaw, player.getYaw())` 와 등가 (라디안↔도 차이만).
+   - 정확성: currentCameraAngle 사용 (이미 SmartStatistics 보간 처리됨) > player.prevYaw/getYaw 직접 사용 (보간 미적용 가능).
+
+6. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (4s).
+
+**B-15 검증 체크리스트**:
+- [근거] ✓ 원본 SmartMovingRender L132-L134 read 완료 + isLevitating field/State 패킷 동기화 검증
+- [전수] ✓ 원본 1 분기 → 1.21.1 1 분기 매핑
+- [발견] 신규 발견 0건
+- [검증] ✓ currentCameraAngle 보간 처리 검증 + 라디안→도 변환 명시
+- [회귀] ✓ smBodyYawActive HEAD reset 으로 매 호출 안전 / levitating false 시 본 분기 skip → 기존 동작 보존
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**세션 29 누적 작업**: B-14 (자기/타인 분기 분리 + 신규 타인 분기) + B-15 (분기 흐름 위 isLevitating 우선 처리) = 2 원자 진행.
+
+**Phase B 진행 누적**: 16 원자 중 **10 완료** (62.5%) / 6 남음. 
+
+**그룹 진행도**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 (climbing 같은 분기) — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ **신규 분기 (B-14/B-15) — 2/2 완료**
+- 누적 검증 후: B-16 (1 원자)
+- 인프라 + 입력값: B-X / B-4 / B-5 / B-6 / B-7 (5 원자)
+- 신규 Mixin: B-17 (1 원자)
+
+**다음 단계 (세션 30+)**: 권장 시작 = **B-16** (cloak.pitch SIXTYFOURTH 기본 기울임 — 누적 위험 검증 후 안전하면 1 라인 추가). 누적 검증 그룹 진입.
 
 ---
 

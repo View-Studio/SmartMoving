@@ -100,6 +100,17 @@ public class MixinPlayerEntityRenderer {
                 || sm.isSliding || sm.isAngleJumping();
         if (!smActive) return;
 
+        // isLevitating 우선 처리 (B-15 / §16-23): 원본 SmartMovingRender L132-L134 —
+        //   levitating 시 모든 모델의 currentHorizontalAngle = currentCameraAngle 강제 정렬.
+        // 원본은 분기 처리 후 마지막에 덮어쓰기지만 결과 동등 (모든 다른 분기 결과를 카메라
+        //   방향으로 덮어쓰는 효과 = 분기 진입 전 카메라 방향 단독 적용과 동일).
+        // 일반적으로 levitate 는 dive 자세와 함께 발생 (Levitation status effect).
+        if (sm.isLevitating) {
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentCameraAngle);
+            return;
+        }
+
         // ── 원본 SmartMovingModel 상태별 bipedOuter.rotateAngleY 1:1 이식 ──────
         // 1.21.1 은 bipedOuter 계층이 없어 bodyYaw 단일 경로로 근사. 라디안→도 변환.
         // 원본 if-else 체인 우선순위 순서:
