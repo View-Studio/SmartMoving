@@ -797,11 +797,18 @@ public class SmartMovingConfig {
     public boolean displayJumpChargeBar = true;
 
     // ── Flying close-to-ground ─────────────────────────────────
-    // 원본: _flyCloseToGround = Modified("move.fly.ground.close") → 기본값 true
-    public boolean flyCloseToGround = true;
-    // 원본: _flyWhileOnGround = Modified("move.fly.ground.collide").depends(_flyCloseToGround) → 기본값 true
-    // flyCloseToGround=false이면 비활성. 착지 시 비행 유지.
-    public boolean flyWhileOnGround = true;
+    // 🔴 BUG-26 정정 (Flying Phase / 세션 43): default 값 1:1 정정.
+    //   원본 SmartMovingOptions L68 `Modified("move.fly.ground.close")` (defaults 미지정) →
+    //   net.smart.properties.Properties.getDefaultValue(Modified) = **false** (Properties.java
+    //   L173-L174). 이전 1.21.1 잘못 매핑: true → tryLanding 가드 `!flyCloseToGround` 가 false →
+    //   자동 착지 영원히 비활성 = 비행 중 정지해도 비행 종료 안 됨 (BUG-26 직접 원인).
+    //   정정: false 로 변경 → 원본 1:1 동작 (정지 시 자동 착지 + ground 닿으면 vanilla 자동 착지).
+    public boolean flyCloseToGround = false;
+    // 🔴 BUG-26 정정 (Flying Phase / 세션 43): 원본 default = false.
+    //   _flyWhileOnGround = "ground 위에서도 비행 가능" 의 활성 옵션. true 이면 vanilla 자동 착지
+    //   (ClientPlayerEntity.tickMovement L1293-L1331) 직후 sm_flyWhileOnGround 가 abilities.flying
+    //   복원 → ground 닿아도 비행 유지. false (원본 default) 이면 vanilla 자동 착지 그대로 작동.
+    public boolean flyWhileOnGround = false;
 
     // ── Perspective (FOV) ──────────────────────────────────────
     // 원본: _perspectiveFadeFactor = PositiveFactor.values(0.5F, 0.1F, 1F)
