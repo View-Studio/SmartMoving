@@ -28,6 +28,8 @@
 - SM enabled 상태에서 Creative 비행 진입 즉시 몸 고정 (이동 불가)
 - 비행 애니메이션 고정 (원본 1.7.10 비행 자세와 다름)
 
+**연관 버그**: **BUG-8 (SM 비행 움직임 시스템 미작동) — 동일 원인 가능성 매우 높음**. SmartMovingFlyer.handleFlying() 가 가로챘는데 vanilla travel() 와 충돌하면 이동 차단 + 애니메이션 0 입력.
+
 **영향 포커스**:
 - **#2 / #2.5** (Jumper Factor 인프라 / Creative flying speed 처리) — 이동 자체 차단
 - **#1** (sm_animateFlying 자세) — 애니메이션 차이
@@ -37,14 +39,17 @@
 2. **B-7 입력값 교체** (세션 32) — flying L576-L578 = `sm.stats.totalDistance/currentSpeed` 사용. SmartStatistics.calculate 가 비행 중 갱신되지 않으면 distance=0/speed=0 → 애니메이션 고정. **확인 필요**: `MixinEntityClient.java` L80 `sm.stats.calculate(...)` 호출이 비행 중에도 실행되는지.
 3. **이동 자체 차단** — Mixin 이 player.move() 또는 ClientPlayerEntity tick 에서 비행 중 이동 처리 차단? `MixinClientPlayerEntity` / `SmartMovingClientState` tick 진입 로직 검토.
 4. **B-15 isLevitating 우선 처리** (세션 29) — flying 분기 진입 전에 isLevitating 분기로 빠지는 가능성. flying 시 isLevitating false 보장?
+5. **🔥 BUG-8 SmartMovingFlyer 충돌** — `SmartMovingFlyer.handleFlying()` (이미 부분 이식 / `MixinLivingEntityClient.java` L149 호출) 가 `ci.cancel()` 후 SM 비행 물리 처리 시도. 이 경로가 vanilla travel() 와 충돌 또는 sm.isFlying 갱신 부정확 시 이동 0 결과.
 
 **리서치 필요 파일**:
 - 원본: `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java` — flying 진입/유지/종료 로직 (`startFlying`/`updateFlying`/`stopFlying` 또는 등가)
 - 원본: `SmartMovingModel.java` L474-L520 (isFlying 분기 본체)
 - 1.21.1: `MixinClientPlayerEntity.java` (tick 진입) + `SmartMovingClientState.java` (isFlying 갱신)
 - 1.21.1: `MixinEntityClient.java` L80 (stats.calculate 호출 조건)
+- 1.21.1: `SmartMovingFlyer.java` (이미 부분 이식 / handleFlying + moveFlying)
+- 1.21.1: `MixinLivingEntityClient.java` L149 (handleFlying 호출 조건)
 
-**우선순위**: 🔴 매우 높음 (이동 자체 차단 — 게임플레이 결정적)
+**우선순위**: 🔴 매우 높음 (이동 자체 차단 — 게임플레이 결정적). **BUG-8 과 함께 진단 권장**.
 
 ---
 
@@ -196,6 +201,76 @@
 
 ---
 
+## BUG-8. SM enabled 비행 — 비행 움직임 시스템 자체 미작동 (원본과 다름)
+
+**증상** (사용자 보고):
+- SM enabled 시 비행은 원본 (1.7.10) 에서 vanilla 비행과 다른 자체 시스템 사용
+- 1.21.1 = 그 시스템이 "번역 안 되어 있는 것 같음" — 실제 비행 동작이 vanilla 와 동일 (= disabled 와 같음)
+- 즉 SM enabled vs disabled 비행 차이가 보이지 않음
+
+**현재 이식 상태 분석**:
+- ✅ `SmartMovingFlyer.java` (130 라인) — `handleAlternativeFlying()` 본체 + `moveFlying()` 정규화 공식 모두 1:1 이식 완료
+- ✅ `MixinLivingEntityClient.java` L149 — `handleFlying` 호출 분기 존재
+- ❌ **호출되지 않거나 / 호출되어도 효과 없거나 / vanilla 처리에 덮여 씀** — 원인 진단 필요
+
+**SM 비행 시스템의 원본 특징** (SmartMovingFlyer 코드에서 확인):
+1. **sneak/jump 수직 보정**: `motionY ± 0.15D` + `moveUpward ± 0.98F` (강한 수직 입력)
+2. **moveFlying 정규화**: `sqrt(sqrt(x²+z²) + y²)` 비표준 정규화 (수평+수직 균형)
+3. **HorizontalAirDamping**: `0.91F` 매 틱 감쇠 (vanilla 와 다른 계수)
+4. **flyControlVertical**: pitch 기반 수직 보정 (treeDimensional=true 시) — 마우스 위/아래 보면 자동 상승/하강
+5. **flyingSpeedFactor 배수**: `Config._flyingSpeedFactor.value` (vanilla 0.05F 기본 외 추가 배수)
+6. **flyWhileOnGround**: 지면 충돌 시 자동 비행 종료 (옵션)
+
+**영향 포커스**:
+- **#2 / #2.5** (Jumper Factor — 비행 진입/유지) — 진입 정확성
+- **BUG-1 동일 원인 가능성** — 비행 처리 가로챘는데 결과 0 → 이동 차단 = BUG-1 의 "몸 고정"
+- **#1** (sm_animateFlying — 가시 효과) — B-7 입력값 (sm.stats.totalDistance/currentSpeed) 비행 중 갱신되어야 정상 애니메이션
+
+**의심 지점**:
+1. **`MixinLivingEntityClient.java` L149 호출 조건** — `handleFlying` 가 어떤 메서드 어떤 위치에서 inject 되는지. travel() / tick() / move() 중 잘못된 위치 inject 시 작동 안 함.
+2. **`sm.isFlying` 갱신 위치** — `SmartMovingClientState.isFlying` 이 매 틱 어디서 갱신되는지. 갱신 안 되면 `handleFlying` 가 즉시 return false.
+3. **`cfg.fly` 옵션 기본값** — `SmartMovingConfig.fly` 가 false 면 진입 안 됨. 기본값 + 사용자 설정 검증.
+4. **vanilla `LivingEntity.travel()` 와의 충돌** — vanilla 의 비행 처리 (`Abilities.flying` 시 별도 분기) 가 sm_handleFlying 호출 후/전에 다시 덮어 씀? → 효과 0.
+5. **CallbackInfo cancel 부재** — handleFlying 가 true 반환해도 호출 측에서 ci.cancel() 안 하면 vanilla 처리 계속. MixinLivingEntityClient L149 본문 확인 필요.
+6. **Mover.getCombinedSpeedFactor 의존** — `flyingSpeedFactor` 계산이 `combinedFactor` 에 의존 (B-6 세션 26). combinedFactor 가 비행 시 0 또는 부정확하면 flyingSpeed=0 → 이동 0.
+
+**리서치 필요 파일**:
+
+원본 (라인별 read 필수):
+- `C:\Work\minecraft\porting\sm_original\SmartMoving\src\main\java\net\smart\moving\SmartMovingSelf.java`:
+  - L80 `if(sp.capabilities.isFlying && !Config.isFlyingEnabled())` — 비행 가드
+  - **L602-L631 `handleAlternativeFlying`** — SM 비행 본체
+  - L633-L663 `handleLand` — 비행 외 처리 (handleAlternativeFlying false 일 때)
+  - L1803-L1831 비행 진입/종료 처리 (flyWhileOnGround / wasCapabilitiesIsFlying)
+  - L2198-L2199 비행 종료 처리
+  - L2320 `boolean isLevitating = sp.capabilities.isFlying && !isFlying;` — Levitate 분기
+  - L2404 `if(esp.capabilities.isFlying && (Config.isFlyingEnabled() || Config.isLevitateSmallEnabled()))` — 비행+Levitate 통합 처리
+- `SmartMoving/.../moving/SmartMovingBase.java`:
+  - `moveFlying()` 본체 (L56-L93 — SmartMovingFlyer.moveFlying 의 원본)
+  - `HorizontalAirDamping` 상수 정의
+- `SmartMoving/.../moving/config/SmartMovingOptions.java`:
+  - L68-L71 `_flyCloseToGround` / `_flyWhileOnGround` / `_flyControlVertical` — 비행 옵션
+- `SmartMoving/.../moving/config/SmartMovingConfig.java`:
+  - `_flyingSpeedFactor` / `_runFactorLevitate` / `_sprintFactorLevitate` 등 비행 속도 배수
+
+1.21.1 (현재 이식 상태):
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingFlyer.java` (130 라인 — handleFlying + moveFlying 1:1 이식 완료)
+- `src/client/java/choco/ratel/smartmoving/mixin/client/MixinLivingEntityClient.java` L149 (호출 조건 — read 필수)
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java` — isFlying 필드 + 갱신 위치 grep
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingMover.java` — getCombinedSpeedFactor 헬퍼
+- `src/main/java/choco/ratel/smartmoving/config/SmartMovingConfig.java` — fly / flyingSpeedFactor / flyControlVertical 등 옵션
+- `MixinClientPlayerEntity.java` — 비행 진입/종료 처리 (capabilities.flying ↔ sm.isFlying 동기화)
+
+**해결 접근 (예상)**:
+1. **MixinLivingEntityClient L149 read** — handleFlying 가 어느 메서드 어디서 inject 되는지 + ci.cancel 호출 여부 확인.
+2. **sm.isFlying 갱신 grep** — 매 틱 어디서 true/false 토글되는지 확인 + capabilities.isFlying 과 동기화 검증.
+3. **cfg.fly 기본값 검증** — SmartMovingConfig.fly 가 기본 true 인지 + 사용자가 disabled 한 적 있는지.
+4. **handleFlying 효과 디버깅** — log 추가 (handleFlying 호출 시 / vel 변경 전후) 또는 breakpoint 로 실제 호출 + 효과 확인.
+
+**우선순위**: 🔴 매우 높음 (BUG-1 의 동일 원인 가능성 매우 높음 / 게임플레이 결정적)
+
+---
+
 ## BUG-7. SM disabled 시 — 애니메이션 초기화 안 됨 + 비행 시 SM 비행 애니메이션
 
 **증상**:
@@ -229,15 +304,15 @@
 
 ## 진행 권장 순서
 
-| 순서 | 버그 | 우선순위 | 의존 |
-|------|------|---------|------|
-| 1 | BUG-7 SM disabled reset 실패 | 🔴 매우 높음 | 없음 (단순 가드) |
-| 2 | BUG-6 I/O 키 비활성화 | 🟢 낮음 (요청 처리) | 없음 (단순) |
-| 3 | BUG-1 비행 고정 | 🔴 매우 높음 | #2/#2.5 |
-| 4 | BUG-3 crawl 진동 | 🔴 매우 높음 | #2.7 (POSE/BBox 동기화) |
-| 5 | BUG-5 swim 진동 | 🔴 매우 높음 | #2.6 (lava liquid border) |
-| 6 | BUG-2 climbing 작동 안 함 | 🔴 매우 높음 | #2 (climbing 진입) |
-| 7 | BUG-4 다이빙 망가짐 | 🟠 높음 | #4 (키 조합) + #2 (dive 진입) |
+| 순서 | 버그 | 우선순위 | 의존 | 비고 |
+|------|------|---------|------|------|
+| 1 | BUG-7 SM disabled reset 실패 | 🔴 매우 높음 | 없음 (단순 가드) | sm_setAngles flyingCreative 가드 추가 |
+| 2 | BUG-6 I/O 키 비활성화 | ✅ 완료 | 없음 (단순) | 세션 35 완료 |
+| 3 | **BUG-1 + BUG-8** 비행 고정 + 비행 시스템 미작동 | 🔴 매우 높음 | #2/#2.5 / SmartMovingFlyer | **함께 진단** — 동일 원인 가능성 매우 높음 |
+| 4 | BUG-3 crawl 진동 | 🔴 매우 높음 | #2.7 (POSE/BBox 동기화) | |
+| 5 | BUG-5 swim 진동 | 🔴 매우 높음 | #2.6 (lava liquid border) | |
+| 6 | BUG-2 climbing 작동 안 함 | 🔴 매우 높음 | #2 (climbing 진입) | |
+| 7 | BUG-4 다이빙 망가짐 | 🟠 높음 | #4 (키 조합) + #2 (dive 진입) | |
 
 ---
 
@@ -254,7 +329,13 @@
 
 - [ ] BUG-7 sm_setAngles flyingCreative 가드 — `Config.enabled` 추가
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
-- [ ] BUG-1 비행 고정 — #2 / #2.5 stats.calculate 호출 검증 + isFlying 갱신 위치 분석
+- [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
+    - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)
+    - sm.isFlying 갱신 위치 grep (`SmartMovingClientState.java`)
+    - SmartMovingConfig.fly 기본값 검증
+    - vanilla travel() 와의 inject 순서 검증
+    - getCombinedSpeedFactor 비행 시 결과 검증 (Mover.java)
+    - SmartMovingSelf.java L602-L631 + L1803-L1831 + L2198-L2199 + L2320 + L2404 라인별 read
 - [ ] BUG-3 crawl 진동 — #2.7 POSE/BBox 동기화 검증 + isCrawling 종료 조건
 - [ ] BUG-5 swim 진동 — #2.6 lava liquid border + 수면 경계 판정 정확성
 - [ ] BUG-2 climbing 작동 안 함 — handsClimbType/feetClimbType 갱신 + grab 키 처리
