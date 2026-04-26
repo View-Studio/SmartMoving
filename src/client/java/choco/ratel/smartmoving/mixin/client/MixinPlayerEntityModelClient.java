@@ -122,7 +122,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isSwimming_sm) {
             sm_animateSwimming(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isDiving) {
-            sm_animateDiving(limbSwing, limbSwingAmount);
+            sm_animateDiving(sm, limbSwing, limbSwingAmount);
         } else if (sm.isCrawling) {
             sm_animateCrawling(limbSwing, limbSwingAmount, headYaw);
         } else if (sm.isSliding) {
@@ -446,10 +446,14 @@ public abstract class MixinPlayerEntityModelClient {
      *   - head.pivotZ = -2F (원본 L371): 머리 앞으로 2px 이동
      *   vanilla 가 매 프레임 head.pitch (j*PI/180) 와 head.pivotZ (B-9 reset 인프라) 모두 reset → 안전.
      */
-    private void sm_animateDiving(float limbSwing, float limbSwingAmount) {
-        float distance    = limbSwing * 0.7f;
-        float walkFactor  = smFactor(limbSwingAmount, 0f, 0.15679921f);
-        float standFactor = smFactor(limbSwingAmount, 0.15679921f, 0f);
+    private void sm_animateDiving(SmartMovingClientState sm, float limbSwing, float limbSwingAmount) {
+        // B-6 / §16-13: 원본 SmartMovingModel L365-L367 = totalDistance (3D 누적) +
+        //   currentSpeed (3D 속도). 이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 →
+        //   sm.stats.totalDistance/currentSpeed 로 교체. 다이빙은 수직+수평 운동 모두 강한
+        //   상태 → 차이 가시화 가능.
+        float distance    = sm.stats.totalDistance * 0.7f;
+        float walkFactor  = smFactor(sm.stats.currentSpeed, 0f, 0.15679921f);
+        float standFactor = smFactor(sm.stats.currentSpeed, 0.15679921f, 0f);
 
         // 머리 자세 (원본 L370-L371)
         head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth

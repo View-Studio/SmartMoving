@@ -415,7 +415,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — **SmartStatistics 에 이미 모두 구현됨** (L11-L19 4 필드 + L60-L62 calcualte 공식 1:1 매핑). R-9 등록 시 인지 못 했으나 실제 구현 완료 상태. **세션 31 검증 완료** (코드 추가 없음).
 - [x] B-4. Climbing 입력값 교체 (§16-10 / B-X 의존) — sm_animateClimbing 본체의 `verticalSpeed = Math.min(0.5f, sm.stats.currentVerticalSpeed)` (1) + arm.pitch cos 2 라인 + feet.pitch cos 2 라인 = 5 라인 교체 (limbSwingAmount/limbSwing → sm.stats.currentVerticalSpeed/totalVerticalDistance). yaw 부분은 horizontalSpeed/limbSwing 그대로 유지. **세션 31 완료**.
 - [x] B-5. Climbing feet vine 입력값 교체 (§16-12 / B-X 의존) — sm_animateClimbing vine 분기 `cos(limbSwing + HALF)` / `cos(limbSwing - QUARTER)` → `cos(sm.stats.totalDistance + HALF)` / `cos(sm.stats.totalDistance - QUARTER)` 2 라인 교체. **세션 32 완료**.
-- [ ] B-6. Diving 입력값 교체 (§16-13 / B-X 의존) — sm_animateDiving L389-L391 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
+- [x] B-6. Diving 입력값 교체 (§16-13 / B-X 의존) — sm_animateDiving 시그니처에 `SmartMovingClientState sm` 추가 + 호출처 갱신 + 본체 3 라인 (distance/walkFactor/standFactor) `limbSwing/limbSwingAmount` → `sm.stats.totalDistance/currentSpeed` 교체. **세션 32 완료**.
 - [x] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying 본체 `distance = limbSwing * 0.08f` + `walkFactor/standFactor = smFactor(limbSwingAmount, ...)` 3 라인 → `sm.stats.totalDistance` / `sm.stats.currentSpeed` 교체. sm 인자 이미 있음. **세션 32 완료**.
 
 **[신규 Mixin]**
@@ -2063,6 +2063,59 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - 신규 Mixin (B-17 — CapeFeatureRenderer) — 0/1
 
 **다음 단계 (세션 32+)**: 권장 시작 = **B-5** (climbing feet vine 3D 입력값 교체 — sm_animateClimbing vine 분기) + **B-7** (flying 3D 입력값 교체 — sm_animateFlying / sm 인자 이미 있음) + **B-6** (diving 3D 입력값 교체 — sm_animateDiving / 시그니처 변경 필요). 한 세션에 묶음 가능.
+
+---
+
+### 세션 32 — 2026-04-26 — Phase B / R-10+ B-5 + B-7 + B-6 (climbing vine + flying + diving 3D 입력값) 1:1 이식 — **인프라+입력값 그룹 마무리**
+
+**진행한 작업** (3 원자 = 같은 그룹 입력값 교체 일괄, 2 commit 분리):
+
+1. **원본 1차 자료 read** (3 분기):
+   - **B-5 (climbing vine)**: SmartMovingModel.java L228 `cos(totalDistance + Half)` / L232 `cos(totalDistance - Quarter)` (수평+수직 누적 사용)
+   - **B-7 (flying)**: L477 `distance = totalDistance * 0.08F` / L478 `walkFactor = Factor(currentSpeed, 0F, 1F)` / L479 `standFactor = Factor(currentSpeed, 1F, 0F)` (3D 누적 + 3D 속도)
+   - **B-6 (diving)**: L365 `distance = totalDistance * 0.7F` / L366 `walkFactor = Factor(currentSpeed, 0F, 0.15679921F)` / L367 `standFactor = Factor(currentSpeed, 0.15679921F, 0F)` (3D 누적 + 3D 속도)
+
+2. **B-5 + B-7 (commit 1, sm 인자 이미 있음 / 같은 패턴)**:
+   - sm_animateClimbing vine 분기 2 라인 교체 (limbSwing → sm.stats.totalDistance) — L290/L294
+   - sm_animateFlying 본체 3 라인 교체 (limbSwing → sm.stats.totalDistance, limbSwingAmount → sm.stats.currentSpeed) — L576-L578
+   - 빌드 검증 BUILD SUCCESSFUL (4s).
+   - 커밋: `feat(focus#1): R-10+ B-5 + B-7 — Climbing vine + Flying 3D 입력값 교체 (세션 32)`
+
+3. **B-6 (commit 2, 시그니처 변경)**:
+   - 호출처 L125 `sm_animateDiving(limbSwing, limbSwingAmount)` → `sm_animateDiving(sm, limbSwing, limbSwingAmount)`
+   - 시그니처 변경 + 본체 3 라인 교체 (L440-L442 distance/walkFactor/standFactor)
+   - 빌드 검증 BUILD SUCCESSFUL (4s).
+   - 커밋: `feat(focus#1): R-10+ B-6 — Diving 3D 입력값 교체 (세션 32)`
+
+4. **값 정확성 검증** (3 분기 공통):
+   - `sm.stats.totalDistance` = `SmartStatistics.calculate L91 totalDistance += distance` (3D 누적, 1.7.10 SmartStatisticsData.calcualte 직접 등가)
+   - `sm.stats.currentSpeed` = `SmartStatistics.calculate L62 currentSpeed += ((float) distance * 4f - currentSpeed) * 0.4f` (3D 속도, 4× + 0.4 EMA, 1.7.10 동일 공식)
+   - 영향: 비행/다이빙은 수직+수평 운동 모두 강한 상태 → walkFactor/standFactor 계수 분기로 차이 가시화. climbing vine 도 vine 등반 중 수직 운동 반영.
+
+5. **vanilla 영향 검증**: 본 수정은 모두 입력값 교체만 (sm.stats.* 직접 사용). vanilla setAngles 의 다른 처리 영향 없음. SmartStatistics 갱신은 ClientPlayerEntity tick 진입 시 매 틱 수행 (B-X 인프라).
+
+**검증 체크리스트 (세션 32 B-5 + B-7 + B-6)**:
+- [근거] ✓ 원본 SmartMovingModel.java L228/L232 (vine) + L477-L479 (flying) + L365-L367 (diving) read 완료
+- [전수] ✓ 원본 변경 8 라인 (vine 2 + flying 3 + diving 3) 모두 1.21.1 매핑
+- [발견] 신규 발견 0건
+- [검증] ✓ SmartStatistics.calculate vs 1.7.10 SmartStatisticsData.calcualte 1:1 등가 (B-X 인프라 검증)
+- [회귀] ✓ vanilla setAngles 영향 없음, 분기 외 다른 분기 영향 없음, 시그니처 변경은 호출처도 갱신
+- [빌드] ✓ BUILD SUCCESSFUL (각 commit 마다)
+
+**Phase B 진행 누적**: 16 원자 중 **16 완료** (100%) / 0 남음... ❌ 잠깐. **B-17 (CapeFeatureRenderer 신규 Mixin) 1 원자 남음**.
+
+수정: 16 원자 중 **15 완료 (93.75%) / 1 남음 (B-17)**.
+
+**그룹 진행도**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ 누적 검증 후 (B-16) — 1/1
+- ✅ **인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 5/5**
+- 🔄 신규 Mixin (B-17 — CapeFeatureRenderer) — 0/1 ← **마지막**
+
+**다음 단계 (세션 33+)**: 권장 시작 = **B-17** (CapeFeatureRenderer outer.X 망토 X 클램프 — 신규 MixinCapeFeatureRenderer 클래스 + outer.X capture). 마지막 1 원자 → **Phase B 종료** → 회귀 감사 → 인게임 통합테스트 인계.
 
 ---
 
