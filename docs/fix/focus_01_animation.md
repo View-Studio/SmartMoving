@@ -412,8 +412,8 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-16. Cloak 기본 기울임 SIXTYFOURTH (§16-24 / SmartRenderModel L251) — vanilla `PlayerEntityModel.setAngles` 가 cloak.pivotZ/pivotY 만 변경 (cloak.pitch 미변경) 사전 검증 완료 → `=` 직접 할당 누적 위험 없음. sm_setAngles 본체 끝에 `cloak.pitch = SIXTYFOURTH;` 1 라인 추가 (PlayerEntityModel 한정 캐스팅). cloak private 접근 위해 신규 `PlayerEntityModelAccessor` Mixin Accessor 인터페이스 생성 + mixins.json 등록. **세션 30 완료**.
 
 **[인프라 선행 → 입력값 교체]**
-- [ ] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick 진입 지점에 4 필드 추가 + 1.7.10 SmartStatisticsData.calcualte() 공식 그대로 갱신 (`distance*4F`, `legYaw += (distance - legYaw) * 0.4F`, `total += legYaw`). 입력값: `verticalDistance` = abs(getY() - prevY) / `allDistance` = sqrt((getX()-prevX)² + (getY()-prevY)² + (getZ()-prevZ)²).
-- [ ] B-4. Climbing 입력값 교체 (§16-10 / B-X 의존) — sm_animateClimbing 시그니처에 verticalDistance/verticalSpeed 인자 추가, L191/L214/L242-L244 수직 입력값 교체
+- [x] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — **SmartStatistics 에 이미 모두 구현됨** (L11-L19 4 필드 + L60-L62 calcualte 공식 1:1 매핑). R-9 등록 시 인지 못 했으나 실제 구현 완료 상태. **세션 31 검증 완료** (코드 추가 없음).
+- [x] B-4. Climbing 입력값 교체 (§16-10 / B-X 의존) — sm_animateClimbing 본체의 `verticalSpeed = Math.min(0.5f, sm.stats.currentVerticalSpeed)` (1) + arm.pitch cos 2 라인 + feet.pitch cos 2 라인 = 5 라인 교체 (limbSwingAmount/limbSwing → sm.stats.currentVerticalSpeed/totalVerticalDistance). yaw 부분은 horizontalSpeed/limbSwing 그대로 유지. **세션 31 완료**.
 - [ ] B-5. Climbing feet vine 입력값 교체 (§16-12 / B-X 의존) — sm_animateClimbing L260/L264 feet vine `totalDistance` 입력값을 `allDistance` 로 교체
 - [ ] B-6. Diving 입력값 교체 (§16-13 / B-X 의존) — sm_animateDiving L389-L391 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
 - [ ] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying L507-L509 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
@@ -1990,6 +1990,79 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - 신규 Mixin: B-17 (1 원자)
 
 **다음 단계 (세션 31+)**: 권장 시작 = **B-X 인프라** (verticalDistance/Speed + allDistance/Speed capture — SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick / 1.7.10 SmartStatisticsData.calcualte() 공식 그대로) 선행 → **B-4 / B-5 / B-6 / B-7** 일괄 입력값 교체 (climbing/diving/flying). 인프라 + 입력값 그룹 진입 (가장 큰 작업).
+
+---
+
+### 세션 31 — 2026-04-26 — Phase B / B-X 검증 + B-4 (climbing 입력값 교체) 1:1 이식 — **인프라+입력값 그룹 진입**
+
+**진행한 작업** (B-X 검증 [코드 0] + B-4 [5 라인 교체]):
+
+1. **B-X 인프라 사전 검증 — 이미 완성 상태 발견**:
+   - `SmartStatistics.java` (L11-L19) 에 4 필드 모두 존재:
+     - L11 `totalHorizontalDistance` (limbSwing 등가)
+     - L12 `totalVerticalDistance` ✓ (B-4 의존)
+     - L13 `totalDistance` ✓ (B-5/B-6/B-7 의존)
+     - L16 `currentHorizontalSpeed` (limbSwingAmount 등가)
+     - L18 `currentVerticalSpeed` ✓ (B-4 의존)
+     - L19 `currentSpeed` ✓ (B-6/B-7 의존)
+   - `SmartStatistics.calculate()` (L60-L62 + L88-L91) 이 1.7.10 SmartStatisticsData.calcualte() 공식과 정확히 1:1:
+     ```java
+     currentVerticalSpeed += ((float) verticalDistance * 4f - currentVerticalSpeed) * 0.4f;
+     currentSpeed         += ((float) distance         * 4f - currentSpeed)         * 0.4f;
+     totalVerticalDistance += (float) verticalDistance;
+     totalDistance += (float) distance;
+     ```
+     vs 원본 `SmartStatisticsData.calcualte()` L47-L50 (`distance*4F`, `legYaw += (distance - legYaw) * 0.4F`, `total += legYaw`) 와 동일 EMA + 누적 패턴.
+   - **결론**: R-9 시점에 인지 못 했지만 인프라 모두 구현 완료. B-X = [x] (코드 추가 없음).
+
+2. **B-4 코드 수정** (§16-10 / sm_animateClimbing — 5 라인 교체):
+
+   **원본 SmartMovingModel.java 정밀 read**:
+   - L80 `float totalVerticalDistance = md.totalVerticalDistance;` (수직 누적 거리)
+   - L144 `float verticalSpeed = Math.min(0.5f, currentVerticalSpeed);` (수직 속도 클램프)
+   - L200/L201 `bipedRightArm/LeftArm.rotateAngleX = cos(totalVerticalDistance * handsFrequenceUpFactor + Half/0) * verticalSpeed * ...` (arm.X 수직 입력)
+   - L203/L204 yaw 부분 = `totalHorizontalDistance + horizontalSpeed` (수평 입력 → limbSwing/limbSwingAmount 등가, **변경 없음**)
+   - L219/L220 `bipedRightLeg/LeftLeg.rotateAngleX = cos(totalVerticalDistance * feetFrequenceUpFactor + 0/Half) * feetDistanceUpFactor * verticalSpeed + ...` (feet.X 수직 입력)
+
+   **1.21.1 sm_animateClimbing 수정** (5 라인):
+   - L221 `verticalSpeed = Math.min(0.5f, limbSwingAmount)` → `Math.min(0.5f, sm.stats.currentVerticalSpeed)` (수직 속도 정합)
+   - L244 `cos(limbSwing * 0.6662f + HALF)` → `cos(sm.stats.totalVerticalDistance * 0.6662f + HALF)` (right arm)
+   - L245 `cos(limbSwing * 0.6662f)` → `cos(sm.stats.totalVerticalDistance * 0.6662f)` (left arm)
+   - L274 `cos(limbSwing * 0.6662f)` → `cos(sm.stats.totalVerticalDistance * 0.6662f)` (right leg)
+   - L275 `cos(limbSwing * 0.6662f + HALF)` → `cos(sm.stats.totalVerticalDistance * 0.6662f + HALF)` (left leg)
+
+   주석 갱신: 원본 라인 출처 + 잘못 매핑 사유 + SmartStatistics.calculate vanilla limbAnimator 등가 EMA 검증 명시.
+
+3. **값 정확성 검증**:
+   - 원본 `handsFrequenceUpFactor = FrequenceFactor = 0.6662F` (vanilla limbSwing 주기 계수와 동일). 이미 1.21.1 0.6662f 로 매핑됨 — 변경 없음.
+   - `verticalSpeed * handsDistUp + handsOffset`: handsDistUp/handsOffset 는 climbing type 별 상수, 변경 없음 (이미 매핑됨).
+   - `feetDistUp = 0.3f / verticalSpeed` (L273): verticalSpeed 가 sm.stats.currentVerticalSpeed 기반이므로 자동 정정.
+   - 영향: 사다리/넝쿨 클라이밍 시 수직으로 오를 때 팔이 수직 거리 입력으로 흔들림 (= 클라이밍 동작감 회복). handsClimbType=UpGrab 일 때 handsDistUp=2f 로 큰 영향. feet 분기도 동일 정정.
+
+4. **vanilla 영향 검증**: 본 수정은 `sm.stats.totalVerticalDistance` / `sm.stats.currentVerticalSpeed` 입력값만 교체. vanilla setAngles 의 다른 처리 영향 없음. SmartStatistics 갱신은 ClientPlayerEntity tick 진입 시 이미 매 틱 수행 (인프라 완성).
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (4s).
+
+**검증 체크리스트 (세션 31 B-X + B-4)**:
+- [근거] ✓ 원본 SmartMovingModel.java L80/L144/L200/L201/L219/L220 read + SmartStatistics.calculate 인프라 검증
+- [전수] ✓ 원본 변경 5 지점 모두 1.21.1 매핑 (yaw 부분은 변경 없음 검증)
+- [발견] B-X 이미 완성 상태 발견 — R-9 시점 인지 못 한 사실 명시
+- [검증] ✓ SmartStatistics.calculate L60-L62 = SmartStatisticsData.calcualte L47-L50 공식 1:1 등가
+- [회귀] ✓ vanilla setAngles 영향 없음, climbing 외 분기 영향 없음
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 16 원자 중 **13 완료** (81.25%) / 3 남음.
+
+**그룹 진행도**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 (climbing 같은 분기) — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ 누적 검증 후 (B-16) — 1/1
+- 🔄 **인프라 + 입력값 (B-X / B-4 / B-5 / B-6 / B-7) — 2/5** (B-X / B-4 완료, B-5/B-6/B-7 남음)
+- 신규 Mixin (B-17 — CapeFeatureRenderer) — 0/1
+
+**다음 단계 (세션 32+)**: 권장 시작 = **B-5** (climbing feet vine 3D 입력값 교체 — sm_animateClimbing vine 분기) + **B-7** (flying 3D 입력값 교체 — sm_animateFlying / sm 인자 이미 있음) + **B-6** (diving 3D 입력값 교체 — sm_animateDiving / 시그니처 변경 필요). 한 세션에 묶음 가능.
 
 ---
 

@@ -218,7 +218,11 @@ public abstract class MixinPlayerEntityModelClient {
      * isCrawlClimbing 시 legAngleZ(roll) 보정 (R-10c).
      */
     private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch) {
-        float verticalSpeed = Math.min(0.5f, limbSwingAmount);
+        // B-4 / §16-10: 원본 SmartMovingModel L144 = `Math.min(0.5f, currentVerticalSpeed)` —
+        //   verticalSpeed 입력은 수직 속도 (sm.stats.currentVerticalSpeed) 가 정합. 이전 구현은
+        //   limbSwingAmount (수평 속도) 로 잘못 매핑. SmartStatistics.calculate L61 이 vanilla
+        //   limbAnimator 와 동일 EMA 공식 (4× + 0.4 보간) 으로 currentVerticalSpeed 갱신 → 안전.
+        float verticalSpeed = Math.min(0.5f, sm.stats.currentVerticalSpeed);
         float horizontalSpeed = Math.min(0.5f, limbSwingAmount);
 
         // 머리: 시야 수직 각도 반영, Y=0(몸 방향 고정)
@@ -241,8 +245,10 @@ public abstract class MixinPlayerEntityModelClient {
             handsDistUp = 0f;
             handsOffset = -0.5f;
         }
-        float rPitch = MathHelper.cos(limbSwing * 0.6662f + HALF) * verticalSpeed * handsDistUp + handsOffset;
-        float lPitch = MathHelper.cos(limbSwing * 0.6662f)        * verticalSpeed * handsDistUp + handsOffset;
+        // B-4 / §16-10: 원본 L200/L201 — arm.pitch cos 입력은 totalVerticalDistance (수직 누적).
+        //   이전 limbSwing (수평 누적) 잘못 매핑 → sm.stats.totalVerticalDistance 로 교체.
+        float rPitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f + HALF) * verticalSpeed * handsDistUp + handsOffset;
+        float lPitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f)        * verticalSpeed * handsDistUp + handsOffset;
         float rYaw   = MathHelper.cos(limbSwing * 0.6662f + QUARTER) * horizontalSpeed;
         float lYaw   = MathHelper.cos(limbSwing * 0.6662f)            * horizontalSpeed;
         setAnglesYZX(rightArm, rPitch, rYaw, 0f);
@@ -271,8 +277,9 @@ public abstract class MixinPlayerEntityModelClient {
         if (!sm.isFeetVineClimbing) {
             if (isUpGrab && verticalSpeed > 0f) {
                 float feetDistUp = 0.3f / verticalSpeed;
-                rightLeg.pitch = MathHelper.cos(limbSwing * 0.6662f)        * feetDistUp * verticalSpeed - 0.3f;
-                leftLeg.pitch  = MathHelper.cos(limbSwing * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f;
+                // B-4 / §16-10: 원본 L219/L220 — feet.pitch cos 입력도 totalVerticalDistance (수직 누적).
+                rightLeg.pitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f)        * feetDistUp * verticalSpeed - 0.3f;
+                leftLeg.pitch  = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f;
             } else {
                 rightLeg.pitch = 0f;
                 leftLeg.pitch  = 0f;
