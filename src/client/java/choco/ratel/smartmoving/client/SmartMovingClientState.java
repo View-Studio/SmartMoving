@@ -693,6 +693,14 @@ public final class SmartMovingClientState {
     public float smOuterExtraYaw_prev = 0f;    // 이전 프레임 보간 결과 (Y 회전)
     public float smOuterFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    /**
+     * 🔴 (세션 52b): partial tick 캐시 — setupTransforms 에서 저장 → setAngles 에서 사용.
+     * Mixin static field 제약 (private 만 허용) 우회 — SmartMovingClientState 에 저장.
+     * 원본 SmartRenderRender.renderPlayer L56-L57: getCurrentSpeed/getTotalDistance(renderPartialTicks)
+     * lerped 매핑용.
+     */
+    public static float globalCachedTickDelta = 0f;
+
     // ── FOV / perspective ──────────────────────────────────────────────
     /**
      * 속도 기반 FOV 배율의 EMA 누적값 (원본: SmartMovingSelf.fadingPerspectiveFactor).

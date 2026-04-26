@@ -34,13 +34,6 @@ public class MixinPlayerEntityRenderer {
     @Unique private static float smBodyYawOverride;
     /** BUG-27/32 (세션 47): 비행 시 추가 Y 회전 (horizontalAngle - lerpedYaw, 라디안). 0 = 추가 회전 없음. */
     @Unique private static float smFlyingExtraYaw;
-    /**
-     * 🔴 (세션 52): partial tick 캐시 — setupTransforms 에서 저장 → setAngles 에서 사용.
-     * 원본 SmartRenderRender.renderPlayer L56-L57: getCurrentSpeed/getTotalDistance(renderPartialTicks)
-     * 매 프레임 lerped 값 → modelPlayer.currentSpeed/totalDistance 저장. 우리 매핑은 setAngles 인자에
-     * tickDelta 없어 캐시 통해 전달.
-     */
-    @Unique public static float smCachedTickDelta = 0f;
 
     /**
      * [9-6][12-6] getPositionOffset() 오버라이드.
@@ -99,9 +92,9 @@ public class MixinPlayerEntityRenderer {
                                     CallbackInfo ci) {
         smBodyYawActive = false;
         smFlyingExtraYaw = 0f;
-        // 🔴 (세션 52): partial tick 캐시 저장. setAngles inject (sm_animateFlying 등) 에서
-        //   getCurrentSpeed/getTotalDistance lerped getter 호출용.
-        smCachedTickDelta = tickDelta;
+        // 🔴 (세션 52b): partial tick 캐시 저장 (Mixin private static 제약 우회 — SmartMovingClientState 사용).
+        //   setAngles inject (sm_animateFlying 등) 에서 getCurrentSpeed/getTotalDistance lerped getter 호출용.
+        SmartMovingClientState.globalCachedTickDelta = tickDelta;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         // BUG-12 (세션 36): SM disabled 시 bodyYaw 오버라이드 안 함 → vanilla bodyYaw 그대로 (BUG-7 확장).
         if (!SmartMovingConfig.Config.enabled) return;

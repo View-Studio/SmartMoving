@@ -610,7 +610,8 @@ public abstract class MixinPlayerEntityModelClient {
         //   이전 1.21.1 매핑은 sm.stats.totalDistance/currentSpeed 직접 사용 (lerp 안 함) →
         //   매 틱 띡 변경 → 팔/다리/모든 애니메이션 부드럽지 않음 = 사용자 보고 직접 원인.
         //   정정: setupTransforms 에서 cached tickDelta 사용 → lerped getter 호출.
-        float partialTicks = MixinPlayerEntityRenderer.smCachedTickDelta;
+        //   세션 52b: SmartMovingClientState.globalCachedTickDelta 로 이동 (Mixin private static 제약).
+        float partialTicks = SmartMovingClientState.globalCachedTickDelta;
 
         // B-7 / §16-20: 원본 L477-L479 = totalDistance (3D 누적) + currentSpeed (3D 속도).
         //   원본 SmartRenderRender L56-L57: getTotalDistance/getCurrentSpeed(renderPartialTicks).
