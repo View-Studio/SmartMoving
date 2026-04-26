@@ -414,9 +414,9 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **[인프라 선행 → 입력값 교체]**
 - [x] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — **SmartStatistics 에 이미 모두 구현됨** (L11-L19 4 필드 + L60-L62 calcualte 공식 1:1 매핑). R-9 등록 시 인지 못 했으나 실제 구현 완료 상태. **세션 31 검증 완료** (코드 추가 없음).
 - [x] B-4. Climbing 입력값 교체 (§16-10 / B-X 의존) — sm_animateClimbing 본체의 `verticalSpeed = Math.min(0.5f, sm.stats.currentVerticalSpeed)` (1) + arm.pitch cos 2 라인 + feet.pitch cos 2 라인 = 5 라인 교체 (limbSwingAmount/limbSwing → sm.stats.currentVerticalSpeed/totalVerticalDistance). yaw 부분은 horizontalSpeed/limbSwing 그대로 유지. **세션 31 완료**.
-- [ ] B-5. Climbing feet vine 입력값 교체 (§16-12 / B-X 의존) — sm_animateClimbing L260/L264 feet vine `totalDistance` 입력값을 `allDistance` 로 교체
+- [x] B-5. Climbing feet vine 입력값 교체 (§16-12 / B-X 의존) — sm_animateClimbing vine 분기 `cos(limbSwing + HALF)` / `cos(limbSwing - QUARTER)` → `cos(sm.stats.totalDistance + HALF)` / `cos(sm.stats.totalDistance - QUARTER)` 2 라인 교체. **세션 32 완료**.
 - [ ] B-6. Diving 입력값 교체 (§16-13 / B-X 의존) — sm_animateDiving L389-L391 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
-- [ ] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying L507-L509 `totalDistance/currentSpeed(3D)` 입력값을 `allDistance/allSpeed` 로 교체
+- [x] B-7. Flying 입력값 교체 (§16-20 / B-X 의존) — sm_animateFlying 본체 `distance = limbSwing * 0.08f` + `walkFactor/standFactor = smFactor(limbSwingAmount, ...)` 3 라인 → `sm.stats.totalDistance` / `sm.stats.currentSpeed` 교체. sm 인자 이미 있음. **세션 32 완료**.
 
 **[신규 Mixin]**
 - [ ] B-17. Cape outer.X 클램프 (§16-25 / ModelCapeRenderer L72-L73) — 신규 MixinCapeFeatureRenderer + 자체 outer.X(setupTransforms theta) capture → `cloak.pitch = clamp(cloak.pitch, ..., max(70.523° - outerX, 6°))`. 우선순위 중간 (메인 외 망토).

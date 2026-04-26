@@ -293,12 +293,15 @@ public abstract class MixinPlayerEntityModelClient {
         leftLeg.roll  = -(MathHelper.cos(limbSwing * 0.6662f + QUARTER) + 1f) * horizontalSpeed * feetDistSideFactor;
 
         // vine 전용 — 원본 L228-L239.
+        // B-5 / §16-12: 원본 L228/L232 cos 입력은 totalDistance (3D 누적). 이전 limbSwing
+        //   (수평 누적) 잘못 매핑 → sm.stats.totalDistance 로 교체. SmartStatistics.calculate
+        //   L91 = totalDistance 누적 1.7.10 등가.
         if (sm.isFeetVineClimbing) {
-            float total = (MathHelper.cos(limbSwing + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
+            float total = (MathHelper.cos(sm.stats.totalDistance + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
             rightLeg.pitch = -total;   // pitch 덮어쓰기
             leftLeg.pitch  = -total;
 
-            float diff = Math.max(0f, MathHelper.cos(limbSwing - QUARTER)) * SIXTYFOURTH;
+            float diff = Math.max(0f, MathHelper.cos(sm.stats.totalDistance - QUARTER)) * SIXTYFOURTH;
             leftLeg.roll  += -diff;    // roll 누적 (원본 `+=`)
             rightLeg.roll +=  diff;
 
@@ -580,9 +583,12 @@ public abstract class MixinPlayerEntityModelClient {
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
     private void sm_animateFlying(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
-        float distance    = limbSwing * 0.08f;
-        float walkFactor  = smFactor(limbSwingAmount, 0f, 1f);
-        float standFactor = smFactor(limbSwingAmount, 1f, 0f);
+        // B-7 / §16-20: 원본 L477-L479 = totalDistance (3D 누적) + currentSpeed (3D 속도).
+        //   이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 → sm.stats.totalDistance/currentSpeed.
+        //   비행 walk/stand factor 계수 분기로 영향 큼 (수직+수평 운동 모두 반영).
+        float distance    = sm.stats.totalDistance * 0.08f;
+        float walkFactor  = smFactor(sm.stats.currentSpeed, 0f, 1f);
+        float standFactor = smFactor(sm.stats.currentSpeed, 1f, 0f);
 
         // 팔 (XZY 순서) — 원본 SmartMovingModel.java L696-L733:
         //   bipedRightArm.rotationOrder = XZY
