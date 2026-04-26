@@ -645,12 +645,15 @@ public abstract class MixinPlayerEntityModelClient {
         // ANIM-01: head pitch 보정 — setupTransforms theta의 절반 역보정
         // 🔴 1:1 정정 (세션 47b): 원본 SmartMovingModel L481 isJump 분기 추가.
         // 🔴 (세션 52): currentSpeedLerped 사용 — 매 프레임 부드러운 변화.
-        // 🔴 (세션 54): setupTransforms 의 fade lerped thetaLerped 와 일관성 매핑.
-        //   원본 bipedHead.X = -bipedOuter.X / 2 (bipedOuter.X = setRotationAngles 시점 raw target).
-        //   1.21.1 환경에서 vanilla scale(-1,-1,1) + matrices/ModelPart 회전 결합 시 raw vs lerped
-        //   불일치로 head 회전이 매 프레임 띡 변경 → 사용자 보고 "진행 방향으로 몸 안 기울어짐"
-        //   인지 차이 가능. 정정: smOuterTiltX (= setupTransforms 의 fade lerped 결과) 사용.
-        head.pitch = -sm.smOuterTiltX / 2f;
+        // 🔴 (세션 56 revert): 세션 54 의 fade lerped 매핑 revert. 원본 1:1 (raw target / 2).
+        //   원본 SmartMovingModel L488: bipedHead.rotateAngleX = -bipedOuter.rotateAngleX / 2F
+        //   (이때 bipedOuter.X = setRotationAngles 시점 raw target, fadeIntermediate 호출 전).
+        //   = head.pitch = -raw_theta / 2f. 우리 매핑 정확.
+        float verticalAngle = sm.isJumping
+                ? Math.abs(sm.stats.currentVerticalAngle)
+                : sm.stats.currentVerticalAngle;
+        float theta = (QUARTER - verticalAngle) * currentSpeedLerped;
+        head.pitch = -theta / 2f;
     }
 
     /**
