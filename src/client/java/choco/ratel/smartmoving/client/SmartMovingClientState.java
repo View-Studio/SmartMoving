@@ -683,6 +683,16 @@ public final class SmartMovingClientState {
      */
     public float smOuterTiltX = 0f;
 
+    // ── 🔴 fade 보간 캐시 (Flying Phase / 세션 49): 원본 ModelRotationRenderer 의
+    //   fadeStore/fadeIntermediate 시스템 매핑. 매 render 프레임 prev → target 사이 점진적
+    //   보간 (factor = (currentTime - prevTime) * 0.2F). 비행 시 bipedOuter.X / Y 회전 보간.
+    //   원본 SmartMovingModel L484: bipedOuter.fadeRotateAngleX = true (X 회전 fade 활성).
+    //   원본 SmartRenderModel L209: bipedOuter.fadeRotateAngleY = true (기본, Pig 안 타면).
+    public float smOuterTiltX_prev = 0f;       // 이전 프레임 보간 결과 (X 회전)
+    public float smOuterExtraYaw = 0f;         // 현재 프레임 Y 회전 target (smFlyingExtraYaw)
+    public float smOuterExtraYaw_prev = 0f;    // 이전 프레임 보간 결과 (Y 회전)
+    public float smOuterFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
+
     // ── FOV / perspective ──────────────────────────────────────────────
     /**
      * 속도 기반 FOV 배율의 EMA 누적값 (원본: SmartMovingSelf.fadingPerspectiveFactor).

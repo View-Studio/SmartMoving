@@ -1391,14 +1391,16 @@ public class SmartMovingConfig {
         //   default = true (원본 Unmodified default = true, Properties.java L171-L172).
         //   사용자 환경 disk 에 이전 false 저장됐을 가능성 → pitch 방향 W 진행 효과 무효 (BUG-27 직접 원인).
         //   마이그레이션 마커: move.config.migration.flying.vertical = "session_48_done".
+        // 세션 49 재실행 강제 — 세션 48 마이그레이션 효과 없을 가능성 대응 (사용자 환경 disk
+        //   에 marker 가 이미 있으면 skip 됐을 수 있음). 새 marker 로 한 번 더 강제.
         String marker48 = props.getProperty("move.config.migration.flying.vertical", "");
-        if (!"session_48_done".equals(marker48)) {
+        if (!"session_49_done".equals(marker48)) {
             INSTANCE.flyControlVertical = true;
             INSTANCE.diveControlVertical = true;
             save();
             try (FileOutputStream out = new FileOutputStream(configFile.toFile(), true)) {
                 Properties marker2 = new Properties();
-                marker2.setProperty("move.config.migration.flying.vertical", "session_48_done");
+                marker2.setProperty("move.config.migration.flying.vertical", "session_49_done");
                 marker2.store(out, null);
             } catch (IOException ignored) {}
         }

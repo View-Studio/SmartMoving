@@ -313,33 +313,40 @@ public class MixinPlayerEntityRenderer {
             float verticalAngle = sm.isJumping
                     ? Math.abs(sm.stats.currentVerticalAngle)
                     : sm.stats.currentVerticalAngle;
-            float theta = ((float) Math.PI / 2f - verticalAngle) * walkFactor;
-            // 🔴 BUG-29 (세션 46) + BUG-27/32 (세션 47) 진짜 원인 정정: 회전 중심 = 머리 위치.
-            //   원본 SmartMovingRender bipedOuter 회전 = ModelRotationRenderer pivot (0,0,0) =
-            //   vanilla biped model root = head pivot 기준 회전.
-            //   vanilla 1.21.1 LivingEntityRenderer.render() L329-L356:
-            //     setupTransforms (TAIL 시점) → 이후 scale + translate(0,-1.501,0) 모델 root → head.
-            //
-            //   원본 비행 시 두 단계 회전 (세션 47):
-            //     1) bipedOuter.rotateAngleY = horizontalAngle (이동 방향) — Y 추가 회전
-            //     2) bipedOuter.rotateAngleX = (Quarter - verticalAngle) * walkFactor — X 기울기
-            //   smFlyingExtraYaw = horizontalAngle - lerpedYaw 는 sm_captureBodyYaw 에서 계산.
-            //   X 회전 부호 반전 (-theta) = vanilla setupTransforms POSITIVE_Y(180-bodyYaw) 의
-            //     좌표계 뒤집힘 보정 (세션 40 BUG-31).
-            //   정정: head 위치로 translate → Y 추가 회전 → X 기울기 → translate 복원.
-            //     원본 head pivot 기준 (Y+X) 두 회전 1:1 매칭.
+            float thetaTarget = ((float) Math.PI / 2f - verticalAngle) * walkFactor;
+            float yawTarget = smFlyingExtraYaw;
+
+            // 🔴 fade 보간 적용 (Flying Phase / 세션 49): 원본 ModelRotationRenderer.fadeIntermediate
+            //   매 프레임 호출 1:1 매핑.
+            //   원본 GetIntermediateAngle (L347-L364):
+            //     return prev + (target - prev) * (currentTime - prevTime) * 0.2F
+            //   가드 (L317): currentTime - prevTime <= 2F 시만 보간 (그 이상은 즉시).
+            //   원본 비행 분기 (L484): bipedOuter.fadeRotateAngleX = true → X 회전 보간.
+            //   원본 rotatePlayer (L209): bipedOuter.fadeRotateAngleY = true (default) → Y 회전 보간.
+            //   사용자 보고 "동작 사이 중간 처리 부재" / "프레임 드랍 느낌" 직접 원인 = fade 부재.
+            //   정정: prev 저장 + 매 프레임 lerp factor 0.2 * deltaTime 적용.
+            //     큰 각도 차이 (π 등) 의 wrapping 처리 (원본 L352-L362) 도 적용.
+            float thetaLerped = lerpFadeAngle(sm.smOuterTiltX_prev, thetaTarget,
+                                              sm.smOuterFade_prevTime, animationProgress);
+            float yawLerped = lerpFadeAngle(sm.smOuterExtraYaw_prev, yawTarget,
+                                            sm.smOuterFade_prevTime, animationProgress);
+
             matrices.translate(0f, 1.5f, 0f);
             // 🔴 BUG-27/32 좌우 바뀜 정정 (Flying Phase / 세션 47b): Y 회전 부호 반전.
-            //   vanilla LivingEntityRenderer.render() 디컴파일 L342: setupTransforms 후 scale(-1,-1,1)
-            //   적용 → Y axis 반전 → 우리 setupTransforms TAIL 의 POSITIVE_Y rotation 결과가
-            //   scale 으로 mirror → 좌우 회전 방향 반전 = 사용자 보고 "좌우 이동 시 애니메이션 바뀜".
-            //   이미 X 회전 (-theta) 도 동일 이유로 부호 반전 (세션 40 BUG-31). Y 도 동일.
-            if (smFlyingExtraYaw != 0f) {
-                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-smFlyingExtraYaw));
+            //   vanilla LivingEntityRenderer.render() L342: setupTransforms 후 scale(-1,-1,1) 적용
+            //   → Y axis 반전 → POSITIVE_Y rotation mirror → 부호 반전 보정.
+            if (yawLerped != 0f) {
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-yawLerped));
             }
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-thetaLerped));
             matrices.translate(0f, -1.5f, 0f);
-            sm.smOuterTiltX = theta;
+
+            // fade prev 갱신 (다음 프레임 보간용)
+            sm.smOuterTiltX_prev = thetaLerped;
+            sm.smOuterExtraYaw_prev = yawLerped;
+            sm.smOuterFade_prevTime = animationProgress;
+
+            sm.smOuterTiltX = thetaLerped;  // cape 클램프 (B-17) 도 보간된 값 사용
         }
 
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
@@ -385,5 +392,50 @@ public class MixinPlayerEntityRenderer {
         else if (entity.isSneaking() && cfg.sneakNameTag) {
             matrices.translate(0.0, -0.05, 0.0);
         }
+    }
+
+    /**
+     * 🔴 fade 보간 헬퍼 (Flying Phase / 세션 49): 원본 ModelRotationRenderer.GetIntermediateAngle
+     *   1:1 매핑 (L347-L364).
+     *
+     * 원본:
+     * <pre>
+     *   private static float GetIntermediateAngle(float prev, float should, boolean fade,
+     *                                              float lastTotalTime, float totalTime) {
+     *       if(!fade || should == prev) return should;
+     *       while(prev >= Whole) prev -= Whole;
+     *       while(prev < 0F) prev += Whole;
+     *       while(should >= Whole) should -= Whole;
+     *       while(should < 0F) should += Whole;
+     *       if(should > prev && (should - prev) > Half) prev += Whole;
+     *       if(should < prev && (prev - should) > Half) should += Whole;
+     *       return prev + (should - prev) * (totalTime - lastTotalTime) * 0.2F;
+     *   }
+     * </pre>
+     *
+     * 호출처 가드 (fadeIntermediate L317): `totalTime - prevTotalTime <= 2F` 시만 보간.
+     * Whole = 2π (라디안). Half = π. 큰 각도 차이 (반대편) 시 wrapping 처리.
+     *
+     * 우리 매핑: fade 항상 활성 (비행 시 fadeRotateAngleX/Y = true). prevTime 미초기화 (-999) 시
+     *   즉시 적용 (보간 skip).
+     */
+    @Unique
+    private static float lerpFadeAngle(float prev, float target, float prevTime, float currentTime) {
+        // prevTime 미초기화 또는 2 ticks 이상 차이 → 즉시 적용 (보간 skip)
+        if (prevTime < -100f) return target;
+        float deltaTime = currentTime - prevTime;
+        if (deltaTime > 2f || deltaTime < 0f) return target;
+        if (target == prev) return target;
+        // 큰 각도 차이 (반대편) wrapping — 원본 L352-L362
+        final float WHOLE = (float) (2.0 * Math.PI);
+        final float HALF = (float) Math.PI;
+        float p = prev, s = target;
+        while (p >= WHOLE) p -= WHOLE;
+        while (p < 0f) p += WHOLE;
+        while (s >= WHOLE) s -= WHOLE;
+        while (s < 0f) s += WHOLE;
+        if (s > p && (s - p) > HALF) p += WHOLE;
+        if (s < p && (p - s) > HALF) s += WHOLE;
+        return p + (s - p) * deltaTime * 0.2f;
     }
 }
