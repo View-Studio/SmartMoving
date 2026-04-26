@@ -30,47 +30,26 @@ public class SmartMovingFlyer {
     public static boolean handleFlying(ClientPlayerEntity player, SmartMovingClientState sm,
                                        Vec3d movementInput, boolean jumping) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!sm.isFlying || !cfg.fly) return false;
+        // 원본 SmartMovingSelf.handleAlternativeFlying L604:
+        //   handleAlternativeFlying = !handledSwimming && !handledLava && capabilities.isFlying && Config.isFlyingEnabled()
+        //   1.21.1: 호출 측 sm_travel_client 가 handleSwimming/handleLava 후 도달 = !handledSwimming
+        //   && !handledLava 자동 충족. sm.isFlying = isFlyingEnabled() && abilities.flying && !swim
+        //   && !dive — 원본 L2510 isFlying 공식 1:1 매핑. cfg.fly 중복 가드 (sm.isFlying 안에 포함).
+        if (!sm.isFlying) return false;
 
-        // 🔴 BUG-28 진짜 원인 정정 (Flying Phase / 세션 44): jumping 인자 (= LivingEntity.jumping
-        //   필드) 가 sm_jumpingFilter 에 의해 false 로 강제될 수 있음 — 비행 시작 시 vanilla
-        //   L797 jump() 호출 → tryJump → D-18 `blockJumpTillButtonRelease=true` set →
-        //   다음 틱부터 sm_jumpingFilter 의 `if (blockJumpTillButtonRelease) this.jumping=false`
-        //   가 매 틱 LivingEntity.jumping 을 false 로 강제 → handleFlying 의 jumping 인자도
-        //   false → vanilla boost cancel + SM 점프 분기 모두 skip → vanilla L1037-L1095 boost
-        //   (motionY += 0.15) 만 net 잔존 → 평형 ~30 m/s 무한 상승.
-        //   원본 SmartMovingSelf 의 esp.movementInput.jump = vanilla input 직접값 (필터 전).
-        //   해결: handleFlying 안에서는 raw input (jumpKey.isPressed()) 사용 = 원본 1:1 매칭.
-        jumping = MinecraftClient.getInstance().options.jumpKey.isPressed();
+        // 원본 L607-L608: resetSwimming(); resetClimbing();
+        //   1.21.1: sm_travel_client 가 handleSwimming/handleLava 후 도달 = SM 수영 분기 ci.cancel
+        //   되지 않은 경우만 → 수영/lava 처리 안 됨 = reset 의미 동일 (이미 false 유지). 매핑 생략.
 
+        // 원본 L611-L620: sneak/jump → motionY ± 0.15 + moveUpward ± 0.98 (esp.movementInput 직접)
         float moveUpward = 0F;
-        Vec3d vel = player.getVelocity();
-
-        // 🔴 BUG-28 정정 (Flying Phase / 세션 43): vanilla 1.21.1 ClientPlayerEntity.tickMovement
-        //   디컴파일 L1037-L1095 = 비행 중 매 틱 `motionY += jumping*flySpeed*3 - sneaking*flySpeed*3`
-        //   적용 (1.21.1 특화 — 원본 1.7.10 EntityClientPlayerMP/EntityPlayerSP 에는 없는 코드).
-        //   원본 SM 의 `motionY -= 0.15` (jump) / `+= 0.15` (sneak) 와 충돌 — vanilla boost 가 SM
-        //   감소를 정확히 cancel + moveFlying +0.05 만 net 잔존 → 평형 ~10 m/s 무한 상승 (BUG-28).
-        //   원본 1:1 동작 = Space hold 만으로 천천히 하강 (net -0.10 → 평형 -1.0 m/s).
-        //   정정: handleFlying 진입 직후 vanilla boost 만큼 motionY 보정 — 원본 1:1 동작 복원.
-        float flySpeedBoost = player.getAbilities().getFlySpeed() * 3.0F;
-        if (jumping) {
-            player.setVelocity(vel.x, vel.y - flySpeedBoost, vel.z);
-            vel = player.getVelocity();
-        }
         if (player.isSneaking()) {
-            player.setVelocity(vel.x, vel.y + flySpeedBoost, vel.z);
-            vel = player.getVelocity();
-        }
-
-        // sneak = 하강 (원본: esp.movementInput.sneak → motionY += 0.15D, moveUpward -= 0.98F)
-        if (player.isSneaking()) {
+            Vec3d vel = player.getVelocity();
             player.setVelocity(vel.x, vel.y + 0.14999999999999999D, vel.z);
-            vel = player.getVelocity();
             moveUpward -= 0.98F;
         }
-        // jump = 상승 (원본: esp.movementInput.jump → motionY -= 0.15D, moveUpward += 0.98F)
         if (jumping) {
+            Vec3d vel = player.getVelocity();
             player.setVelocity(vel.x, vel.y - 0.14999999999999999D, vel.z);
             moveUpward += 0.98F;
         }

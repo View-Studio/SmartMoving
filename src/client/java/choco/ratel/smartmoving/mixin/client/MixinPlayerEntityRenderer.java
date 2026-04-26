@@ -275,7 +275,20 @@ public class MixinPlayerEntityRenderer {
         if (sm.isFlying) {
             float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
             float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
+            // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 46): 회전 중심 = 머리 위치.
+            //   원본 SmartMovingRender 의 bipedOuter 회전 (rotateAngleX = θ) 은 ModelRotationRenderer
+            //   pivot (0,0,0) = vanilla biped model root = head pivot 기준 회전.
+            //   vanilla 1.21.1 LivingEntityRenderer.render() 디컴파일 L329-L356:
+            //     setupTransforms (TAIL inject 시점) → 이후 scale(-1,-1,1) + translate(0,-1.501,0)
+            //     모델 root 를 player.y + 1.501 (= 머리 위치) 로 이동.
+            //   1.21.1 잘못된 매핑: setupTransforms TAIL inject 시점 matrices 가 발 위치 →
+            //     matrices.multiply(X 회전) = 발 위치 기준 회전 = 모델 전체가 발 끝 회전축으로 기울어짐.
+            //   사용자 보고 BUG-29 "비행 시 몸 중심점이 다름 + 움직일 때 이상" 직접 원인.
+            //   정정: translate(0, +1.5, 0) → 머리 위치 → 회전 → translate(0, -1.5, 0) 복원.
+            //     원본 head pivot (= model root) 기준 회전 1:1 매칭.
+            matrices.translate(0f, 1.5f, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
+            matrices.translate(0f, -1.5f, 0f);
             sm.smOuterTiltX = theta;
         }
 
