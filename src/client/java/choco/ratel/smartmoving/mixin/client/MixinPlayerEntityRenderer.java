@@ -307,7 +307,12 @@ public class MixinPlayerEntityRenderer {
         //   smOuterTiltX 는 그대로 (cape 클램프 — B-17 — 별도 의미 보존).
         if (sm.isFlying) {
             float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
-            float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
+            // 🔴 1:1 정정 (세션 47b): 원본 SmartMovingModel L481 `verticalAngle =
+            //   isJump ? Math.abs(currentVerticalAngle) : currentVerticalAngle`. 이전 매핑 누락.
+            float verticalAngle = sm.isJumping
+                    ? Math.abs(sm.stats.currentVerticalAngle)
+                    : sm.stats.currentVerticalAngle;
+            float theta = ((float) Math.PI / 2f - verticalAngle) * walkFactor;
             // 🔴 BUG-29 (세션 46) + BUG-27/32 (세션 47) 진짜 원인 정정: 회전 중심 = 머리 위치.
             //   원본 SmartMovingRender bipedOuter 회전 = ModelRotationRenderer pivot (0,0,0) =
             //   vanilla biped model root = head pivot 기준 회전.
@@ -323,8 +328,13 @@ public class MixinPlayerEntityRenderer {
             //   정정: head 위치로 translate → Y 추가 회전 → X 기울기 → translate 복원.
             //     원본 head pivot 기준 (Y+X) 두 회전 1:1 매칭.
             matrices.translate(0f, 1.5f, 0f);
+            // 🔴 BUG-27/32 좌우 바뀜 정정 (Flying Phase / 세션 47b): Y 회전 부호 반전.
+            //   vanilla LivingEntityRenderer.render() 디컴파일 L342: setupTransforms 후 scale(-1,-1,1)
+            //   적용 → Y axis 반전 → 우리 setupTransforms TAIL 의 POSITIVE_Y rotation 결과가
+            //   scale 으로 mirror → 좌우 회전 방향 반전 = 사용자 보고 "좌우 이동 시 애니메이션 바뀜".
+            //   이미 X 회전 (-theta) 도 동일 이유로 부호 반전 (세션 40 BUG-31). Y 도 동일.
             if (smFlyingExtraYaw != 0f) {
-                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(smFlyingExtraYaw));
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-smFlyingExtraYaw));
             }
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
             matrices.translate(0f, -1.5f, 0f);

@@ -634,8 +634,12 @@ public abstract class MixinPlayerEntityModelClient {
         leftLeg.roll   = -SIXTYFOURTH;
 
         // ANIM-01: head pitch 보정 — setupTransforms theta의 절반 역보정
+        // 🔴 1:1 정정 (세션 47b): 원본 SmartMovingModel L481 isJump 분기 추가.
         float speedFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
-        float theta = (QUARTER - sm.stats.currentVerticalAngle) * speedFactor;
+        float verticalAngle = sm.isJumping
+                ? Math.abs(sm.stats.currentVerticalAngle)
+                : sm.stats.currentVerticalAngle;
+        float theta = (QUARTER - verticalAngle) * speedFactor;
         head.pitch = -theta / 2f;
     }
 
