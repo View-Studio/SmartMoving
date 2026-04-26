@@ -49,13 +49,20 @@ public class SmartMovingFlyer {
         float moveForward = (float) movementInput.z;
         float moveStrafe  = (float) movementInput.x;
 
-        // B-6 (세션 26): Mover.getCombinedSpeedFactor 헬퍼 경유로 변경 — Creative 게이트 적용.
-        // 원본 `SmartMovingSelf.handleAlternativeFlying` L622 `moveFlying(..., speedFactor *
-        // 0.05F * _flyingSpeedFactor, ...)` 에서 speedFactor 는 Self L119 의 지역변수
-        // (`getConfigSpeedFactor * getPotionSpeedFactor * getNonSlowInputSpeedFactor` 포함) 인데,
-        // 비행 경로는 isSprinting 영향만 받고 NonSlowInput 이 1F 가 되는 경우가 일반적이라
-        // getCombinedSpeedFactor 로 근사. 엄밀 1:1 재확인 필요 시 getSpeedFactor 사용 고려.
+        // 🔴 BUG-25 정정 (Flying Phase F-6 / 세션 40): getNonSlowInputSpeedFactor 누락 보강.
+        //   원본 SmartMovingSelf L119 `speedFactor = getConfigSpeedFactor * getPotionSpeedFactor *
+        //   getNonSlowInputSpeedFactor(moveForward, moveStrafing)`.
+        //   getNonSlowInputSpeedFactor (L197-L227) 본체:
+        //     if (isFast) speedFactor *= (!isLevitating ? sprintFactor : sprintFactorLevitate);
+        //     if (isClimbing) ... (비행 무관)
+        //   → 비행 시 sprint 키 hold + 비행 가능 = 1.5F (sprintFactor) 또는 sprintFactorLevitate (Levitate)
+        //   곱셈. 1.21.1 SmartMovingMover.getCombinedSpeedFactor (= getConfigSpeedFactor *
+        //   getPotionSpeedFactor) 만 있어 NonSlow 의 sprint 곱셈 누락 → 비행 sprint 시 1.5배 느림.
+        //   해결: isFast 시 sprintFactor (또는 isLevitating 시 sprintFactorLevitate) 곱셈 추가.
         float combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        if (sm.isFast) {
+            combinedFactor *= sm.isLevitating ? cfg.sprintFactorLevitate : cfg.sprintFactor;
+        }
         float flyingSpeed    = combinedFactor * 0.05F * cfg.flyingSpeedFactor;
 
         // 원본: moveFlying(moveUpward, moveStrafing, moveForward, speed, Options._flyControlVertical)

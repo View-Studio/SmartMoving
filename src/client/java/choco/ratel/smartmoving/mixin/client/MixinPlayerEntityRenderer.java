@@ -265,10 +265,17 @@ public class MixinPlayerEntityRenderer {
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)
         // walkFactor = Factor(currentSpeed, 0F, 1) — 속도 0~1 범위 정규화 (SmartMovingModel.md 9번 분기)
+        // 🔴 BUG-31 (Flying Phase F-6 / 세션 40): X 회전 부호 반전.
+        //   원인: vanilla LivingEntityRenderer.setupTransforms L44-L59 = POSITIVE_Y.rotation(180-bodyYaw)
+        //   기본 적용 (entity Y 180° 뒤집음). SM 의 sm_setupTransforms TAIL inject 로 추가 X 회전
+        //   적용 시 좌표계 뒤집힘 영향 받음 — Y 180° 후 POSITIVE_X 회전 = 모델 좌표계의
+        //   NEGATIVE_X 회전 등가 → 회전 방향 반대 (사용자 보고 "몸 앞쪽이 하늘").
+        //   해결: -theta 적용 (POSITIVE_X 부호 반전) → 슈퍼맨 자세 (배 아래, 등 위).
+        //   smOuterTiltX 는 그대로 (cape 클램프 — B-17 — 별도 의미 보존).
         if (sm.isFlying) {
             float walkFactor = Math.min(1f, Math.max(0f, sm.stats.currentSpeed));
             float theta = ((float) Math.PI / 2f - sm.stats.currentVerticalAngle) * walkFactor;
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
             sm.smOuterTiltX = theta;
         }
 

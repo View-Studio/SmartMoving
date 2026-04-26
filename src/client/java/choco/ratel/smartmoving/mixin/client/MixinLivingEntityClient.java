@@ -241,6 +241,12 @@ public abstract class MixinLivingEntityClient {
                 || sm.jumpCharge > 0 || sm.blockJumpTillButtonRelease) {
             this.jumping = false;
         }
+        // 🔴 누락 정정 (Flying Phase F-6 / 세션 40): 비행 중 fallDistance reset.
+        //   원본 SmartMovingSelf L1803-L1804: `if (sp.capabilities.isFlying) sp.fallDistance = 0F;`
+        //   1.21.1 매핑 부재 → 비행 종료 직후 착지 시 누적 fallDistance 로 낙하 데미지 가능.
+        if (player.getAbilities().flying) {
+            player.fallDistance = 0F;
+        }
     }
 
     /**
