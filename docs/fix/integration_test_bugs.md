@@ -292,6 +292,30 @@
 - 또는 `anySmState` 계산을 `Config.enabled && (...)` 형태로 변경.
 - 또는 sm_setAngles 의 `if (anySmState)` 를 `if (Config.enabled && anySmState)` 로 변경.
 
+**해결 (세션 36 AI 완결)**:
+원인 진단 = 의심 지점 4 (flyingCreative Config.enabled 가드 부재) 가 핵심. 추가로 cloak.pitch SIXTYFOURTH (B-16) 도 가드 부재 발견.
+
+`MixinPlayerEntityModelClient.java` 3 가드 추가:
+1. **L84 `flyingCreative` 가드**:
+   ```java
+   boolean cfgEnabled = SmartMovingConfig.Config.enabled;
+   boolean flyingCreative = cfgEnabled && player.getAbilities().flying;   // BUG-7
+   ```
+2. **L88-L100 reset 인프라 분기 확장**: `if (anySmState || !cfgEnabled)` — SM disabled 진입 시 잔존 4 필드 (head.pivotZ + body.pivotZ + body.yaw + head.roll) 정리.
+3. **L150 cloak.pitch 가드**: `cfgEnabled ? SIXTYFOURTH : 0f` — disabled 시 0 reset (vanilla 미reset 필드).
+
+`leaningPitch` 강제 0 분기는 `if (anySmState)` 그대로 유지 (SM enabled 일 때만 vanilla setupTransforms Branch 2 차단 — disabled 시 vanilla leaningPitch 동작 보존).
+
+**회귀 안전성**:
+- SM enabled + 비행 → cfgEnabled=true → flyingCreative=true → SM 비행 처리 (기존 동작 보존)
+- SM enabled + 비행 외 → cfgEnabled=true / flyingCreative=false → sm.* 분기 처리 (기존 동작 보존)
+- SM disabled + 비행 → cfgEnabled=false → flyingCreative=false → vanilla 비행 처리 + reset 인프라 작동 → SM 잔존 정리 + cloak.pitch=0 reset (BUG-7 해결)
+- SM disabled + 비행 외 → cfgEnabled=false → 모든 sm.* false (resetState 강제) + flyingCreative=false → reset 인프라 작동 → vanilla 정상
+
+빌드 검증 — `./gradlew compileJava compileClientJava --rerun-tasks` BUILD SUCCESSFUL (5s).
+
+**세션 36 AI 완결 / 인게임 검증 대기**.
+
 **리서치 필요 파일**:
 - 1.21.1: `MixinPlayerEntityModelClient.java` L83-L96 (anySmState 계산 + reset 인프라)
 - 1.21.1: `SmartMovingClientState.java` L912-L916 (resetState 호출 조건)
@@ -306,7 +330,7 @@
 
 | 순서 | 버그 | 우선순위 | 의존 | 비고 |
 |------|------|---------|------|------|
-| 1 | BUG-7 SM disabled reset 실패 | 🔴 매우 높음 | 없음 (단순 가드) | sm_setAngles flyingCreative 가드 추가 |
+| 1 | ✅ BUG-7 SM disabled reset 실패 | 🔴 매우 높음 | 없음 (단순 가드) | **세션 36 AI 완결 / 인게임 검증 대기** — 3 가드 추가 (flyingCreative + cloak.pitch + reset 인프라) |
 | 2 | BUG-6 I/O 키 비활성화 | ✅ 완료 | 없음 (단순) | 세션 35 완료 |
 | 3 | **BUG-1 + BUG-8** 비행 고정 + 비행 시스템 미작동 | 🔴 매우 높음 | #2/#2.5 / SmartMovingFlyer | **함께 진단** — 동일 원인 가능성 매우 높음 |
 | 4 | BUG-3 crawl 진동 | 🔴 매우 높음 | #2.7 (POSE/BBox 동기화) | |
@@ -327,7 +351,7 @@
 
 ## 후속 작업 큐
 
-- [ ] BUG-7 sm_setAngles flyingCreative 가드 — `Config.enabled` 추가
+- [✅ AI 완결 / 인게임 검증 대기] BUG-7 sm_setAngles flyingCreative 가드 + cloak.pitch 가드 + reset 인프라 분기 확장 — 세션 36. 3 가드 추가로 SM disabled 시 잔존 정리.
 - [x] BUG-6 I/O 키 비활성화 — 세션 35 완료 (`SmartMovingClientState.java` L894-L910)
 - [ ] **BUG-1 + BUG-8** 비행 고정 + SM 비행 시스템 미작동 — **함께 진단** (동일 원인 가능):
     - SmartMovingFlyer.handleFlying 호출 조건 + ci.cancel 검증 (`MixinLivingEntityClient.java` L149)

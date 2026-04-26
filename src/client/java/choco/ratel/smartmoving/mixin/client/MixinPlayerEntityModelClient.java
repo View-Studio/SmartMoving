@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.model.ModelPart;
@@ -81,18 +82,26 @@ public abstract class MixinPlayerEntityModelClient {
         // ── [8-3][6-4] SM 활성 상태에서 leaningPitch 강제 0 ─────────────────
         // leaningPitch > 0이면 setupTransforms Branch 2(-90° X회전)와
         // setAngles Step 13(수영 팔 애니메이션)이 활성화된다. SM 상태에서는 억제.
-        boolean flyingCreative = player.getAbilities().flying;
+        // BUG-7 (세션 36): flyingCreative 에 Config.enabled 가드 추가.
+        //   기존: vanilla `player.getAbilities().flying` 만 → SM disabled 시에도 anySmState true →
+        //   sm_animateFlying 호출 + reset 인프라 작동 → SM 비행 애니메이션 잔존 (= 토글 무용지물).
+        //   해결: cfgEnabled && capabilities.flying 으로 변경 (SM enabled 일 때만 SM 비행 처리).
+        boolean cfgEnabled = SmartMovingConfig.Config.enabled;
+        boolean flyingCreative = cfgEnabled && player.getAbilities().flying;
         boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isClimbJumping || sm.isSwimming_sm || sm.isDiving
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
             this.leaningPitch = 0f;
-            // pivot/yaw/roll reset 인프라 (B-9/B-11/B-13 부속): vanilla setAngles 는
-            //   head/body pivotZ, body.yaw, head.roll 을 매 프레임 reset 하지 않는다
-            //   (sneak 분기는 leg.pivotZ 만 변경 / body.yaw 는 animateArms 안
-            //   handSwingProgress > 0 분기에서만 설정 / head.roll 은 vanilla 미사용).
-            //   이전 sm 분기의 변경이 다음 분기까지 누적되는 위험을 막기 위해
-            //   SM 분기 진입 직전에 vanilla 기본값(0) 으로 reset 한다.
+        }
+        // pivot/yaw/roll reset 인프라 (B-9/B-11/B-13 부속): vanilla setAngles 는
+        //   head/body pivotZ, body.yaw, head.roll 을 매 프레임 reset 하지 않는다
+        //   (sneak 분기는 leg.pivotZ 만 변경 / body.yaw 는 animateArms 안
+        //   handSwingProgress > 0 분기에서만 설정 / head.roll 은 vanilla 미사용).
+        //   이전 sm 분기의 변경이 다음 분기까지 누적되는 위험을 막기 위해 SM 분기 진입
+        //   직전 또는 SM disabled 전환 시 (BUG-7) vanilla 기본값(0) 으로 reset.
+        //   anySmState 외 (!cfgEnabled) 도 포함: SM disabled 시 잔존 SM 변경 정리.
+        if (anySmState || !cfgEnabled) {
             head.pivotZ = 0f;
             body.pivotZ = 0f;
             body.yaw    = 0f;
@@ -155,8 +164,10 @@ public abstract class MixinPlayerEntityModelClient {
         //   cloak.pitch 는 변경 안 함 → 매 프레임 = 직접 할당하면 누적 위험 없음 (사전 검증).
         // BipedEntityModel 의 다른 자식 (갑옷 등) 은 cloak 필드 부재 → PlayerEntityModel 한정 적용.
         // cloak 은 private 필드 → PlayerEntityModelAccessor (Mixin Accessor) 경유.
+        // BUG-7 (세션 36): SM disabled 시 cloak.pitch = 0 으로 명시 reset (vanilla 미reset 필드).
+        //   cfgEnabled true → SIXTYFOURTH 적용, false → 0 reset 으로 SM 잔존 정리.
         if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
-            ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = SIXTYFOURTH;
+            ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = cfgEnabled ? SIXTYFOURTH : 0f;
         }
     }
 
