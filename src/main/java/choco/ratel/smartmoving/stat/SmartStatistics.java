@@ -90,11 +90,22 @@ public class SmartStatistics {
         // 원본 SmartRenderRender L95: currentCameraAngle = rotationYaw / RadiantToAngle (= Math.toRadians)
         currentCameraAngle = (float) Math.toRadians(yawDegrees);
 
-        // 수직 이동 각도 (라디안): 수평 이동 방향에서 위/아래 각도
-        // 원본 SmartRenderRender L96-98: atan(yDiff/h), h==0 → NaN → Quarter(π/2). 순수 수직 이동 시 Quarter.
-        currentVerticalAngle = (horizontalDistance > 1e-4)
-                ? (float) Math.atan2(diffY, horizontalDistance)
-                : (float) (Math.PI / 2f);
+        // 🔴 (세션 53): 수직 이동 각도 (라디안) 1:1 정정.
+        //   원본 SmartRenderRender L77-L79:
+        //     currentVerticalAngle = (float)Math.atan(yDiff / horizontalDistance);
+        //     if(Float.isNaN(currentVerticalAngle)) currentVerticalAngle = Quarter;
+        //   - yDiff > 0, h == 0: atan(+∞) = +π/2 (위로 이동).
+        //   - yDiff < 0, h == 0: atan(-∞) = -π/2 (아래로 이동). ★ 부호 부수적
+        //   - yDiff == 0, h == 0: atan(0/0) = NaN → fallback +π/2.
+        //   = atan2(diffY, h) (h≥0) 와 동일 + (0,0) 시 +π/2 fallback.
+        //   이전 1.21.1 매핑 `(h > 1e-4) ? atan2 : +π/2` 가드는 잘못 — h 작을 때 항상 +π/2
+        //   → 마우스 아래 + W 이동 시 verticalAngle 부호 반대 (= 몸이 위로 기울어짐 잘못).
+        //   사용자 보고 "마우스 위/아래 → W 진행 방향 이동 시 진행 방향으로 몸 안 기울어짐" 직접 원인.
+        if (horizontalDistance < 1e-9 && Math.abs(diffY) < 1e-9) {
+            currentVerticalAngle = (float) (Math.PI / 2f);  // 0/0 fallback
+        } else {
+            currentVerticalAngle = (float) Math.atan2(diffY, horizontalDistance);
+        }
 
         // 원본 SmartRenderRender L100-111: -atan(xDiff/zDiff). NaN(xDiff=0&&zDiff=0) 시
         //   prevHorizontalAngle NaN → currentCameraAngle, 아니면 prev 사용.
