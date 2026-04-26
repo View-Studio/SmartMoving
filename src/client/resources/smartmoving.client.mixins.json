@@ -13,7 +13,8 @@
     "MixinLivingEntityRenderer",
     "MixinPlayerEntityClient",
     "MixinPlayerEntityModelClient",
-    "MixinPlayerEntityRenderer"
+    "MixinPlayerEntityRenderer",
+    "PlayerEntityModelAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -6,6 +6,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -144,6 +145,18 @@ public abstract class MixinPlayerEntityModelClient {
         // ── [12-2] animateAngleJumping — 방향 점프 팔/다리 포즈 ──────────────
         if (sm.isAngleJumping()) {
             sm_animateAngleJumping(sm);
+        }
+
+        // ── [B-16 / §16-24] 망토 기본 기울임 ─────────────────────────────────
+        // 원본 SmartRenderModel.setRotationAngles L251 끝부분:
+        //   bipedCloak.rotateAngleX = Sixtyfourth (≈5.6° 살짝 뒤로 기울임).
+        // SM 상태 무관 항상 적용 (원본 SR 모델 모든 호출).
+        // vanilla PlayerEntityModel.setAngles 가 cloak.pivotZ/pivotY 만 매 프레임 변경하고
+        //   cloak.pitch 는 변경 안 함 → 매 프레임 = 직접 할당하면 누적 위험 없음 (사전 검증).
+        // BipedEntityModel 의 다른 자식 (갑옷 등) 은 cloak 필드 부재 → PlayerEntityModel 한정 적용.
+        // cloak 은 private 필드 → PlayerEntityModelAccessor (Mixin Accessor) 경유.
+        if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
+            ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = SIXTYFOURTH;
         }
     }
 

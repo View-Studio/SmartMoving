@@ -409,7 +409,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-15. Levitate horizontal=camera (§16-23 / SmartMovingRender L132-L134) — sm_captureBodyYaw 분기 처리 위에 `if (sm.isLevitating) { smBodyYawActive = true; smBodyYawOverride = Math.toDegrees(sm.stats.currentCameraAngle); return; }` 추가. 원본 마지막 덮어쓰기와 결과 등가 (모든 분기 결과를 카메라로 덮어쓰기 = 분기 진입 전 단독 적용). **세션 29 완료**.
 
 **[누적 위험 검증 후]**
-- [ ] B-16. Cloak 기본 기울임 SIXTYFOURTH (§16-24 / SmartRenderModel L251) — vanilla setAngles 가 매 프레임 cloak.pitch reset 여부 검증 → reset 없으면 sm_setAngles TAIL 이전에 reset 필요. 안전하면 `cloak.pitch = SIXTYFOURTH;` 추가. 우선순위 낮음.
+- [x] B-16. Cloak 기본 기울임 SIXTYFOURTH (§16-24 / SmartRenderModel L251) — vanilla `PlayerEntityModel.setAngles` 가 cloak.pivotZ/pivotY 만 변경 (cloak.pitch 미변경) 사전 검증 완료 → `=` 직접 할당 누적 위험 없음. sm_setAngles 본체 끝에 `cloak.pitch = SIXTYFOURTH;` 1 라인 추가 (PlayerEntityModel 한정 캐스팅). cloak private 접근 위해 신규 `PlayerEntityModelAccessor` Mixin Accessor 인터페이스 생성 + mixins.json 등록. **세션 30 완료**.
 
 **[인프라 선행 → 입력값 교체]**
 - [ ] B-X. verticalDistance/Speed + allDistance/Speed capture 인프라 — SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick 진입 지점에 4 필드 추가 + 1.7.10 SmartStatisticsData.calcualte() 공식 그대로 갱신 (`distance*4F`, `legYaw += (distance - legYaw) * 0.4F`, `total += legYaw`). 입력값: `verticalDistance` = abs(getY() - prevY) / `allDistance` = sqrt((getX()-prevX)² + (getY()-prevY)² + (getZ()-prevZ)²).
@@ -1921,6 +1921,75 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - 신규 Mixin: B-17 (1 원자)
 
 **다음 단계 (세션 30+)**: 권장 시작 = **B-16** (cloak.pitch SIXTYFOURTH 기본 기울임 — 누적 위험 검증 후 안전하면 1 라인 추가). 누적 검증 그룹 진입.
+
+---
+
+### 세션 30 — 2026-04-26 — Phase B / R-10+ B-16 (cloak.pitch 기본 기울임) 1:1 이식 — **누적 검증 그룹 진입**
+
+**진행한 작업** (vanilla 누적 위험 검증 + 신규 Accessor 인터페이스 + 1 라인 추가):
+
+1. **원본 1차 자료 read** — `SmartRenderModel.java` L250-L251 (setRotationAngles 끝부분):
+   - L250 `bipedCloak.ignoreBase = false;` (SR `ignoreBase` 부재 → N/A)
+   - **L251 `bipedCloak.rotateAngleX = Sixtyfourth;` ← B-16 본 작업 (≈5.6° 살짝 뒤로 기울임)**
+
+2. **vanilla cloak.pitch 처리 패턴 사전 검증** (`PlayerEntityModel_setAngles.md` L57-L77):
+   - vanilla `PlayerEntityModel.setAngles` super 호출 후 cloak 처리:
+     - `cloak.pivotZ` / `cloak.pivotY` 만 매 프레임 변경 (chest armor + sneaking 4 분기)
+     - **`cloak.pitch` 변경 코드 부재** → vanilla 가 매 프레임 reset 안 함
+   - 결론: `cloak.pitch = SIXTYFOURTH;` 매 프레임 `=` 직접 할당하면 같은 값으로 덮어쓰기 → **누적 위험 없음** (= 으로 할당이므로).
+
+3. **PlayerEntityModel cloak 접근성 검증**:
+   - Mixin target = `BipedEntityModel.class` → 자식 `PlayerEntityModel` 의 `cloak` 필드 직접 접근 못 함.
+   - 첫 시도: `(Object) this instanceof PlayerEntityModel<?> playerModel` 캐스팅 후 `playerModel.cloak.pitch` 직접 접근 → **컴파일 실패** (`cloak has private access in PlayerEntityModel`).
+   - 해결: 신규 `PlayerEntityModelAccessor` Mixin Accessor 인터페이스 생성 + `smartmoving.client.mixins.json` 등록.
+
+4. **B-16 코드 수정** (3 파일 변경 — 신규 Accessor + Mixin 갱신 + mixins.json 등록):
+
+   a. **신규 파일** `PlayerEntityModelAccessor.java` (16 라인):
+      ```java
+      @Mixin(PlayerEntityModel.class)
+      public interface PlayerEntityModelAccessor {
+          @Accessor("cloak")
+          ModelPart sm_getCloak();
+      }
+      ```
+   b. **mixins.json 등록** (`smartmoving.client.mixins.json` client 배열에 `PlayerEntityModelAccessor` 추가).
+   c. **`MixinPlayerEntityModelClient.sm_setAngles` 본체 끝** (모든 분기 처리 후 / animateAngleJumping 직후):
+      ```java
+      if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
+          ((PlayerEntityModelAccessor) playerModel).sm_getCloak().pitch = SIXTYFOURTH;
+      }
+      ```
+      `import net.minecraft.client.render.entity.model.PlayerEntityModel;` 추가.
+
+5. **값 정확성 검증**:
+   - 원본 `Sixtyfourth = π/32 ≈ 0.0982 라디안 ≈ 5.625°`. 1.21.1 `SIXTYFOURTH = HALF / 32f = π/32` 동일 상수.
+   - SM 상태 무관 항상 적용 (원본 SR 모델 모든 setRotationAngles 호출 시).
+   - PlayerEntityModel 한정 (BipedEntityModel 의 다른 자식 — 갑옷 등 — 은 cloak 필드 부재).
+   - 자기 자신만 적용 (sm_setAngles 의 `if (!(entity instanceof ClientPlayerEntity player)) return;` 으로 인해). 타인 플레이어 cloak 기본 기울임은 별도 작업 필요 (별도 후속 후보).
+
+6. **빌드 검증**: 첫 시도 BUILD FAILED (`cloak has private access`) → Accessor 추가 후 **BUILD SUCCESSFUL** (4s).
+
+**검증 체크리스트 (세션 30 B-16)**:
+- [근거] ✓ 원본 SmartRenderModel.java L251 read + PlayerEntityModel_setAngles.md L57-L77 vanilla cloak 처리 검증
+- [전수] ✓ 원본 1 라인 → 1.21.1 1 라인 매핑 (Accessor 인프라 추가 분리)
+- [발견] 신규 발견 0건 (단 타인 플레이어 cloak 기본 기울임 누락은 별도 후속 후보)
+- [검증] ✓ vanilla cloak.pitch 미변경 사전 검증 + Accessor private 접근 우회 검증 + 빌드 실패 후 정정
+- [회귀] ✓ `=` 직접 할당으로 누적 없음, PlayerEntityModel 한정 캐스팅으로 갑옷 모델 영향 없음
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**Phase B 진행 누적**: 16 원자 중 **11 완료** (68.75%) / 5 남음.
+
+**그룹 진행도**:
+- ✅ 단일 라인 (B-8/9/10/11/12/18) — 6/6
+- ✅ B-19 (climbing 같은 분기) — 1/1
+- ✅ 다중 라인 + MatrixStack (B-13) — 1/1
+- ✅ 신규 분기 (B-14/B-15) — 2/2
+- ✅ **누적 검증 후 (B-16) — 1/1**
+- 인프라 + 입력값: B-X / B-4 / B-5 / B-6 / B-7 (5 원자) — **남은 가장 큰 작업**
+- 신규 Mixin: B-17 (1 원자)
+
+**다음 단계 (세션 31+)**: 권장 시작 = **B-X 인프라** (verticalDistance/Speed + allDistance/Speed capture — SmartMovingClientState 또는 신규 MixinClientPlayerEntity tick / 1.7.10 SmartStatisticsData.calcualte() 공식 그대로) 선행 → **B-4 / B-5 / B-6 / B-7** 일괄 입력값 교체 (climbing/diving/flying). 인프라 + 입력값 그룹 진입 (가장 큰 작업).
 
 ---
 
