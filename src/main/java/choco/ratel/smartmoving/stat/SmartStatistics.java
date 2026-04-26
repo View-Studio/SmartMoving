@@ -84,6 +84,13 @@ public class SmartStatistics {
         currentVerticalSpeed   += ((float) verticalDistance   * 4f - currentVerticalSpeed)   * 0.4f;
         currentSpeed           += ((float) distance           * 4f - currentSpeed)           * 0.4f;
 
+        // 🔴 (세션 57): total 누적 1:1 정정 — 원본 SmartStatisticsData.calcualte L50:
+        //     `total += legYaw;` (legYaw = EMA 결과, raw distance 아님!)
+        //   이전 1.21.1 매핑 `totalDistance += raw distance` 가 잘못 → 진자 사이클이 원본의
+        //   1/2 속도 (raw distance 가 EMA 결과의 약 2배) → 팔/다리 진자운동 디테일 차이.
+        //   사용자 보고 "팔/다리 진자운동 디테일이 원본이랑 다른 느낌" 직접 원인.
+        //   정정: total += currentSpeed (EMA 결과, clamp 전).
+
         // 평탄화 수평 속도 (EMA on EMA: factor=0.5)
         currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened * 0.5f + currentHorizontalSpeed * 0.5f;
 
@@ -119,10 +126,13 @@ public class SmartStatistics {
         prevHorizontalAngle = newH;
         currentHorizontalAngle = newH;
 
-        // 누적 거리
-        totalHorizontalDistance += (float) horizontalDistance;
-        totalVerticalDistance += (float) verticalDistance;
-        totalDistance += (float) distance;
+        // 🔴 (세션 57): 원본 1:1 — total += EMA 결과 (currentSpeed, raw distance 아님).
+        //   원본 SmartStatisticsData.calcualte L49-L50:
+        //     legYaw += (distance - legYaw) * 0.4F;   // EMA 갱신 (위에서 처리)
+        //     total += legYaw;                          // 누적 = EMA 결과
+        totalHorizontalDistance += currentHorizontalSpeed;
+        totalVerticalDistance   += currentVerticalSpeed;
+        totalDistance           += currentSpeed;
     }
 
     // ── 🔴 partial tick lerp getter (Flying Phase / 세션 48): 60Hz 부드러움 보간 ────
