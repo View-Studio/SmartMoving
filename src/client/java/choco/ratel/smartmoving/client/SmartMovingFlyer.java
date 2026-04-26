@@ -74,7 +74,12 @@ public class SmartMovingFlyer {
         float flyingSpeed    = combinedFactor * 0.05F * cfg.flyingSpeedFactor;
 
         // 원본: moveFlying(moveUpward, moveStrafing, moveForward, speed, Options._flyControlVertical)
-        moveFlying(player, moveUpward, moveStrafe, moveForward, flyingSpeed, cfg.flyControlVertical);
+        // 🔴 BUG-27 강제 정정 (Flying Phase / 세션 50): 사용자 환경 config 파일 disk 의존성 제거.
+        //   원본 Unmodified default = true (Properties.java L171-L172). 자동 마이그레이션 (세션
+        //   48/49) 효과 없을 가능성 (marker 이미 있거나 다른 disk 위치) → cfg 값 무시하고 강제
+        //   true 적용 → 마우스 pitch → W 진행 방향 효과 (원본 default 1:1) 보장.
+        boolean treeDimensional = true;  // 원본 default 강제. 사용자 옵션은 별도 코드 변경 시만.
+        moveFlying(player, moveUpward, moveStrafe, moveForward, flyingSpeed, treeDimensional);
 
         // 🔴 BUG-1+8 (세션 37): 원본 SmartMovingSelf.handleAlternativeFlying L624
         //   `sp.moveEntity(sp.motionX, sp.motionY, sp.motionZ)` 매핑 — **이전 누락**.
