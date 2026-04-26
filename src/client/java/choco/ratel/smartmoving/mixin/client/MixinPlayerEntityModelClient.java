@@ -86,12 +86,14 @@ public abstract class MixinPlayerEntityModelClient {
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
         if (anySmState) {
             this.leaningPitch = 0f;
-            // pivotZ reset 인프라 (B-9 부속): vanilla setAngles 는 head/body pivotZ 를 매 프레임
-            //   reset 하지 않으므로 (sneak 분기는 leg.pivotZ 만 변경), 이전 sm 분기의 변경이
-            //   다음 분기까지 누적되는 위험이 있다. SM 분기 진입 직전에 vanilla 기본값(0) 으로
-            //   reset 하여 모든 sm 분기에서 안전하게 head.pivotZ / body.pivotZ 변경 가능.
+            // pivot/yaw reset 인프라 (B-9/B-11 부속): vanilla setAngles 는 head/body pivotZ 와
+            //   body.yaw 를 매 프레임 reset 하지 않는다 (sneak 분기는 leg.pivotZ 만 변경 /
+            //   body.yaw 는 animateArms 안 handSwingProgress > 0 분기에서만 설정).
+            //   이전 sm 분기의 변경이 다음 분기까지 누적되는 위험을 막기 위해
+            //   SM 분기 진입 직전에 vanilla 기본값(0) 으로 reset 한다.
             head.pivotZ = 0f;
             body.pivotZ = 0f;
+            body.yaw    = 0f;
         }
 
         // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
@@ -374,6 +376,11 @@ public abstract class MixinPlayerEntityModelClient {
                 -EIGHTH * standSneakFactor,
                 MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor,
                 0f);
+
+        // 몸통 yaw (B-11 / §16-16): 자유형 영법 좌우 흔들림.
+        // 원본 SmartMovingModel.java L335: bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance/2 - Quarter) * walkFactor
+        //   (Breast 부재 — body 단일 노드만 적용).
+        body.yaw = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;
 
         // 팔 (YZX 순서): pitch=X(앞뒤 젓기), yaw=0, roll=Z(좌우 펼침)
         float dist2      = limbSwing * 0.5f;

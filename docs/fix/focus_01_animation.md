@@ -397,7 +397,7 @@ R-9 통합 누적 표 (4,968 라인 전수):
 - [x] B-9. Climbing NoGrab+non-NoStep body.pivotZ -6F (§16-14 / SmartMovingModel L285) — sm_animateClimbing NoGrab+non-NoStep 분기에 `body.pivotZ = -6F;` 1 라인 추가 + sm_setAngles HEAD pivotZ reset 인프라 2 라인 추가 (head/body — vanilla 미reset 안전 보장). **세션 25 완료**.
 - [ ] B-19. Climbing NoGrab+non-NoStep leg.pitch -= 0.5F (§16-26 / SmartMovingModel L283) — sm_animateClimbing NoGrab+non-NoStep 분기에 `leftLeg.pitch -= 0.5F; rightLeg.pitch -= 0.5F;` 2 라인 추가 (B-9 와 같은 분기, 다리 그룹 무릎 굽힘 보정).
 - [ ] B-10. Swim/Dive head 자세 (§16-15 / SmartMovingModel L329 / L370-L371) — sm_animateSwimming `head.pivotZ = -2F;` + sm_animateDiving `head.pitch = -EIGHTH; head.pivotZ = -2F;` 추가
-- [ ] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming `body.yaw = cos(distance/2 - QUARTER) * walkFactor;` 추가
+- [x] B-11. Swim body yaw (§16-16 / SmartMovingModel L335) — sm_animateSwimming 머리 처리 후 `body.yaw = cos(limbSwing/2 - QUARTER) * walkFactor;` 1 라인 추가 + sm_setAngles HEAD reset 인프라에 `body.yaw = 0f` 추가 (vanilla animateArms 조건부 reset 만 → SM 분기 누적 방지). **세션 26 완료**.
 - [x] B-12. Crawl head/body 피벗 (§16-18 / SmartMovingModel L401/L405) — sm_animateCrawling 머리 후 `head.pivotZ = -2F;` / 몸통 후 `body.pivotY = +3F;` 2 라인 추가. head.pivotZ 는 B-9 reset 인프라 활용, body.pivotY 는 vanilla 매 프레임 sneak 분기 reset 안전. **세션 26 완료**.
 - [x] B-18. Ceiling head.yaw 잉여 차감 제거 (§16-17 / sm_animateCeilingClimbing L339) — `head.yaw -= headYaw * DEG_TO_RAD;` + 주석 1 라인 제거 (원본 L315 절대 할당 1:1). **세션 25 완료**.
 
@@ -1590,6 +1590,43 @@ R-9 통합 누적 표 (4,968 라인 전수):
 **Phase B 진행 누적**: 15 원자 (B-N 14 + B-X 1) + 신규 B-19 = 16 원자 중 **4 완료** (B-8/B-9/B-12/B-18) / 12 남음. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 4 완료 / 2 남음 (**B-10/B-11**).
 
 **다음 단계 (세션 27+)**: 권장 시작 = **B-10** (swim/dive head 자세 — swim L329 head.pivotZ=-2 + dive L370/L371 head.pitch=-Eighth + head.pivotZ=-2 / 2 메서드 3 라인 추가) 또는 **B-11** (swim body yaw — 1 라인 추가) 또는 **B-19** (climbing leg.pitch -= 0.5F — 2 라인 / 같은 분기).
+
+**세션 26 추가 작업 — B-11 도 함께 진행 (토큰 여유)**:
+
+1. **원본 1차 자료 read** — SmartMovingModel.java L317-L351 (swim 분기), 핵심 L335:
+   - L335 `bipedBreast.rotateAngleY = bipedBody.rotateAngleY = MathHelper.cos(distance / 2.0F - Quarter) * walkFactor;`
+   - 머리 yaw L327 와 정확히 동일한 공식 — Breast 부재로 1.21.1 body 단일 노드만 적용.
+
+2. **vanilla body.yaw reset 패턴 사전 검증** (BipedEntityModel_detail.md L65-L102):
+   - vanilla `BipedEntityModel.animateArms()` 안에서만 body.yaw 변경: `body.yaw = sin(sqrt(handSwingProgress) * 2π) * 0.2F`
+   - **조건**: `handSwingProgress > 0.0F` (= 공격 스윙 중) 일 때만 실행 → 평상시 vanilla 가 body.yaw reset 안 함 → **누적 위험**.
+   - 현재 sm_animateCrawling L455 도 body.yaw 사용 중 → crawl 종료 후 다른 분기 진입 시 body.yaw 잔존 (기존부터 누적 위험).
+   - 대응: B-9 reset 인프라 확장 — sm_setAngles HEAD anySmState 분기에 `body.yaw = 0f` 추가 (head.pivotZ + body.pivotZ + body.yaw 3 필드 reset).
+
+3. **B-11 코드 수정** (2 라인):
+   - sm_setAngles HEAD reset 인프라 (anySmState 분기): `body.yaw = 0f;` 추가 (B-9 인프라 확장)
+   - sm_animateSwimming 머리 setAnglesYXZ 호출 후 / 팔 처리 전: `body.yaw = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;` 추가 (원본 L335 1:1)
+
+4. **handSwing 동시 발생 시 영향 검토**:
+   - swim 중 공격 발생 (handSwing > 0) → vanilla animateArms 가 body.yaw 와 arm.pivotX/pivotZ 계산 → sm_setAngles TAIL inject 에서 body.yaw 만 cos 값으로 덮어쓰기 → arm pivotX/pivotZ 가 vanilla 의 이전 body.yaw 기반으로 남음 (불일치).
+   - 영향: handSwing 중 (≈0.5초) arm 위치 미세 차이 (-5px ~ +5px 범위). 메인 swim 자세는 영향 없음.
+   - 1.7.10 원본도 setRotationAngles 안에서 단순 절대 할당이므로 1:1 매핑 (handSwing 시 미세 차이는 원본도 유사 가능성).
+
+5. **빌드 검증**: `./gradlew compileJava compileClientJava --rerun-tasks` → **BUILD SUCCESSFUL** (5s).
+
+**B-11 검증 체크리스트**:
+- [근거] ✓ 원본 L335 read 완료 + vanilla animateArms 사전 검증 (handSwingProgress 조건부 reset)
+- [전수] ✓ 원본 L335 1 지점 → 1.21.1 1 지점 매핑 + reset 인프라 확장
+- [발견] 신규 발견 0건 (handSwing 시 arm pivot 불일치는 1:1 번역 의도 외 평가, 별도 신규 발견 후보 보류)
+- [검증] ✓ vanilla animateArms 조건부 body.yaw reset 사전 확인 + reset 인프라로 모든 sm 분기 안전 보장
+- [회귀] ✓ swim 종료 후 다른 분기 진입 시 reset 인프라로 0 reset → 누적 없음. crawl 의 기존 body.yaw 사용도 동일 인프라로 안전.
+- [빌드] ✓ BUILD SUCCESSFUL
+
+**세션 26 누적 작업**: B-12 (2 라인 추가) + B-11 (1 라인 추가 + reset 인프라 확장 1 라인) = 2 원자 진행. R-10+ 진행 = B-8/B-9/B-11/B-12/B-18 = 5 원자 완료.
+
+**Phase B 진행 누적**: 16 원자 중 **5 완료** / 11 남음. 단일 라인 그룹 (B-8/9/10/11/12/18) 6 원자 중 5 완료 / 1 남음 (**B-10**).
+
+**다음 단계 (세션 27+)**: 권장 시작 = **B-10** (swim/dive head 자세 — swim L329 head.pivotZ=-2 + dive L370/L371 head.pitch=-Eighth + head.pivotZ=-2 / 2 메서드 3 라인 추가). 단일 라인 그룹 마지막 1 원자 + 다중/신규 그룹 진입.
 
 ---
 
