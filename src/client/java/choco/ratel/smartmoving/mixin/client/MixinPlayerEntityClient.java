@@ -62,12 +62,21 @@ public abstract class MixinPlayerEntityClient {
         if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
-        // 원본 setHeightOffset(-1F) 상태 전수 — 모두 0.6 × 0.8 + eyeHeight 0.62F.
-        // isDipping 은 heightOffset=0 유지 (원본) → vanilla STANDING 통과.
+        // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 45): 비행/Levitate 분기 제거.
+        //   원본 SmartMovingSelf.setHeightOffset (L1694-L1704) = `boundingBox.minY -= heightOffset
+        //   + height += heightOffset` — **충돌 박스만 변경, eyeHeight 변경 없음**. 1.7.10 vanilla
+        //   에 EntityPose 시스템 자체가 없어 비행 시 STANDING 모델 + eyeHeight 1.62 그대로 유지.
+        //   1.21.1 잘못된 매핑: isFlying/isLevitating 시 0.6 × 0.8 + eyeHeight 0.62F 강제 →
+        //   vanilla 가 카메라 위치를 0.62로 적용 → 카메라가 발끝으로 내려옴 + 모델 작게 그려짐.
+        //   사용자 보고 BUG-29 "비행 시 몸 중심점이 발끝으로 바뀜" 직접 원인.
+        //   정정: isFlying/isLevitating 조건 제거 → vanilla 1.21.1 STANDING POSE + 1.8 height +
+        //   1.62 eyeHeight 그대로 → 원본 1.7.10 동작 1:1 매칭 (충돌 박스도 vanilla 처리).
+        //
+        // 원본 setHeightOffset(-1F) 상태 전수 — Crawling/Sliding/Swimming 등 모두 0.6 × 0.8 +
+        // eyeHeight 0.62F. isDipping/isFlying/isLevitating 은 vanilla 통과.
         boolean smSmall = sm.isCrawling || sm.isClimbCrawling
                        || sm.isHeadJumping || sm.isSliding
-                       || sm.isSwimming_sm || sm.isDiving
-                       || sm.isFlying || sm.isLevitating;
+                       || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
@@ -135,15 +144,14 @@ public abstract class MixinPlayerEntityClient {
             // 수영/잠수 — SWIMMING POSE (vanilla 도 동일, 명시적 고정)
             player.setPose(EntityPose.SWIMMING);
             ci.cancel();
-        } else if (sm.isFlying || sm.isLevitating) {
-            // SM 비행 / levitate — 원본 setHeightOffset(-1F) 상태 (bbox 0.8)
-            //   POSE 는 SLIDING 재활용 (0.6×0.8 동치). vanilla SWIMMING 대신 SLIDING 선택 이유:
-            //   SWIMMING 은 수영 애니 트리거 → 비행 중 수영 애니는 부자연. SLIDING 이 시각
-            //   정합성 더 나음.
-            player.setPose(EntityPose.SLIDING);
-            ci.cancel();
         }
-        // isDipping / 그 외 → vanilla updatePose() 통과 (STANDING/CROUCHING/FALL_FLYING/SPIN_ATTACK)
+        // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 45): isFlying/isLevitating 분기 제거.
+        //   원본 1.7.10 vanilla 에 EntityPose 시스템 없음 → 비행 시 STANDING 모델 그대로 유지.
+        //   1.21.1 잘못된 매핑: SLIDING POSE 강제 → vanilla 가 eyeHeight 작게 적용 → 카메라
+        //   발끝으로 내려옴 + 모델 작게 그려짐. 사용자 보고 BUG-29 직접 원인.
+        //   정정: 분기 제거 → vanilla 1.21.1 STANDING POSE 그대로 → 카메라 정상 (1.62 eyeHeight)
+        //   + 모델 정상 (1.8 height) = 원본 1.7.10 동작 1:1 매칭.
+        // isFlying/isLevitating/isDipping/그 외 → vanilla updatePose() 통과 (STANDING 등)
     }
 
 }

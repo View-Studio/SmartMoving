@@ -43,16 +43,17 @@ public abstract class MixinPlayerEntity {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
 
-        // 원본 setHeightOffset(-1F) 상태 전수 — 클라와 동일 OR 분기.
-        // isFlying 원본 공식 (SmartMovingSelf L2509-L2515): cfg.fly && abilities.flying
-        //   && !isSwimming && !isDiving.
-        boolean smFlying = SmartMovingConfig.Config.fly
-                && player.getAbilities().flying
-                && !sm.isSwimming && !sm.isDiving;
+        // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 45): 비행/Levitate 분기 제거 (서버측).
+        //   클라측 sm_getBaseDimensions_client 와 동일 정정 — 비행 시 vanilla STANDING 통과.
+        //   원본 1.7.10 vanilla 에 EntityPose 시스템 없음 → 비행 시 STANDING 모델 + eyeHeight
+        //   1.62 그대로. 1.21.1 잘못 매핑 = SLIDING 강제 → 카메라 발끝.
+        //   클라/서버 대칭 유지: 둘 다 비행 시 vanilla STANDING POSE 통과 → datatracker 일관.
+        //
+        // 원본 setHeightOffset(-1F) 상태 전수 — Crawling/Sliding/Swimming 등만 0.6 × 0.8 +
+        // eyeHeight 0.62F. isFlying/isLevitating 은 vanilla 통과.
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
                        || sm.isHeadJumping || sm.isSliding
-                       || sm.isSwimming || sm.isDiving
-                       || smFlying || sm.isLevitating;
+                       || sm.isSwimming || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
@@ -91,17 +92,13 @@ public abstract class MixinPlayerEntity {
         } else if (sm.isSwimming || sm.isDiving) {
             player.setPose(EntityPose.SWIMMING);
             ci.cancel();
-        } else {
-            // isFlying 원본 공식 (SmartMovingSelf L2509-L2515) 1:1.
-            boolean smFlying = SmartMovingConfig.Config.fly
-                    && player.getAbilities().flying
-                    && !sm.isSwimming && !sm.isDiving;
-            if (smFlying || sm.isLevitating) {
-                player.setPose(EntityPose.SLIDING);
-                ci.cancel();
-            }
         }
-        // isDipping / 그 외 → vanilla updatePose() 통과 (STANDING/CROUCHING/FALL_FLYING/SPIN_ATTACK)
+        // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 45): 비행/Levitate 분기 제거 (서버측).
+        //   클라측 sm_updatePose_client 와 동일 정정 — 비행 시 vanilla STANDING POSE 통과.
+        //   원본 1.7.10 vanilla 에 POSE 시스템 없음 → 비행 시 STANDING 그대로. 1.21.1 잘못 매핑
+        //   = SLIDING 강제 → 카메라 발끝. 정정: vanilla 통과 → STANDING POSE → eyeHeight 1.62.
+        //   클라/서버 대칭 유지 → datatracker 진동 0.
+        // isFlying/isLevitating/isDipping/그 외 → vanilla updatePose() 통과 (STANDING 등)
     }
 
     /**
