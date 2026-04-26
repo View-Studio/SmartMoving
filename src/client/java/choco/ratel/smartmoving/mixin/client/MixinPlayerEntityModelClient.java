@@ -689,8 +689,19 @@ public abstract class MixinPlayerEntityModelClient {
         if (swing > 0F) {
             float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
                                               sm.smOuterFade_prevTime, totalTime);
-            if (preserveRight) preCancelParentXRotation(rightArm, thetaCancel);
-            if (preserveLeft)  preCancelParentXRotation(leftArm,  thetaCancel);
+            // 🔴 (세션 65q): 회전 부호 반전 + 위치 보정 → 시각 결과가 수직/수평 동일.
+            //   사용자 의견: "수직 시 결과 올바름. 수평 값 조정해서 같게".
+            //   65k 의 R_x(+theta) cancel 은 scale Y 부호 반전 영향으로 실제 world R_x(-θ)
+            //   적용 → 부모 R_x(-θ) * R_x(-θ) = R_x(-2θ) → "90° 뒤로 젖혀짐".
+            //   부호 반전 (R_x(-theta)) + 위치 보정 → 시각 결과가 직립 swing 효과.
+            if (preserveRight) {
+                preCancelParentXPivot(rightArm, thetaCancel);
+                preCancelParentXRotation(rightArm, thetaCancel);
+            }
+            if (preserveLeft) {
+                preCancelParentXPivot(leftArm, thetaCancel);
+                preCancelParentXRotation(leftArm, thetaCancel);
+            }
         }
     }
 
@@ -927,12 +938,33 @@ public abstract class MixinPlayerEntityModelClient {
      * 사용처: 비행 swing 진행 중 preferred arm — 직립 자세로 vanilla swing 효과 잔존.
      */
     private static void preCancelParentXRotation(ModelPart part, float theta) {
+        // 🔴 (세션 65q): 부호 반전 + scale 보정.
+        //   vanilla render: setupTransforms → scale(-1,-1,1) → ModelPart.rotate.
+        //   scale Y 부호 반전 → ModelPart R_x(theta) = world R_x(-theta).
+        //   부모 world R_x(-θ) cancel 위해 ModelPart R_x(-theta) 적용 (= world R_x(+θ)).
         Quaternionf qOrig = new Quaternionf().rotationZYX(part.roll, part.yaw, part.pitch);
-        Quaternionf qNew = new Quaternionf().rotationX(theta).mul(qOrig);
+        Quaternionf qNew = new Quaternionf().rotationX(-theta).mul(qOrig);
         Vector3f e = qNew.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;
         part.roll  = e.z;
+    }
+
+    /**
+     * arm pivot 위치를 부모 X 회전 cancel — 회전 중심 ModelPart (0, 0, 0).
+     *
+     * vanilla render 흐름: setupTransforms(R_x(-θ) at world (0,1.5,0)) → scale(-1,-1,1) →
+     * translate(0, -1.501, 0) → ModelPart.rotate.
+     * 회전 중심 (0, 1.5, 0) world 가 ModelPart 좌표계에서 ≈ (0, 0, 0) (scale + translate 보정).
+     * scale Y 부호 반전 → ModelPart R_x(-theta) = world R_x(+theta) → 부모 cancel.
+     */
+    private static void preCancelParentXPivot(ModelPart part, float theta) {
+        float py = part.pivotY;
+        float pz = part.pivotZ;
+        float cos = MathHelper.cos(theta);
+        float sin = MathHelper.sin(theta);
+        part.pivotY = py * cos + pz * sin;
+        part.pivotZ = -py * sin + pz * cos;
     }
 
     /**
