@@ -510,35 +510,11 @@ public abstract class MixinLivingEntityClient {
      */
     @Inject(method = "getMovementSpeed", at = @At("HEAD"), cancellable = true)
     private void sm_getMovementSpeed(CallbackInfoReturnable<Float> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;
-        // 🔴 (2026-04-28) 원본 SmartMovingSelf L119 land speedFactor 1:1 매핑.
-        //   원본 식: speedFactor = configFactor * potionFactor * nonSlowFactor.
-        //   원본 land final = rawSpeed * speedFactor (rawSpeed = vanilla base movement speed).
-        //
-        //   1.21.1 매핑: vanilla `getMovementSpeed()` 가 attribute 반환 (sprint 시 1.3x 적용).
-        //   원본 potionFactor = attribute * 10 / sprintDivisor 가 sprint 정상화 효과 → 우리는
-        //   `smFactor /= 1.3F` 로 동등 매핑. nonSlowFactor 만 곱하면 원본과 동등.
-        //
-        //   sprint 시: smFactor = nonSlow / 1.3 (run=1.3/1.3=1.0, isFast=1.5/1.3≈1.154).
-        //   sprint 안 할 때: smFactor = 1.0 (vanilla 동일).
-        //
-        //   비행과 동일 패턴 (SmartMovingFlyer.handleFlying 의 combinedFactor + sprintFactor 곱).
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        float vanillaSpeed = (float) player.getAttributeValue(
-                net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED);
-        float smFactor = choco.ratel.smartmoving.client.SmartMovingMover
-                .getConfigSpeedFactor(player, cfg);  // cfg.speedFactor (1F default)
-        // 🔴 (2026-04-28) sprint 시 sprintFactor (1.5) 적용 — 사용자 의도 "SM 모드 시 빠름".
-        //   원본 isFast 정의는 onGround sprint 시 false (standing17=true 가드). 따라서 원본
-        //   일반 sprint 효과 = vanilla 동일. 사용자 의도 위배.
-        //   해결: isFast 가드 제거. 항상 sprintFactor 적용 → vanilla * (1.5/1.3) = 1.154x.
-        if (player.isSprinting()) {
-            smFactor *= cfg.sprintFactor;
-            smFactor /= 1.3F;  // vanilla sprint modifier 정상화
-        }
-        cir.setReturnValue(vanillaSpeed * smFactor);
+        // 🔴 (2026-04-28) 비활성화 — handleLand 가 vanilla travel 을 cancel + 자체 식 적용
+        //   하므로 vanilla travel 의 getMovementSpeed 호출 경로 없음.
+        //   다른 서브시스템 (애니메이션/발자국/네트워크) 이 호출 시 sprint 1.154x 부수효과
+        //   → 원본보다 살짝 빠른 느낌의 가능성. handleLand 에서 sprintFactor 직접 적용하므로
+        //   여기서 추가 곱은 이중 적용 위험.
     }
 
     /**
