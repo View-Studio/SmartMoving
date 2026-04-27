@@ -15,6 +15,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.MovementType;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
@@ -196,20 +197,146 @@ public abstract class MixinLivingEntityClient {
         sm.isFeetVineClimbing   = feetVine[0];
 
         boolean onClimbable = hands[0].isRelevant() || feet[0].isRelevant();
-        if (!onClimbable && !sm.isCeilingClimbing) return;
+        // 🔴 (2026-04-27) Free Climb (일반 벽 grab) 진입 게이트 — 사용자 보고
+        //   "그랩 키 클라이밍 작동 안 함" 의 핵심 원인.
+        //   원본 SmartMovingSelf L657 은 handleClimbing 무조건 호출. 그 안의 8방향
+        //   seekClimbGap 검사로 일반 벽도 detect → handsClimbing/feetClimbing 갱신.
+        //   우리는 onClimbable (사다리/덩굴 인접) 만 가드라 일반 벽에서 진입 불가.
+        //   sm.wantClimb 는 tickEssential L1262 에서 `freeClimb && enabled && wouldWantClimb`
+        //   (= grab 키 또는 자동사다리/덩굴 검증) 으로 매 tick 갱신. 추가하면 일반 벽에서도
+        //   handleClimbing 진입 → 안의 seekClimbGap 8방향 검사 발동 → Free Climb 정상.
+        boolean wantFreeClimb = sm.wantClimb;
+        if (!onClimbable && !sm.isCeilingClimbing && !wantFreeClimb) {
+            // 🔴 (2026-04-28) Land 분기 — 비행과 동일 패턴 (vanilla travel 통째로 cancel + SM 자체 식).
+            //   원본 SmartMovingSelf.handleLand + landMotion + setLandMotions 1:1 매핑.
+            //   사용자 의도 "비행처럼 1:1": vanilla 흐름 + 부분 inject 의 곱셈 누적 문제 근본 해결.
+            SmartMovingMover.handleLand(player, sm, movementInput);
+            ci.cancel();
+            return;
+        }
 
-        if (onClimbable) SmartMovingClimber.handleClimbing(player, sm);
+        if (onClimbable || wantFreeClimb) SmartMovingClimber.handleClimbing(player, sm);
         SmartMovingClimber.handleCeilingClimbing(player, sm);
 
-        // B-4 (세션 27): 하강 클램프 User 배율 이식. 원본 Self L780:
-        //   sp.motionY = Math.max(sp.motionY, -0.15 * getCombinedSpeedFactor());
-        // `-0.15D` 고정은 User 배율 미반영. 1.21.1 SmartMovingConfig cfg 로 getCombinedSpeedFactor
-        // 호출. Creative 게이트 자동 처리 (B-6). 기본(!enabled 또는 !Creative) 에서는
-        // combinedFactor≈1F → 동작 불변.
+        // 클라이밍 미발동 시도 land 분기로.
+        if (!sm.isClimbing && !sm.isCeilingClimbing) {
+            SmartMovingMover.handleLand(player, sm, movementInput);
+            ci.cancel();
+            return;
+        }
+
+        // 🔴 (2026-04-28) 원본 SmartMovingSelf.handleLand + landMotion 정밀 1:1 매핑.
+        //   원본 흐름:
+        //     1. landMotion (L675-810): horizontalDamping 결정 + moveFlying (movementInput → motion).
+        //     2. move (L655): vanilla move() — 위치 갱신.
+        //     3. handleClimbing (L657): motionY 새로 set.
+        //     4. handleCeilingClimbing.
+        //     5. setLandMotions (L659): motionY -= 0.08, *= 0.98, horizontalDamping.
+        //
+        //   우리는 HEAD inject 라 순서 변경:
+        //     a. handleClimbing (motionY set) — 이미 호출됨.
+        //     b. movementInput → motion (원본 L718 moveFlying 등가).
+        //     c. ladder/vine 시 motion clamp -0.15 ~ 0.15 (원본 L757-775).
+        //     d. notTotalFreeClimbing 시 fallDistance=0 + vertical clamp (원본 L776-781).
+        //     e. sneak 시 motionY=0 (원본 L782-794).
+        //     f. setLandMotions (원본 L1176-1182): motionY -= 0.08, *= 0.98, horizontal *= 0.91.
+        //     g. player.move (원본 L655 등가).
+
+        // b. 🔴 (2026-04-28) 원본 L718 `sp.moveFlying(strafe, forward, rawSpeed * speedFactor)` 1:1.
+        //   기존 `0.1F` hardcoded 는 vanilla 1.21.1 walk 속도. 사용자 보고 "원본보다 빠름".
+        //   원본 식: rawSpeed * speedFactor.
+        //     rawSpeed = onGround ? 0.1 * f3 : jumpMovementFactor / sprintDiv.
+        //     speedFactor = configFactor * potionFactor * nonSlowFactor * slowFactor.
+        //     + landMotion runFactor (isRunning && !isFast).
+        //     + !onGround 시 /= potionFactor.
+        //
+        //   handleLand 와 동일 식.
+        SmartMovingConfig cfg2 = SmartMovingConfig.Config;
+        float climbSpeedFactor = SmartMovingMover.getConfigSpeedFactor(player, cfg2)
+                * SmartMovingMover.getPotionSpeedFactor(player)
+                * SmartMovingMover.getNonSlowInputSpeedFactor(player, sm, cfg2);
+        float climbSlowFactor = SmartMovingMover.getSlowInputSpeedFactor(player, sm, cfg2);
+        if (sm.vanilla()) {
+            // vanilla mode 시 movementInput 자체 곱 — 본 매핑 무관 (cfg.enabled 일 때 vanilla=false).
+        } else {
+            climbSpeedFactor *= climbSlowFactor;
+        }
+        // damping/rawSpeed 결정.
+        float climbDamping;
+        if (player.isOnGround() && (!sm.isJumping || sm.vanilla())) {
+            net.minecraft.block.BlockState below = player.getWorld().getBlockState(player.getSteppingPos());
+            float slip = below.getBlock().getSlipperiness();
+            climbDamping = slip > 0F ? slip * 0.91F : 0.546F;
+        } else {
+            climbDamping = 0.91F;
+        }
+        float climbF3 = 0.1627714F / (climbDamping * climbDamping * climbDamping);
+        float climbRawSpeed;
+        if (player.isOnGround()) {
+            climbRawSpeed = 0.1F * climbF3;
+        } else {
+            float jumpMovementFactor = 0.02F;
+            climbRawSpeed = jumpMovementFactor / (player.isSprinting() && !player.getAbilities().flying ? 1.3F : 1F);
+        }
+        // runFactor (isRunning && !isFast).
+        if (cfg2.run && SmartMovingMover.isRunning(player, sm, cfg2) && !sm.isFast) {
+            climbSpeedFactor *= cfg2.runFactor;
+        }
+        // !onGround 시 potionFactor 정상화.
+        if (!player.isOnGround()) {
+            float potion = SmartMovingMover.getPotionSpeedFactor(player);
+            if (potion > 0F) climbSpeedFactor /= potion;
+        }
+        player.updateVelocity(climbRawSpeed * climbSpeedFactor, movementInput);
+
+        // c. 원본 L757-775: ladder/vine 시 motion clamp -0.15 ~ 0.15.
+        //   onClimbable=true (사다리/덩굴 인접) 시만 적용. free climb 일반 벽엔 미적용.
+        if (onClimbable) {
+            Vec3d v = player.getVelocity();
+            double clampH = 0.15D;
+            double mx = Math.max(-clampH, Math.min(clampH, v.x));
+            double mz = Math.max(-clampH, Math.min(clampH, v.z));
+            if (mx != v.x || mz != v.z) {
+                player.setVelocity(mx, v.y, mz);
+            }
+        }
+
+        // d. 원본 L776-781: notTotalFreeClimbing 시 fallDistance=0 + motionY clamp -0.15*factor.
+        //   notTotalFreeClimbing = (!isClimbing && isOnLadder && !totalFreeLadder) || (isOnVine && !totalFreeVine).
+        //   1.21.1 매핑 근사: 사다리/덩굴 인접 시 항상 적용 (totalFree config 미체크).
+        if (onClimbable) {
+            player.fallDistance = 0;
+            double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
+                    player, SmartMovingConfig.Config);
+            Vec3d v = player.getVelocity();
+            if (v.y < clampFactor) {
+                player.setVelocity(v.x, clampFactor, v.z);
+            }
+        }
+
+        // e. 원본 L782-794: sneak 시 motionY=0 (벽에서 매달리기).
+        //   freeBaseClimb 모드: sneak + motionY < 0 + !onGround + notTotalFreeClimbing → motionY=0.
+        //   그 외: localIsSneaking + motionY<0 → motionY=0.
+        //   1.21.1 매핑: player.isSneaking() 시 motionY<0 → 0 (간소화).
+        if (onClimbable && player.isSneaking()) {
+            Vec3d v = player.getVelocity();
+            if (v.y < 0) {
+                player.setVelocity(v.x, 0, v.z);
+            }
+        }
+
+        // f. 원본 setLandMotions L1176-1182:
+        //   sp.motionY -= 0.08;
+        //   sp.motionY *= 0.98;
+        //   sp.motionX *= horizontalDamping;  (= 0.91F air damping)
+        //   sp.motionZ *= horizontalDamping;
         Vec3d vel = player.getVelocity();
-        double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
-                player, SmartMovingConfig.Config);
-        player.setVelocity(vel.x * 0.91F, Math.max(vel.y, clampFactor), vel.z * 0.91F);
+        double newY = (vel.y - 0.08D) * 0.98D;
+        player.setVelocity(vel.x * 0.91F, newY, vel.z * 0.91F);
+
+        // g. 원본 L655 등가: vanilla move() 호출로 위치 갱신.
+        player.move(MovementType.SELF, player.getVelocity());
+
         ci.cancel();
     }
 
@@ -350,14 +477,13 @@ public abstract class MixinLivingEntityClient {
      */
     @Inject(method = "travel", at = @At("TAIL"))
     private void sm_aerodynamicDamping(Vec3d movementInput, CallbackInfo ci) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (!sm.isAerodynamic || player.isOnGround()) return;
-        float factor = 0.999F / 0.91F;
-        Vec3d vel = player.getVelocity();
-        player.setVelocity(vel.x * factor, vel.y, vel.z * factor);
+        // 🔴 (2026-04-28) 임시 비활성 — 사용자 보고 "달리다 점프 시 엄청 빨라짐" 디버깅.
+        //   isAerodynamic 또는 isHeadJumping 잔존 가능성 → 매 tick motion * 1.098 가속.
+        //   land + 점프 동작 검증 후 head jump 별도 매핑.
+        // if (!sm.isAerodynamic || !sm.isHeadJumping || player.isOnGround()) return;
+        // float factor = 0.999F / 0.91F;
+        // Vec3d vel = player.getVelocity();
+        // player.setVelocity(vel.x * factor, vel.y, vel.z * factor);
     }
 
     /**
@@ -386,12 +512,33 @@ public abstract class MixinLivingEntityClient {
     private void sm_getMovementSpeed(CallbackInfoReturnable<Float> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;  // SM 비활성 시 vanilla 값 그대로
+        if (!cfg.enabled) return;
+        // 🔴 (2026-04-28) 원본 SmartMovingSelf L119 land speedFactor 1:1 매핑.
+        //   원본 식: speedFactor = configFactor * potionFactor * nonSlowFactor.
+        //   원본 land final = rawSpeed * speedFactor (rawSpeed = vanilla base movement speed).
+        //
+        //   1.21.1 매핑: vanilla `getMovementSpeed()` 가 attribute 반환 (sprint 시 1.3x 적용).
+        //   원본 potionFactor = attribute * 10 / sprintDivisor 가 sprint 정상화 효과 → 우리는
+        //   `smFactor /= 1.3F` 로 동등 매핑. nonSlowFactor 만 곱하면 원본과 동등.
+        //
+        //   sprint 시: smFactor = nonSlow / 1.3 (run=1.3/1.3=1.0, isFast=1.5/1.3≈1.154).
+        //   sprint 안 할 때: smFactor = 1.0 (vanilla 동일).
+        //
+        //   비행과 동일 패턴 (SmartMovingFlyer.handleFlying 의 combinedFactor + sprintFactor 곱).
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
         float vanillaSpeed = (float) player.getAttributeValue(
                 net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED);
-        float configFactor = choco.ratel.smartmoving.client.SmartMovingMover
-                .getConfigSpeedFactor(player, cfg);
-        cir.setReturnValue(vanillaSpeed * configFactor);
+        float smFactor = choco.ratel.smartmoving.client.SmartMovingMover
+                .getConfigSpeedFactor(player, cfg);  // cfg.speedFactor (1F default)
+        // 🔴 (2026-04-28) sprint 시 sprintFactor (1.5) 적용 — 사용자 의도 "SM 모드 시 빠름".
+        //   원본 isFast 정의는 onGround sprint 시 false (standing17=true 가드). 따라서 원본
+        //   일반 sprint 효과 = vanilla 동일. 사용자 의도 위배.
+        //   해결: isFast 가드 제거. 항상 sprintFactor 적용 → vanilla * (1.5/1.3) = 1.154x.
+        if (player.isSprinting()) {
+            smFactor *= cfg.sprintFactor;
+            smFactor /= 1.3F;  // vanilla sprint modifier 정상화
+        }
+        cir.setReturnValue(vanillaSpeed * smFactor);
     }
 
     /**
