@@ -296,16 +296,10 @@ public class MixinPlayerEntityRenderer {
         SmartMovingClientState.smCachedBodyYawNaturalDeg = bodyYaw;
         if (smBodyYawActive) {
             SmartMovingClientState.smBodyYawActive_publicShared = true;
-            // 🔴 (2026-04-27) force 동안 standard fade prev 매 frame 갱신.
-            //   사용자 보고: angleJump 착지 후 몸통이 점프 방향으로 띡 돌아가는 보간 부재.
-            //   원인: force 분기 (isAngleJumping/isClimb 등) 에서 standard fade prev 정지 →
-            //         force 끝 후 standard 분기 진입 시 prev=NaN → lerp skip → 즉시 적용.
-            //   해결: force 동안 prev = smBodyYawOverride 로 매 frame 갱신 → 끝 시 prev=force
-            //         마지막 값 → standard 진입 첫 프레임부터 lerp (부드러운 회전).
-            //   원본 SmartRender bipedOuter.previous 가 모든 분기 공통 단일 변수인 것을 매핑.
-            //   점프 동작 자체엔 영향 없음 (force 결과 그대로 반환).
             SmartMovingClientState.smStandardBodyYawPrev = smBodyYawOverride;
             SmartMovingClientState.smStandardFadeTimePrev = SmartMovingClientState.smCachedAnimationProgress;
+            // 비행 외 분기에서 비행 fade prev 갱신용 — ModifyArg 의 실제 적용 결과 캐시.
+            SmartMovingClientState.smCachedBodyYawLaggedDeg = smBodyYawOverride;
             return smBodyYawOverride;
         }
         // 🔴 (2026-04-27) 기본 상태 fade lerp — vanilla bodyYaw 위에 추가 lag (factor 0.2).
@@ -317,6 +311,8 @@ public class MixinPlayerEntityRenderer {
             SmartMovingClientState.smCachedBodyYawLaggedDeg = lagged;
             return lagged;
         }
+        // vanilla 통과 — 비행 fade prev 갱신용 캐시도 vanilla bodyYaw.
+        SmartMovingClientState.smCachedBodyYawLaggedDeg = bodyYaw;
         return bodyYaw;
     }
 
@@ -465,6 +461,19 @@ public class MixinPlayerEntityRenderer {
 
             // head 보정용 캐시 (sm_modifyNetHeadYaw 가 사용).
             SmartMovingClientState.smCachedYawLerpedRad = yawLerped;
+        }
+
+        // 🔴 (2026-04-27) 비행 외 분기에서 비행 fade prev 매 frame 갱신.
+        //   사용자 보고: 비행 진입 시 부드럽게 안 됨, 중간 끊김.
+        //   prev = ModifyArg 의 실제 적용 결과 (smCachedBodyYawLaggedDeg) 라디안.
+        //   비행 외 모델 회전 = POSITIVE_Y(180 - applied_deg) = π - applied_rad.
+        //   비행 첫 frame 모델 회전 = POSITIVE_Y(180) + POSITIVE_Y(-yawLerped) = π - yawLerped_rad.
+        //   yawLerped 시작 = applied_rad → 같음 → 끊김 없음.
+        //   원본 SmartRender bipedOuter.previous 가 모든 분기 공통 단일 변수인 것을 매핑.
+        if (!sm.isFlying) {
+            sm.smOuterTiltX_prev = 0f;
+            sm.smOuterExtraYaw_prev = (float) Math.toRadians(SmartMovingClientState.smCachedBodyYawLaggedDeg);
+            sm.smOuterFade_prevTime = animationProgress;
         }
     }
 
