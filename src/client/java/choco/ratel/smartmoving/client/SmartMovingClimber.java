@@ -8,6 +8,7 @@ import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import choco.ratel.smartmoving.climbing.CeilingClimbBlocks;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.LadderBlock;
 import net.minecraft.block.VineBlock;
@@ -230,48 +231,60 @@ public final class SmartMovingClimber {
      *
      * @return true if relevant (속도를 변경함)
      */
+    /**
+     * 🔴 (2026-04-27) 원본 SmartMovingSelf L1500-1551 1:1 재구성:
+     *   원본 호출 흐름: setShouldClimbSpeed → setOnlyShouldClimbSpeed → `isClimbing=true` 무조건.
+     *   이전 매핑은 `isClimbing=true` 를 relevant 시만 set → motionY 가 이미 충분 시
+     *   isClimbing 안 set → travel inject 가 vanilla 진행 → 사다리 댐핑 X → 떨어짐 →
+     *   다음 tick 다시 발동 → on/off 진동 = 끊김 (사용자 보고 BUG-1).
+     */
     public static boolean setShouldClimbSpeed(ClientPlayerEntity player, SmartMovingClientState sm,
                                                double value, boolean isUp, double combinedFactor) {
-        // climbIntoCount > 0이면 crawl gap 진입 중 — HoldMotion으로 강제 (C-26)
+        // 원본 L1502: setShouldClimbSpeed(value) → setShouldClimbSpeed(value, UpGrab, DownStep).
+        // 우리는 hands/feet type 별도 처리 안 함 (R-01 패킷 인코딩만 영향) — setOnly 직접 호출.
+        return setOnlyShouldClimbSpeed(player, sm, value, isUp, combinedFactor);
+    }
+
+    /**
+     * 원본: SmartMovingSelf.setOnlyShouldClimbSpeed L1513-1551.
+     *   `isClimbing = true` 진입 시 무조건. relevant 일 때만 motionY 적용.
+     */
+    public static boolean setOnlyShouldClimbSpeed(ClientPlayerEntity player, SmartMovingClientState sm,
+                                                   double value, boolean isUp, double combinedFactor) {
+        // 원본 L1515: isClimbing=true 무조건 (climbing 발동 의도가 있는 어떤 호출이든).
+        sm.isClimbing = true;
+
+        // 원본 L1517-1518: climbIntoCount>0 이면 HoldMotion 으로 강제.
         if (sm.climbIntoCount > 0) {
             value = HOLD_MOTION;
             isUp = true;
         }
 
         double motionY = player.getVelocity().y;
-        boolean relevant = value < 0 || value > motionY;
 
-        if (relevant) {
-            // hasClimbCrawlGap && isClimbCrawling: 상단 크롤 갭 도달 시 속도 상한 적용 (C-27)
+        // 원본 L1520-1543: value != HoldMotion 시 factor 보간. HoldMotion 인 경우는 isClimbingStill.
+        if (value != HOLD_MOTION) {
+            // 원본 L1541-1542: hasClimbCrawlGap && isClimbCrawling 시 catchCrawlGap 상한.
             if (sm.hasClimbCrawlGap && sm.isClimbCrawling && value > HOLD_MOTION) {
                 value = Math.min(CATCH_CRAWL_GAP_MOTION, value);
             }
-
             SmartMovingConfig cfg2 = SmartMovingConfig.Config;
-            double newMotionY;
             if (isUp) {
-                newMotionY = (value - HOLD_MOTION) * cfg2.freeClimbingUpSpeedFactor * combinedFactor + HOLD_MOTION;
+                value = (value - HOLD_MOTION) * cfg2.freeClimbingUpSpeedFactor * combinedFactor + HOLD_MOTION;
             } else {
-                newMotionY = HOLD_MOTION - (HOLD_MOTION - value) * cfg2.freeClimbingDownSpeedFactor * combinedFactor;
+                value = HOLD_MOTION - (HOLD_MOTION - value) * cfg2.freeClimbingDownSpeedFactor * combinedFactor;
             }
-
-            player.setVelocity(player.getVelocity().x, newMotionY, player.getVelocity().z);
+        } else {
+            sm.isClimbingStill = true;
         }
 
-        // isClimbJumping = !relevant && !isClimbHolding (C-28)
+        // 원본 L1547-1550: relevant = value<0 || value>motionY. relevant 시만 motionY 적용.
+        boolean relevant = value < 0 || value > motionY;
+        if (relevant) {
+            player.setVelocity(player.getVelocity().x, value, player.getVelocity().z);
+        }
         sm.isClimbJumping = !relevant && !sm.isClimbHolding;
 
-        return relevant;
-    }
-
-    /**
-     * 원본: SmartMovingSelf.setOnlyShouldClimbSpeed(value, isUp, factor)
-     * setShouldClimbSpeed와 동일하나 sm.isClimbing=true도 설정한다.
-     */
-    public static boolean setOnlyShouldClimbSpeed(ClientPlayerEntity player, SmartMovingClientState sm,
-                                                   double value, boolean isUp, double combinedFactor) {
-        boolean relevant = setShouldClimbSpeed(player, sm, value, isUp, combinedFactor);
-        if (relevant) sm.isClimbing = true;
         return relevant;
     }
 
@@ -410,10 +423,15 @@ public final class SmartMovingClimber {
                 jh += -2D;
             }
 
-            HandsClimbing[] inoutH = { HandsClimbing.NONE };
-            FeetClimbing[]  inoutF = { FeetClimbing.NONE };
-            ClimbGap outHandsGap = new ClimbGap();
-            ClimbGap outFeetGap  = new ClimbGap();
+            // 🔴 (2026-04-27) 원본 SmartMovingSelf L928-961 정밀 1:1 매핑:
+            //   원본은 main handsClimbing/feetClimbing 와 inout 변수가 동일 (별도 NONE 시작 후
+            //   inout[0] 에 대입). 우리는 inout 만 NONE 시작 → 8방향 결과 main 에 누적 안 됨
+            //   → setShouldClimbSpeed 결정 시 일반 벽 인식 못 함 → 사용자 보고 "grab 키 정지".
+            //   해결: inout 시작값을 main (getOnLadderOrVine 결과) 으로 + 8방향 후 main 갱신.
+            HandsClimbing[] inoutH = { handsClimbing };
+            FeetClimbing[]  inoutF = { feetClimbing };
+            ClimbGap outHandsGap = handsGap[0];
+            ClimbGap outFeetGap  = feetGap[0];
 
             // 원본 L937-L940: 4방향 (PZ/NZ/ZP/ZN) seekClimbGap 호출
             Orientation.PZ.seekClimbGap(rotation, world, ix, id, jh, iz, kd,
@@ -429,8 +447,14 @@ public final class SmartMovingClimber {
                     sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
                     inoutH, inoutF, outHandsGap, outFeetGap);
 
+            // 원본 L942-L943: 4방향 후 main 변수로 다시 가져오기
+            handsClimbing = inoutH[0];
+            feetClimbing  = inoutF[0];
+            handsGap[0]   = outHandsGap;
+            feetGap[0]    = outFeetGap;
+
             // 원본 L945-L947: 4방향 결과 → ClientState 필드 3 대입
-            sm.isNeighborClimbing = inoutH[0].isRelevant() || inoutF[0].isRelevant();
+            sm.isNeighborClimbing = handsClimbing.isRelevant() || feetClimbing.isRelevant();
             sm.hasNeighborClimbGap = outHandsGap.canStand || outFeetGap.canStand;
             sm.hasNeighborClimbCrawlGap = outHandsGap.mustCrawl || outFeetGap.mustCrawl;
 
@@ -449,6 +473,12 @@ public final class SmartMovingClimber {
                         sm.isClimbCrawling, sm.isCrawlClimbing, isSmallClimbing,
                         inoutH, inoutF, outHandsGap, outFeetGap);
             }
+
+            // 원본 L957-L958: 8방향 후 main 변수로 다시 가져오기
+            handsClimbing = inoutH[0];
+            feetClimbing  = inoutF[0];
+            handsGap[0]   = outHandsGap;
+            feetGap[0]    = outFeetGap;
 
             // 원본 L960-L961: 8방향 합산 결과 → ClientState 필드 2 대입
             sm.hasClimbGap = outHandsGap.canStand || outFeetGap.canStand;
@@ -599,41 +629,99 @@ public final class SmartMovingClimber {
         boolean isUp;
 
         if (wantClimbUp) {
-            // B-37 (세션 62): 원본 L985-L986 이식 — wall 오르기 진입 시 슬라이딩+크롤 전환.
-            //   if (isSliding && handsClimbing.IsRelevant()) { isSliding=false; isCrawling=true; }
-            // 슬라이딩 중에 grab+전진 입력하면 크롤로 전환하여 벽 오르기 시작.
+            // 🔴 (2026-04-27) 원본 SmartMovingSelf L981-1027 1:1 정밀 매핑.
+
+            // 원본 L983-987: 슬라이딩 중에 grab+전진 → 크롤 전환.
             if (sm.isSliding && handsClimbing.isRelevant()) {
                 sm.isSliding  = false;
                 sm.isCrawling = true;
             }
-            if (handsClimbing == HandsClimbing.FAST_UP || feetClimbing == FeetClimbing.FAST_UP) {
+
+            // 원본 L989: handsClimbing = handsClimbing.ToUp(); (BottomHold → Up 전환)
+            handsClimbing = handsClimbing.toUp();
+
+            // 원본 L991-995: feetClimbing.FastUp + 특수 조건 → fast climb.
+            //   원본 조건: !(handsClimbing == None && onGround && feetClimbGap.Block != bed)
+            //   1.21.1 매핑: bed 검사 생략 (근사).
+            boolean handsNoneOnGround = (handsClimbing == HandsClimbing.NONE) && player.isOnGround();
+            if (feetClimbing == FeetClimbing.FAST_UP && !handsNoneOnGround) {
                 value = FAST_UP_MOTION; isUp = true;
-            } else if (handsClimbing.isUp() && feetClimbing.isUp()) {
+            }
+            // ★ 원본 L996-1000: hasClimbGap || hasClimbCrawlGap + handsClimbing.FastUp +
+            //   feetClimbing(None or BaseWithHands) → climb into crawl gap.
+            //   = 2칸 벽 위에 갭 있을 때 자동 등반 분기. 사용자 보고 "2칸 벽 안 올라감" 직접 원인.
+            else if ((sm.hasClimbGap || sm.hasClimbCrawlGap)
+                    && handsClimbing == HandsClimbing.FAST_UP
+                    && (feetClimbing == FeetClimbing.NONE
+                            || feetClimbing == FeetClimbing.BASE_WITH_HANDS)) {
+                value = (feetClimbing == FeetClimbing.NONE) ? SLOW_UP_MOTION : FAST_UP_MOTION;
+                isUp = true;
+            }
+            // 원본 L1001-1005: feet.IsRelevant && hands.IsRelevant + 3 예외 조합 → MediumUp.
+            else if (feetClimbing.isRelevant() && handsClimbing.isRelevant()
+                    && !(feetClimbing == FeetClimbing.BASE_HOLD && handsClimbing == HandsClimbing.SINK)
+                    && !(handsClimbing == HandsClimbing.SINK && feetClimbing == FeetClimbing.TOP_WITH_HANDS)
+                    && !(handsClimbing == HandsClimbing.TOP_HOLD && feetClimbing == FeetClimbing.TOP_WITH_HANDS)) {
                 value = MEDIUM_UP_MOTION; isUp = true;
-            } else if (handsClimbing.isUp()) {
+            }
+            // 원본 L1006-1010: handsClimbing.IsUp() → SlowUpMotion.
+            else if (handsClimbing.isUp()) {
                 value = SLOW_UP_MOTION; isUp = true;
-            } else if (feetClimbing.isIndependentlyRelevant()) {
-                value = SLOW_UP_MOTION; isUp = true;
-            } else {
+            }
+            // 원본 L1011-1021: TopHold || BaseHold || (SlowUpWithHoldWithoutHands && hands None) → Hold.
+            //   원본은 jumpButton.StartPressed 시 climbJump 시도 (현재 미이식).
+            else if (handsClimbing == HandsClimbing.TOP_HOLD
+                    || feetClimbing == FeetClimbing.BASE_HOLD
+                    || (feetClimbing == FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS
+                            && handsClimbing == HandsClimbing.NONE)) {
+                value = HOLD_MOTION; isUp = true;
+            }
+            // 원본 L1022-1026: Sink || (SlowUpWithSinkWithoutHands && hands None) → SinkDown.
+            else if (handsClimbing == HandsClimbing.SINK
+                    || (feetClimbing == FeetClimbing.SLOW_UP_WITH_SINK_WITHOUT_HANDS
+                            && handsClimbing == HandsClimbing.NONE)) {
+                value = SINK_DOWN_MOTION; isUp = false;
+            }
+            else {
+                // fallback (어디에도 안 걸리면 정지) — 원본은 기본값 setShouldClimbSpeed 호출 안 함.
+                // 우리는 isClimbing 발동 위해 HOLD_MOTION fallback.
                 value = HOLD_MOTION; isUp = true;
             }
         } else {
-            // wantClimbDown: 내려가기
-            if (feetClimbing == FeetClimbing.FAST_UP) {
-                value = CLIMB_DOWN_MOTION; isUp = false;
-            } else if (handsClimbing.isUp()) {
-                value = CLIMB_DOWN_MOTION; isUp = false;
+            // 원본 L1028-1053 wantClimbDown 분기 매핑.
+            handsClimbing = handsClimbing.toDown();
+
+            if (handsClimbing == HandsClimbing.BOTTOM_HOLD && !feetClimbing.isIndependentlyRelevant()) {
+                value = HOLD_MOTION; isUp = false;
+            } else if (handsClimbing.isRelevant()) {
+                if (feetClimbing == FeetClimbing.FAST_UP) {
+                    value = CLIMB_DOWN_MOTION; isUp = false;
+                } else if (feetClimbing == FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS) {
+                    value = CLIMB_DOWN_MOTION; isUp = false;
+                } else if (feetClimbing == FeetClimbing.TOP_WITH_HANDS) {
+                    value = CLIMB_DOWN_MOTION; isUp = false;
+                } else if (feetClimbing == FeetClimbing.BASE_WITH_HANDS
+                        || feetClimbing == FeetClimbing.BASE_HOLD) {
+                    if ((handsClimbing != HandsClimbing.NONE && handsClimbing != HandsClimbing.UP)
+                            || (handsClimbing == HandsClimbing.UP && feetClimbing == FeetClimbing.BASE_HOLD)) {
+                        value = CLIMB_DOWN_MOTION; isUp = false;
+                    } else {
+                        value = SINK_DOWN_MOTION; isUp = false;
+                    }
+                } else {
+                    value = SINK_DOWN_MOTION; isUp = false;
+                }
             } else {
                 value = SINK_DOWN_MOTION; isUp = false;
             }
         }
 
-        // B-4 (세션 27): Free climb User 배율 이식. 원본 Self L1522 `factor =
-        // getCombinedSpeedFactor()` 가 setOnlyShouldClimbSpeed 내부 계산에 곱해짐.
-        // 1.21.1 setShouldClimbSpeed 는 combinedFactor 를 파라미터로 받아 내부에서 곱 →
-        // 호출자가 getCombinedSpeedFactor 전달해야 함. 기존 `1.0D` 는 User 배율 누락.
-        setOnlyShouldClimbSpeed(player, sm, value, isUp,
-                SmartMovingMover.getCombinedSpeedFactor(player, cfg));
+        // 원본 L1522 factor = getCombinedSpeedFactor() + L1523-1524 isFast sprint factor.
+        double freeFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        if (sm.isFast) {
+            freeFactor *= cfg.sprintFactor;
+        }
+        setOnlyShouldClimbSpeed(player, sm, value, isUp, freeFactor);
 
         // fallDistance 리셋 (클라이밍 중 낙하 데미지 방지)
         player.fallDistance = 0;
@@ -758,6 +846,23 @@ public final class SmartMovingClimber {
 
         // 조건: !isClimbing && (!isCrawling || conflict) && !isCrawlClimbing
         if (sm.isClimbing || sm.isCrawlClimbing) return;
+
+        // 🔴 (2026-04-27) 천장 블록 종류 검사 — 원본 SmartMovingSelf L1139-1145 1:1.
+        //   원본: topBlock = supportsCeilingClimbing(i, j, k);
+        //         bottomBlock = supportsCeilingClimbing(i, j+1, k);
+        //         if (topBlock != null || bottomBlock != null) { ... }
+        //   기본 dictionary (SmartMovingConfig L142): iron bars + closed trapdoor.
+        //   기존 CeilingClimbBlocks.supports(state) 헬퍼 호출 — 이미 dictionary 이식됨.
+        World world = player.getWorld();
+        Box bb = player.getBoundingBox();
+        int px = (int) Math.floor(player.getX());
+        int pz = (int) Math.floor(player.getZ());
+        int topY = (int) Math.floor(bb.maxY);
+        BlockState topState    = world.getBlockState(new BlockPos(px, topY, pz));
+        BlockState bottomState = world.getBlockState(new BlockPos(px, topY + 1, pz));
+        boolean topClimb    = CeilingClimbBlocks.supports(topState);
+        boolean bottomClimb = CeilingClimbBlocks.supports(bottomState);
+        if (!topClimb && !bottomClimb) return;
 
         // C-35: jgap = 플레이어 머리(bb.maxY)에서 천장 블록까지의 거리
         // 원본: ceil(bb.maxY) 이상에서 첫 번째 솔리드 블록 Y - bb.maxY

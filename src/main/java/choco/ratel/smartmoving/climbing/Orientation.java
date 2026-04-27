@@ -477,10 +477,20 @@ public class Orientation {
      *
      * Config 기본값 1.0F/1.0F 에서 = 0.06F.
      */
-    private static final float _handClimbingHoldGap = Math.min(0.25F,
-            0.06F * Math.max(
-                    SmartMovingConfig.Config.freeClimbingUpSpeedFactor,
-                    SmartMovingConfig.Config.freeClimbingDownSpeedFactor));
+    /**
+     * 🔴 (2026-04-28) static final → 메서드로 변경.
+     *   원본은 modload 후 Config init → Orientation 첫 사용 (static final 평가) → 0.06 정상.
+     *   Fabric 환경에선 클래스 로드 시점에 SmartMovingConfig.Config 가 미초기화 →
+     *   freeClimbingUpSpeedFactor=0F (Java default) → _handClimbingHoldGap=0 → BottomHold
+     *   분기 (jh_offset<holdGap) 절대 발동 안 함 → 사용자 보고 "grab 만 시 정지 안 됨" 직접 원인.
+     *   해결: 매번 평가 (Config 초기화 후 정상 0.06 반환).
+     */
+    private static float _handClimbingHoldGap() {
+        return Math.min(0.25F,
+                0.06F * Math.max(
+                        SmartMovingConfig.Config.freeClimbingUpSpeedFactor,
+                        SmartMovingConfig.Config.freeClimbingDownSpeedFactor));
+    }
 
     /**
      * 원본 L2726-L2727 `_climbGapTemp` / `_climbGapOuterTemp` — static ClimbGap 인스턴스.
@@ -2867,14 +2877,14 @@ public class Orientation {
         ClimbGap[] outArr = { out_climbGap };
 
         if ((gap = isLadderSubstitute(middle, _climbGapTemp)) > 0) {
-            if (jh_offset > 1D - _handClimbingHoldGap)
+            if (jh_offset > 1D - _handClimbingHoldGap())
                 result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
             else
                 result = result.max(HandsClimbing.NONE, outArr, _climbGapTemp);
         }
 
         if ((gap = isLadderSubstitute(base, _climbGapTemp)) > 0) {
-            if (jh_offset < _handClimbingHoldGap)
+            if (jh_offset < _handClimbingHoldGap())
                 result = result.max(HandsClimbing.BOTTOM_HOLD, outArr, _climbGapTemp);
             else
                 result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
@@ -2889,7 +2899,7 @@ public class Orientation {
             } else if (isClimbCrawling && gap > 1) {
                 result = result.max(HandsClimbing.FAST_UP, outArr, _climbGapTemp);
             } else {
-                if (jh_offset < _handClimbingHoldGap) {
+                if (jh_offset < _handClimbingHoldGap()) {
                     if (grabType == AroundGrab)
                         result = result.max(HandsClimbing.UP, outArr, _climbGapTemp);
                     else
@@ -2907,7 +2917,7 @@ public class Orientation {
             if ((gap > 2 && !isCrawlClimbing)
                     || grabType == AroundGrab
                     || (gap > 1 && isClimbCrawling)) {
-                if (jh_offset < _handClimbingHoldGap && !isClimbCrawling)
+                if (jh_offset < _handClimbingHoldGap() && !isClimbCrawling)
                     result = result.max(HandsClimbing.TOP_HOLD, outArr, _climbGapTemp);
                 else if (isClimbCrawling)
                     result = result.max(HandsClimbing.FAST_UP, outArr, _climbGapTemp);
@@ -2978,7 +2988,7 @@ public class Orientation {
                 result = result.max(FeetClimbing.FAST_UP, outArr, _climbGapTemp);
             } else if (gap > 2 && !isCrawling) {
                 if (!isClimbCrawling) {
-                    if (jh_offset < _handClimbingHoldGap)
+                    if (jh_offset < _handClimbingHoldGap())
                         result = result.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS,
                                 outArr, _climbGapTemp);
                     else
@@ -2988,7 +2998,7 @@ public class Orientation {
                     result = result.max(FeetClimbing.NONE, outArr, _climbGapTemp);
                 }
             } else {
-                if (jh_offset < 1D - _handClimbingHoldGap)
+                if (jh_offset < 1D - _handClimbingHoldGap())
                     result = result.max(FeetClimbing.BASE_WITH_HANDS, outArr, _climbGapTemp);
                 else
                     result = result.max(FeetClimbing.BASE_HOLD, outArr, _climbGapTemp);
