@@ -100,7 +100,10 @@ public abstract class MixinPlayerEntityModelClient {
         boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isClimbJumping || sm.isSwimming_sm || sm.isDiving
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative
-                || isFallingForReset;
+                || isFallingForReset
+                || sm.isAngleJumping();   // 🔴 (2026-04-27) angle jump 시 reset 인프라 활성화 —
+                                          // head.pivotZ/body.yaw/head.roll/arm.pivot 0 reset →
+                                          // 이전 SM 분기 잔존 + vanilla animateArms swing body.yaw 흔들림 cancel.
         if (anySmState) {
             this.leaningPitch = 0f;
         }
@@ -862,6 +865,15 @@ public abstract class MixinPlayerEntityModelClient {
         float backness  = 1f - Math.abs(angle - HALF) / QUARTER;
         float leftness  = -Math.min(angle - HALF, 0f) / QUARTER;
         float rightness =  Math.max(angle - HALF, 0f) / QUARTER;
+
+        // 🔴 head.yaw = 0 강제 (2026-04-27): vanilla setAngles 가 head.yaw = netHeadYaw =
+        //   headYaw_lerped - bodyYaw_natural_lerped 로 매 프레임 set. angle jumping 시
+        //   smBodyYawOverride=rotationYaw_lerped force 로 setupTransforms 는 cameraYaw 향하지만
+        //   bodyYaw_natural 은 옆으로 lerp 진행 → netHeadYaw 가 0 아님 → head 가 entity 의
+        //   반대 방향으로 회전 (사용자 보고 "좌 점프 시 고개 우로 돌아감"). 비행 매핑 패턴
+        //   (sm_animateFlying head.yaw=0) 차용 — head.yaw 강제로 0 → setupTransforms force
+        //   결과만 살아남아 head 가 cameraYaw 향함 (1.7.10 원본 효과 1:1).
+        head.yaw = 0f;
 
         // 다리 — 팔과 동일한 LOCAL 매핑 (원본 L569-574 1:1).
         // 🔴 leg.roll 부호 반전 (2026-04-27 fix): 원본 ZXY (vertex 적용 R_z→R_x→R_y) 와
