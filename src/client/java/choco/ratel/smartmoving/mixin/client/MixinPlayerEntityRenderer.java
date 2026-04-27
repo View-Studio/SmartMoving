@@ -129,18 +129,14 @@ public class MixinPlayerEntityRenderer {
                     && localPlayer.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                     && !localPlayer.isTouchingWater();
             if (isFalling) {
-                smBodyYawActive = true;
-                smBodyYawOverride = 0f;
-                // 🔴 (2026-04-27) 낙하 target = vanilla bodyYaw_lerped (= 1.7.10 actualRotation 등가).
-                //   원본 SmartRenderRender L76 currentCameraAngle = rotationYaw (즉시값, 라디안).
-                //   원본 SmartMovingModel isFalling (L531-549): bipedOuter 본문 안 건드림 →
-                //   SmartRenderModel L208 default `actualRotation` (vanilla bodyYaw_lerped) 유지.
-                //   = 낙하 target 이 vanilla 자체 lerp 된 값 위에 fade 0.2 추가 = 이중 lerp.
-                //   비행 target = horizontalAngle (즉시값) 위에 fade 0.2 = 단일 lerp.
-                //   → 낙하가 비행보다 더 부드러움 (사용자 보고).
-                float bodyYawLerpedDeg = localPlayer.prevBodyYaw
-                        + (localPlayer.getBodyYaw() - localPlayer.prevBodyYaw) * tickDelta;
-                smFlyingExtraYaw = (float) Math.toRadians(bodyYawLerpedDeg);
+                // 🔴 (2026-04-27) 낙하 매핑 변경 — standard 와 동일한 ModifyArg lerp 모드.
+                //   이전 (force=0 + 추가 R_y) 매핑은 vanilla setupTransforms 의 자연 회전을
+                //   무력화 → 원본의 "vanilla 즉시 + bipedOuter fade" 이중 효과 중 즉시 부분 빠짐.
+                //   사용자 보고: 낙하 시 WASD 회전이 원본보다 lag.
+                //   해결: smBodyYawActive=false 유지 → sm_modifyBodyYaw 가 vanilla bodyYaw 위에
+                //         fade lerp 만 적용 → vanilla 즉시 효과 + 추가 fade lag (원본 1:1).
+                //   smFallingFadeMode=true 는 유지 — sm_animateFalling head.yaw=0 force +
+                //   sm_modifyNetHeadYaw 보정 skip 발동용 (머리/몸 같이 회전).
                 SmartMovingClientState.smStandardFadeActive = true;
                 SmartMovingClientState.smFallingFadeMode = true;
             } else {
@@ -463,36 +459,11 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterTiltX = theta;
         }
 
-        // 🔴 (2026-04-27) 낙하 force 분기 body fade lag — 비행 fade 패턴 (L355-382) 1:1 차용.
-        //   sm_captureBodyYaw 의 isFalling 분기가 smFallingFadeMode=true + smFlyingExtraYaw 설정.
-        //   기본 상태 fade 는 sm_modifyBodyYaw 의 ModifyArg lerp 로 처리 → 여기서 적용 안 함.
-        if (SmartMovingClientState.smFallingFadeMode) {
-            float yawTarget = smFlyingExtraYaw;
-            float yawLerped = lerpFadeAngle(sm.smStandardFadeYaw_prev, yawTarget,
-                                            sm.smStandardFadeYaw_prevTime, animationProgress);
-
-            matrices.translate(0f, 1.5f, 0f);
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-yawLerped));
-            matrices.translate(0f, -1.5f, 0f);
-
-            // fade prev 갱신
-            sm.smStandardFadeYaw_prev = yawLerped;
-            sm.smStandardFadeYaw_prevTime = animationProgress;
-
-            // head 보정용 캐시 (sm_modifyNetHeadYaw 가 사용).
-            SmartMovingClientState.smCachedYawLerpedRad = yawLerped;
-
-            // 🔴 (2026-04-27) falling → 땅 착지 (standard) 전환 시 standard fade prev 자연 시작점.
-            //   falling 모델 회전 = POSITIVE_Y(180-0) + POSITIVE_Y(-yawLerped) = π - yawLerped_rad.
-            //   = setupTransforms 등가 bodyYaw 인자 = yawLerped_deg.
-            //   sm_modifyBodyYaw force 분기는 smBodyYawOverride=0 으로 갱신 → 잘못된 값.
-            //   여기서 yawLerped_deg 로 덮어쓰기 — 비행 분기와 동일 패턴.
-            //   사용자 보고 "땅 착지 시 몸통 한번 돌아감" 해소.
-            float yawLerpedDeg = (float) Math.toDegrees(yawLerped);
-            SmartMovingClientState.smCachedBodyYawLaggedDeg = yawLerpedDeg;
-            SmartMovingClientState.smStandardBodyYawPrev = yawLerpedDeg;
-            SmartMovingClientState.smStandardFadeTimePrev = animationProgress;
-        }
+        // 🔴 (2026-04-27) falling matrix 분기 비활성화 — sm_modifyBodyYaw 의 fade lerp 로 통합.
+        //   이전: force=0 + 추가 R_y(-yawLerped) → vanilla setupTransforms 무력화 → 원본 동작 차이.
+        //   새 매핑: smBodyYawActive=false → sm_modifyBodyYaw 가 vanilla bodyYaw 에 fade lerp 만
+        //   적용 → vanilla 즉시 + 추가 fade (원본 1:1).
+        //   추가 R_y 불필요. smCachedYawLerpedRad / smStandardFadeYaw_prev 도 사용 안 함.
 
         // 🔴 (2026-04-27) 비행 외 분기에서 비행 fade prev 매 frame 갱신.
         //   사용자 보고: 비행 진입 시 부드럽게 안 됨, 중간 끊김.
