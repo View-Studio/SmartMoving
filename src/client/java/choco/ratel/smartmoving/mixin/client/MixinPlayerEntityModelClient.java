@@ -195,6 +195,9 @@ public abstract class MixinPlayerEntityModelClient {
             if (isFalling) {
                 sm_animateFalling(sm, player);
             }
+            // 🔴 (2026-04-28) isStandard 분기 swing 식 덮어쓰기 제거.
+            //   vanilla setAngles 의 sneak/idle 진동/heldItem 등 += 누적 효과 보존.
+            //   limbSwing/limbSwingAmount 인자만 ModifyArg 로 SM stat 으로 변경 (MixinLivingEntityRenderer).
         }
 
         // ── [12-2] animateAngleJumping — 방향 점프 팔/다리 포즈 ──────────────

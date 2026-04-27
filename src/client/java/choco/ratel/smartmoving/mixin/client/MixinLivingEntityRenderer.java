@@ -6,12 +6,17 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * renderName() sneakNameTag 대응.
@@ -73,5 +78,65 @@ public abstract class MixinLivingEntityRenderer {
         if (SmartMovingClientState.smFallingFadeMode) return netHeadYaw;
         return netHeadYaw + SmartMovingClientState.smCachedBodyYawNaturalDeg
                 - SmartMovingClientState.smCachedBodyYawLaggedDeg;
+    }
+
+    /**
+     * 🔴 (2026-04-28) 원본 SmartRenderModel.animateArmSwinging (L269-275) 1:1 매핑.
+     *   vanilla 1.21.1 limbAnimator (EMA + min(f*4,1) multiplier) 대신 SM stat 사용.
+     *
+     *   원본 식 (vanilla 동일):
+     *     rightArm.pitch = cos(swingPos * 0.6662 + π) * 2.0 * speed * 0.5;
+     *     leftLeg.pitch  = cos(swingPos * 0.6662 + π) * 1.4 * speed;
+     *
+     *   원본 SM 입력: totalHorizontalDistance (= EMA 누적 거리), currentHorizontalSpeed (= EMA 속도).
+     *   vanilla 1.21.1 입력: limbAnimator.pos (= EMA + *4 multiplier), limbAnimator.speed.
+     *
+     *   ModifyArg 로 인자만 변경 → vanilla setAngles 식 그대로 + sneak/idle/heldItem 등 다른
+     *   효과 다 보존.
+     *
+     *   ClientPlayerEntity (자기 자신) 만 적용. 다른 entity (mob, 다른 player) 는 vanilla.
+     */
+    /**
+     * 🔴 (2026-04-28) entity 가 모든 player (AbstractClientPlayerEntity = 자기 + 다른 player)
+     *   일 때 ModifyArg 발동. mob 등 다른 entity 는 vanilla 그대로.
+     *
+     *   자기 player: SmartMovingClientState.get(ClientPlayerEntity).
+     *   다른 player: SmartMovingClientState.get(uuid) — server 에서 sync 된 stat.
+     */
+    @Unique private AbstractClientPlayerEntity sm_currentRenderPlayer;
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void sm_captureRenderEntity(LivingEntity entity, float yaw, float tickDelta,
+                                         MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                         int light, CallbackInfo ci) {
+        sm_currentRenderPlayer = entity instanceof AbstractClientPlayerEntity p ? p : null;
+    }
+
+    @ModifyArg(
+        method = "render",
+        at = @At(value = "INVOKE",
+                 target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V"),
+        index = 1
+    )
+    private float sm_modifyLimbSwing(float limbSwing) {
+        if (sm_currentRenderPlayer == null) return limbSwing;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return limbSwing;
+        SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
+        return sm.stats.getTotalDistance(SmartMovingClientState.globalCachedTickDelta);
+    }
+
+    @ModifyArg(
+        method = "render",
+        at = @At(value = "INVOKE",
+                 target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V"),
+        index = 2
+    )
+    private float sm_modifyLimbSwingAmount(float limbSwingAmount) {
+        if (sm_currentRenderPlayer == null) return limbSwingAmount;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return limbSwingAmount;
+        SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
+        return sm.stats.getCurrentSpeed(SmartMovingClientState.globalCachedTickDelta);
     }
 }
