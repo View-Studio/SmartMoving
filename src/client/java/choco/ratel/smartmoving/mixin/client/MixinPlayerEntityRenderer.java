@@ -434,6 +434,17 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterFade_prevTime = animationProgress;
 
             sm.smOuterTiltX = thetaLerped;  // cape 클램프 (B-17) 도 보간된 값 사용
+
+            // 🔴 (2026-04-27) 비행 → 비행 외 전환 시 standard fade prev 자연 시작점 매핑.
+            //   비행 모델 회전 = POSITIVE_Y(180-0) + POSITIVE_Y(-yawLerped) = POSITIVE_Y(180-yawLerped_deg).
+            //   = setupTransforms 등가 bodyYaw 인자 = yawLerped_deg.
+            //   sm_modifyBodyYaw force 분기는 smBodyYawOverride=0 으로 갱신 → 잘못된 값.
+            //   여기서 yawLerped_deg 로 덮어쓰기 → 비행 → standard 전환 시 lerp 자연 시작.
+            //   사용자 보고 "비행 릴리즈 시 몸통 한번 돌아감" 해소.
+            float yawLerpedDeg = (float) Math.toDegrees(yawLerped);
+            SmartMovingClientState.smCachedBodyYawLaggedDeg = yawLerpedDeg;
+            SmartMovingClientState.smStandardBodyYawPrev = yawLerpedDeg;
+            SmartMovingClientState.smStandardFadeTimePrev = animationProgress;
         }
 
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
@@ -461,6 +472,17 @@ public class MixinPlayerEntityRenderer {
 
             // head 보정용 캐시 (sm_modifyNetHeadYaw 가 사용).
             SmartMovingClientState.smCachedYawLerpedRad = yawLerped;
+
+            // 🔴 (2026-04-27) falling → 땅 착지 (standard) 전환 시 standard fade prev 자연 시작점.
+            //   falling 모델 회전 = POSITIVE_Y(180-0) + POSITIVE_Y(-yawLerped) = π - yawLerped_rad.
+            //   = setupTransforms 등가 bodyYaw 인자 = yawLerped_deg.
+            //   sm_modifyBodyYaw force 분기는 smBodyYawOverride=0 으로 갱신 → 잘못된 값.
+            //   여기서 yawLerped_deg 로 덮어쓰기 — 비행 분기와 동일 패턴.
+            //   사용자 보고 "땅 착지 시 몸통 한번 돌아감" 해소.
+            float yawLerpedDeg = (float) Math.toDegrees(yawLerped);
+            SmartMovingClientState.smCachedBodyYawLaggedDeg = yawLerpedDeg;
+            SmartMovingClientState.smStandardBodyYawPrev = yawLerpedDeg;
+            SmartMovingClientState.smStandardFadeTimePrev = animationProgress;
         }
 
         // 🔴 (2026-04-27) 비행 외 분기에서 비행 fade prev 매 frame 갱신.
