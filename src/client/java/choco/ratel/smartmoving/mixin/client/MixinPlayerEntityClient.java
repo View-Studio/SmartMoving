@@ -100,13 +100,15 @@ public abstract class MixinPlayerEntityClient {
     @Inject(method = "getOffGroundSpeed", at = @At("HEAD"), cancellable = true)
     private void sm_getOffGroundSpeed(CallbackInfoReturnable<Float> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        // BUG-21 (세션 36): SM disabled 시 vanilla 공중 속도 그대로 사용.
-        //   기존: cfg.fly 만 가드 → cfg.fly=false 사용자가 SM disabled 시 0.05F 강제 →
-        //   vanilla 비행 속도 약화. 추가 cfg.enabled 가드로 SM disabled 시 vanilla 정상.
-        if (!SmartMovingConfig.Config.enabled) return;
-        if (player.getAbilities().flying && !SmartMovingConfig.Config.fly) {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
+        if (player.getAbilities().flying && !cfg.fly) {
             cir.setReturnValue(0.05F);
+            return;
         }
+        // 🔴 (2026-04-28) SM 공중 가속 임시 비활성 — 사용자 보고 "점프 시 엄청 빨라짐" 디버깅.
+        //   땅 (getMovementSpeed) 만 SM factor 적용 + 공중 (getOffGroundSpeed) 은 vanilla 그대로.
+        //   가속 사라지면 공중 매핑 식 재설계.
     }
 
     /**

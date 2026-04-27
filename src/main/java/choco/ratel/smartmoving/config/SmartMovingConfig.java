@@ -1058,8 +1058,13 @@ public class SmartMovingConfig {
      * 사용처: isFast 공식 `isGroundSprinting && (!standing || _sprintEnableStanding)` (원본 L2689).
      * true 설정 시 standing 상태에서도 Ground Sprint 인정 (정지 스프린트 허용).
      * B-1a (세션 40).
+     *
+     * 🔴 (2026-04-28) default false → true 변경. 사용자 의도 "SM 모드 시 vanilla 보다 빠름".
+     *   원본 default false 시 onGround 일반 sprint = isFast=false → nonSlow=1.0 → vanilla 동일.
+     *   true 시 isFast=true → nonSlow=sprintFactor (1.5) → vanilla * 1.154x.
+     *   원본 식 (isFast 시 1.5x) 그대로 발동되도록 default 변경.
      */
-    public boolean sprintEnableStanding = false;
+    public boolean sprintEnableStanding = true;
 
     /**
      * 원본 `SmartMovingConfig.java` L348:

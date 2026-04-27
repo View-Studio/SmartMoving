@@ -7,7 +7,10 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
+import net.minecraft.entity.MovementType;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 
 /**
@@ -110,11 +113,11 @@ public final class SmartMovingMover {
      */
     public static float getNonSlowInputSpeedFactor(ClientPlayerEntity player, SmartMovingClientState sm,
                                                     SmartMovingConfig cfg) {
-        BlockState below = player.getWorld().getBlockState(player.getBlockPos().down());
-        float slip = below.getBlock().getSlipperiness();
-        if (slip > 0.6F) return 1.5F;
-        if (player.isSprinting()) {
-            return sm.isFast ? cfg.sprintFactor : cfg.runFactor;
+        // 🔴 (2026-04-28) 원본 SmartMovingSelf L197-227 1:1 정밀 매핑.
+        //   원본: isFast 시 sprintFactor (1.5). !isFast 시 1.0.
+        //   landMotion L712 에서 별도: isRunning && !isFast 시 runFactor (1.3) 곱.
+        if (sm.isFast) {
+            return cfg.sprintFactor;  // 1.5
         }
         return 1.0F;
     }
@@ -144,5 +147,151 @@ public final class SmartMovingMover {
              * getPotionSpeedFactor(player)
              * getNonSlowInputSpeedFactor(player, sm, cfg)
              * getSlowInputSpeedFactor(player, sm, cfg);
+    }
+
+    // ── 상수 (원본 SmartMovingContext.java) ───────────────────────────────
+    private static final float HORIZONTAL_GROUND_DAMPING = 0.546F;
+    private static final float HORIZONTAL_AIR_DAMPING    = 0.91F;
+
+    // ── isRunning (원본 SmartMovingSelf.isRunning) ────────────────────────
+    /**
+     * 원본 `SmartMovingSelf.isRunning()` 1:1:
+     *   `return Config._running.value && !isFast && sp.isSprinting()`.
+     */
+    public static boolean isRunning(ClientPlayerEntity player, SmartMovingClientState sm,
+                                     SmartMovingConfig cfg) {
+        return cfg.run && !sm.isFast && player.isSprinting();
+    }
+
+    // ── 11-2: handleLand (원본 superMoveEntityWithHeading + landMotion + setLandMotions) ──
+
+    /**
+     * 🔴 (2026-04-28) 원본 SmartMovingSelf.superMoveEntityWithHeading + landMotion +
+     *   setLandMotions 통째로 1:1 매핑.
+     *
+     * 원본 흐름 (`SmartMovingSelf.handleLand` L633-663):
+     *   1. landMotion (L675-810): horizontalDamping 결정 + moveFlying (movementInput → motion).
+     *   2. move (L655): vanilla move() 호출.
+     *   3. handleClimbing (L657): motionY 조정 (별도 분기에서 호출).
+     *   4. setLandMotions (L1176-1182): motionY -= 0.08, *= 0.98, motionX/Z *= damping.
+     *
+     * 비행과 동일 패턴 — vanilla travel 통째로 cancel + SM 자체 식 적용.
+     * @return true = SM 처리 완료 (호출 측 ci.cancel 대상).
+     */
+    public static boolean handleLand(ClientPlayerEntity player, SmartMovingClientState sm,
+                                      Vec3d movementInput) {
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return false;
+
+        float moveStrafing = (float) movementInput.x;
+        float moveForward  = (float) movementInput.z;
+
+        // 원본 superMoveEntityWithHeading L119-130: speedFactor 계산.
+        float speedFactor = getConfigSpeedFactor(player, cfg)
+                * getPotionSpeedFactor(player)
+                * getNonSlowInputSpeedFactor(player, sm, cfg);
+        float slowFactor = getSlowInputSpeedFactor(player, sm, cfg);
+        if (sm.vanilla()) {
+            moveForward  *= slowFactor;
+            moveStrafing *= slowFactor;
+        } else {
+            speedFactor *= slowFactor;
+        }
+
+        // 원본 landMotion L677-690: horizontalDamping 결정 + L686-687 sprintJumpVertical.
+        float horizontalDamping;
+        if (player.isOnGround() && (!sm.isJumping || sm.vanilla())) {
+            BlockState below = player.getWorld().getBlockState(player.getSteppingPos());
+            float slip = below.getBlock().getSlipperiness();
+            horizontalDamping = slip > 0F ? slip * HORIZONTAL_AIR_DAMPING
+                                          : HORIZONTAL_GROUND_DAMPING;
+            // 원본 L686-687: jump 키 hold + isFast 시 sprintJumpVerticalFactor 적용.
+            boolean jumpKeyPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
+            if (jumpKeyPressed && sm.isFast) {
+                speedFactor *= cfg.sprintJumpVerticalFactor;
+            }
+        } else {
+            horizontalDamping = HORIZONTAL_AIR_DAMPING;
+        }
+
+        // 원본 landMotion L703-707: jump control factor.
+        if (sm.isHeadJumping) {
+            speedFactor *= cfg.headJumpControlFactor;
+        } else if (!player.isOnGround() && !player.getAbilities().flying && !sm.isFlying) {
+            speedFactor *= cfg.jumpControlFactor;
+        }
+
+        // 원본 landMotion L708-709: rawSpeed.
+        float f3 = 0.1627714F / (horizontalDamping * horizontalDamping * horizontalDamping);
+        float rawSpeed;
+        if (player.isOnGround()) {
+            rawSpeed = 0.1F * f3;
+        } else {
+            float jumpMovementFactor = 0.02F;
+            rawSpeed = jumpMovementFactor / (player.isSprinting() && !player.getAbilities().flying ? 1.3F : 1F);
+        }
+
+        // 원본 landMotion L712-713: isRunning && !isFast 시 runFactor 곱.
+        // (원본 runFactorLevitate 는 levitate 시만 사용 — land 분기 무관, runFactor 만)
+        if (cfg.run && isRunning(player, sm, cfg) && !sm.isFast) {
+            speedFactor *= cfg.runFactor;
+        }
+
+        // 원본 landMotion L714-716: 공중 시 potionFactor 정상화.
+        if (!player.isOnGround()) {
+            float potionFactor = getPotionSpeedFactor(player);
+            if (potionFactor > 0F) speedFactor /= potionFactor;
+        }
+
+        // 원본 L718: moveFlying(strafe, forward, rawSpeed * speedFactor) — motion 에 ADD.
+        applyLandMoveFlying(player, moveStrafing, moveForward, rawSpeed * speedFactor);
+
+        // 원본 L655: vanilla move() — 위치 갱신.
+        player.move(MovementType.SELF, player.getVelocity());
+
+        // 원본 setLandMotions L1176-1182: motionY -= 0.08, *= 0.98, motionX/Z *= damping.
+        Vec3d vel = player.getVelocity();
+        double newY = (vel.y - 0.08D) * 0.98D;
+        double newX = vel.x * horizontalDamping;
+        double newZ = vel.z * horizontalDamping;
+
+        // vanilla LivingEntity.travel 마지막의 작은 motion 0 clamp (= 잔존 motion 정리).
+        if (Math.abs(newX) < 0.003D) newX = 0.0D;
+        if (Math.abs(newY) < 0.003D) newY = 0.0D;
+        if (Math.abs(newZ) < 0.003D) newZ = 0.0D;
+
+        player.setVelocity(newX, newY, newZ);
+
+        return true;
+    }
+
+    /**
+     * 원본 `SmartMovingBase.moveFlying` (L55-93) — yaw 기반 horizontal 분해 + ADD.
+     * Land 시 treeDimensional=false → vertical 처리 없음.
+     */
+    private static void applyLandMoveFlying(ClientPlayerEntity player,
+                                             float moveStrafing, float moveForward, float speed) {
+        float total = MathHelper.sqrt(moveStrafing * moveStrafing + moveForward * moveForward);
+        if (total < 0.01F) return;
+        if (total < 1.0F) total = 1.0F;
+
+        float strafeFactor = moveStrafing / total;
+        float forwardFactor = moveForward / total;
+
+        float yawRad = player.getYaw() * (float) Math.PI / 180F;
+        float sin = MathHelper.sin(yawRad);
+        float cos = MathHelper.cos(yawRad);
+
+        float diffX = strafeFactor * cos - forwardFactor * sin;
+        float diffZ = forwardFactor * cos + strafeFactor * sin;
+
+        // 원본 L85: total = sqrt(sqrt(diffX^2 + diffZ^2) + diffY^2). diffY=0 (land).
+        float horizontal2 = diffX * diffX + diffZ * diffZ;
+        float total2 = MathHelper.sqrt(MathHelper.sqrt(horizontal2));
+        if (total2 < 0.01F) return;
+
+        float factor = speed / total2;
+        Vec3d vel = player.getVelocity();
+        player.setVelocity(vel.x + diffX * factor, vel.y, vel.z + diffZ * factor);
     }
 }
