@@ -155,12 +155,14 @@ public final class SmartMovingMover {
 
     // ── isRunning (원본 SmartMovingSelf.isRunning) ────────────────────────
     /**
-     * 원본 `SmartMovingSelf.isRunning()` 1:1:
-     *   `return Config._running.value && !isFast && sp.isSprinting()`.
+     * 원본 `SmartMovingSelf.isRunning()` (L3239-3242) 1:1:
+     *   `return sp.isSprinting() && !isFast && (sp.onGround || vanilla())`.
+     *
+     * cfg.run 체크는 호출 측 (handleLand L712) 에서 별도로 수행 — 원본과 동일.
      */
     public static boolean isRunning(ClientPlayerEntity player, SmartMovingClientState sm,
                                      SmartMovingConfig cfg) {
-        return cfg.run && !sm.isFast && player.isSprinting();
+        return player.isSprinting() && !sm.isFast && (player.isOnGround() || sm.vanilla());
     }
 
     // ── 11-2: handleLand (원본 superMoveEntityWithHeading + landMotion + setLandMotions) ──
