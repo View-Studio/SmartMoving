@@ -10,6 +10,7 @@ import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
@@ -35,5 +36,36 @@ public abstract class MixinLivingEntityRenderer {
         if (!cfg.enabled || !cfg.sneakNameTag) return entity.isSneaky();
         // sneakNameTag=true: 스니킹 중이어도 isSneaky()=false → 64 거리 기준 적용
         return false;
+    }
+
+    /**
+     * 🔴 (2026-04-27) 낙하/기본 상태 head 가 vanilla 동작 유지하도록 netHeadYaw 보정.
+     *
+     * 우리 매핑: setupTransforms force=0 + sm_setupTransforms TAIL 의 R_y(-yawLerped) 추가.
+     * vertex 분석: head world yaw = yawLerped + netHeadYaw_deg.
+     * vanilla head world yaw = headYaw_deg (cameraYaw 즉시 추적).
+     *
+     * 같으려면 netHeadYaw_force = headYaw - yawLerped = (netHeadYaw + bodyYaw_natural) - yawLerped.
+     *   → netHeadYaw_force = vanilla_netHeadYaw + (bodyYaw_natural - yawLerped).
+     *
+     * 비행/SM force 분기는 smStandardFadeActive=false → 그대로 통과.
+     *
+     * 🔴 (2026-04-27) 낙하 sub-mode 분기 추가 (사용자 요청 "낙하는 비행처럼"):
+     *   smFallingFadeMode=true 시 보정 skip → vanilla netHeadYaw 그대로 → head 가 fade matrix 영향
+     *   받아 body 와 같이 lag (비행 패턴). sm_animateFalling 의 head.yaw=0 force 와 협동.
+     */
+    @ModifyArg(
+        method = "render",
+        at = @At(value = "INVOKE",
+                 target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V"),
+        index = 4
+    )
+    private float sm_modifyNetHeadYaw(float netHeadYaw) {
+        if (!SmartMovingClientState.smStandardFadeActive) return netHeadYaw;
+        // 낙하 mode: head 도 body 와 같이 fade — 보정 skip.
+        if (SmartMovingClientState.smFallingFadeMode) return netHeadYaw;
+        float yawLerpedDeg = (float) Math.toDegrees(SmartMovingClientState.smCachedYawLerpedRad);
+        float bodyYawNaturalDeg = SmartMovingClientState.smCachedBodyYawNaturalDeg;
+        return netHeadYaw + bodyYawNaturalDeg - yawLerpedDeg;
     }
 }

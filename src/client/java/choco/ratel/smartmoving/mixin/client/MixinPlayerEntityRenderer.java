@@ -10,6 +10,7 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -92,9 +93,15 @@ public class MixinPlayerEntityRenderer {
                                     CallbackInfo ci) {
         smBodyYawActive = false;
         smFlyingExtraYaw = 0f;
+        SmartMovingClientState.smStandardFadeActive = false;  // 낙하/기본 상태 fade flag reset.
+        SmartMovingClientState.smFallingFadeMode = false;     // 낙하 mode flag reset.
         // 🔴 (세션 52b): partial tick 캐시 저장 (Mixin private static 제약 우회 — SmartMovingClientState 사용).
         //   setAngles inject (sm_animateFlying 등) 에서 getCurrentSpeed/getTotalDistance lerped getter 호출용.
         SmartMovingClientState.globalCachedTickDelta = tickDelta;
+        // 🔴 (2026-04-27) animationProgress 캐시 — 낙하/기본 상태 body fade 식 deltaT 계산용.
+        SmartMovingClientState.smCachedAnimationProgress = animationProgress;
+        // body fade adjustment skip 가드 (force 분기 시 true).
+        SmartMovingClientState.smBodyYawActive_publicShared = false;
         if (!(player instanceof ClientPlayerEntity localPlayer)) return;
         // BUG-12 (세션 36): SM disabled 시 bodyYaw 오버라이드 안 함 → vanilla bodyYaw 그대로 (BUG-7 확장).
         if (!SmartMovingConfig.Config.enabled) return;
@@ -106,7 +113,26 @@ public class MixinPlayerEntityRenderer {
                 || sm.isFlying || sm.isSwimming_sm || sm.isDiving
                 || sm.isCeilingClimbing || sm.isHeadJumping
                 || sm.isSliding || sm.isAngleJumping();
-        if (!smActive) return;
+        if (!smActive) {
+            // 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 1:1 차용.
+            //   비행 L217-226 의 horizontalAngle 식 그대로 (정지=cameraAngle, 이동=horizontalAngle).
+            //   - 기본 상태: 머리는 vanilla 그대로 (sm_modifyNetHeadYaw 가 보정).
+            //   - 낙하 상태: 머리/몸 같이 fade (비행과 동일 — sm_animateFalling 가 head.yaw=0 force).
+            //     사용자 요청 (2026-04-27): "낙하일 때는 비행일때랑 같게 처리".
+            float bodyTarget = sm.stats.horizontalDistance < 0.05F
+                    ? sm.stats.currentCameraAngle
+                    : sm.stats.currentHorizontalAngle;
+            smBodyYawActive = true;
+            smBodyYawOverride = 0f;
+            smFlyingExtraYaw = bodyTarget;
+            SmartMovingClientState.smStandardFadeActive = true;
+            // 낙하 감지 — 원본 SmartMovingSelf.doFallingAnimation L3278-3282 +
+            //   MixinPlayerEntityModelClient L191-194 와 동일 조건.
+            SmartMovingClientState.smFallingFadeMode = !localPlayer.isOnGround()
+                    && localPlayer.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                    && !localPlayer.isTouchingWater();
+            return;
+        }
 
         // isLevitating 우선 처리 (B-15 / §16-23): 원본 SmartMovingRender L132-L134 —
         //   levitating 시 모든 모델의 currentHorizontalAngle = currentCameraAngle 강제 정렬.
@@ -215,9 +241,18 @@ public class MixinPlayerEntityRenderer {
                     : sm.stats.currentHorizontalAngle;
             smBodyYawActive = true;
             smBodyYawOverride = 0f;  // vanilla POSITIVE_Y(180-0)=POSITIVE_Y(180) → 모델 정면 정상.
-            // entity.bodyYaw / prevBodyYaw 강제 제거 — vanilla 자연 처리 (ModifyArg 가 0 적용).
             // bipedOuter.rotateAngleY 효과: horizontalAngle (절대값, fade 보간).
             smFlyingExtraYaw = horizontalAngle;
+            // 🔴 (2026-04-27) 원본 SmartMovingRender L145-L148 1:1 복구.
+            //   `entity.renderYawOffset = forwardRotation (=lerpedYaw)` 매 frame 강제.
+            //   비행 동작 자체엔 영향 없음 (sm_modifyBodyYaw ModifyArg 가 0 으로 덮어씀,
+            //   sm_animateFlying TAIL 이 head.yaw=0 force).
+            //   효과: 비행 종료 → standard/falling 진입 시 vanilla netHeadYaw ≈ 0 →
+            //   setAngles 의 head.yaw 점프 사라짐 (사용자 보고 "비행→낙하 사이 머리 끊김" 해소).
+            //   세션 61 에서 제거됐던 코드를 원본 1:1 분석 후 복구.
+            float lerpedYaw = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
+            localPlayer.setBodyYaw(lerpedYaw);
+            localPlayer.prevBodyYaw = lerpedYaw;
             return;
         }
 
@@ -249,8 +284,15 @@ public class MixinPlayerEntityRenderer {
         index = 3
     )
     private float sm_modifyBodyYaw(float bodyYaw) {
-        return smBodyYawActive ? smBodyYawOverride : bodyYaw;
+        // vanilla 1 frame lerped bodyYaw 캐시 (sm_modifyNetHeadYaw 의 head 보정에 사용).
+        SmartMovingClientState.smCachedBodyYawNaturalDeg = bodyYaw;
+        if (smBodyYawActive) {
+            SmartMovingClientState.smBodyYawActive_publicShared = true;
+            return smBodyYawOverride;
+        }
+        return bodyYaw;
     }
+
 
     /**
      * [12-3] setupTransforms() TAIL 주입 — SM 이동 상태별 body X 기울기.
@@ -376,6 +418,27 @@ public class MixinPlayerEntityRenderer {
             float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
             sm.smOuterTiltX = theta;
+        }
+
+        // 🔴 (2026-04-27) 낙하/기본 상태 body fade lag — 비행 fade 패턴 (L355-382) 1:1 차용.
+        //   sm_captureBodyYaw 가 smStandardFadeActive=true + smFlyingExtraYaw=target 설정.
+        //   여기서 비행과 동일하게 lerpFadeAngle + matrices.translate + multiply 적용.
+        //   머리는 head.yaw=0 force 안 함 → vanilla netHeadYaw 그대로.
+        if (SmartMovingClientState.smStandardFadeActive) {
+            float yawTarget = smFlyingExtraYaw;
+            float yawLerped = lerpFadeAngle(sm.smStandardFadeYaw_prev, yawTarget,
+                                            sm.smStandardFadeYaw_prevTime, animationProgress);
+
+            matrices.translate(0f, 1.5f, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-yawLerped));
+            matrices.translate(0f, -1.5f, 0f);
+
+            // fade prev 갱신
+            sm.smStandardFadeYaw_prev = yawLerped;
+            sm.smStandardFadeYaw_prevTime = animationProgress;
+
+            // head 보정용 캐시 (sm_modifyNetHeadYaw 가 사용).
+            SmartMovingClientState.smCachedYawLerpedRad = yawLerped;
         }
     }
 

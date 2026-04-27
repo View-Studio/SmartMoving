@@ -694,12 +694,101 @@ public final class SmartMovingClientState {
     public float smOuterFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
     /**
+     * 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 그대로 차용 (head 만 vanilla).
+     * 비행과 별개 prev 필드 (서로 다른 시점 활성, 같은 필드 공유 시 분기 전환 시 lerp 부정확).
+     */
+    public float smStandardFadeYaw_prev = 0f;
+    public float smStandardFadeYaw_prevTime = -999f;
+
+    /**
      * 🔴 (세션 52b): partial tick 캐시 — setupTransforms 에서 저장 → setAngles 에서 사용.
      * Mixin static field 제약 (private 만 허용) 우회 — SmartMovingClientState 에 저장.
      * 원본 SmartRenderRender.renderPlayer L56-L57: getCurrentSpeed/getTotalDistance(renderPartialTicks)
      * lerped 매핑용.
      */
     public static float globalCachedTickDelta = 0f;
+
+    /**
+     * 🔴 (2026-04-27) 낙하/기본 상태 body fade 매핑 — 원본 SmartRenderModel L208/247
+     *   `bipedOuter.fadeIntermediate(totalTime)` 1:1 (factor 0.2 lag).
+     * 머리는 vanilla 그대로 (원본도 head 처리는 vanilla 동등 — actualRotation + netHeadYaw =
+     *   headYaw_raw absolute). 여기서는 setupTransforms bodyYaw 인자만 fade 적용.
+     * MixinPlayerEntityRenderer.sm_modifyBodyYaw 가 fade 계산 + 갱신.
+     */
+    public static float smCachedAnimationProgress = 0f;
+    public static float smStandardBodyYawPrev = Float.NaN;
+    public static float smStandardFadeTimePrev = Float.NaN;
+    /**
+     * sm_captureBodyYaw 가 비행/SM force 분기 활성 시 true 로 set.
+     * MixinPlayerEntityModelClient.sm_setAngles 가 body.yaw fade adjustment skip 위해 사용.
+     */
+    public static boolean smBodyYawActive_publicShared = false;
+    /**
+     * 🔴 (2026-04-27) 낙하/기본 상태 fade lag 활성 플래그.
+     * sm_captureBodyYaw 가 set, sm_setupTransforms TAIL 가 fade 적용 가드용.
+     */
+    public static boolean smStandardFadeActive = false;
+    /**
+     * 🔴 (2026-04-27) 낙하 시 비행 패턴(머리/몸 같이 fade lag) 활성 플래그.
+     * smStandardFadeActive=true 의 sub-mode — 활성 시:
+     *   - sm_animateFalling 가 head.yaw=0 force (머리/몸 같이 회전).
+     *   - sm_modifyNetHeadYaw 가 head 보정 skip (vanilla netHeadYaw 그대로 → fade matrix 영향 받음).
+     * false (기본 상태) 시: 머리는 vanilla 동작 유지 (sm_modifyNetHeadYaw 가 보정 적용).
+     */
+    public static boolean smFallingFadeMode = false;
+    /**
+     * 🔴 (2026-04-27) sm_setupTransforms TAIL 가 set, sm_modifyNetHeadYaw 가 head 보정에 사용.
+     */
+    public static float smCachedYawLerpedRad = 0f;
+    /**
+     * 🔴 (2026-04-27) sm_modifyBodyYaw 의 input (vanilla 1 frame lerped bodyYaw, degrees).
+     * sm_modifyNetHeadYaw 의 head 보정식에 사용.
+     */
+    public static float smCachedBodyYawNaturalDeg = 0f;
+
+    /**
+     * 원본 ModelRotationRenderer.GetIntermediateAngle (L347-365) 1:1 매핑 (degrees 단위).
+     *   prev + (target - prev) * deltaT * 0.2F  (factor 0.2 lag).
+     *   ±180° wrap 처리 (짧은 방향 보간).
+     *   deltaT > 2F (또는 NaN/<=0) 가드 → 즉시 (lerp 없음).
+     *
+     * 호출처: MixinPlayerEntityModelClient.sm_setAngles — body.yaw 에 fade adjustment.
+     *           머리는 vanilla 그대로 (사용자 "원본도 머리는 vanilla").
+     *           setupTransforms bodyYaw 인자 그대로 → head/arm/leg 부모 변환 영향 없음.
+     */
+    public static float applyFadeAngleDegrees(float target) {
+        float curTime = smCachedAnimationProgress;
+        float prev = smStandardBodyYawPrev;
+        float prevTime = smStandardFadeTimePrev;
+
+        // 첫 호출 또는 timeout (>2 ticks): 즉시 적용 + prev 갱신.
+        if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
+            smStandardBodyYawPrev = target;
+            smStandardFadeTimePrev = curTime;
+            return target;
+        }
+        float deltaT = curTime - prevTime;
+        if (deltaT <= 0F || deltaT > 2F) {
+            smStandardBodyYawPrev = target;
+            smStandardFadeTimePrev = curTime;
+            return target;
+        }
+
+        // ±180° wrap (원본 L352-362, Whole=360, Half=180).
+        float p = prev, t = target;
+        while (p >= 360F) p -= 360F;
+        while (p < 0F)    p += 360F;
+        while (t >= 360F) t -= 360F;
+        while (t < 0F)    t += 360F;
+        if (t > p && t - p > 180F) p += 360F;
+        if (t < p && p - t > 180F) t += 360F;
+
+        // 원본 L364: prev + (target - prev) * deltaT * 0.2F.
+        float faded = p + (t - p) * deltaT * 0.2F;
+        smStandardBodyYawPrev = faded;
+        smStandardFadeTimePrev = curTime;
+        return faded;
+    }
 
     // ── FOV / perspective ──────────────────────────────────────────────
     /**

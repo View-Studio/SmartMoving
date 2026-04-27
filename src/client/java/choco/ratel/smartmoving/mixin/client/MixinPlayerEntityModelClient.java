@@ -202,6 +202,10 @@ public abstract class MixinPlayerEntityModelClient {
             sm_animateAngleJumping(sm, animationProgress);
         }
 
+        // 🔴 (2026-04-27) head 는 vanilla 그대로 — sm_setupTransforms TAIL 의 fade 가
+        //   모든 ModelPart 부모 변환 영향. head 만 cancel 안 함 → vanilla netHeadYaw 그대로
+        //   (사용자 의도 "머리만 바닐라 코드"). 즉 head 도 fade lag 따라 회전 (의도된 동작).
+
         // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
         //   원본 SmartRenderModel L251 = SM 상태 무관 항상 적용. cfgEnabled false 시에도 0 reset 보장.
     }
@@ -815,6 +819,17 @@ public abstract class MixinPlayerEntityModelClient {
                 .getRenderTickCounter().getTickDelta(false);
         float totalDistance = sm.stats.getTotalDistance(partialTicks);
         float distance = totalDistance * 0.1f;
+
+        // 🔴 (2026-04-27) 낙하 시 비행 패턴 — 머리/몸 같이 fade lag.
+        //   sm_setupTransforms TAIL 의 fade matrix 가 head 포함 모든 ModelPart 영향.
+        //   head.yaw=0 force → vanilla netHeadYaw 무력화 → head world yaw = body world yaw.
+        //   head.pitch=0 force → vanilla headPitch 무력화 → 마우스 위아래 시 머리 끄덕임 고정.
+        //   사용자 요청 (2026-04-27): "낙하일 때는 비행일때랑 같게 처리" + "마우스 위아래 끄덕임 고정".
+        //   비행 분기 (sm_animateFlying) 는 setupTransforms X tilt 보정 위해 head.pitch=-theta/2 set,
+        //   낙하는 X tilt 없음 → 단순 0 force.
+        head.yaw = 0f;
+        head.pitch = 0f;
+        head.roll = 0f;
 
         // preferred arm 만 vanilla swing 보존. swing > 0 시에만 활성.
         float swing = player.handSwingProgress;
