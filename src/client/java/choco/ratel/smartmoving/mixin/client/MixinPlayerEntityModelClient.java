@@ -89,9 +89,18 @@ public abstract class MixinPlayerEntityModelClient {
         //   해결: cfgEnabled && capabilities.flying 으로 변경 (SM enabled 일 때만 SM 비행 처리).
         boolean cfgEnabled = SmartMovingConfig.Config.enabled;
         boolean flyingCreative = cfgEnabled && player.getAbilities().flying;
+        // 🔴 (2026-04-27): falling 도 anySmState 에 포함 — vanilla animateArms 가 swing 시
+        //   body.yaw 흔들리는 효과 (사용자 보고 "공중 낙하 휘두름 시 몸통 움찔움찔") 를 reset
+        //   인프라로 cancel. 진입 조건은 if-else 체인 falling 가드 (아래) 와 동일.
+        boolean isFallingForReset = cfgEnabled
+                && !player.isOnGround()
+                && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
+                && !player.isTouchingWater();
         boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isClimbJumping || sm.isSwimming_sm || sm.isDiving
-                || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative;
+                || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative
+                || isFallingForReset;
         if (anySmState) {
             this.leaningPitch = 0f;
         }
@@ -107,6 +116,19 @@ public abstract class MixinPlayerEntityModelClient {
             body.pivotZ = 0f;
             body.yaw    = 0f;
             head.roll   = 0f;
+            // 🔴 (2026-04-27): 낙하 body.yaw 처리와 동일 패턴 — vanilla animateArms 가 swing 시
+            //   leftArm.pivotZ = -sin(body.yaw)*5, leftArm.pivotX = cos(body.yaw)*5,
+            //   rightArm.pivotZ = sin(body.yaw)*5, rightArm.pivotX = -cos(body.yaw)*5 로
+            //   매 프레임 변동 → 비-preferred arm "어깨 앞뒤 움찔움찔" (사용자 보고 비행).
+            //   사용자 요청: "낙하 body.yaw cancel 방법 (reset 인프라) 을 비행 leftArm 에도 적용".
+            //   reset 인프라에서 양 arm.pivot 을 vanilla setAngles Step 4 기본값으로 강제 →
+            //   모든 SM 상태에 일관 적용. preferred arm 의 swing 효과 (매 프레임 변동) 도
+            //   cancel 되지만, body.yaw=0 후의 swing pivot 변동은 매우 작음 (cos(0)=1, sin(0)=0
+            //   에 가까운 값) → preferred arm visual 영향 미미.
+            leftArm.pivotX  =  5f;
+            leftArm.pivotZ  =  0f;
+            rightArm.pivotX = -5f;
+            rightArm.pivotZ =  0f;
         }
 
         // ── cloak.pitch 처리 (cfgEnabled 분기) — disabled 시 0 reset 작동 보장 ──
@@ -159,13 +181,16 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isHeadJumping) {
             sm_animateHeadJumping(sm);
         } else {
-            // isFalling: 낙하 중(낙하거리 > 1.5블록, 지면/물 아님, SM 이동 아님)
+            // isFalling: 낙하 중. 원본 `SmartMovingSelf.doFallingAnimation` (L3278-3282):
+            //   `!sp.onGround && sp.fallDistance > _fallAnimationDistanceMinimum.value` (기본 3F).
+            // isClimbing/isCrawlClimbing/isCeilingClimbing/isTouchingWater 가드는
+            //   if-else 우선순위가 이미 처리하지만 안전상 명시 유지.
             boolean isFalling = !player.isOnGround()
-                    && player.fallDistance > 1.5f
+                    && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                     && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
                     && !player.isTouchingWater();
             if (isFalling) {
-                sm_animateFalling(animationProgress);
+                sm_animateFalling(sm, player);
             }
         }
 
@@ -702,6 +727,19 @@ public abstract class MixinPlayerEntityModelClient {
                 preCancelParentXPivot(leftArm, thetaCancel);
                 preCancelParentXRotation(leftArm, thetaCancel);
             }
+
+            // 🔴 (2026-04-27): vanilla animateArms 가 swing 시 양 팔 pivotZ = ±sin(body.yaw)*5
+            //   를 매 프레임 set → 비-preferred arm "움찔움찔" (사용자 보고 비행 중 왼팔).
+            //   비-preferred arm 만 vanilla setAngles Step 4 기본값 복원 (preferred arm 은
+            //   vanilla swing 효과 그대로 보존).
+            if (!preserveRight) {
+                rightArm.pivotX = -5f;
+                rightArm.pivotZ =  0f;
+            }
+            if (!preserveLeft) {
+                leftArm.pivotX  =  5f;
+                leftArm.pivotZ  =  0f;
+            }
         }
     }
 
@@ -742,29 +780,58 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * isFalling: 자유 낙하.
-     * 원본: SmartMovingModel.setRotationAngles() 11번 분기 (isFalling).
-     * totalTime(animationProgress)으로 totalDistance 근사.
-     * 원본 팔 회전 순서 XZY → 여기서는 XYZ 근사.
+     * 원본: SmartMovingModel.setRotationAngles() L531-549 (isFalling 분기).
+     *
+     * 🔴 distance 입력 1:1 정정 (2026-04-27):
+     *   원본 L533 `distance = totalDistance * 0.1F` 의 totalDistance 는
+     *   SmartRenderRender L56 `statistics.getTotalDistance(renderPartialTicks)` 호출 결과.
+     *   = `total - legYaw * (1.0F - partialTicks)` (SmartStatisticsData L33-36).
+     *
+     *   - 매 틱 `total += legYaw` 누적 (legYaw = currentSpeed EMA, factor 0.4, 0~1 clamp).
+     *   - 매 프레임 partialTicks lerp → 60Hz 부드러움 (사용자 "fade 보간 부드러움" 의 실체).
+     *   - 낙하 시작 직후 legYaw 가 0→1 점진 증가 → 휘저음 가속도 자연스러움
+     *     (사용자 "팔/다리 휘저어지는 속도 및 가속도" 의 직접 원인).
+     *
+     *   이전 매핑 `animationProgress * 0.1F` 는 vanilla `entity.age + tickDelta` —
+     *   이동 가속도 무관 + 시간 단조 증가 → 가속도 부재 + 정지 시에도 휘저음 지속 (원본과 다름).
+     *
+     *   정정: `sm.stats.getTotalDistance(partialTicks) * 0.1F` (이미 인프라 존재).
+     *
+     * 회전 순서: 팔 XZY (setAnglesXZY 헬퍼). 회전식은 원본 L538-548 라인별 1:1.
+     *
+     * 🔴 swing 처리 (2026-04-27):
+     *   vanilla `BipedEntityModel.animateArms` 가 handSwingProgress > 0 시 body.yaw 를
+     *   `sin(sqrt(swing) * 2π) * 0.2` 로 흔든다 → 사용자 보고 "공중 낙하 휘두름 시 몸통 움찔움찔".
+     *   비행 분기 sm_animateFlying 의 preserve 패턴 차용:
+     *   - body.yaw cancel = sm_setAngles 의 anySmState reset 인프라 (isFallingForReset 추가).
+     *   - preferred arm 의 setAnglesXZY skip → vanilla swing pitch/yaw/roll 그대로 보존.
+     *   - falling 은 setupTransforms X 회전 없음 → preCancelParentX* 불필요.
      */
-    private void sm_animateFalling(float animationProgress) {
-        float distance = animationProgress * 0.1f;
+    private void sm_animateFalling(SmartMovingClientState sm, ClientPlayerEntity player) {
+        float partialTicks = net.minecraft.client.MinecraftClient.getInstance()
+                .getRenderTickCounter().getTickDelta(false);
+        float totalDistance = sm.stats.getTotalDistance(partialTicks);
+        float distance = totalDistance * 0.1f;
 
-        // 팔 (XZY 순서) — 원본 SmartMovingModel.java L768-L792:
-        //   bipedRightArm.rotationOrder = XZY
-        //   rotateAngleY = cos(distance + Quarter) * Eighth   (좌우 흔들림)
-        //   rotateAngleZ = cos(distance) * Eighth ± Quarter   (Z, 좌우 부호 반대)
-        // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
+        // preferred arm 만 vanilla swing 보존. swing > 0 시에만 활성.
+        float swing = player.handSwingProgress;
+        Arm preferredArm = player.getMainArm();
+        boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
+        boolean preserveLeft  = swing > 0F && preferredArm == Arm.LEFT;
+
+        // 팔 (XZY 순서) — 원본 L535-542.
+        // rotationOrder = XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
         float rYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
         float lYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
         float rRoll = MathHelper.cos(distance) * EIGHTH + QUARTER;
         float lRoll = MathHelper.cos(distance) * EIGHTH - QUARTER;
-        setAnglesXZY(rightArm, 0f, rYaw, rRoll);
-        setAnglesXZY(leftArm,  0f, lYaw, lRoll);
+        if (!preserveRight) setAnglesXZY(rightArm, 0f, rYaw, rRoll);
+        if (!preserveLeft)  setAnglesXZY(leftArm,  0f, lYaw, lRoll);
 
-        // 다리 X (앞뒤 흔들림)
+        // 다리 X (앞뒤 흔들림) — 원본 L544-545.
         rightLeg.pitch = MathHelper.cos(distance + HALF + QUARTER) * SIXTEENTH + THIRTYTWOTH;
-        leftLeg.pitch  = MathHelper.cos(distance + QUARTER) * SIXTEENTH + THIRTYTWOTH;
-        // 다리 Z (좌우 흔들림)
+        leftLeg.pitch  = MathHelper.cos(distance + QUARTER)        * SIXTEENTH + THIRTYTWOTH;
+        // 다리 Z (좌우 흔들림) — 원본 L547-548.
         rightLeg.roll  = MathHelper.cos(distance) * SIXTEENTH + THIRTYTWOTH;
         leftLeg.roll   = MathHelper.cos(distance) * SIXTEENTH - THIRTYTWOTH;
     }

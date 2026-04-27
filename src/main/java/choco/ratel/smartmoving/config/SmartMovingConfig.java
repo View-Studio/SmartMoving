@@ -1071,6 +1071,16 @@ public class SmartMovingConfig {
      */
     public float fallingDistanceMinimum = 3F;
 
+    /**
+     * 원본 `SmartMovingConfig.java` L223:
+     *   `public final Property<Float> _fallAnimationDistanceMinimum = Positive("move.fall.animation.distance.minimum").min(_fallingDistanceMinimum).defaults(3F, _pre_sm_1_6);`
+     * 기본값 3F. `_fallingDistanceMinimum` 과 별도 — 애니메이션 트리거 전용.
+     * 사용처: doFallingAnimation (원본 SmartMovingSelf.java L3281)
+     *   `!sp.onGround && sp.fallDistance > _fallAnimationDistanceMinimum.value`.
+     * 1.21.1 매핑: MixinPlayerEntityModelClient.sm_setAngles isFalling 진입 조건.
+     */
+    public float fallAnimationDistanceMinimum = 3F;
+
     // ── B-1c1 (세션 50) — 원본 SmartMovingConfig.java 피로/스프린트 관련 필드 ─────────
 
     /**
