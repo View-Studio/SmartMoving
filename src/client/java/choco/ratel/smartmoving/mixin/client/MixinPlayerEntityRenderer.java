@@ -131,7 +131,16 @@ public class MixinPlayerEntityRenderer {
             if (isFalling) {
                 smBodyYawActive = true;
                 smBodyYawOverride = 0f;
-                smFlyingExtraYaw = sm.stats.currentCameraAngle;
+                // 🔴 (2026-04-27) 낙하 target = vanilla bodyYaw_lerped (= 1.7.10 actualRotation 등가).
+                //   원본 SmartRenderRender L76 currentCameraAngle = rotationYaw (즉시값, 라디안).
+                //   원본 SmartMovingModel isFalling (L531-549): bipedOuter 본문 안 건드림 →
+                //   SmartRenderModel L208 default `actualRotation` (vanilla bodyYaw_lerped) 유지.
+                //   = 낙하 target 이 vanilla 자체 lerp 된 값 위에 fade 0.2 추가 = 이중 lerp.
+                //   비행 target = horizontalAngle (즉시값) 위에 fade 0.2 = 단일 lerp.
+                //   → 낙하가 비행보다 더 부드러움 (사용자 보고).
+                float bodyYawLerpedDeg = localPlayer.prevBodyYaw
+                        + (localPlayer.getBodyYaw() - localPlayer.prevBodyYaw) * tickDelta;
+                smFlyingExtraYaw = (float) Math.toRadians(bodyYawLerpedDeg);
                 SmartMovingClientState.smStandardFadeActive = true;
                 SmartMovingClientState.smFallingFadeMode = true;
             } else {
