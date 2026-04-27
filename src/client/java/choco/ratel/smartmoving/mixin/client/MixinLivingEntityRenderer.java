@@ -61,11 +61,17 @@ public abstract class MixinLivingEntityRenderer {
         index = 4
     )
     private float sm_modifyNetHeadYaw(float netHeadYaw) {
+        // 🔴 (2026-04-27) head 가 vanilla cameraYaw 추적 유지하도록 보정.
+        //   기본 상태: ModifyArg sm_modifyBodyYaw 가 bodyYaw → lagged 로 force.
+        //   이전 b876203 매핑 (force=0 + R_y(-yawLerped)) 의 보정식:
+        //     netHeadYaw + bodyYaw_natural - yawLerped (yawLerped = cameraAngle fade lag).
+        //   새 매핑의 등가 변수: lagged = vanilla bodyYaw 의 fade lag → yawLerped 자리에 lagged.
+        //   = netHeadYaw + bodyYaw_natural - lagged.
+        //
+        //   낙하 (smFallingFadeMode=true): sm_animateFalling head.yaw=0 force 가 덮어씀 → skip.
         if (!SmartMovingClientState.smStandardFadeActive) return netHeadYaw;
-        // 낙하 mode: head 도 body 와 같이 fade — 보정 skip.
         if (SmartMovingClientState.smFallingFadeMode) return netHeadYaw;
-        float yawLerpedDeg = (float) Math.toDegrees(SmartMovingClientState.smCachedYawLerpedRad);
-        float bodyYawNaturalDeg = SmartMovingClientState.smCachedBodyYawNaturalDeg;
-        return netHeadYaw + bodyYawNaturalDeg - yawLerpedDeg;
+        return netHeadYaw + SmartMovingClientState.smCachedBodyYawNaturalDeg
+                - SmartMovingClientState.smCachedBodyYawLaggedDeg;
     }
 }

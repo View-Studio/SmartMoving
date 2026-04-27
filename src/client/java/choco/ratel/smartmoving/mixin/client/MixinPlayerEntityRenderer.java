@@ -114,23 +114,31 @@ public class MixinPlayerEntityRenderer {
                 || sm.isCeilingClimbing || sm.isHeadJumping
                 || sm.isSliding || sm.isAngleJumping();
         if (!smActive) {
-            // 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 1:1 차용.
-            //   비행 L217-226 의 horizontalAngle 식 그대로 (정지=cameraAngle, 이동=horizontalAngle).
-            //   - 기본 상태: 머리는 vanilla 그대로 (sm_modifyNetHeadYaw 가 보정).
-            //   - 낙하 상태: 머리/몸 같이 fade (비행과 동일 — sm_animateFalling 가 head.yaw=0 force).
-            //     사용자 요청 (2026-04-27): "낙하일 때는 비행일때랑 같게 처리".
-            float bodyTarget = sm.stats.horizontalDistance < 0.05F
-                    ? sm.stats.currentCameraAngle
-                    : sm.stats.currentHorizontalAngle;
-            smBodyYawActive = true;
-            smBodyYawOverride = 0f;
-            smFlyingExtraYaw = bodyTarget;
-            SmartMovingClientState.smStandardFadeActive = true;
-            // 낙하 감지 — 원본 SmartMovingSelf.doFallingAnimation L3278-3282 +
-            //   MixinPlayerEntityModelClient L191-194 와 동일 조건.
-            SmartMovingClientState.smFallingFadeMode = !localPlayer.isOnGround()
+            // 🔴 (2026-04-27) 낙하/기본 상태 분기 — 두 모드:
+            //   - 낙하: force 매핑 (smBodyYawActive=true; smBodyYawOverride=0) + head force.
+            //          비행 패턴과 동일. 머리/몸 같이 fade lag.
+            //   - 기본 상태 (땅 위): smBodyYawActive=false 유지 → ModifyArg 가 vanilla bodyYaw 를
+            //          받아 fade lerp 적용 후 force (sm_modifyBodyYaw 내부).
+            //          = vanilla 자연 동작 (키보드 이동 시 몸 회전) + 추가 fade lag (마우스 부드러움).
+            //   사용자 보고 흐름:
+            //     1) "마우스 회전 시 머리/몸 회전 속도 차이 부드럽게" → fade lag 필요.
+            //     2) "키보드 좌우 이동 시 몸 경직" → vanilla force 0 무력화 안 해야.
+            //     3) "마우스 회전 시 lag 가 없어짐" → fade 다시 활성화.
+            //   해결: ModifyArg 가 force=0 안 하고 vanilla bodyYaw 에 fade 만 추가.
+            boolean isFalling = !localPlayer.isOnGround()
                     && localPlayer.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                     && !localPlayer.isTouchingWater();
+            if (isFalling) {
+                smBodyYawActive = true;
+                smBodyYawOverride = 0f;
+                smFlyingExtraYaw = sm.stats.currentCameraAngle;
+                SmartMovingClientState.smStandardFadeActive = true;
+                SmartMovingClientState.smFallingFadeMode = true;
+            } else {
+                // 기본 상태: ModifyArg 가 fade lerp 적용 모드. smBodyYawActive=false 유지.
+                SmartMovingClientState.smStandardFadeActive = true;
+                SmartMovingClientState.smFallingFadeMode = false;
+            }
             return;
         }
 
@@ -288,7 +296,26 @@ public class MixinPlayerEntityRenderer {
         SmartMovingClientState.smCachedBodyYawNaturalDeg = bodyYaw;
         if (smBodyYawActive) {
             SmartMovingClientState.smBodyYawActive_publicShared = true;
+            // 🔴 (2026-04-27) force 동안 standard fade prev 매 frame 갱신.
+            //   사용자 보고: angleJump 착지 후 몸통이 점프 방향으로 띡 돌아가는 보간 부재.
+            //   원인: force 분기 (isAngleJumping/isClimb 등) 에서 standard fade prev 정지 →
+            //         force 끝 후 standard 분기 진입 시 prev=NaN → lerp skip → 즉시 적용.
+            //   해결: force 동안 prev = smBodyYawOverride 로 매 frame 갱신 → 끝 시 prev=force
+            //         마지막 값 → standard 진입 첫 프레임부터 lerp (부드러운 회전).
+            //   원본 SmartRender bipedOuter.previous 가 모든 분기 공통 단일 변수인 것을 매핑.
+            //   점프 동작 자체엔 영향 없음 (force 결과 그대로 반환).
+            SmartMovingClientState.smStandardBodyYawPrev = smBodyYawOverride;
+            SmartMovingClientState.smStandardFadeTimePrev = SmartMovingClientState.smCachedAnimationProgress;
             return smBodyYawOverride;
+        }
+        // 🔴 (2026-04-27) 기본 상태 fade lerp — vanilla bodyYaw 위에 추가 lag (factor 0.2).
+        //   smStandardFadeActive=true && smBodyYawActive=false ⇔ 땅 위 기본 상태.
+        //   vanilla bodyYaw 의 자연 lerp (키보드 이동 시 몸 회전) 보존 + 마우스 회전 시 부드러움.
+        if (SmartMovingClientState.smStandardFadeActive) {
+            float lagged = SmartMovingClientState.applyFadeAngleDegrees(bodyYaw);
+            // head 보정용 캐시 — sm_modifyNetHeadYaw 가 lagged - natural 차이만큼 보정.
+            SmartMovingClientState.smCachedBodyYawLaggedDeg = lagged;
+            return lagged;
         }
         return bodyYaw;
     }
@@ -420,11 +447,10 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterTiltX = theta;
         }
 
-        // 🔴 (2026-04-27) 낙하/기본 상태 body fade lag — 비행 fade 패턴 (L355-382) 1:1 차용.
-        //   sm_captureBodyYaw 가 smStandardFadeActive=true + smFlyingExtraYaw=target 설정.
-        //   여기서 비행과 동일하게 lerpFadeAngle + matrices.translate + multiply 적용.
-        //   머리는 head.yaw=0 force 안 함 → vanilla netHeadYaw 그대로.
-        if (SmartMovingClientState.smStandardFadeActive) {
+        // 🔴 (2026-04-27) 낙하 force 분기 body fade lag — 비행 fade 패턴 (L355-382) 1:1 차용.
+        //   sm_captureBodyYaw 의 isFalling 분기가 smFallingFadeMode=true + smFlyingExtraYaw 설정.
+        //   기본 상태 fade 는 sm_modifyBodyYaw 의 ModifyArg lerp 로 처리 → 여기서 적용 안 함.
+        if (SmartMovingClientState.smFallingFadeMode) {
             float yawTarget = smFlyingExtraYaw;
             float yawLerped = lerpFadeAngle(sm.smStandardFadeYaw_prev, yawTarget,
                                             sm.smStandardFadeYaw_prevTime, animationProgress);

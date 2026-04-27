@@ -745,6 +745,11 @@ public final class SmartMovingClientState {
      * sm_modifyNetHeadYaw 의 head 보정식에 사용.
      */
     public static float smCachedBodyYawNaturalDeg = 0f;
+    /**
+     * 🔴 (2026-04-27) sm_modifyBodyYaw 의 output (fade lerp 적용 후 lagged bodyYaw, degrees).
+     * sm_modifyNetHeadYaw 의 head 보정식에 사용 (lagged - natural 차이로 head world yaw 보정).
+     */
+    public static float smCachedBodyYawLaggedDeg = 0f;
 
     /**
      * 원본 ModelRotationRenderer.GetIntermediateAngle (L347-365) 1:1 매핑 (degrees 단위).
