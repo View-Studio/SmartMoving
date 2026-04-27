@@ -196,7 +196,7 @@ public abstract class MixinPlayerEntityModelClient {
 
         // ── [12-2] animateAngleJumping — 방향 점프 팔/다리 포즈 ──────────────
         if (sm.isAngleJumping()) {
-            sm_animateAngleJumping(sm);
+            sm_animateAngleJumping(sm, animationProgress);
         }
 
         // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
@@ -838,25 +838,58 @@ public abstract class MixinPlayerEntityModelClient {
 
     /**
      * [12-2] animateAngleJumping: 방향 점프 시 팔/다리 각도.
-     * 원본: SmartMovingModel.animateAngleJumping().
-     * 원본 다리 ZXY 회전 순서 → setAnglesZXY 헬퍼로 정확하게 변환.
-     * 원본 bipedPelvic.rotateAngleY 조정: 1.21.1에 bipedPelvic 없음 → 생략.
+     * 원본: SmartMovingModel.animateAngleJumping() L559-584.
+     *
+     * 🔴 단순 LOCAL 매핑 (2026-04-27, 사용자 통찰 — "팔처럼 처리"):
+     *   원본 L569-574 (LOCAL 각도, ZXY rotationOrder):
+     *     leg.rotateAngleX = THIRTYTWOTH * (1 + ?ness);     // 다리 들어올림
+     *     leg.rotateAngleY = -angle;                         // 다리 방향
+     *     leg.rotateAngleZ = ±THIRTYTWOTH * backness;        // 다리 좌우 (back jump)
+     *
+     *   원본의 bipedPelvic.Y = -bipedOuter.Y + cameraAngle 보정은 1.7.10 SmartMoving 이
+     *   별도로 entity.renderYawOffset = forwardRotation 으로 bodyYaw=cameraAngle force
+     *   하기 때문에 동작. 1.21.1 vanilla 는 bodyYaw 자유 lerp → 그 보정을 leg.yaw 에
+     *   추가하면 오히려 다리가 entity 와 분리 (사용자 보고 "다리 몸통 방향과 다름").
+     *
+     *   해결: 팔과 동일하게 LOCAL 각도 직접 set. cameraDelta 보정 제거.
+     *   leg 는 entity.bodyYaw 따라 자연스럽게 회전 (vanilla setupTransforms).
+     *
+     *   ZXY rotationOrder 는 ModelPart 의 ZYX 와 미세 차이 (작은 pitch/roll ~π/16 시
+     *   시각 거의 동일). gimbal lock 회피용 ModelPart 직접 set 패턴 유지.
      */
-    private void sm_animateAngleJumping(SmartMovingClientState sm) {
+    private void sm_animateAngleJumping(SmartMovingClientState sm, float animationProgress) {
         float angle    = sm.angleJumpType * EIGHTH;
         float backness  = 1f - Math.abs(angle - HALF) / QUARTER;
         float leftness  = -Math.min(angle - HALF, 0f) / QUARTER;
         float rightness =  Math.max(angle - HALF, 0f) / QUARTER;
 
-        // 다리 (ZXY 순서): pitch=X, yaw=Y(-angle), roll=Z
-        setAnglesZXY(leftLeg,  THIRTYTWOTH * (1f + rightness), -angle,  THIRTYTWOTH * backness);
-        setAnglesZXY(rightLeg, THIRTYTWOTH * (1f + leftness),  -angle, -THIRTYTWOTH * backness);
+        // 다리 — 팔과 동일한 LOCAL 매핑 (원본 L569-574 1:1).
+        // 🔴 leg.roll 부호 반전 (2026-04-27 fix): 원본 ZXY (vertex 적용 R_z→R_x→R_y) 와
+        //   ModelPart ZYX (R_x→R_y→R_z) 의 회전 순서 차이가 back jump (leg.yaw=-π) 시
+        //   R_y(-π) 의 X 부호 반전으로 인해 R_z 적용 결과 정반대 → 다리가 가운데로 모임
+        //   (사용자 보고). 부호 반전으로 1.7.10 원본과 동일한 "바깥쪽 기울임" 효과 복원.
+        leftLeg.pitch  = THIRTYTWOTH * (1f + rightness);
+        leftLeg.yaw    = -angle;
+        leftLeg.roll   = -THIRTYTWOTH * backness;
+        rightLeg.pitch = THIRTYTWOTH * (1f + leftness);
+        rightLeg.yaw   = -angle;
+        rightLeg.roll  =  THIRTYTWOTH * backness;
 
-        // 팔
-        leftArm.roll   = -SIXTEENTH * rightness;
-        rightArm.roll  =  SIXTEENTH * leftness;
-        leftArm.pitch  = -EIGHTH * backness;
-        rightArm.pitch = -EIGHTH * backness;
+        // 팔 (원본 L579-583 1:1) + idle 진동 누적 (원본 SmartRenderModel.animateArms L334-339).
+        // 🔴 idle 진동 (2026-04-27 fix): 원본 1.7.10 흐름 = animateAngleJumping 가 X/Z set
+        //   후 imp.animateArms 가 += idle 진동 (cos*0.05+0.05 / sin*0.067) 누적. 1.21.1
+        //   vanilla CrossbowPosing.swingArm 동등 식이 setAngles Step 12 에서 += 적용했으나
+        //   우리 inject TAIL 의 = set 으로 cancel → "미세 진동 안 보임" (사용자 보고).
+        //   해결: 우리 식에 idle 진동 += 누적해 1.7.10 의 `+=` 효과 1:1 재현.
+        //   ageInTicks = animationProgress (vanilla CrossbowPosing 입력과 동일).
+        float ageInTicks = animationProgress;
+        float idleZ = MathHelper.cos(ageInTicks * 0.09f)  * 0.05f + 0.05f;
+        float idleX = MathHelper.sin(ageInTicks * 0.067f) * 0.05f;
+
+        leftArm.roll   = -SIXTEENTH * rightness - idleZ;     // 원본 leftArm.Z -= cos*0.05+0.05
+        rightArm.roll  =  SIXTEENTH * leftness  + idleZ;     // 원본 rightArm.Z += cos*0.05+0.05
+        leftArm.pitch  = -EIGHTH * backness - idleX;          // 원본 leftArm.X -= sin*0.067
+        rightArm.pitch = -EIGHTH * backness + idleX;          // 원본 rightArm.X += sin*0.067
     }
 
     // ─────────────────────────────────────────────────────────────────────────

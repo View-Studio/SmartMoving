@@ -1535,9 +1535,10 @@ public final class SmartMovingClientState {
             // 원본: updateEntityActionState() 내 방향키 StartPressed → count 갱신
             {
                 MinecraftClient mc = MinecraftClient.getInstance();
-                boolean pressLeft  = mc.options.leftKey.isPressed();
-                boolean pressRight = mc.options.rightKey.isPressed();
-                boolean pressBack  = mc.options.backKey.isPressed();
+                boolean pressLeft    = mc.options.leftKey.isPressed();
+                boolean pressRight   = mc.options.rightKey.isPressed();
+                boolean pressBack    = mc.options.backKey.isPressed();
+                boolean pressForward = mc.options.forwardKey.isPressed();
 
                 boolean startLeft  = pressLeft  && !prevPressLeft;
                 boolean startRight = pressRight && !prevPressRight;
@@ -1547,22 +1548,46 @@ public final class SmartMovingClientState {
                 prevPressRight = pressRight;
                 prevPressBack  = pressBack;
 
+                // 🔴 (2026-04-27) 원본 SmartMovingSelf L2898-2902 가드 1:1 추가:
+                //   canAngleJump = !isSleeping && onGround && !isCrawling && !isClimbing
+                //                  && !isClimbCrawling && !isSwimming && !isDiving
+                //   canLeftJump  = canSideJump && !rightButton.Pressed
+                //   canRightJump = canSideJump && !leftButton.Pressed
+                //   canBackJump  = canAngleJump && !forwardButton.Pressed && !isStandupSprintingOrRunning()
+                // 가드 false 시 else 분기에서 count = 0 reset (원본 L2917/L2932/L2947).
+                boolean canAngleJump = !player.isSleeping()
+                        && player.isOnGround()
+                        && !isCrawling && !isClimbing && !isCrawlClimbing
+                        && !isSwimming_sm && !isDiving;
+                boolean canSideJump  = cfg.angleJumpSide && canAngleJump;
+                boolean canLeftJump  = canSideJump && !pressRight;
+                boolean canRightJump = canSideJump && !pressLeft;
+                boolean canBackJump  = cfg.angleJumpBack && canAngleJump
+                        && !pressForward && !isStandupSprintingOrRunning(player);
+
                 // 원본: if(StartPressed) { count==0→angleJumpDoubleClickTicks(), else→-1 } else if(count>0) count--
                 // 원본 _angleJumpDoubleClickTicks: Positive("...").up(3F, 2F), (int)Math.ceil(value) 정수화.
                 int angleTicks = (int) Math.ceil(cfg.angleJumpDoubleClickTicks);
-                if (cfg.angleJumpSide) {
+                if (canLeftJump) {
                     if (startLeft) {
                         if (leftJumpCount  == 0) leftJumpCount  = angleTicks; else leftJumpCount  = -1;
                     } else if (leftJumpCount  > 0) leftJumpCount--;
-
+                } else {
+                    leftJumpCount  = 0;
+                }
+                if (canRightJump) {
                     if (startRight) {
                         if (rightJumpCount == 0) rightJumpCount = angleTicks; else rightJumpCount = -1;
                     } else if (rightJumpCount > 0) rightJumpCount--;
+                } else {
+                    rightJumpCount = 0;
                 }
-                if (cfg.angleJumpBack) {
+                if (canBackJump) {
                     if (startBack) {
                         if (backJumpCount  == 0) backJumpCount  = angleTicks; else backJumpCount  = -1;
                     } else if (backJumpCount  > 0) backJumpCount--;
+                } else {
+                    backJumpCount  = 0;
                 }
 
                 // 대각선 우선순위: -1 중복 시 -2로 강등 (좌/우+후 동시 방지)
@@ -1573,6 +1598,14 @@ public final class SmartMovingClientState {
                 if (rightJumpCount == -2 && backJumpCount  <= 0) rightJumpCount = -1;
                 if (leftJumpCount  == -2 && backJumpCount  <= 0) leftJumpCount  = -1;
                 if (backJumpCount  == -2 && leftJumpCount  <= 0 && rightJumpCount <= 0) backJumpCount = -1;
+
+                // 🔴 (2026-04-27) 원본 SmartMovingSelf L2963-2964 1:1 추가:
+                //   if (sp.onGround || sp.isCollidedVertically) angleJumpType = 0;
+                // 점프 후 onGround 복귀 시 angleJumpType reset → isAngleJumping() 즉시 false.
+                // 이전 누락 → angleJumpType 잔존으로 애니메이션 잔존 가능.
+                if (player.isOnGround() || player.verticalCollision) {
+                    angleJumpType = 0;
+                }
             }
 
             // R-04: isSmall 갱신.
