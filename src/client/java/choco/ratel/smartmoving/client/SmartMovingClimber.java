@@ -407,16 +407,16 @@ public final class SmartMovingClimber {
         }
 
         if (!cfg.freeClimb && !cfg.simpleClimb && !cfg.smartClimb) {
-            // B-20 (세션 76) → **B-42-B20 해소 (세션 125)**: 원본 L820-L823 Standard Base
-            //   Climb 정밀 복원. 원본: if (isOnLadderOrVine && isCollidedHorizontally)
-            //     motionY = 0.2 * combinedFactor
-            //   `isOnLadderOrVine` 조건은 1.21.1 `handleClimbing` 호출 상위 (MixinLivingEntity
-            //   L153 `onClimbable`) 에서 이미 내포 → 남은 조건 `player.horizontalCollision` 복원.
-            //   `setShouldClimbSpeed` 사용 (isClimbing 안 건드림) 은 세션 76 정정 유지.
-            // B-1 (세션 25): Mover.getCombinedSpeedFactor User 배율 주입.
+            // 🔴 사다리/덩굴 1-4: 원본 SmartMovingSelf L820-L823 Standard Base Climb 정밀 1:1.
+            //   원본: if(isStandardBaseClimb && isCollidedHorizontally && isOnLadderOrVine)
+            //           sp.motionY = 0.2 * getCombinedSpeedFactor();
+            //   isOnLadderOrVine 은 MixinLivingEntityClient onClimbable 가드로 내포.
+            //   원본은 motionY 직접 set (sm.isClimbing 갱신 없음) → setShouldClimbSpeed
+            //   호출 (relevant 가드 + isClimbing=true) 은 부수효과 발생 → 직접 set 으로 변경.
             if (player.horizontalCollision) {
                 double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
-                setShouldClimbSpeed(player, sm, FAST_UP_MOTION * combinedFactor, true, 1.0D);
+                Vec3d v = player.getVelocity();
+                player.setVelocity(v.x, 0.2D * combinedFactor, v.z);
                 player.fallDistance = 0;
             }
             return;
@@ -652,19 +652,22 @@ public final class SmartMovingClimber {
         //   isOnLadderOrVine 은 상위 `onClimbable` 에 내포 (B-42-B20 확인). 남은 조건
         //   `isCollidedHorizontally` 복원 + feet/hands isClimbable 정밀 판정.
         if (cfg.simpleClimb) {
+            // 🔴 사다리/덩굴 1-4: 원본 SmartMovingSelf L825-844 Simple Base Climb 정밀 1:1.
+            //   원본은 motionY 직접 set (relevant 가드 없음, sm.isClimbing 갱신 없음).
             if (player.horizontalCollision) {
                 int i = (int) Math.floor(player.getX());
                 int j = (int) Math.floor(player.getBoundingBox().minY);
                 int k = (int) Math.floor(player.getZ());
                 boolean feet  = Orientation.isClimbable(world, i, j, k);
                 boolean hands = Orientation.isClimbable(world, i, j + 1, k);
-                double value;
-                if (feet && hands)      value = FAST_UP_MOTION;
-                else if (feet)          value = FAST_UP_MOTION;
-                else if (hands)         value = SLOW_UP_MOTION;
-                else                    value = 0.0D;
-                value *= combinedFactor;
-                setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+                double motionY;
+                if (feet && hands)      motionY = FAST_UP_MOTION;
+                else if (feet)          motionY = FAST_UP_MOTION;
+                else if (hands)         motionY = SLOW_UP_MOTION;
+                else                    motionY = 0.0D;
+                motionY *= combinedFactor;
+                Vec3d v = player.getVelocity();
+                player.setVelocity(v.x, motionY, v.z);
                 player.fallDistance = 0;
             }
             return;
@@ -682,15 +685,17 @@ public final class SmartMovingClimber {
         //   handsSubstitute 는 원본 L866-L869: PZ/NZ/ZP/ZN 4방향 (ZZ 없음).
         //   feetSubstitute 는 원본 L879-L883: ZZ/PZ/NZ/ZP/ZN 5방향.
         if (cfg.smartClimb) {
+            // 🔴 사다리/덩굴 1-4: 원본 SmartMovingSelf L856-L894 Smart Base Climb 정밀 1:1.
+            //   원본은 motionY 직접 set (relevant 가드 없음, sm.isClimbing 갱신 없음).
             if (player.horizontalCollision) {
                 int i = (int) Math.floor(player.getX());
                 int j = (int) Math.floor(player.getBoundingBox().minY);
                 int k = (int) Math.floor(player.getZ());
                 boolean feet  = Orientation.isClimbable(world, i, j, k);
                 boolean hands = Orientation.isClimbable(world, i, j + 1, k);
-                double value;
+                double motionY;
                 if (feet && hands) {
-                    value = FAST_UP_MOTION;
+                    motionY = FAST_UP_MOTION;
                 } else if (feet) {
                     // 원본 L866-L869: 4방향 (PZ/NZ/ZP/ZN) at j+1
                     boolean handsSubstitute =
@@ -698,7 +703,7 @@ public final class SmartMovingClimber {
                          || Orientation.NZ.isHandsLadderSubstitute(world, i, j + 1, k)
                          || Orientation.ZP.isHandsLadderSubstitute(world, i, j + 1, k)
                          || Orientation.ZN.isHandsLadderSubstitute(world, i, j + 1, k);
-                    value = handsSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
+                    motionY = handsSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
                 } else if (hands) {
                     // 원본 L879-L883: 5방향 (ZZ/PZ/NZ/ZP/ZN) at j
                     boolean feetSubstitute =
@@ -707,12 +712,13 @@ public final class SmartMovingClimber {
                          || Orientation.NZ.isFeetLadderSubstitute(world, i, j, k)
                          || Orientation.ZP.isFeetLadderSubstitute(world, i, j, k)
                          || Orientation.ZN.isFeetLadderSubstitute(world, i, j, k);
-                    value = feetSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
+                    motionY = feetSubstitute ? FAST_UP_MOTION : SLOW_UP_MOTION;
                 } else {
-                    value = 0.0D;
+                    motionY = 0.0D;
                 }
-                value *= combinedFactor;
-                setOnlyShouldClimbSpeed(player, sm, value, true, 1.0D);
+                motionY *= combinedFactor;
+                Vec3d v = player.getVelocity();
+                player.setVelocity(v.x, motionY, v.z);
                 player.fallDistance = 0;
             }
             return;
