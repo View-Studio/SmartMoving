@@ -1427,6 +1427,22 @@ public class SmartMovingConfig {
                 marker2.store(out, null);
             } catch (IOException ignored) {}
         }
+        // 🔴 fence 클라이밍 자동 마이그레이션 — _freeFenceClimbing default = true 강제.
+        //   원본 SmartMovingConfig L123 `_freeFenceClimbing = Unmodified("move.climb.free.fence")`
+        //   → Properties.java L171-172 Unmodified default true. 우리 1.21.1 이식 초기 default 가
+        //   false 로 잘못 저장돼 있는 환경 → fence 자체등반/위잡기 작동 안 함 (사용자 보고 #1, #3).
+        //   BUG-26/27 동일 패턴: 마커 없으면 default true 강제 + save + 마커 추가.
+        //   사용자가 마이그레이션 후 의도적으로 false 로 바꾸면 그건 존중 (1:1 옵션 보존).
+        String fenceMarker = props.getProperty("move.config.migration.fence", "");
+        if (!"session_104_done".equals(fenceMarker)) {
+            INSTANCE.freeFenceClimbing = true;
+            save();
+            try (FileOutputStream out = new FileOutputStream(configFile.toFile(), true)) {
+                Properties marker2 = new Properties();
+                marker2.setProperty("move.config.migration.fence", "session_104_done");
+                marker2.store(out, null);
+            } catch (IOException ignored) {}
+        }
     }
 
     /**

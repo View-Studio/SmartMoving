@@ -714,6 +714,21 @@ public final class SmartMovingClimber {
             } else {
                 value = SINK_DOWN_MOTION; isUp = false;
             }
+
+            // 🔴 원본 L1055-1058 isClimbHolding 분기 매핑 — wantClimbDown 안에서 위 결정값을
+            //   덮어쓰는 unconditional hold. grab+sneak 시 isClimbHolding=true →
+            //   setOnlyShouldClimbSpeed(HoldMotion) 강제. iron_bars/fence/일반 블록 위 잡기 시
+            //   sneak 누르면 떨어지지 않고 hold. 사용자 보고 #4 직접 원인.
+            //
+            //   원본 isClimbHolding 정의 (L2721-2732):
+            //     wantClimbHolding = (isClimbHolding && sneak) || (isClimbing && blocked) ||
+            //                        (wantClimb && !isSwimming && !isDiving && !isCrawling &&
+            //                         (sneak || crawlToggled));
+            //     isClimbHolding = wantClimbHolding && isClimbing;
+            //   → 가장 일반 케이스: grab + sneak.
+            if (sm.isClimbHolding) {
+                value = HOLD_MOTION; isUp = true;
+            }
         }
 
         // 원본 L1522 factor = getCombinedSpeedFactor() + L1523-1524 isFast sprint factor.
