@@ -5,6 +5,7 @@ import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.EntityPose;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,6 +28,33 @@ public abstract class MixinClientPlayerEntity {
     private void sm_tickMovement(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         SmartMovingClientState.get(player).tickEssential(player);
+    }
+
+    /**
+     * 🔴 사다리/덩굴 등반 + W + sneak 시 CROUCHING 자세 매 틱 강제 reset.
+     *
+     * 이전 시도 실패 (모두 효과 없음):
+     *   1. shouldEnterCrouchingPose mixin (ClientPlayerEntity / LivingEntity) — method 없음
+     *   2. Entity.setSneaking mixin — vanilla 자세 결정이 SNEAKING flag 사용 안 함
+     *   3. KeyboardInput.tick mixin — vanilla 자세 결정이 input.sneaking 사용 안 함
+     *
+     * 진단:
+     * vanilla 1.21.1 의 CROUCHING 자세 결정 source 를 정확히 추적 못 함 (yarn mapping
+     * 검색 한계). 어떤 source 를 쓰든 "결과적 자세" 가 CROUCHING 인 것을 매 틱 강제 reset.
+     *
+     * tickMovement TAIL — vanilla 자세 결정 후 우리가 STANDING 으로 reset.
+     * 가드: sm.isClimbing && forward > 0F (사용자 의도 정확히).
+     */
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void sm_resetCrouchingInClimb(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isClimbing && player.input.movementForward > 0F) {
+            if (player.getPose() == EntityPose.CROUCHING) {
+                player.setPose(EntityPose.STANDING);
+            }
+        }
     }
 
     /**
