@@ -946,20 +946,34 @@ public final class SmartMovingClimber {
      * jgap이 클수록 방이 높음 → 천장 클라이밍 속도 증가.
      */
     private static double computeJgap(ClientPlayerEntity player) {
+        // 🔴 원본 SmartMovingSelf L1147-1149 정밀 1:1:
+        //   double jgap = 1D - jd + j;
+        //   if (bottomCeilingClimbing) jgap++;
+        //
+        //   jd = bb.maxY (사용자 머리 y), j = floor(jd).
+        //   jgap = 1 - jd + j = (다음 정수 경계) - jd = 사용자 머리에서 다음 블록 경계까지 거리.
+        //   bottomCeilingClimbing (= bottomBlock supports() true) 시 jgap += 1.
+        //
+        //   anchor 평형점 (motionY=0.08, jgap > 1.115 ~ 1.2) 으로 수렴:
+        //     - 사용자 매달림 시 maxY = fence.y → jgap = 1 → case 3 → 떨어짐
+        //     - 떨어지면서 bottom climbing 활성 + jgap 점차 1.116 진입 → case 2 → 정지
+        //     - 평형점 = maxY = fence.y - 0.116 (사용자 머리가 fence 의 0.116 아래)
+        //
+        //   이전 식 (collision shape 거리 계산) 은 원본과 결과 다름 → 평형점 안 잡힘.
         World world = player.getWorld();
         Box bb = player.getBoundingBox();
         int px = (int) Math.floor(player.getX());
         int pz = (int) Math.floor(player.getZ());
-        // ceil(bb.maxY): 머리 위 첫 블록 경계부터 스캔
-        int startY = (int) Math.ceil(bb.maxY);
 
-        for (int by = startY; by <= startY + 4; by++) {
-            BlockPos pos = new BlockPos(px, by, pz);
-            BlockState state = world.getBlockState(pos);
-            if (!state.getCollisionShape(world, pos).isEmpty()) {
-                return by - bb.maxY;
-            }
+        double jd = bb.maxY;
+        int j = (int) Math.floor(jd);
+        double jgap = 1D - jd + j;
+
+        // 원본 L1148-1149: bottomCeilingClimbing 시 jgap += 1
+        BlockState bottomState = world.getBlockState(new BlockPos(px, j + 1, pz));
+        if (CeilingClimbBlocks.supports(bottomState)) {
+            jgap += 1.0D;
         }
-        return 2.0D; // 4블록 이내에 천장 없음 → 넉넉한 공간
+        return jgap;
     }
 }
