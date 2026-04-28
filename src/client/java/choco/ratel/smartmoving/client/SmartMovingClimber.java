@@ -715,18 +715,19 @@ public final class SmartMovingClimber {
                 value = SINK_DOWN_MOTION; isUp = false;
             }
 
-            // 🔴 원본 L1055-1058 isClimbHolding 분기 매핑 — wantClimbDown 안에서 위 결정값을
-            //   덮어쓰는 unconditional hold. grab+sneak 시 isClimbHolding=true →
-            //   setOnlyShouldClimbSpeed(HoldMotion) 강제. iron_bars/fence/일반 블록 위 잡기 시
-            //   sneak 누르면 떨어지지 않고 hold. 사용자 보고 #4 직접 원인.
+            // 🔴 원본 L1055-1058 isClimbHolding HoldMotion 분기 매핑 (sneak 키 가드).
+            //   원본 isClimbHolding = wantClimb && (sneak || crawlToggled) && isClimbing.
             //
-            //   원본 isClimbHolding 정의 (L2721-2732):
-            //     wantClimbHolding = (isClimbHolding && sneak) || (isClimbing && blocked) ||
-            //                        (wantClimb && !isSwimming && !isDiving && !isCrawling &&
-            //                         (sneak || crawlToggled));
-            //     isClimbHolding = wantClimbHolding && isClimbing;
-            //   → 가장 일반 케이스: grab + sneak.
-            if (sm.isClimbHolding) {
+            // 🔴 사용자 요구 추가 (handsClimbing.SINK 통합):
+            //   "iron_bars 위 잡고 그랩만 누르면 안떨어져야됨 (일반 블록 그랩 홀드 코드 참고)".
+            //   원본 동작:
+            //     일반 블록 grab → handsClimbing=BottomHold (jh_offset 작음) → ToDown 변환 없음
+            //                   → wantClimbDown 분기 L694 BottomHold + !feet → HoldMotion (자동 hold).
+            //     iron_bars/fence 위 잡기 → handsClimbing=Sink/TopHold (jh_offset 큼)
+            //                              → ToDown: TopHold→Sink, Sink→Sink → SinkDownMotion (떨어짐).
+            //   사용자 의도 = 두 케이스 모두 grab만으로 hold → handsClimbing.SINK 시도 HoldMotion 강제.
+            //   원본은 sneak 필요했지만 사용자 명시 의도 우선.
+            if (sm.isClimbHolding || handsClimbing == HandsClimbing.SINK) {
                 value = HOLD_MOTION; isUp = true;
             }
         }

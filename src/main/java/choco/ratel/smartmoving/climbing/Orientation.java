@@ -2415,13 +2415,16 @@ public class Orientation {
 
         BlockState remoteState = getRemoteBlockId(0);
         if (isEmpty(base_i, 0, base_k)) {
-            if (remoteState.getBlock() == Blocks.IRON_BARS
+            // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. iron_bars 무조건 분기에 fence 통합.
+            //   원본은 fence 를 cfg.freeFenceClimbing 게이트 안 (L571-598) 에서 별도 처리하나
+            //   사용자 의도는 "두 블록 동일 작동" 이므로 게이트 무관 통합.
+            if ((remoteState.getBlock() == Blocks.IRON_BARS || isFence(remoteState))
                     && headedToFrontWall(remote_i, 0, remote_k, remoteState))
                 return setHalfGrabType(HalfGrab, remoteState);
         }
 
         BlockState wallState = getWallBlockId(base_i, 0, base_k);
-        if (wallState != null && wallState.getBlock() == Blocks.IRON_BARS
+        if (wallState != null && (wallState.getBlock() == Blocks.IRON_BARS || isFence(wallState))
                 && headedToBaseWall(0, wallState))
             return setHalfGrabType(HalfGrab, wallState, false);
         if (wallState != null && isOnMiddleLadderFront(0))
@@ -2555,7 +2558,8 @@ public class Orientation {
         // 근사 이식 — 원본과 차이: RedPower wire 4 sub 분기 (원본 L765-L795) 생략
 
         if (isEmpty(base_i, -1, base_k)) {
-            if (remoteBelowState.getBlock() == Blocks.IRON_BARS
+            // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. iron_bars 무조건 분기에 fence 통합.
+            if ((remoteBelowState.getBlock() == Blocks.IRON_BARS || isFence(remoteBelowState))
                     && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState))
                 return setBottomGrabType(HalfGrab, remoteBelowState);
         }
@@ -2583,7 +2587,8 @@ public class Orientation {
         if (belowWallBlockState != null) {
             if (isEmpty(base_i - _i, 0, base_k - _k)
                     && isEmpty(base_i - _i, -1, base_k - _k)) {
-                if (belowWallBlockState.getBlock() == Blocks.IRON_BARS
+                // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. iron_bars 무조건 분기에 fence 통합.
+                if ((belowWallBlockState.getBlock() == Blocks.IRON_BARS || isFence(belowWallBlockState))
                         && headedToBaseWall(-1, belowWallBlockState))
                     return setBottomGrabType(HalfGrab, belowWallBlockState, false);
                 if (isOnMiddleLadderFront(-1))
