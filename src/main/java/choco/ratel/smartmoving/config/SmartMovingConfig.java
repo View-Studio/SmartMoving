@@ -488,6 +488,18 @@ public class SmartMovingConfig {
      */
     public float freeClimbingHorizontalSpeedFactor = 1.0F;
     /**
+     * 원본 SmartMovingConfig L121 `_freeOneLadderClimbUpSpeedFactor = PositiveFactor("move.climb.free.ladder.one.up.speed.factor").defaults(1.0153F)`.
+     * setOnlyShouldClimbSpeed 의 MediumUpMotion 분기에서 ladder 1개 시 factor 곱.
+     * 사다리 1줄 등반 시 약간의 추가 속도. 사다리/덩굴 통합 작업 1-2.
+     */
+    public float freeOneLadderClimbUpSpeedFactor = 1.0153F;
+    /**
+     * 원본 SmartMovingConfig L122 `_freeBothLadderClimbUpSpeedFactor = IncreasingFactor("move.climb.free.ladder.two.up.speed.factor").defaults(1.43F)`.
+     * setOnlyShouldClimbSpeed 의 MediumUpMotion 분기에서 ladder 2개 시 factor 곱.
+     * 사다리 2줄 (양쪽) 등반 시 큰 추가 속도. 사다리/덩굴 통합 작업 1-2.
+     */
+    public float freeBothLadderClimbUpSpeedFactor = 1.43F;
+    /**
      * 원본 SmartMovingConfig L129 `_freeClimbingOrthogonalDirectionAngle` Positive — 기본값 `90F`.
      * "클라이밍 N/S/E/W 붙잡기 각도(도)". `Orientation.setClimbingAngles` 가 orthogonal 방향
      * (PZ/NZ/ZP/ZN) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 90F → 각 방향마다 ±45도
@@ -1535,6 +1547,8 @@ public class SmartMovingConfig {
         freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
         freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
         freeClimbingHorizontalSpeedFactor = getFloat(p, "move.climb.free.horizontal.speed.factor", freeClimbingHorizontalSpeedFactor);
+        freeOneLadderClimbUpSpeedFactor   = getFloat(p, "move.climb.free.ladder.one.up.speed.factor",  freeOneLadderClimbUpSpeedFactor);
+        freeBothLadderClimbUpSpeedFactor  = getFloat(p, "move.climb.free.ladder.two.up.speed.factor",  freeBothLadderClimbUpSpeedFactor);
         freeFenceClimbing = getBool(p, "move.climb.free.fence", freeFenceClimbing);
         freeClimbingOrthogonalDirectionAngle = getFloat(p, "move.climb.free.direction.orthogonal.angle", freeClimbingOrthogonalDirectionAngle);
         freeClimbingDiagonalDirectionAngle   = getFloat(p, "move.climb.free.direction.diagonal.angle",   freeClimbingDiagonalDirectionAngle);
@@ -1698,6 +1712,8 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
         p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
         p.setProperty("move.climb.free.horizontal.speed.factor", String.valueOf(freeClimbingHorizontalSpeedFactor));
+        p.setProperty("move.climb.free.ladder.one.up.speed.factor", String.valueOf(freeOneLadderClimbUpSpeedFactor));
+        p.setProperty("move.climb.free.ladder.two.up.speed.factor", String.valueOf(freeBothLadderClimbUpSpeedFactor));
         p.setProperty("move.climb.free.fence", String.valueOf(freeFenceClimbing));
         p.setProperty("move.climb.free.direction.orthogonal.angle", String.valueOf(freeClimbingOrthogonalDirectionAngle));
         p.setProperty("move.climb.free.direction.diagonal.angle",   String.valueOf(freeClimbingDiagonalDirectionAngle));

@@ -84,6 +84,79 @@ public final class SmartMovingClimber {
     }
 
     /**
+     * 원본 SmartMovingBase L209-L312 `getOnLadder(maxResult, faceOnly, isSmall)` 1:1.
+     *   = getOnLadderOrVine(maxResult, faceOnly, ladder=true, vine=false, isSmall).
+     *
+     * 사다리 카운트 반환 (최대 maxResult 까지). setOnlyShouldClimbSpeed (사다리/덩굴 통합 1-2)
+     * 의 MediumUpMotion 분기에서 호출 — ladder 1개 시 freeOneLadderClimbUpSpeedFactor (1.0153),
+     * 2개 시 freeBothLadderClimbUpSpeedFactor (1.43) 곱.
+     *
+     * 사용자 의도 "원본 사다리 기능을 일반 덩굴에도 동일 적용" — ladder 외 VineBlock 도 카운트.
+     */
+    public static int getOnLadderOrVineCount(ClientPlayerEntity player, int maxResult,
+                                             boolean faceOnly, boolean isSmall) {
+        World world = player.getWorld();
+        int px = (int) Math.floor(player.getX());
+        int minj = (int) Math.floor(player.getBoundingBox().minY);
+        int pz = (int) Math.floor(player.getZ());
+
+        if (isSmall) minj--;
+
+        Direction facedDir = faceOnly ? player.getHorizontalFacing() : null;
+
+        int result = 0;
+        int maxj = (int) Math.floor(player.getBoundingBox().minY
+                + Math.ceil(player.getBoundingBox().maxY - player.getBoundingBox().minY)) - 1;
+
+        for (int j = minj; j <= maxj; j++) {
+            if (result >= maxResult) return result;
+
+            // 중심 위치 LadderBlock 또는 VineBlock
+            BlockState centerState = world.getBlockState(new BlockPos(px, j, pz));
+            Direction localLadderFacing = null;
+            if (centerState.getBlock() instanceof LadderBlock) {
+                localLadderFacing = centerState.get(LadderBlock.FACING);
+                if (facedDir == null || facedDir == localLadderFacing) {
+                    result++;
+                }
+            } else if (centerState.getBlock() instanceof VineBlock) {
+                // 사용자 의도: 일반 덩굴도 사다리와 동일 카운트.
+                if (facedDir == null) {
+                    result++;
+                }
+            }
+
+            if (result >= maxResult) return result;
+
+            // 4방향 인접 LadderBlock (원본 L260-269) — 사다리가 우리 쪽으로 면이 향함.
+            for (Direction dir : Direction.Type.HORIZONTAL) {
+                if (result >= maxResult) return result;
+                if (faceOnly && dir != facedDir) continue;
+                if (dir == localLadderFacing) continue;  // 중심 사다리와 같은 방향 제외
+
+                BlockState s = world.getBlockState(new BlockPos(
+                        px + dir.getOffsetX(), j, pz + dir.getOffsetZ()));
+                if (s.getBlock() instanceof LadderBlock) {
+                    if (s.get(LadderBlock.FACING).getOpposite() == dir) {
+                        result++;
+                    }
+                } else if (s.getBlock() instanceof VineBlock) {
+                    // vine 인접: face property 가 우리 쪽 (dir 반대) 으로 향함.
+                    boolean hasFace = switch (dir) {
+                        case NORTH -> s.get(VineBlock.SOUTH);  // 북쪽 인접 vine 의 남쪽 면 = 우리 향함
+                        case SOUTH -> s.get(VineBlock.NORTH);
+                        case EAST  -> s.get(VineBlock.WEST);
+                        case WEST  -> s.get(VineBlock.EAST);
+                        default    -> false;
+                    };
+                    if (hasFace) result++;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * 원본 SmartMovingBase L189-L192 `isFacedToSolidVine(boolean isSmall)`:
      *   return getOnVine(1, true, isSmall) > 0;
      *   where getOnVine(maxResult, faceOnly=true, isSmall) =
@@ -270,8 +343,24 @@ public final class SmartMovingClimber {
                 value = Math.min(CATCH_CRAWL_GAP_MOTION, value);
             }
             SmartMovingConfig cfg2 = SmartMovingConfig.Config;
+
+            // 🔴 사다리/덩굴 1-2: 원본 SmartMovingSelf L1525-1534 ladder 보정 분기 1:1.
+            //   isFreeBaseClimb && value == MediumUpMotion (0.14) 시 사다리 개수에 따라:
+            //     1개 → factor *= freeOneLadderClimbUpSpeedFactor (1.0153)
+            //     2개 → factor *= freeBothLadderClimbUpSpeedFactor (1.43)
+            //   사용자 의도 "사다리/덩굴 동일 적용" 이라 vine 도 카운트 (getOnLadderOrVineCount).
+            float ladderFactor = 1.0F;
+            if (cfg2.isFreeBaseClimb() && value == MEDIUM_UP_MOTION) {
+                int ladderCount = getOnLadderOrVineCount(player, Integer.MAX_VALUE, false, sm.isClimbCrawling);
+                if (ladderCount == 1) {
+                    ladderFactor = cfg2.freeOneLadderClimbUpSpeedFactor;
+                } else if (ladderCount >= 2) {
+                    ladderFactor = cfg2.freeBothLadderClimbUpSpeedFactor;
+                }
+            }
+
             if (isUp) {
-                value = (value - HOLD_MOTION) * cfg2.freeClimbingUpSpeedFactor * combinedFactor + HOLD_MOTION;
+                value = (value - HOLD_MOTION) * cfg2.freeClimbingUpSpeedFactor * ladderFactor * combinedFactor + HOLD_MOTION;
             } else {
                 value = HOLD_MOTION - (HOLD_MOTION - value) * cfg2.freeClimbingDownSpeedFactor * combinedFactor;
             }
