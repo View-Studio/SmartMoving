@@ -69,6 +69,19 @@ public abstract class MixinLivingEntityClient {
         //   해결: cfg.enabled false 면 즉시 return — vanilla travel 정상 작동.
         if (!cfg.enabled) return;
 
+        // 🔴 사용자 의도: 늘어진 덩굴 (weeping_vines) / 휘어진 덩굴 (twisting_vines) 은 vanilla
+        //   동작 그대로 (나중에 grab 애니메이션만 추가 예정). SM 처리 통째로 skip → vanilla
+        //   travel 본체 진행 (motion clamp ±0.15 + sneak motionY=0 등 vanilla 사다리 등반 동작).
+        net.minecraft.block.BlockState _stateAtPos = player.getWorld()
+                .getBlockState(player.getBlockPos());
+        net.minecraft.block.Block _blockAtPos = _stateAtPos.getBlock();
+        if (_blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+            return;  // vanilla travel 본체 진행 (cancel 안 함)
+        }
+
         // [11-4] 비행 억제 — SM 비행 비활성화 시 vanilla creative 비행 motionY 감쇠
         // 1.21.1: jumpMovementFactor 필드 없음 → getOffGroundSpeed() 메서드(PlayerEntity) (A-30 확인)
         // C-41: getOffGroundSpeed() @HEAD Mixin으로 0.05F 반환하여 공중 이동 억제
