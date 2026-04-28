@@ -24,11 +24,55 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPlayerEntity.class)
 public abstract class MixinClientPlayerEntity {
 
+    /**
+     * 🔴 비행 재진입 시 vanilla 의 자동 yaw 회전 차단 (사용자 보고 fix):
+     *   사용자 motion 잔존 (떨어지는 큰 motionY) + 비행 재진입 시 vanilla
+     *   LivingEntity.tickMovement 안의 어떤 처리 가 motion 방향 기반 yaw 보정.
+     *   결과: 앞 (W) → +180°, 뒤 (S) → ?, 좌우 (A/D) → ±90°.
+     *
+     *   해결:
+     *   1. tickMovement HEAD 시점 yaw + abilFly 저장.
+     *   2. TAIL 시점 비행 진입 엣지 (HEAD 시 abilFly=false → TAIL 시 abilFly=true)
+     *      검출 → 그 시점만 yaw 복구.
+     *   3. 임계값 30° (좌우 ±90° 회전 케이스도 잡음).
+     *
+     *   mouse 입력은 별도 메서드 (changeLookDirection) 라 tick 안 yaw 변경은
+     *   vanilla 자동 처리만 → 안전하게 복구 가능.
+     */
+    @org.spongepowered.asm.mixin.Unique
+    private float sm_yawAtTickStart;
+    @org.spongepowered.asm.mixin.Unique
+    private boolean sm_abilFlyAtTickStart;
+
     @Inject(method = "tickMovement", at = @At("HEAD"))
     private void sm_tickMovement(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        sm_yawAtTickStart = player.getYaw();
+        sm_abilFlyAtTickStart = player.getAbilities().flying;
         SmartMovingClientState.get(player).tickEssential(player);
     }
+
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void sm_tickMovementYawRestore(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        // 비행 진입 엣지 (HEAD: abilFly=false, TAIL: abilFly=true) 만 검사.
+        boolean flyEntryEdge = !sm_abilFlyAtTickStart && player.getAbilities().flying;
+        if (!flyEntryEdge) return;
+        // 비행 진입 엣지 시점의 모든 yaw 변경 = vanilla 자동 보정 (사용자 mouse 입력 X).
+        // 임계값 1° (부동소수점 잡음 회피, 그 외 모든 vanilla 자동 회전 catch).
+        // 사용자 mouse 입력은 별도 메서드 (changeLookDirection) 라 tick 안 yaw 변경 X →
+        // 안전하게 모든 변화 복구.
+        float currentYaw = player.getYaw();
+        float diff = currentYaw - sm_yawAtTickStart;
+        while (diff > 180F) diff -= 360F;
+        while (diff < -180F) diff += 360F;
+        if (Math.abs(diff) > 1F) {
+            player.setYaw(sm_yawAtTickStart);
+            player.bodyYaw = sm_yawAtTickStart;
+            player.prevBodyYaw = sm_yawAtTickStart;
+        }
+    }
+
 
     /**
      * 🔴 사다리/덩굴 등반 중 sneak 자세 변경 차단.

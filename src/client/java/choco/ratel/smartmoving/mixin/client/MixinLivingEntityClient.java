@@ -430,6 +430,7 @@ public abstract class MixinLivingEntityClient {
         }
     }
 
+
     /**
      * 5-2 + 5-3: jump() 인터셉트.
      *
@@ -532,13 +533,7 @@ public abstract class MixinLivingEntityClient {
      */
     @Inject(method = "travel", at = @At("TAIL"))
     private void sm_aerodynamicDamping(Vec3d movementInput, CallbackInfo ci) {
-        // 🔴 (2026-04-28) 임시 비활성 — 사용자 보고 "달리다 점프 시 엄청 빨라짐" 디버깅.
-        //   isAerodynamic 또는 isHeadJumping 잔존 가능성 → 매 tick motion * 1.098 가속.
-        //   land + 점프 동작 검증 후 head jump 별도 매핑.
-        // if (!sm.isAerodynamic || !sm.isHeadJumping || player.isOnGround()) return;
-        // float factor = 0.999F / 0.91F;
-        // Vec3d vel = player.getVelocity();
-        // player.setVelocity(vel.x * factor, vel.y, vel.z * factor);
+        // 🔴 (2026-04-28) 임시 비활성. land + 점프 동작 검증 후 head jump 별도 매핑.
     }
 
     /**

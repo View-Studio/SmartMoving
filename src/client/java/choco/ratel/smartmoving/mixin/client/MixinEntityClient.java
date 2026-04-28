@@ -188,4 +188,5 @@ public abstract class MixinEntityClient {
             ci.cancel();
         }
     }
+
 }
