@@ -444,6 +444,29 @@ public abstract class MixinLivingEntityClient {
     }
 
     /**
+     * 🔴 사다리/덩굴 등반 + W + sneak 시 CROUCHING 자세 차단.
+     *
+     * vanilla 1.21.1 `LivingEntity.shouldEnterCrouchingPose()` 가 sneak 자세 진입 결정.
+     * `LivingEntity.updatePose()` → `setPose(CROUCHING)` 호출 분기에서 사용.
+     *
+     * 사용자 의도: "사다리 + W + sneak → 아무 동작 없이 그냥 등반".
+     *   - W 누름 (forward > 0F) + 사다리 등반 (sm.isClimbing) → CROUCHING 차단.
+     *   - W 안 누름 + sneak → vanilla 자세 그대로 + SM motion hold (motionY=0) 활성.
+     *
+     * (mixin target = LivingEntity.shouldEnterCrouchingPose. ClientPlayerEntity 에는 override
+     *  없음 → 1.21.1 mapping 에서 LivingEntity 가 정확한 위치.)
+     */
+    @Inject(method = "shouldEnterCrouchingPose", at = @At("HEAD"), cancellable = true)
+    private void sm_shouldEnterCrouchingPose(CallbackInfoReturnable<Boolean> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isClimbing && player.input.movementForward > 0F) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    /**
      * 5-6: applyClimbingSpeed() 이중 차단 — SM 클라이밍 시 Vec3d 그대로 반환.
      * Yarn: applyClimbingSpeed (intermediary: method_18801 확인 완료)
      *

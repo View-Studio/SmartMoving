@@ -9,7 +9,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 4-2: tickEssential() 무조건 호출 Mixin.
@@ -28,26 +27,6 @@ public abstract class MixinClientPlayerEntity {
     private void sm_tickMovement(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         SmartMovingClientState.get(player).tickEssential(player);
-    }
-
-    /**
-     * 🔴 사다리/덩굴 등반 중 W+sneak 시 CROUCHING 자세 차단.
-     *
-     * vanilla 1.21.1 `ClientPlayerEntity.shouldEnterCrouchingPose()` 는
-     * `this.input.sneaking` 직접 체크 → SM isSneaking() override 우회.
-     * → 사다리 등반 중 sneak 키 누르면 자세 CROUCHING 진입 ("엎드리기 커맨드").
-     *
-     * 사용자 의도: "사다리 + W + sneak 시 아무 동작 없이 그냥 등반".
-     *   - W 누름 (forward > 0F) + 사다리 등반 (sm.isClimbing) → CROUCHING 차단.
-     *   - W 안 누름 + sneak → vanilla 자세 (그대로) + SM motion hold (motionY=0) 활성.
-     */
-    @Inject(method = "shouldEnterCrouchingPose", at = @At("HEAD"), cancellable = true)
-    private void sm_shouldEnterCrouchingPose(CallbackInfoReturnable<Boolean> cir) {
-        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isClimbing && player.input.movementForward > 0F) {
-            cir.setReturnValue(false);
-        }
     }
 
     /**
