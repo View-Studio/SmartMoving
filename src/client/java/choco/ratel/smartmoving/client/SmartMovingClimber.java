@@ -854,16 +854,23 @@ public final class SmartMovingClimber {
             // 🔴 원본 L1055-1058 isClimbHolding HoldMotion 분기 매핑 (sneak 키 가드).
             //   원본 isClimbHolding = wantClimb && (sneak || crawlToggled) && isClimbing.
             //
-            // 🔴 사용자 요구 추가 (handsClimbing.SINK 통합):
-            //   "iron_bars 위 잡고 그랩만 누르면 안떨어져야됨 (일반 블록 그랩 홀드 코드 참고)".
+            // 🔴 사용자 요구 (handsClimbing.SINK 통합) — grab 키 가드 추가:
+            //   "iron_bars 위 잡고 그랩만 누르면 안떨어져야됨".
             //   원본 동작:
-            //     일반 블록 grab → handsClimbing=BottomHold (jh_offset 작음) → ToDown 변환 없음
-            //                   → wantClimbDown 분기 L694 BottomHold + !feet → HoldMotion (자동 hold).
-            //     iron_bars/fence 위 잡기 → handsClimbing=Sink/TopHold (jh_offset 큼)
-            //                              → ToDown: TopHold→Sink, Sink→Sink → SinkDownMotion (떨어짐).
-            //   사용자 의도 = 두 케이스 모두 grab만으로 hold → handsClimbing.SINK 시도 HoldMotion 강제.
-            //   원본은 sneak 필요했지만 사용자 명시 의도 우선.
-            if (sm.isClimbHolding || handsClimbing == HandsClimbing.SINK) {
+            //     일반 블록 grab → handsClimbing=BottomHold → wantClimbDown 분기 BottomHold +
+            //                   !feet → HoldMotion (자동 hold).
+            //     iron_bars/fence 위 잡기 → handsClimbing=Sink/TopHold → ToDown: TopHold→Sink,
+            //                              Sink→Sink → SinkDownMotion (떨어짐).
+            //   사용자 의도 = grab만으로 iron_bars hold → SINK 시 HoldMotion 강제.
+            //
+            //   🔴 부작용 정정 (사용자 보고: 사다리 끝 도달 시 자동 hold).
+            //   사다리 끝 위 블록 (예: stone) 의 8방향 substitute 검사 결과 handsClimbing=SINK
+            //   매핑 → SINK 무조건 가드가 grab 안 누른 케이스에도 HoldMotion 발동 → 떨어지지
+            //   않고 그 자리 hold (사용자 보고).
+            //   해결: SINK 가드에 `grabPressed` 추가 — grab 키 누른 케이스만 hold (iron_bars
+            //   의도 유지) + 사다리 끝 grab 안 누름 케이스는 SINK_DOWN_MOTION 정상 적용 (천천히 내려옴).
+            boolean grabPressed_holdGuard = SmartMovingKeys.grab.isPressed();
+            if (sm.isClimbHolding || (handsClimbing == HandsClimbing.SINK && grabPressed_holdGuard)) {
                 value = HOLD_MOTION; isUp = true;
             }
 
@@ -873,13 +880,15 @@ public final class SmartMovingClimber {
             //   블록 grab hold 와 동일 동작.
             //   handsEdgeBlock/feetEdgeBlock 은 ClimbGap.state → 클라이밍 진입 시 잡은
             //   실제 블록 (BlockState). null 가드 필수.
-            boolean grabbedFenceOrBars =
+            // 🔴 grab 키 가드 추가 (위 SINK 분기와 동일 이유): 사용자가 grab 안 누른 케이스에
+            //   사다리 끝 우발적 fence/iron_bars 매핑되어도 자동 hold 차단.
+            boolean grabbedFenceOrBars = grabPressed_holdGuard && (
                     (sm.handsEdgeBlock != null
                             && (sm.handsEdgeBlock.getBlock() == net.minecraft.block.Blocks.IRON_BARS
                                 || Orientation.isFence(sm.handsEdgeBlock)))
                  || (sm.feetEdgeBlock != null
                             && (sm.feetEdgeBlock.getBlock() == net.minecraft.block.Blocks.IRON_BARS
-                                || Orientation.isFence(sm.feetEdgeBlock)));
+                                || Orientation.isFence(sm.feetEdgeBlock))));
             if (grabbedFenceOrBars) {
                 value = HOLD_MOTION; isUp = true;
             }

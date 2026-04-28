@@ -224,7 +224,14 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClimber.handleCeilingClimbing(player, sm);
 
         // 클라이밍 미발동 시도 land 분기로.
-        if (!sm.isClimbing && !sm.isCeilingClimbing) {
+        // 🔴 onClimbable 가드 추가 (사용자 보고: 사다리 등반 중 마우스 돌리거나 sneak hold +
+        //   마우스 돌림 → 훅 떨어짐). 원인: handleClimbing 의 wantClimbUp/Down 둘 다 false 시
+        //   isClimbing 갱신 X → 이 분기가 handleLand 호출 → 자유 낙하.
+        //   원본 SmartMovingSelf.landMotion (L757-794) 의 ladder/vine 가드는 isClimbing 무관
+        //   `if (isOnLadder || isOnVine)` 위치 기반 → 천천히 내려옴 (motion clamp + vertical
+        //   clamp -0.15*factor + sneak 시 motionY=0). 우리 매핑은 L342-363 onClimbable 분기에
+        //   동등 가드 보유. 즉 onClimbable=true 면 handleLand 차단하고 그 분기로 진행하면 됨.
+        if (!sm.isClimbing && !sm.isCeilingClimbing && !onClimbable) {
             SmartMovingMover.handleLand(player, sm, movementInput);
             ci.cancel();
             return;
@@ -282,6 +289,18 @@ public abstract class MixinLivingEntityClient {
         } else {
             float jumpMovementFactor = 0.02F;
             climbRawSpeed = jumpMovementFactor / (player.isSprinting() && !player.getAbilities().flying ? 1.3F : 1F);
+        }
+        // 🔴 jumpControlFactor / headJumpControlFactor (원본 L703-706 1:1):
+        //   if (isHeadJumping) speedFactor *= headJumpControlFactor;
+        //   else if (Config.enabled && !onGround && !capabilities.flying && !isFlying)
+        //       speedFactor *= jumpControlFactor;
+        //   기본값: jumpControlFactor=1F (defaults(1F)), headJumpControlFactor=0.2F.
+        if (sm.isHeadJumping) {
+            climbSpeedFactor *= cfg2.headJumpControlFactor;
+        } else if (!player.isOnGround()
+                && !player.getAbilities().flying
+                && !sm.isFlying) {
+            climbSpeedFactor *= cfg2.jumpControlFactor;
         }
         // runFactor (isRunning && !isFast).
         if (cfg2.run && SmartMovingMover.isRunning(player, sm, cfg2) && !sm.isFast) {
