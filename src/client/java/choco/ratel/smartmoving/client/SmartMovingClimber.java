@@ -226,6 +226,72 @@ public final class SmartMovingClimber {
 
         Direction playerFacing = player.getHorizontalFacing();
 
+        // 🔴 사다리/덩굴 자동 진입 BUG: 사용자 위치 자체 (px, by, pz) 검사 누락.
+        //   원본 SmartMovingBase L260-286 흐름:
+        //     for(j = minj; j <= maxj; j++) {
+        //         Block block = world.getBlock(i, j, k);  // 사용자 위치 자체
+        //         if (ladder && isKnownLadder(block) && faceMatch) result++;  // 사다리 칸 안
+        //         if (vine && isVine(block)) result++;
+        //         for (Orientation dir : Orthogonals) { ... 인접 검사 }
+        //     }
+        //   우리 코드는 인접 검사만 → 사용자가 사다리 칸 안에 있을 때 (사다리 충돌 박스 thin
+        //   이라 들어갈 수 있음) 사다리 발견 못 함 → 클라이밍 풀림.
+        //   해결: 사용자 위치 자체 검사 추가 (faceOnly 시 ladder facing 매칭).
+        for (int by = minY; by <= maxY; by++) {
+            BlockState centerState = world.getBlockState(new BlockPos(px, by, pz));
+            boolean isHandsLevel = (by == maxY);
+
+            // 사용자 위치 자체 사다리
+            if (centerState.getBlock() instanceof LadderBlock) {
+                Direction ladderFacing = centerState.get(LadderBlock.FACING);
+                // faceOnly=true 시 사다리 면이 사용자 정면 향함 (사용자가 사다리 보고 있음).
+                // 원본: facedOnlyTo == null || facedOnlyTo.contains(localLadderOrientation).
+                if (!faceOnly || ladderFacing == playerFacing) {
+                    ClimbGap gap = new ClimbGap();
+                    gap.state = centerState;
+                    gap.direction = ladderFacing;
+                    if (isHandsLevel) {
+                        out_hands[0] = out_hands[0].max(HandsClimbing.UP, out_handsGap, gap);
+                    } else {
+                        out_feet[0] = out_feet[0].max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, out_feetGap, gap);
+                    }
+                }
+            }
+
+            // 사용자 위치 자체 vine — 4방향 face property 중 하나라도 true 면 활성.
+            //   faceOnly=true 시 사용자 정면 face (= dir 매칭) 만, 그 외 모두.
+            if (centerState.getBlock() instanceof VineBlock) {
+                boolean hasAnyFace;
+                if (faceOnly) {
+                    hasAnyFace = switch (playerFacing) {
+                        case NORTH -> centerState.get(VineBlock.NORTH);
+                        case SOUTH -> centerState.get(VineBlock.SOUTH);
+                        case EAST  -> centerState.get(VineBlock.EAST);
+                        case WEST  -> centerState.get(VineBlock.WEST);
+                        default    -> false;
+                    };
+                } else {
+                    hasAnyFace = centerState.get(VineBlock.NORTH)
+                              || centerState.get(VineBlock.SOUTH)
+                              || centerState.get(VineBlock.EAST)
+                              || centerState.get(VineBlock.WEST);
+                }
+                if (hasAnyFace) {
+                    // 원본 vine 자기 위치 검사: solid 뒤 블록 검증 없음 (L289-292 fasedOnlyTo == null
+                    // 분기는 단순 result++. faceOnly 일 때만 hasVineOrientation && isRemoteSolid).
+                    ClimbGap gap = new ClimbGap();
+                    gap.state = centerState;
+                    if (isHandsLevel) {
+                        out_hands[0] = out_hands[0].max(HandsClimbing.UP, out_handsGap, gap);
+                        out_handsVine[0] = true;
+                    } else {
+                        out_feet[0] = out_feet[0].max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, out_feetGap, gap);
+                        out_feetVine[0] = true;
+                    }
+                }
+            }
+        }
+
         for (Direction dir : Direction.Type.HORIZONTAL) {
             if (faceOnly && dir != playerFacing) continue;
 
