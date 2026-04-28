@@ -1284,7 +1284,13 @@ public class Orientation {
      * 에서 사용.
      */
     private static boolean getAllWallsOnNoWall(BlockState state) {
-        return state != null && state.getBlock() instanceof PaneBlock;
+        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작.
+        //   원본은 `block instanceof BlockPane` 만 (iron_bars/glass_pane). fence 단독 시
+        //   `allOnNone=false` → headedToFrontWall 의 4방향 강제 true 미적용 → fence 자체 등반
+        //   시 hasHalfHold 통합 분기 L2421 (isEmpty+headedToFrontWall) 미충족 → 다른 분기로
+        //   fall through → 다른 grabRemote/위치 → 다른 motion → iron_bars 와 다른 속도.
+        //   해결: fence 추가하여 fence 단독 시도 강제 true 적용 → iron_bars 와 같은 분기로 잡힘.
+        return state != null && (state.getBlock() instanceof PaneBlock || isFence(state));
     }
 
     /**
