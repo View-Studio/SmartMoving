@@ -481,17 +481,25 @@ public class SmartMovingConfig {
     public float freeClimbingUpSpeedFactor   = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     public float freeClimbingDownSpeedFactor = 1.0F;  // PositiveFactor 기본값 1F (A-18 확인)
     /**
+     * 원본 SmartMovingConfig L115 `_freeClimbingHorizontalSpeedFactor = PositiveFactor("move.climb.free.horizontal.speed.factor")` — 기본값 `1F`.
+     * (Properties.java L185-186: PositiveFactor type → default 1F)
+     * SmartMovingSelf.java L205 `if(isClimbing) speedFactor *= _freeClimbingHorizontalSpeedFactor.value` 에서
+     * 클라이밍 중 횡 이동 (moveStrafing/moveForward) 입력에 곱해지는 인자.
+     */
+    public float freeClimbingHorizontalSpeedFactor = 1.0F;
+    /**
      * 원본 SmartMovingConfig L129 `_freeClimbingOrthogonalDirectionAngle` Positive — 기본값 `90F`.
      * "클라이밍 N/S/E/W 붙잡기 각도(도)". `Orientation.setClimbingAngles` 가 orthogonal 방향
      * (PZ/NZ/ZP/ZN) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 90F → 각 방향마다 ±45도
      * 범위 내 시선일 때 등반 가능. B-19a0 (세션 90).
      */
     /**
-     * 원본 SmartMovingConfig L250 `_freeFenceClimbing` Unmodified — 기본값 `false`.
+     * 원본 SmartMovingConfig L123 `_freeFenceClimbing = Unmodified("move.climb.free.fence")` — 기본값 `true`.
+     * (Properties.java L171-172: Unmodified type → default true)
      * "펜스 타기 허용" 옵션. `Orientation.hasHalfHold` / `hasBottomHold` 에서 펜스/벽 기반
-     * grab 경로 활성화 게이트. B-19a2c (세션 104).
+     * grab 경로 활성화 게이트. fence 자체 등반 + 위 잡기 둘 다 이 게이트로 제어됨.
      */
-    public boolean freeFenceClimbing = false;
+    public boolean freeFenceClimbing = true;
     public float freeClimbingOrthogonalDirectionAngle = 90F;
     /**
      * 원본 SmartMovingConfig L130 `_freeClimbingDiagonalDirectionAngle` Positive — 기본값 `80F`.
@@ -1510,6 +1518,7 @@ public class SmartMovingConfig {
         smartClimb               = getBool(p,   "move.climb.smart",               smartClimb);
         freeClimbingUpSpeedFactor   = getFloat(p, "move.climb.free.up.factor",   freeClimbingUpSpeedFactor);
         freeClimbingDownSpeedFactor = getFloat(p, "move.climb.free.down.factor", freeClimbingDownSpeedFactor);
+        freeClimbingHorizontalSpeedFactor = getFloat(p, "move.climb.free.horizontal.speed.factor", freeClimbingHorizontalSpeedFactor);
         freeFenceClimbing = getBool(p, "move.climb.free.fence", freeFenceClimbing);
         freeClimbingOrthogonalDirectionAngle = getFloat(p, "move.climb.free.direction.orthogonal.angle", freeClimbingOrthogonalDirectionAngle);
         freeClimbingDiagonalDirectionAngle   = getFloat(p, "move.climb.free.direction.diagonal.angle",   freeClimbingDiagonalDirectionAngle);
@@ -1672,6 +1681,7 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.smart",                String.valueOf(smartClimb));
         p.setProperty("move.climb.free.up.factor",       String.valueOf(freeClimbingUpSpeedFactor));
         p.setProperty("move.climb.free.down.factor",     String.valueOf(freeClimbingDownSpeedFactor));
+        p.setProperty("move.climb.free.horizontal.speed.factor", String.valueOf(freeClimbingHorizontalSpeedFactor));
         p.setProperty("move.climb.free.fence", String.valueOf(freeFenceClimbing));
         p.setProperty("move.climb.free.direction.orthogonal.angle", String.valueOf(freeClimbingOrthogonalDirectionAngle));
         p.setProperty("move.climb.free.direction.diagonal.angle",   String.valueOf(freeClimbingDiagonalDirectionAngle));

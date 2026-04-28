@@ -116,10 +116,20 @@ public final class SmartMovingMover {
         // 🔴 (2026-04-28) 원본 SmartMovingSelf L197-227 1:1 정밀 매핑.
         //   원본: isFast 시 sprintFactor (1.5). !isFast 시 1.0.
         //   landMotion L712 에서 별도: isRunning && !isFast 시 runFactor (1.3) 곱.
+        float speedFactor = 1.0F;
         if (sm.isFast) {
-            return cfg.sprintFactor;  // 1.5
+            // 원본: !isLevitating ? sprintFactor : sprintFactorLevitate. Levitate 는 SmartMovingFlyer 에서 별도 처리.
+            speedFactor *= cfg.sprintFactor;  // 1.5
         }
-        return 1.0F;
+        // 🔴 원본 SmartMovingSelf L203-205: isClimbing 시 _freeClimbingHorizontalSpeedFactor 곱.
+        //   원본 가드 `if(moveStrafing != 0F || moveForward != 0F)` 는 movementInput 정보 필요.
+        //   우리 호출자의 climbSpeedFactor 는 updateVelocity(speed, movementInput) 매개로만
+        //   motion 에 영향 → 입력 0 시 곱셈 결과 무관. 가드 생략해도 동일 효과.
+        //   사용자 보고 #2/#5: 우리 코드에 이 곱셈 누락 → fence/iron_bars 등반·횡이동 속도 원본과 다름.
+        if (sm.isClimbing) {
+            speedFactor *= cfg.freeClimbingHorizontalSpeedFactor;
+        }
+        return speedFactor;
     }
 
     /**
