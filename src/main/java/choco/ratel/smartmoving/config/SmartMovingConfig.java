@@ -1485,6 +1485,24 @@ public class SmartMovingConfig {
                 marker2.store(out, null);
             } catch (IOException ignored) {}
         }
+        // 🔴 사다리/덩굴 자동 진입 마이그레이션 — _freeClimbingAutoLaddder /
+        //   _freeClimbingAutoVine default = true 강제.
+        //   원본 SmartMovingConfig L119-120 `Unmodified("move.climb.free.ladder.auto" /
+        //   "move.climb.free.vine.auto")` → Properties.java L171-172 Unmodified default true.
+        //   사용자 환경 disk 에 이전 false 저장됐을 가능성 → 사다리/덩굴 자동 진입
+        //   (grab 키 없이 정면 사다리/덩굴 시) 작동 안 함.
+        //   fence 마이그레이션 동일 패턴 — 마커 없으면 default true 강제.
+        String autoLadderVineMarker = props.getProperty("move.config.migration.ladder.vine.auto", "");
+        if (!"session_ladder_vine_auto_done".equals(autoLadderVineMarker)) {
+            INSTANCE.freeClimbAutoLadder = true;
+            INSTANCE.freeClimbAutoVine   = true;
+            save();
+            try (FileOutputStream out = new FileOutputStream(configFile.toFile(), true)) {
+                Properties marker2 = new Properties();
+                marker2.setProperty("move.config.migration.ladder.vine.auto", "session_ladder_vine_auto_done");
+                marker2.store(out, null);
+            } catch (IOException ignored) {}
+        }
     }
 
     /**
