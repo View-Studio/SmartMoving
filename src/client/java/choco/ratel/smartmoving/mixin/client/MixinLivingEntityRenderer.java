@@ -123,7 +123,11 @@ public abstract class MixinLivingEntityRenderer {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (!cfg.enabled) return limbSwing;
         SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
-        return sm.stats.getTotalDistance(SmartMovingClientState.globalCachedTickDelta);
+        // 🔴 (사용자 보고: 점프/낙하 시 팔다리 앞뒤 swing) — 원본 SmartRenderModel.animateArmSwinging
+        //   입력 `totalHorizontalDistance` (수평만) 1:1. getTotalDistance (3D, 수직 포함) 사용 시
+        //   점프/낙하 motionY 큰 값 → SM currentSpeed 큰 값 → vanilla setAngles 의 arm.pitch swing
+        //   식 활성 → 사용자 보고 팔다리 swing.
+        return sm.stats.getTotalHorizontalDistance(SmartMovingClientState.globalCachedTickDelta);
     }
 
     @ModifyArg(
@@ -137,6 +141,8 @@ public abstract class MixinLivingEntityRenderer {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         if (!cfg.enabled) return limbSwingAmount;
         SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
-        return sm.stats.getCurrentSpeed(SmartMovingClientState.globalCachedTickDelta);
+        // 🔴 동일 fix — `currentHorizontalSpeed` (수평만) 1:1. `getCurrentSpeed` (3D) 사용 시
+        //   점프/낙하 시 팔다리 swing 발생 (사용자 보고).
+        return sm.stats.getCurrentHorizontalSpeed(SmartMovingClientState.globalCachedTickDelta);
     }
 }
