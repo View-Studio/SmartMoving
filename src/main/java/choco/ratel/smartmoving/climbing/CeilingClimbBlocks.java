@@ -35,6 +35,12 @@ public final class CeilingClimbBlocks {
         // tile.fenceIron → minecraft:iron_bars: 모든 상태 허용
         if (state.isOf(Blocks.IRON_BARS)) return true;
 
+        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. 천장 클라이밍도 fence 추가.
+        //   원본은 fence 천장 클라이밍 미지원 (_ceilingClimbConfigurationString 기본값에
+        //   tile.fenceIron 만 포함) 이지만 사용자 의도 "두 블록 동일 작동" 우선.
+        //   isFence(state) = FenceBlock || WallBlock || closed FenceGate.
+        if (Orientation.isFence(state)) return true;
+
         // tile.trapdoor/trapdoor_iron → TrapdoorBlock 계열: 닫혀있는 상태만 허용
         // 원본 meta 0-3 = OPEN=false에 해당
         if (state.getBlock() instanceof TrapdoorBlock) {
