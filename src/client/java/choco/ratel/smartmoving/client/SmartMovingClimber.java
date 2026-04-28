@@ -724,13 +724,22 @@ public final class SmartMovingClimber {
             return;
         }
 
-        // C-31: wantClimbUp / wantClimbDown 키 입력 기반 방향 제어
-        // 원본: grabButton.Pressed + movementInput.moveForward 조합
-        boolean wantClimb     = SmartMovingKeys.grab.isPressed();
-        boolean wantClimbUp   = wantClimb && player.input.movementForward > 0F;
-        boolean wantClimbDown = wantClimb && player.input.movementForward <= 0F && !sm.isCrawling;
+        // 🔴 사다리/덩굴 1-1 BUG: wantClimb / wantClimbUp / wantClimbDown 결정 정정.
+        //   이전: `wantClimb = SmartMovingKeys.grab.isPressed()` — grab 키만 체크.
+        //   원본 (SmartMovingSelf L2479-2500):
+        //     wantClimb = isFreeClimbingEnabled && wouldWantClimb;
+        //     wouldWantClimb = (grab || (climbHolding && sneak) || (autoLadder && faced)
+        //                      || (autoVine && facedSolid)) && ...;
+        //     wantClimbUp = (wantClimb && forward>0) || (vine + jump 메커니즘);
+        //     wantClimbDown = wantClimb && forward<=0 && !wantCrawl;
+        //   → grab 키 없이 정면 사다리/덩굴 시 자동 진입 (auto ladder/vine 분기) 활성.
+        //   SmartMovingClientState.tickEssential 가 매 틱 sm.wantClimb / sm.wantClimbUp /
+        //   sm.wantClimbDown 갱신 (L1262, L1289-1295) — 4-OR + vine jump 모두 포함.
+        //   이걸 그대로 사용 → 자동 진입 정상 작동.
+        boolean wantClimbUp   = sm.wantClimbUp;
+        boolean wantClimbDown = sm.wantClimbDown;
 
-        // grab 없이 사다리/넝쿨 위 → vanilla가 낙하 처리
+        // 진입 게이트: 둘 다 false 시 등반 분기 진입 안 함 (원본 동등).
         if (!wantClimbUp && !wantClimbDown) {
             return;
         }

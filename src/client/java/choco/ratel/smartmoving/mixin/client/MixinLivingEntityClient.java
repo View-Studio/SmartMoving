@@ -301,38 +301,49 @@ public abstract class MixinLivingEntityClient {
             }
         }
 
-        // d. 원본 L776-781: notTotalFreeClimbing 시 fallDistance=0 + motionY clamp -0.15*factor.
-        //   원본은 isClimbing=true 시 이 분기 미적용 (Free Climb 자유 매달림 의도).
-        //   사용자 의도 = 사다리/덩굴 인접 시 항상 fallDistance reset + clamp → 가드 단순화.
-        //   (1-3 totalFree 옵션은 보존하나 사용처는 사용자 의도 우선으로 단순 가드 유지.)
+        // d. fallDistance reset (사다리/덩굴 매달림 시 낙하 데미지 방지)
         if (onClimbable) {
             player.fallDistance = 0;
-            double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
-                    player, SmartMovingConfig.Config);
-            Vec3d v = player.getVelocity();
-            if (v.y < clampFactor) {
-                player.setVelocity(v.x, clampFactor, v.z);
-            }
-        }
-
-        // e. 원본 L782-794: sneak 시 motionY=0 (벽에서 매달리기).
-        //   원본은 isFreeBaseClimb 분기에서 notTotalFreeClimbing 추가 가드 적용 →
-        //   isClimbing=true 시 sneak hold 안 됨. 사용자 의도 = sneak 항상 hold → 가드 제거.
-        if (onClimbable && player.isSneaking()) {
-            Vec3d v = player.getVelocity();
-            if (v.y < 0) {
-                player.setVelocity(v.x, 0, v.z);
-            }
         }
 
         // f. 원본 setLandMotions L1176-1182:
-        //   sp.motionY -= 0.08;
-        //   sp.motionY *= 0.98;
+        //   sp.motionY -= 0.08;  sp.motionY *= 0.98;
         //   sp.motionX *= horizontalDamping;  (= 0.91F air damping)
         //   sp.motionZ *= horizontalDamping;
         Vec3d vel = player.getVelocity();
         double newY = (vel.y - 0.08D) * 0.98D;
         player.setVelocity(vel.x * 0.91F, newY, vel.z * 0.91F);
+
+        // 🔴 사다리/덩굴 motion 가드 — 원본 L757-794 (landMotion) 1:1.
+        //   원본 흐름: landMotion (motion 가드) → move (player.move) → setLandMotions.
+        //   우리 흐름: setLandMotions → player.move (역순). 따라서 motion 가드는
+        //   setLandMotions 후 player.move 전 위치에서 적용 → player.move 시점 motion 보장.
+        //
+        //   가드 1 (L757-775): motionX/Z ±0.15 clamp.
+        //   가드 2 (L779-780): fallDistance=0 + motionY = max(motionY, -0.15*factor).
+        //   가드 3 (L782-794): sneak 시 motionY=0 (떨어지지 않게).
+        if (onClimbable) {
+            Vec3d v = player.getVelocity();
+            double clampH = 0.15D;
+            double mx = Math.max(-clampH, Math.min(clampH, v.x));
+            double mz = Math.max(-clampH, Math.min(clampH, v.z));
+            double my = v.y;
+
+            // sneak 가드 우선 적용 — 떨어지지 않게 motionY=0 보장.
+            if (player.isSneaking() && my < 0) {
+                my = 0;
+            } else {
+                // sneak 아닐 때 vertical clamp -0.15*factor.
+                double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
+                        player, SmartMovingConfig.Config);
+                if (my < clampFactor) my = clampFactor;
+            }
+
+            if (mx != v.x || mz != v.z || my != v.y) {
+                player.setVelocity(mx, my, mz);
+            }
+            player.fallDistance = 0;  // setLandMotions 후 다시 한번 안전 장치
+        }
 
         // g. 원본 L655 등가: vanilla move() 호출로 위치 갱신.
         player.move(MovementType.SELF, player.getVelocity());
