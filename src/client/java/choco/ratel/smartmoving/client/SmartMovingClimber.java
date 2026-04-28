@@ -386,10 +386,24 @@ public final class SmartMovingClimber {
                                        || (d[0] < 0 && Boolean.TRUE.equals(state.get(VineBlock.WEST)))
                                        || (d[1] > 0 && Boolean.TRUE.equals(state.get(VineBlock.SOUTH)))
                                        || (d[1] < 0 && Boolean.TRUE.equals(state.get(VineBlock.NORTH)));
+                        // 🔴 사다리/덩굴 1-1: 4방향 탐색과 동일하게 solid 뒤 블록 검증 추가
+                        //   (원본 SmartMovingBase L284: isRemoteSolid 체크). vine 이 매달릴 solid 벽 필수.
                         if (hasFace) {
-                            ClimbGap gap = new ClimbGap(); gap.state = state;
-                            if (isHandsLevel) handsClimbing = handsClimbing.max(HandsClimbing.UP, handsGap, gap);
-                            else feetClimbing = feetClimbing.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, feetGap, gap);
+                            BlockPos solidPos = new BlockPos(px + d[0] * 2, by, pz + d[1] * 2);
+                            BlockState solidState = world.getBlockState(solidPos);
+                            if (solidState.isSolidBlock(world, solidPos)) {
+                                ClimbGap gap = new ClimbGap(); gap.state = state;
+                                if (isHandsLevel) {
+                                    handsClimbing = handsClimbing.max(HandsClimbing.UP, handsGap, gap);
+                                    // 🔴 사다리/덩굴 1-1 BUG: 대각 vine flag 갱신 누락 → 추가.
+                                    //   isHandsVineClimbing 가 4방향 탐색만 갱신되어 대각 vine 잡힘 시
+                                    //   isFacedToSolidVine / isVineAnyClimbing 오판정 → vine jump 등반 등 실패.
+                                    sm.isHandsVineClimbing = true;
+                                } else {
+                                    feetClimbing = feetClimbing.max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, feetGap, gap);
+                                    sm.isFeetVineClimbing = true;
+                                }
+                            }
                         }
                     }
                 }
