@@ -901,52 +901,34 @@ public final class SmartMovingClimber {
         // 원본: ceil(bb.maxY) 이상에서 첫 번째 솔리드 블록 Y - bb.maxY
         double jgap = computeJgap(player);
 
-        // 🔴 옵션 A — motionY 와 motionX/Z 분리 처리.
-        //   motionX/Z: jgap 기반 horizontalSpeed (이전 식 그대로) — 천장 매달림 횡이동
-        //              속도가 자체 등반/일반 grab hold 와 다름 (사용자 명시 — fence 들에서
-        //              이동속도 따로).
-        //   motionY: setShouldClimbSpeed 호출 — 일반 블록 grab hold 와 동일 메커니즘
-        //            (relevant 가드 적용 → motionY 가 음수면 끌어올림 → setLandMotions
-        //            후 0 → 정지/hold). 사용자 가설 검증 결과 일치.
-        double horizontalSpeed;
+        // 🔴 motionY = jgap 기반 anchor 보간 (원본 SmartMovingSelf L1145-1166 정밀 1:1).
+        //   원본 메커니즘 = 자연스러운 anchor 수렴:
+        //     jgap > 1.2  (천장에서 멀음) → motionY=0.12 → setLandMotions 후 +0.0392 (위로)
+        //     jgap > 1.115 (anchor 범위)  → motionY=0.08 → 0 (정지)
+        //     else        (천장 가까움)   → motionY=0.04 → -0.0392 (아래로 → jgap 회복)
+        //   → 평형점 jgap=1.115~1.2 로 수렴. 사용자 가설 "부드러운 anchor 보간" 의 원본 구현.
+        //   case 3 의 0.04 떨어짐이 anchor 보간의 핵심 (이전 0.08 변경은 anchor 보간 깨뜨림).
         double climbValue;
         if (jgap > 1.2) {
-            horizontalSpeed = 0.12D;
-            climbValue      = 0.12D;  // 위로 약간 올라감 (원본 동일)
+            climbValue = 0.12D;
         } else if (jgap > 1.115) {
-            horizontalSpeed = 0.08D;
-            climbValue      = HOLD_MOTION;  // 0.08 (원본 동일, isClimbingStill 처리)
+            climbValue = HOLD_MOTION;  // 0.08
         } else {
-            // 사용자 의도: 천장 가까울 때도 hold (원본 0.04 = 떨어짐 → HoldMotion 으로).
-            horizontalSpeed = 0.08D;
-            climbValue      = HOLD_MOTION;
+            climbValue = 0.04D;  // 원본 1:1 — anchor 보간 (천천히 아래로 → jgap 증가)
         }
 
-        // C-36: motionX/Z 만 직접 set (motionY 는 그대로 유지 — setShouldClimbSpeed 가 처리).
-        Vec3d vel = player.getVelocity();
-        float forward = player.input.movementForward;
-        float strafe  = player.input.movementSideways;
-        float distSq  = forward * forward + strafe * strafe;
-        if (distSq > 0.0001F) {
-            float dist   = (float) Math.sqrt(distSq);
-            float ratio  = (float) (horizontalSpeed / Math.max(dist, 1F));
-            strafe  *= ratio;
-            forward *= ratio;
-            double yawRad = Math.toRadians(player.getYaw());
-            double cos = Math.cos(yawRad);
-            double sin = Math.sin(yawRad);
-            double motionX = strafe * cos - forward * sin;
-            double motionZ = forward * cos + strafe * sin;
-            // motionY 는 player.getVelocity().y 그대로 유지 → 이후 setShouldClimbSpeed 가 가드 적용.
-            player.setVelocity(motionX, vel.y, motionZ);
-        }
-        // 입력 없을 때는 motionX/Z 변경 없음 (vanilla horizontal damping 적용 유지).
+        // 🔴 motionX/Z: 원본 1:1 — handleCeilingClimbing 안에서 직접 set 하지 않음.
+        //   원본 SmartMovingSelf L658 handleCeilingClimbing 은 motionY 만 set.
+        //   motionX/Z 는 별도 흐름 (L653 landMotion 의 L718 sp.moveFlying — vanilla
+        //   addVelocity 식). 우리 코드도 MixinLivingEntityClient L290 updateVelocity 가
+        //   동일 식 처리 → handleCeilingClimbing 에서 추가 직접 set 하면 누적 → 원본보다 빠름.
+        //   해결: 직접 set 제거. L290 만 사용 → 원본 1:1.
 
         // fallDistance = 0 (필수 — 낙하 데미지 방지)
         player.fallDistance = 0;
 
-        // 🔴 motionY 는 일반 grab hold 와 동일 메커니즘 — setShouldClimbSpeed 의 relevant
-        //   가드 적용. motionY 가 climbValue 미만이면 끌어올림 → setLandMotions 후 정지/위로.
+        // 🔴 motionY 만 setShouldClimbSpeed 호출 — 일반 grab hold 와 동일 메커니즘
+        //   (relevant 가드: value < 0 || value > motionY).
         double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
         boolean climbIsUp = climbValue >= HOLD_MOTION;
         setShouldClimbSpeed(player, sm, climbValue, climbIsUp, combinedFactor);
