@@ -1124,7 +1124,18 @@ public class Orientation {
      * 플레이어 지나갈 수 있는 공간 + 바로 아래가 fence 가 아님 (fence 는 1.5-높이 → 막힘).
      */
     protected static boolean isEmpty(int i, int j_offset, int k) {
-        return isFullEmpty(i, j_offset, k) && !isFence(i, j_offset - 1, k);
+        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작.
+        //   원본은 `!isFence(i, j-1, k)` 만 체크 (fence 1.5 높이 → 위 칸 막힘 처리).
+        //   iron_bars 도 1.5 높이로 동일하게 위 칸 막혀야 하나 isFence 미포함 → isEmpty=true.
+        //   → 사용자 fence 위에 서서 grab+W: isEmpty(base,0)=false → hasHalfHold L2421
+        //     미진입 → L2427 wallState 분기 (grabRemote=false) 활성.
+        //   → 사용자 iron_bars 위에 서서 grab+W: isEmpty(base,0)=true → L2421 진입
+        //     (grabRemote=true) → 다른 isLadderSubstitute gap → 다른 motion → 다른 속도.
+        //   해결: iron_bars 도 fence 와 동일하게 차단 → 둘 다 L2427 분기로 통일.
+        BlockState belowState = getBlock(i, j_offset - 1, k);
+        return isFullEmpty(i, j_offset, k)
+            && !isFence(belowState)
+            && belowState.getBlock() != Blocks.IRON_BARS;
     }
 
     // ── isBaseAccessible 2 오버로드 (원본 L2342-L2399) ──────────────────────
