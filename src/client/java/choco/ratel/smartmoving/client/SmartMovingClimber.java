@@ -244,9 +244,10 @@ public final class SmartMovingClimber {
             // 사용자 위치 자체 사다리
             if (centerState.getBlock() instanceof LadderBlock) {
                 Direction ladderFacing = centerState.get(LadderBlock.FACING);
-                // faceOnly=true 시 사다리 면이 사용자 정면 향함 (사용자가 사다리 보고 있음).
-                // 원본: facedOnlyTo == null || facedOnlyTo.contains(localLadderOrientation).
-                if (!faceOnly || ladderFacing == playerFacing) {
+                // 🔴 BUG 정정: vanilla LadderBlock.FACING = 사다리 정면 (사용자 측 향) 방향.
+                //   사용자 facing=NORTH (사다리 보면서) → 사다리 정면=SOUTH → 사용자 측 향.
+                //   매칭: ladderFacing.getOpposite() == playerFacing (= 사다리 정면 반대 = 사용자 정면).
+                if (!faceOnly || ladderFacing.getOpposite() == playerFacing) {
                     ClimbGap gap = new ClimbGap();
                     gap.state = centerState;
                     gap.direction = ladderFacing;
@@ -292,65 +293,15 @@ public final class SmartMovingClimber {
             }
         }
 
-        for (Direction dir : Direction.Type.HORIZONTAL) {
-            if (faceOnly && dir != playerFacing) continue;
-
-            int bx = px + dir.getOffsetX();
-            int bz = pz + dir.getOffsetZ();
-
-            for (int by = minY; by <= maxY; by++) {
-                BlockState state = world.getBlockState(new BlockPos(bx, by, bz));
-                boolean isHandsLevel = (by == maxY);
-
-                // ── 사다리 판정 ──────────────────────────────────────────
-                if (state.getBlock() instanceof LadderBlock) {
-                    Direction ladderFacing = state.get(LadderBlock.FACING);
-                    // 탐색 방향(dir)에서 접근할 수 있는 사다리인지 확인
-                    // 예: dir=EAST 탐색 → 사다리 FACING=WEST(동쪽 벽에 붙음) → getOpposite()=EAST == dir
-                    if (ladderFacing.getOpposite() == dir) {
-                        ClimbGap gap = new ClimbGap();
-                        gap.state = state;
-                        gap.direction = dir;
-                        if (isHandsLevel) {
-                            ClimbGap[] temp = {gap};
-                            out_hands[0] = out_hands[0].max(HandsClimbing.UP, out_handsGap, gap);
-                        } else {
-                            ClimbGap[] temp = {gap};
-                            out_feet[0] = out_feet[0].max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, out_feetGap, gap);
-                        }
-                    }
-                }
-
-                // ── 넝쿨 판정 ───────────────────────────────────────────
-                if (state.getBlock() instanceof VineBlock) {
-                    // 해당 방향(dir)의 vine property 확인
-                    boolean hasVineOnFace = switch (dir) {
-                        case NORTH -> state.get(VineBlock.NORTH);
-                        case SOUTH -> state.get(VineBlock.SOUTH);
-                        case EAST  -> state.get(VineBlock.EAST);
-                        case WEST  -> state.get(VineBlock.WEST);
-                        default    -> false;
-                    };
-
-                    if (hasVineOnFace) {
-                        // 넝쿨의 해당 방향 뒤 블록(solid)이 있어야 클라이밍 가능
-                        BlockPos solidPos = new BlockPos(bx + dir.getOffsetX(), by, bz + dir.getOffsetZ());
-                        if (world.getBlockState(solidPos).isSolidBlock(world, solidPos)) {
-                            ClimbGap gap = new ClimbGap();
-                            gap.state = state;
-                            gap.direction = dir;
-                            if (isHandsLevel) {
-                                out_hands[0] = out_hands[0].max(HandsClimbing.UP, out_handsGap, gap);
-                                out_handsVine[0] = true;
-                            } else {
-                                out_feet[0] = out_feet[0].max(FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS, out_feetGap, gap);
-                                out_feetVine[0] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // 🔴 사다리/덩굴 자동 진입 BUG 2: 4방향 인접 검사 비활성.
+        //   사용자 보고: "사다리 1칸 떨어진 위치 (앞앞 블록) 에서 클라이밍 활성하면 안됨".
+        //   원본 SmartMovingBase L271-279 (인접 검사) 는 SM 1.7.10 동작 — 사다리 주변
+        //   1칸 인접 시 등반 가능. vanilla 1.21.1 동작 = 사용자 boundingBox 가 사다리
+        //   충돌 박스 닿을 때 (= floor(player.x)/floor(player.z) 가 사다리 위치 동등)
+        //   만 isClimbing=true.
+        //   사용자 의도 = vanilla 동작. → 인접 검사 비활성. 사용자 위치 자체 검사만 활성.
+        //   (vanilla 사다리 충돌 박스 thin → 사용자가 사다리 면 닿기 직전 floor 좌표 ==
+        //    사다리 위치 일 때만 자동 진입 활성).
     }
 
     // ── 7-2: setShouldClimbSpeed / setOnlyShouldClimbSpeed ──────────────
@@ -804,6 +755,28 @@ public final class SmartMovingClimber {
         //   이걸 그대로 사용 → 자동 진입 정상 작동.
         boolean wantClimbUp   = sm.wantClimbUp;
         boolean wantClimbDown = sm.wantClimbDown;
+
+        // 🔧 DEBUG (사다리/덩굴 자동 진입 진단용 — 검증 후 제거).
+        //   사용자 위치 + 사다리 검사 결과 + wantClimb 흐름 콘솔 출력.
+        //   매 5틱 (1/4초) 1회 → minecraft logs/latest.log 에서 확인 가능.
+        if (player.age % 5 == 0) {
+            boolean debugIsFacedToLadder = isFacedToLadder(player, sm.isClimbCrawling);
+            boolean debugIsFacedToVine   = isFacedToSolidVine(player, sm.isClimbCrawling);
+            String debugMsg = String.format(
+                    "[SM-CLIMB] x=%.2f y=%.2f z=%.2f px=%d py=%d pz=%d facing=%s | h=%s f=%s | facedLad=%s facedVine=%s | wantClimb=%s wantUp=%s wantDn=%s | onClimbable=%s | grab=%s sneak=%s fwd=%.1f",
+                    player.getX(), player.getY(), player.getZ(),
+                    (int) Math.floor(player.getX()),
+                    (int) Math.floor(player.getY()),
+                    (int) Math.floor(player.getZ()),
+                    player.getHorizontalFacing(),
+                    handsClimbing, feetClimbing,
+                    debugIsFacedToLadder, debugIsFacedToVine,
+                    sm.wantClimb, wantClimbUp, wantClimbDown,
+                    handsClimbing.isRelevant() || feetClimbing.isRelevant(),
+                    SmartMovingKeys.grab.isPressed(), player.isSneaking(),
+                    player.input.movementForward);
+            System.out.println(debugMsg);
+        }
 
         // 진입 게이트: 둘 다 false 시 등반 분기 진입 안 함 (원본 동등).
         if (!wantClimbUp && !wantClimbDown) {
