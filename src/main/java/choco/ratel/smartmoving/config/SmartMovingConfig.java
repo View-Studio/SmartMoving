@@ -500,6 +500,19 @@ public class SmartMovingConfig {
      */
     public float freeBothLadderClimbUpSpeedFactor = 1.43F;
     /**
+     * 원본 SmartMovingConfig L104 `_freeBaseLadderClimb = Modified().key("move.climb.free.base.ladder")`
+     * (Modified type default = false). isTotalFreeLadderClimb() = isFreeBaseClimb && _freeBaseLadderClimb.
+     * MixinLivingEntityClient.travel 의 notTotalFreeClimbing 가드에서 사용:
+     *   true → 사다리에서 motion clamp / fallDistance reset / sneak hold 미적용 (vanilla 자유 매달림).
+     *   false (default) → SM 보호 매달림 (clamp + hold 적용).
+     */
+    public boolean freeBaseLadderClimb = false;
+    /**
+     * 원본 SmartMovingConfig L105 `_freeBaseVineClimb = Modified().key("move.climb.free.base.vine").defaults(true, _pre_sm_1_11)`
+     * (current default = false, pre 1.11 default true). isTotalFreeVineClimb() = isFreeBaseClimb && _freeBaseVineClimb.
+     */
+    public boolean freeBaseVineClimb = false;
+    /**
      * 원본 SmartMovingConfig L129 `_freeClimbingOrthogonalDirectionAngle` Positive — 기본값 `90F`.
      * "클라이밍 N/S/E/W 붙잡기 각도(도)". `Orientation.setClimbingAngles` 가 orthogonal 방향
      * (PZ/NZ/ZP/ZN) 의 등반 유효 각도 범위를 계산할 때 사용. 기본값 90F → 각 방향마다 ±45도
@@ -1305,6 +1318,23 @@ public class SmartMovingConfig {
     }
 
     /**
+     * 원본 SmartMovingClientConfig L47-50 `isTotalFreeLadderClimb()`:
+     *   return isFreeBaseClimb() && _freeBaseLadderClimb.value;
+     * MixinLivingEntityClient.travel notTotalFreeClimbing 가드에서 사용.
+     */
+    public boolean isTotalFreeLadderClimb() {
+        return isFreeBaseClimb() && freeBaseLadderClimb;
+    }
+
+    /**
+     * 원본 SmartMovingClientConfig L52-55 `isTotalFreeVineClimb()`:
+     *   return isFreeBaseClimb() && _freeBaseVineClimb.value;
+     */
+    public boolean isTotalFreeVineClimb() {
+        return isFreeBaseClimb() && freeBaseVineClimb;
+    }
+
+    /**
      * 원본 `SmartMovingOptions.java` L449-L455 `isSneakToggleEnabled()`:
      *   return _sneakToggle.value && enabled;
      * **AND 패턴** — SM 비활성 시 토글 모드 비허용.
@@ -1549,6 +1579,8 @@ public class SmartMovingConfig {
         freeClimbingHorizontalSpeedFactor = getFloat(p, "move.climb.free.horizontal.speed.factor", freeClimbingHorizontalSpeedFactor);
         freeOneLadderClimbUpSpeedFactor   = getFloat(p, "move.climb.free.ladder.one.up.speed.factor",  freeOneLadderClimbUpSpeedFactor);
         freeBothLadderClimbUpSpeedFactor  = getFloat(p, "move.climb.free.ladder.two.up.speed.factor",  freeBothLadderClimbUpSpeedFactor);
+        freeBaseLadderClimb = getBool(p, "move.climb.free.base.ladder", freeBaseLadderClimb);
+        freeBaseVineClimb   = getBool(p, "move.climb.free.base.vine",   freeBaseVineClimb);
         freeFenceClimbing = getBool(p, "move.climb.free.fence", freeFenceClimbing);
         freeClimbingOrthogonalDirectionAngle = getFloat(p, "move.climb.free.direction.orthogonal.angle", freeClimbingOrthogonalDirectionAngle);
         freeClimbingDiagonalDirectionAngle   = getFloat(p, "move.climb.free.direction.diagonal.angle",   freeClimbingDiagonalDirectionAngle);
@@ -1714,6 +1746,8 @@ public class SmartMovingConfig {
         p.setProperty("move.climb.free.horizontal.speed.factor", String.valueOf(freeClimbingHorizontalSpeedFactor));
         p.setProperty("move.climb.free.ladder.one.up.speed.factor", String.valueOf(freeOneLadderClimbUpSpeedFactor));
         p.setProperty("move.climb.free.ladder.two.up.speed.factor", String.valueOf(freeBothLadderClimbUpSpeedFactor));
+        p.setProperty("move.climb.free.base.ladder", String.valueOf(freeBaseLadderClimb));
+        p.setProperty("move.climb.free.base.vine",   String.valueOf(freeBaseVineClimb));
         p.setProperty("move.climb.free.fence", String.valueOf(freeFenceClimbing));
         p.setProperty("move.climb.free.direction.orthogonal.angle", String.valueOf(freeClimbingOrthogonalDirectionAngle));
         p.setProperty("move.climb.free.direction.diagonal.angle",   String.valueOf(freeClimbingDiagonalDirectionAngle));

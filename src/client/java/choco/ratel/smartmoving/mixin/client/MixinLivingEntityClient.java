@@ -302,9 +302,18 @@ public abstract class MixinLivingEntityClient {
         }
 
         // d. 원본 L776-781: notTotalFreeClimbing 시 fallDistance=0 + motionY clamp -0.15*factor.
-        //   notTotalFreeClimbing = (!isClimbing && isOnLadder && !totalFreeLadder) || (isOnVine && !totalFreeVine).
-        //   1.21.1 매핑 근사: 사다리/덩굴 인접 시 항상 적용 (totalFree config 미체크).
-        if (onClimbable) {
+        //   원본 식 (L776):
+        //     notTotalFreeClimbing = !isClimbing && isOnLadder && !isTotalFreeLadderClimb
+        //                            || isOnVine && !isTotalFreeVineClimb;
+        //   사다리/덩굴 통합 1-3: totalFree* 옵션 추가에 따라 가드 정밀 매핑.
+        //   사다리 vs 덩굴 구분 — sm.isHandsVineClimbing/isFeetVineClimbing flag 사용.
+        boolean isVineClimb   = sm.isHandsVineClimbing || sm.isFeetVineClimbing;
+        boolean isLadderClimb = onClimbable && !isVineClimb;
+        boolean notTotalFreeClimbing =
+                (!sm.isClimbing && isLadderClimb && !cfg.isTotalFreeLadderClimb())
+                || (isVineClimb && !cfg.isTotalFreeVineClimb());
+
+        if (onClimbable && notTotalFreeClimbing) {
             player.fallDistance = 0;
             double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
                     player, SmartMovingConfig.Config);
@@ -315,13 +324,22 @@ public abstract class MixinLivingEntityClient {
         }
 
         // e. 원본 L782-794: sneak 시 motionY=0 (벽에서 매달리기).
-        //   freeBaseClimb 모드: sneak + motionY < 0 + !onGround + notTotalFreeClimbing → motionY=0.
-        //   그 외: localIsSneaking + motionY<0 → motionY=0.
-        //   1.21.1 매핑: player.isSneaking() 시 motionY<0 → 0 (간소화).
+        //   원본 분기 (1:1):
+        //     if(isFreeBaseClimb) {
+        //         if(sneak && motionY<0 && !onGround && notTotalFreeClimbing) motionY=0;
+        //     } else {
+        //         if(localIsSneaking && motionY<0) motionY=0;
+        //     }
         if (onClimbable && player.isSneaking()) {
             Vec3d v = player.getVelocity();
             if (v.y < 0) {
-                player.setVelocity(v.x, 0, v.z);
+                if (cfg.isFreeBaseClimb()) {
+                    if (!player.isOnGround() && notTotalFreeClimbing) {
+                        player.setVelocity(v.x, 0, v.z);
+                    }
+                } else {
+                    player.setVelocity(v.x, 0, v.z);
+                }
             }
         }
 
