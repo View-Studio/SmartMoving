@@ -143,6 +143,30 @@ public abstract class MixinEntityClient {
     }
 
     /**
+     * 🔴 사다리/덩굴 등반 + W + sneak 시 SNEAKING flag 설정 차단.
+     *
+     * vanilla 1.21.1 자세 결정 (CROUCHING) 메커니즘이 SNEAKING flag 또는 input.sneaking
+     * 직접 사용 (정확한 method mapping 다름) → 우리 isSneaking() override 만으로 부족.
+     *
+     * Entity.setSneaking(boolean) 은 매 틱 vanilla 가 input.sneaking 으로 호출 →
+     * SNEAKING flag (DataTracker) 설정. 이 flag 자체를 차단하면 자세 결정 + isSneaking()
+     * + 모든 sneak 영향 일괄 차단.
+     *
+     * 사용자 의도: "사다리 + W + sneak → 아무 동작 없이 그냥 등반".
+     *   - sm.isClimbing && forward > 0 && sneaking=true → setSneaking(true) 차단.
+     *   - 그 외 모든 케이스: vanilla 정상 처리.
+     */
+    @Inject(method = "setSneaking", at = @At("HEAD"), cancellable = true)
+    private void sm_setSneaking(boolean sneaking, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isClimbing && player.input.movementForward > 0F && sneaking) {
+            ci.cancel();
+        }
+    }
+
+    /**
      * pushOutOfBlocks: 서버→클라이언트 위치 동기화 직후 억제.
      * 원본: SmartMovingSelf.pushOutOfBlocks (SmartMovingSelf.md L1263-1277)
      *
