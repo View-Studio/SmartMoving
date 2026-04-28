@@ -76,7 +76,20 @@ public abstract class MixinPlayerEntityClient {
         //
         // 원본 setHeightOffset(-1F) 상태 전수 — Crawling/Sliding/Swimming 등 모두 0.6 × 0.8 +
         // eyeHeight 0.62F. isDipping/isFlying/isLevitating 은 vanilla 통과.
-        boolean smSmall = sm.isCrawling || sm.isClimbCrawling
+        // 🔴 isClimbCrawling 분리: 원본 1.7.10 사다리 매달림 자세 STANDING 유지 (POSE 시스템
+        //   없음). setHeightOffset(-1F) 는 박스만 변경, eyeHeight 변경 없음 (BUG-29 동일 패턴).
+        //   1.21.1 잘못된 매핑: 0.6×0.8 + eyeHeight 0.62F 강제 → 카메라 발끝으로 1m 떨어짐 →
+        //   사용자가 "엎드리기" 로 인식.
+        //   정정: isClimbCrawling 시 박스만 0.6×0.8, eyeHeight 1.62F (vanilla STANDING 유지).
+        // 🔴 isCrawling && isClimbing 케이스 추가: isClimbCrawling 해제 엣지의 toCrawling()
+        //   호출 → 1 틱 isCrawling=true → 등반 중인데 eyeHeight 0.62F 강제 → 카메라
+        //   1.62↔0.62 토글 = 사용자 보고 "몸 애니메이션 주기적 요동". 등반 중이면 STANDING
+        //   eyeHeight 유지.
+        if (sm.isClimbCrawling || (sm.isCrawling && sm.isClimbing)) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
+        boolean smSmall = sm.isCrawling
                        || sm.isHeadJumping || sm.isSliding
                        || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
@@ -136,8 +149,16 @@ public abstract class MixinPlayerEntityClient {
         if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
-        if (sm.isCrawling || sm.isClimbCrawling) {
+        if (sm.isCrawling && !sm.isClimbing) {
             // 엎드림 자세 — SWIMMING POSE 재활용 (vanilla 수영 애니 공유)
+            // 🔴 isClimbCrawling 분기 제거: 원본 1.7.10 vanilla 에 EntityPose 시스템 없음 →
+            //   isClimbCrawling 시 자세 STANDING 유지 (박스만 0.6×0.8 축소). SWIMMING POSE
+            //   강제 시 사용자 시각적으로 사다리 막바지에서 수평 엎드림 자세 → "엎드리기" 인식.
+            //   원본 1:1 매핑은 STANDING POSE + 작은 박스. dimensions 는 sm_getBaseDimensions
+            //   가 isClimbCrawling 시에도 0.6×0.8 적용 (원본 setHeightOffset(-1F) 1:1).
+            // 🔴 !isClimbing 가드: isClimbCrawling 해제 엣지의 toCrawling() 호출 → 1 틱
+            //   isCrawling=true → 등반 중 SWIMMING POSE 발동 → STANDING↔SWIMMING 토글 →
+            //   사용자 보고 "몸 애니메이션 주기적 요동". 등반 중이면 자세 STANDING 유지.
             player.setPose(EntityPose.SWIMMING);
             ci.cancel();
         } else if (sm.isHeadJumping || sm.isSliding) {

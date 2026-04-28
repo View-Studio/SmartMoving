@@ -150,7 +150,12 @@ public abstract class MixinLivingEntityClient {
         sm.isCeilingClimbing = false;
         sm.isClimbJumping    = false;
         sm.isClimbHolding    = false;
-        sm.isClimbCrawling   = false;
+        // 🔴 isClimbCrawling 은 SmartMovingClientState L1877 메인 식이 매 틱 갱신 + 진입/해제
+        //   엣지 (L1880-1908) 가 heightOffset 처리. G-01 강제 reset 하면 wasClimbCrawling 추적
+        //   불가 → 해제 엣지 미발동 → heightOffset=-1 잔존 → vanilla CROUCHING 자세에 박스
+        //   잔존이 결합되어 사용자 보고 "엎드리기" 자세. 원본 resetClimbing (L1474-1486) 도
+        //   isClimbCrawling 미포함 → 1:1 일치하도록 라인 삭제.
+        // sm.isClimbCrawling   = false;
         sm.isClimbBackJumping = false;
 
         // [11-5] SM 비행 물리 — isFlying && cfg.fly 시 pitch 방향 3D 이동

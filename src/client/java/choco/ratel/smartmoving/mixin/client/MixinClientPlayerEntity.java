@@ -46,7 +46,11 @@ public abstract class MixinClientPlayerEntity {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isClimbing) {
+        // 🔴 등반 직후 1 틱 reset 유지 (wasClimbing). 사용자 보고: 등반 끝난 직후 vanilla
+        //   CROUCHING 발동. KeyboardInput.tick 은 tickMovement 보다 먼저 실행되므로 KeyboardInput
+        //   에서 sneaking=false 강제해도 그 틱의 vanilla 자세 처리가 이미 진행되어 자세 잔존.
+        //   tickMovement TAIL 에서도 wasClimbing 가드로 reset.
+        if (sm.isClimbing || sm.wasClimbing || sm.sneakHeldDuringClimb) {
             // 1. input.sneaking 강제 false
             player.input.sneaking = false;
             // 2. SNEAKING flag 강제 false
@@ -55,9 +59,12 @@ public abstract class MixinClientPlayerEntity {
             if (player.getPose() == EntityPose.CROUCHING) {
                 player.setPose(EntityPose.STANDING);
             }
-            // 4. SM crawl 자세 강제 false
-            sm.isCrawling = false;
-            sm.crawlToggled = false;
+            // 🔴 isCrawling/crawlToggled 강제 reset 제거: 사다리 등반 막바지 isClimbCrawling
+            //   해제 엣지 (L1890-1908) 의 toCrawling() 호출 결과 (isCrawling=true) 를 즉시
+            //   무효화 → SM crawl 모드 진입 차단 + heightOffset=-1 잔존 (B-35 reset 미발동)
+            //   → vanilla CROUCHING + 작은 박스 잔존이 사용자 보고 "엎드리기" 자세.
+            //   isCrawling 은 메인 식 (L1535) 의 canCrawl `!isClimbing` 가드로 등반 중 자동
+            //   차단되므로 추가 강제 불필요.
         }
     }
 

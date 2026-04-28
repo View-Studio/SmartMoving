@@ -607,6 +607,18 @@ public final class SmartMovingClientState {
     // ── C-33: SM 독자 exhaustion (클라이밍 피로도) ──────────────────────────
     /** 이전 틱 클라이밍 여부 — exhaustion 허용 조건 판정용. */
     public boolean wasClimbing;
+
+    /**
+     * 🔴 사다리/덩굴 등반 중 sneak 키가 눌렸으면 set. sneak 키 뗄 때 reset.
+     *   원본 1.7.10 의 isSneaking() override 는 isClimbing=true 시 false 리턴 →
+     *   1.21.1 vanilla CROUCHING 자세도 차단. 그러나 등반 끝난 직후 (isClimbing=false)
+     *   에는 원본도 isSneaking()=true → sneak 자세. 1.7.10 vanilla sneak 자세는
+     *   시각적으로 미미 → 사용자 인식 X. 1.21.1 vanilla CROUCHING 은 매우 두드러짐
+     *   → 사용자 보고 "엎드리기".
+     *   사용자 의도 (원본보다 엄격) 반영: 등반 중 sneak 누르고 있으면 등반 끝나도
+     *   sneak 키를 한 번 떼야 sneak 효과 활성화. 떼면 자연 reset.
+     */
+    public boolean sneakHeldDuringClimb;
     /** SM 독자 피로도 (0 ~ climbExhaustionStop 사이). 매 틱 감소, 클라이밍 중 증가. */
     public float exhaustion;
 
@@ -1130,12 +1142,21 @@ public final class SmartMovingClientState {
             boolean crawlingEnabled_  = cfg0.crawl && cfg0.enabled;
             // B-36-pre (세션 77): 지역 `wouldWantCrawl_` → `this.wouldWantCrawl` 필드 승격.
             // B-36 grab.StartPressed 3분기 (원본 L2838-L2861) 에서 필드 참조 예정.
+            // 🔴 사용자 의도: 사다리/덩굴 정면 + grab + sneak → crawl 진입 X (등반 우선).
+            //   원본 SmartMovingSelf L2419-2428 의 분기 2 (grabJustPressed && sneak && onGround)
+            //   는 사다리/덩굴 인접 케이스에서도 첫 틱 isCrawling=true 활성 → SM crawl 자세
+            //   1 틱 visible (사용자 "엎드리기 발동" 인식).
+            //   해결: grabJustPressed 분기에 사다리/덩굴 정면 가드 추가. 사용자 grab+sneak
+            //   누름 시 등반 의도 (사다리/덩굴 정면) 면 crawl 진입 차단.
+            boolean facedClimbable_ = SmartMovingClimber.isFacedToLadder(player, isClimbCrawling)
+                    || SmartMovingClimber.isFacedToSolidVine(player, isClimbCrawling);
             wouldWantCrawl =
                     !player.getAbilities().flying &&
                     (
                         (isCrawling && (inputContinueCrawl || contextContinueCrawl))
                         ||
-                        (grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround())
+                        (grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround()
+                                && !facedClimbable_)
                     );
             boolean wouldWantCrawl_ = wouldWantCrawl;  // 하위 호환용 지역 별칭
             // 원본 진입 경로 추가 가드(!flying/!swim/!dive/!dipping/!climbing/!crawlClimbing/!ceilingClimbing/
@@ -1263,11 +1284,23 @@ public final class SmartMovingClientState {
 
                 // 원본 L2721-L2732 3-OR:
                 // B-18-pre (세션 81): 지역 `wantClimbHolding` → `this.wantClimbHolding` 필드 승격.
-                wantClimbHolding =
+                // 🔴 사용자 의도 (원본 위반): 사다리 등반 + W + sneak → W 우선, sneak hold 무시.
+                //   원본은 W 누름 무관 sneak → wantClimbHolding=true → climbIntoCount 발동 →
+                //   isClimbCrawling 토글 → 자세/박스 토글 + 찔끔찔끔 등반. 사용자 명시 의도:
+                //   "쉬프트가 씹히고 올라가는게 우선이 되야됨". 모든 분기에 !forwardPressed
+                //   가드 추가 → W 누름 시 hold 무효 → 정상 등반 속도.
+                //   영향:
+                //   - sneak 만 (W X): forwardPressed=false → 가드 통과 → hold 정상 (사용자 인정).
+                //   - W 만 (sneak X): sneak 가드 false → wantClimbHolding=false → 정상 등반.
+                //   - W + sneak: forwardPressed=true → 모든 분기 차단 → wantClimbHolding=false →
+                //     isClimbCrawling 차단 → 자세/박스 토글 X, 정상 등반 속도.
+                boolean forwardPressed_holdGuard = player.input.movementForward > 0F;
+                wantClimbHolding = !forwardPressed_holdGuard && (
                         (isClimbHolding && sneakPressedRaw)
                         || (isClimbing && blocked)
                         || (wantClimb && !isSwimming_sm && !isDiving && !isCrawling
-                                && (sneakPressedRaw || crawlToggled));
+                                && (sneakPressedRaw || crawlToggled))
+                );
                 isClimbHolding = wantClimbHolding && isClimbing;
             }
 

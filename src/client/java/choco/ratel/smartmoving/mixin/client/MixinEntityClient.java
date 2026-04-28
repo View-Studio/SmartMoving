@@ -96,7 +96,13 @@ public abstract class MixinEntityClient {
         // 헤드점프 heightOffset 위치 보정 (C-20)
         // 원본: afterMoveEntity() — setPosition(x, y - heightOffset, z)
         // heightOffset = -1F 시: y - (-1F) = y + 1F → 플레이어를 1블록 위로 보정
-        if (sm.heightOffset != 0F) {
+        // 🔴 BUG-28/29 동일 패턴 (사다리 등반 grab+sneak 보고): isClimbCrawling/isCrawling/
+        //   isSliding 등 진입 엣지의 player.move() 호출 시 이 TAIL inject 발동 → setPos
+        //   y+1 강제 → "플레이어가 위로 쑥 올라감" (사용자 보고).
+        //   원본 setHeightOffset(-1F) 는 박스만 변경, player 위치 변경 X. setPos 보정은 head
+        //   jump 전용 (C-20 의도). 다른 자세는 sm_getBaseDimensions_client 의 dimensions 변경
+        //   만으로 박스 처리 (1.21.1 vanilla 자동 갱신). isHeadJumping 만 가드.
+        if (sm.heightOffset != 0F && sm.isHeadJumping) {
             player.setPos(player.getX(), player.getY() - sm.heightOffset, player.getZ());
         }
 
