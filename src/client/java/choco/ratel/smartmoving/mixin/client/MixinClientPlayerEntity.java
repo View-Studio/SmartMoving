@@ -31,25 +31,22 @@ public abstract class MixinClientPlayerEntity {
     }
 
     /**
-     * 🔴 사다리/덩굴 등반 + W + sneak 시 모든 sneak source 일괄 차단.
+     * 🔴 사다리/덩굴 등반 중 sneak 자세 변경 차단.
      *
-     * 이전 시도 5번 모두 효과 없음 — vanilla 자세 결정 source 추적 불가.
+     * 원본 SmartMovingSelf.isSneaking() L3226-3232:
+     *   return ... || (!_crawlOverEdge && isCrawling && !isClimbing) || ...;
+     * 원본 1.7.10 vanilla 자세 = isSneaking() 결과 직접 사용 → SM override false →
+     * 자세 STANDING. **W 무관 모든 사다리 등반 케이스 자세 변경 X**.
      *
-     * 가장 robust 차단: 매 틱 모든 sneak/crawl source 강제 reset.
-     *   1. input.sneaking = false (vanilla input source)
-     *   2. setSneaking(false) (SNEAKING flag)
-     *   3. setPose(STANDING) (자세 결정 결과)
-     *   4. sm.isCrawling = false (SM crawl 자세 source)
-     *   5. sm.crawlToggled = false (SM crawl toggle)
-     *
-     * 가드: sm.isClimbing && forward > 0F. W 안 누름 시 정상 sneak hold 유지.
+     * 1.21.1 vanilla 자세 결정 source 추적 불가 → 모든 sneak source 일괄 reset.
+     * 가드: sm.isClimbing 만 (W 무관 — 원본 1:1).
      */
     @Inject(method = "tickMovement", at = @At("TAIL"))
     private void sm_resetSneakInClimb(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isClimbing && player.input.movementForward > 0F) {
+        if (sm.isClimbing) {
             // 1. input.sneaking 강제 false
             player.input.sneaking = false;
             // 2. SNEAKING flag 강제 false

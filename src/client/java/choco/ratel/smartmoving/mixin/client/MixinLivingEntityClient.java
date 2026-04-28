@@ -329,8 +329,14 @@ public abstract class MixinLivingEntityClient {
             double mz = Math.max(-clampH, Math.min(clampH, v.z));
             double my = v.y;
 
-            // sneak 가드 우선 적용 — 떨어지지 않게 motionY=0 보장.
-            if (player.isSneaking() && my < 0) {
+            // 🔴 sneak 가드 — 원본 L782-794 1:1 매핑.
+            //   원본은 esp.movementInput.sneak (input source) 직접 사용.
+            //   우리 매핑이 player.isSneaking() (SNEAKING flag) 사용 → 자세 차단
+            //   (input.sneaking=false 강제) 과 충돌 (motion hold 미활성).
+            //   해결: vanilla sneak 키 직접 체크 (자세 차단과 독립).
+            boolean sneakKeyPressed = net.minecraft.client.MinecraftClient.getInstance()
+                    .options.sneakKey.isPressed();
+            if (sneakKeyPressed && my < 0) {
                 my = 0;
             } else {
                 // sneak 아닐 때 vertical clamp -0.15*factor.
