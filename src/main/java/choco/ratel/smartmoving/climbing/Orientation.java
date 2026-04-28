@@ -2430,31 +2430,14 @@ public class Orientation {
         if (wallState != null && isOnMiddleLadderFront(0))
             return setHalfGrabType(AroundGrab, remoteState, false);
 
+        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. cfg.freeFenceClimbing 안의 fence
+        //   6개 sub-branch 제거 — 통합 분기 (L2417 isEmpty+remote, L2423 wallState) 에서
+        //   iron_bars 와 동일하게 처리됨. 추가 fence 전용 분기 (L2434 baseBlockId,
+        //   L2443 remoteBelow, L2454 belowWall) 가 fence 만 잡으면 iron_bars 와 다른
+        //   grabRemote/위치로 매핑되어 속도 차이 발생 → 제거하여 강제 통일.
+        //   cobblestone_wall 분기는 별도 블록이라 그대로 유지.
         if (cfg.freeFenceClimbing) {
-            if (isFence(remoteState)
-                    && headedToFrontWall(remote_i, 0, remote_k, remoteState)) {
-                if (!isFence(getBaseBlockId(0)))
-                    return setHalfGrabType(HalfGrab, remoteState);
-                else if (headedToFrontSideWall(remote_i, 0, remote_k, remoteState))
-                    return setHalfGrabType(HalfGrab, remoteState);
-            }
-
             BlockState remoteBelowState = getRemoteBlockId(-1);
-            if (isFence(remoteBelowState)
-                    && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
-                if (!isFence(getBaseBlockId(-1)))
-                    return setHalfGrabType(HalfGrab, remoteState);
-                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
-                    return setHalfGrabType(HalfGrab, remoteState);
-            }
-
-            if (isFence(wallState) && headedToBaseWall(0, wallState))
-                return setHalfGrabType(HalfGrab, wallState, false);
-
-            BlockState belowWallState = getWallBlockId(base_i, -1, base_k);
-            if (isFence(belowWallState) && headedToBaseWall(-1, belowWallState))
-                return setHalfGrabType(HalfGrab, belowWallState, false);
-
             if (remoteState.getBlock() == Blocks.COBBLESTONE_WALL
                     && !headedToRemoteFlatWall(remoteState, 0))
                 return setHalfGrabType(HalfGrab, remoteState);
@@ -2564,16 +2547,10 @@ public class Orientation {
                 return setBottomGrabType(HalfGrab, remoteBelowState);
         }
 
+        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. cfg.freeFenceClimbing 안의 fence
+        //   sub-branch 제거 — 통합 분기 (L2545 isEmpty+remoteBelow, L2574 belowWall) 에서
+        //   iron_bars 와 동일하게 처리됨. cobblestone_wall 만 유지.
         if (cfg.freeFenceClimbing) {
-            BlockState baseBelowBlockState = getBaseBlockId(-1);
-            if (isFence(remoteBelowState)
-                    && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
-                if (!isFence(baseBelowBlockState))
-                    return setBottomGrabType(HalfGrab, remoteBelowState);
-                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
-                    return setBottomGrabType(HalfGrab, remoteBelowState);
-            }
-
             if (remoteBelowState.getBlock() == Blocks.COBBLESTONE_WALL
                     && !headedToRemoteFlatWall(remoteBelowState, -1))
                 return setHalfGrabType(HalfGrab, remoteBelowState);
@@ -2598,10 +2575,8 @@ public class Orientation {
                     return setBottomGrabType(HalfGrab, belowWallBlockState, false);
             }
 
-            if (cfg.freeFenceClimbing
-                    && isFence(belowWallBlockState)
-                    && headedToBaseWall(-1, belowWallBlockState))
-                return setBottomGrabType(HalfGrab, belowWallBlockState, false);
+            // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. fence 전용 belowWall 분기 제거 —
+            //   위 통합 분기 (L2574 IRON_BARS || isFence) 에서 처리됨.
         }
 
         // (7) 복합 중첩 — 원본 L853-L865
