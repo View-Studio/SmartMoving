@@ -901,22 +901,28 @@ public final class SmartMovingClimber {
         // 원본: ceil(bb.maxY) 이상에서 첫 번째 솔리드 블록 Y - bb.maxY
         double jgap = computeJgap(player);
 
+        // 🔴 옵션 A — motionY 와 motionX/Z 분리 처리.
+        //   motionX/Z: jgap 기반 horizontalSpeed (이전 식 그대로) — 천장 매달림 횡이동
+        //              속도가 자체 등반/일반 grab hold 와 다름 (사용자 명시 — fence 들에서
+        //              이동속도 따로).
+        //   motionY: setShouldClimbSpeed 호출 — 일반 블록 grab hold 와 동일 메커니즘
+        //            (relevant 가드 적용 → motionY 가 음수면 끌어올림 → setLandMotions
+        //            후 0 → 정지/hold). 사용자 가설 검증 결과 일치.
         double horizontalSpeed;
+        double climbValue;
         if (jgap > 1.2) {
             horizontalSpeed = 0.12D;
+            climbValue      = 0.12D;  // 위로 약간 올라감 (원본 동일)
         } else if (jgap > 1.115) {
             horizontalSpeed = 0.08D;
+            climbValue      = HOLD_MOTION;  // 0.08 (원본 동일, isClimbingStill 처리)
         } else {
-            // 🔴 사용자 요구: 천장 매달림 hold (grab 누르고 있으면 떨어지지 않게).
-            //   원본 SmartMovingSelf L1158-1159 = 0.04. 그러나 setLandMotions 의
-            //   motionY -= 0.08 적용 후 (0.04-0.08)*0.98 = -0.0392 → 매 틱 떨어짐.
-            //   사용자 명시 의도 = hold → 0.08 로 보정 (gravity 와 정확히 상쇄, 정지).
+            // 사용자 의도: 천장 가까울 때도 hold (원본 0.04 = 떨어짐 → HoldMotion 으로).
             horizontalSpeed = 0.08D;
+            climbValue      = HOLD_MOTION;
         }
 
-        // C-36: 이동 방향 기반 수평 벡터 분해 (원본: moveFlying(strafe, forward, speed))
-        // movementForward / movementSideways 기반으로 yaw 방향 수평 속도 계산
-        // 원본: motionY는 입력 유무와 무관하게 항상 jgap 기반 값으로 설정 (T-04)
+        // C-36: motionX/Z 만 직접 set (motionY 는 그대로 유지 — setShouldClimbSpeed 가 처리).
         Vec3d vel = player.getVelocity();
         float forward = player.input.movementForward;
         float strafe  = player.input.movementSideways;
@@ -931,13 +937,19 @@ public final class SmartMovingClimber {
             double sin = Math.sin(yawRad);
             double motionX = strafe * cos - forward * sin;
             double motionZ = forward * cos + strafe * sin;
-            player.setVelocity(motionX, horizontalSpeed, motionZ);
-        } else {
-            player.setVelocity(vel.x, horizontalSpeed, vel.z);
+            // motionY 는 player.getVelocity().y 그대로 유지 → 이후 setShouldClimbSpeed 가 가드 적용.
+            player.setVelocity(motionX, vel.y, motionZ);
         }
+        // 입력 없을 때는 motionX/Z 변경 없음 (vanilla horizontal damping 적용 유지).
 
         // fallDistance = 0 (필수 — 낙하 데미지 방지)
         player.fallDistance = 0;
+
+        // 🔴 motionY 는 일반 grab hold 와 동일 메커니즘 — setShouldClimbSpeed 의 relevant
+        //   가드 적용. motionY 가 climbValue 미만이면 끌어올림 → setLandMotions 후 정지/위로.
+        double combinedFactor = SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        boolean climbIsUp = climbValue >= HOLD_MOTION;
+        setShouldClimbSpeed(player, sm, climbValue, climbIsUp, combinedFactor);
 
         sm.isCeilingClimbing = true;
         // B-38 (세션 58): 원본 L1170 `isCrawling = false` — handleCeilingClimbing 성공
