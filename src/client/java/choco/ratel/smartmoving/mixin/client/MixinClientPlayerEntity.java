@@ -31,29 +31,36 @@ public abstract class MixinClientPlayerEntity {
     }
 
     /**
-     * 🔴 사다리/덩굴 등반 + W + sneak 시 CROUCHING 자세 매 틱 강제 reset.
+     * 🔴 사다리/덩굴 등반 + W + sneak 시 모든 sneak source 일괄 차단.
      *
-     * 이전 시도 실패 (모두 효과 없음):
-     *   1. shouldEnterCrouchingPose mixin (ClientPlayerEntity / LivingEntity) — method 없음
-     *   2. Entity.setSneaking mixin — vanilla 자세 결정이 SNEAKING flag 사용 안 함
-     *   3. KeyboardInput.tick mixin — vanilla 자세 결정이 input.sneaking 사용 안 함
+     * 이전 시도 5번 모두 효과 없음 — vanilla 자세 결정 source 추적 불가.
      *
-     * 진단:
-     * vanilla 1.21.1 의 CROUCHING 자세 결정 source 를 정확히 추적 못 함 (yarn mapping
-     * 검색 한계). 어떤 source 를 쓰든 "결과적 자세" 가 CROUCHING 인 것을 매 틱 강제 reset.
+     * 가장 robust 차단: 매 틱 모든 sneak/crawl source 강제 reset.
+     *   1. input.sneaking = false (vanilla input source)
+     *   2. setSneaking(false) (SNEAKING flag)
+     *   3. setPose(STANDING) (자세 결정 결과)
+     *   4. sm.isCrawling = false (SM crawl 자세 source)
+     *   5. sm.crawlToggled = false (SM crawl toggle)
      *
-     * tickMovement TAIL — vanilla 자세 결정 후 우리가 STANDING 으로 reset.
-     * 가드: sm.isClimbing && forward > 0F (사용자 의도 정확히).
+     * 가드: sm.isClimbing && forward > 0F. W 안 누름 시 정상 sneak hold 유지.
      */
     @Inject(method = "tickMovement", at = @At("TAIL"))
-    private void sm_resetCrouchingInClimb(CallbackInfo ci) {
+    private void sm_resetSneakInClimb(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         if (!SmartMovingConfig.Config.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing && player.input.movementForward > 0F) {
+            // 1. input.sneaking 강제 false
+            player.input.sneaking = false;
+            // 2. SNEAKING flag 강제 false
+            if (player.isSneaking()) player.setSneaking(false);
+            // 3. CROUCHING 자세 강제 STANDING
             if (player.getPose() == EntityPose.CROUCHING) {
                 player.setPose(EntityPose.STANDING);
             }
+            // 4. SM crawl 자세 강제 false
+            sm.isCrawling = false;
+            sm.crawlToggled = false;
         }
     }
 
