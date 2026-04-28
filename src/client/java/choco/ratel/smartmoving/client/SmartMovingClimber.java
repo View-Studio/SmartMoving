@@ -907,7 +907,11 @@ public final class SmartMovingClimber {
         } else if (jgap > 1.115) {
             horizontalSpeed = 0.08D;
         } else {
-            horizontalSpeed = 0.04D;
+            // 🔴 사용자 요구: 천장 매달림 hold (grab 누르고 있으면 떨어지지 않게).
+            //   원본 SmartMovingSelf L1158-1159 = 0.04. 그러나 setLandMotions 의
+            //   motionY -= 0.08 적용 후 (0.04-0.08)*0.98 = -0.0392 → 매 틱 떨어짐.
+            //   사용자 명시 의도 = hold → 0.08 로 보정 (gravity 와 정확히 상쇄, 정지).
+            horizontalSpeed = 0.08D;
         }
 
         // C-36: 이동 방향 기반 수평 벡터 분해 (원본: moveFlying(strafe, forward, speed))
