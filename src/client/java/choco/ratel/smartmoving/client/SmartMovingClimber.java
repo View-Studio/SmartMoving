@@ -17,6 +17,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.World;
 
 /**
@@ -901,6 +902,16 @@ public final class SmartMovingClimber {
         // 원본: ceil(bb.maxY) 이상에서 첫 번째 솔리드 블록 Y - bb.maxY
         double jgap = computeJgap(player);
 
+        // 🔴 원본 SmartMovingSelf L1151-1153 가드 2 + 3 — 천장 매달림 진입 범위 제한.
+        //   가드 2: jgap < 1.9 — 매달림 위치가 너무 아래면 비활성. bottomCeilingClimbing
+        //           시 jgap += 1 → bb.maxY 가 j+1 의 0.1 위쪽까지만 허용 (j+1 이 천장 블록).
+        //   가드 3: actuallySolidHeight < jd + 0.5 — 머리 위 0.5 이내에 솔리드 블록 있어야.
+        //           실제 천장 (fence/iron_bars + 일반 솔리드) 가 머리 가까이 있어야 매달림.
+        //   사용자 보고 #: "천장 그랩 범위가 원본보다 더 아래까지 잡힘" 직접 원인 = 두 가드 누락.
+        double jd = bb.maxY;
+        double actuallySolidHeight = getMinPlayerSolidBetween(player, jd, jd + 0.6, 0.2);
+        if (jgap >= 1.9 || actuallySolidHeight >= jd + 0.5) return;
+
         // 🔴 motionY = jgap 기반 anchor 보간 (원본 SmartMovingSelf L1145-1166 정밀 1:1).
         //   원본 메커니즘 = 자연스러운 anchor 수렴:
         //     jgap > 1.2  (천장에서 멀음) → motionY=0.12 → setLandMotions 후 +0.0392 (위로)
@@ -975,5 +986,39 @@ public final class SmartMovingClimber {
             jgap += 1.0D;
         }
         return jgap;
+    }
+
+    /**
+     * 원본 SmartMovingBase L398-L409 `getMinPlayerSolidBetween(yMin, yMax, horizontalTolerance)` 1:1.
+     *
+     * player AABB 의 Y 범위를 [yMin, yMax] 로 임시 변경 + X/Z `horizontalTolerance` 만큼
+     * 확장한 box 와 충돌하는 모든 solid 블록의 minY (블록 하단) 중 최솟값 반환.
+     * 결과 ≥ yMin 으로 clamp.
+     *
+     * 1.21.1 매핑: world.getBlockCollisions(entity, box) → Iterable<VoxelShape> (world 좌표).
+     * 각 shape 의 getBoundingBox().minY 중 최솟값.
+     *
+     * 천장 매달림 가드 3 에서 호출: getMinPlayerSolidBetween(jd, jd + 0.6, 0.2).
+     * 머리 위 0.6 범위, X/Z 0.2 확장으로 머리 가까운 솔리드 블록 검출.
+     */
+    private static double getMinPlayerSolidBetween(ClientPlayerEntity player,
+                                                    double yMin, double yMax,
+                                                    double horizontalTolerance) {
+        Box bb = player.getBoundingBox();
+        Box checkBox = new Box(
+                bb.minX - horizontalTolerance, yMin, bb.minZ - horizontalTolerance,
+                bb.maxX + horizontalTolerance, yMax, bb.maxZ + horizontalTolerance
+        );
+        double result = yMax;
+        Iterable<VoxelShape> collisions = player.getWorld().getBlockCollisions(player, checkBox);
+        for (VoxelShape shape : collisions) {
+            if (shape.isEmpty()) continue;
+            Box shapeBox = shape.getBoundingBox();
+            // shape 가 yMin~yMax 와 Y 범위 겹침 (X/Z 는 getBlockCollisions 가 처리)
+            if (shapeBox.maxY > yMin && shapeBox.minY < yMax) {
+                result = Math.min(result, shapeBox.minY);
+            }
+        }
+        return Math.max(result, yMin);
     }
 }
