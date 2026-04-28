@@ -9,6 +9,7 @@
     "MixinClientPlayerEntity",
     "MixinClientPlayerInteractionManager",
     "MixinEntityClient",
+    "MixinKeyboardInput",
     "MixinLivingEntityClient",
     "MixinLivingEntityRenderer",
     "MixinPlayerEntityClient",

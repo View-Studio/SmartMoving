@@ -756,28 +756,6 @@ public final class SmartMovingClimber {
         boolean wantClimbUp   = sm.wantClimbUp;
         boolean wantClimbDown = sm.wantClimbDown;
 
-        // 🔧 DEBUG (사다리/덩굴 자동 진입 진단용 — 검증 후 제거).
-        //   사용자 위치 + 사다리 검사 결과 + wantClimb 흐름 콘솔 출력.
-        //   매 5틱 (1/4초) 1회 → minecraft logs/latest.log 에서 확인 가능.
-        if (player.age % 5 == 0) {
-            boolean debugIsFacedToLadder = isFacedToLadder(player, sm.isClimbCrawling);
-            boolean debugIsFacedToVine   = isFacedToSolidVine(player, sm.isClimbCrawling);
-            String debugMsg = String.format(
-                    "[SM-CLIMB] x=%.2f y=%.2f z=%.2f px=%d py=%d pz=%d facing=%s | h=%s f=%s | facedLad=%s facedVine=%s | wantClimb=%s wantUp=%s wantDn=%s | onClimbable=%s | grab=%s sneak=%s fwd=%.1f",
-                    player.getX(), player.getY(), player.getZ(),
-                    (int) Math.floor(player.getX()),
-                    (int) Math.floor(player.getY()),
-                    (int) Math.floor(player.getZ()),
-                    player.getHorizontalFacing(),
-                    handsClimbing, feetClimbing,
-                    debugIsFacedToLadder, debugIsFacedToVine,
-                    sm.wantClimb, wantClimbUp, wantClimbDown,
-                    handsClimbing.isRelevant() || feetClimbing.isRelevant(),
-                    SmartMovingKeys.grab.isPressed(), player.isSneaking(),
-                    player.input.movementForward);
-            System.out.println(debugMsg);
-        }
-
         // 진입 게이트: 둘 다 false 시 등반 분기 진입 안 함 (원본 동등).
         if (!wantClimbUp && !wantClimbDown) {
             return;
