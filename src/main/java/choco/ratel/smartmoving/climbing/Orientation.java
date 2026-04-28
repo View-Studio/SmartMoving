@@ -2447,14 +2447,47 @@ public class Orientation {
         if (wallState != null && isOnMiddleLadderFront(0))
             return setHalfGrabType(AroundGrab, remoteState, false);
 
-        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. cfg.freeFenceClimbing 안의 fence
-        //   6개 sub-branch 제거 — 통합 분기 (L2417 isEmpty+remote, L2423 wallState) 에서
-        //   iron_bars 와 동일하게 처리됨. 추가 fence 전용 분기 (L2434 baseBlockId,
-        //   L2443 remoteBelow, L2454 belowWall) 가 fence 만 잡으면 iron_bars 와 다른
-        //   grabRemote/위치로 매핑되어 속도 차이 발생 → 제거하여 강제 통일.
-        //   cobblestone_wall 분기는 별도 블록이라 그대로 유지.
+        // 🔴 b 옵션 (사용자 요구 fence ≡ iron_bars 통합 + 끝까지 등반 보장):
+        //   원본 L573-591 fence sub-branch 4개를 iron_bars 통합 형태로 복원.
+        //   기존 통합 분기 (L2434-2440 isEmpty+remote / L2443-2446 wallState) 는 base 가
+        //   비어있는 케이스만 처리 — 사용자 위치 base 가 fence/iron_bars 인 케이스 (수직
+        //   fence/iron_bars 줄 등반 마지막 블록 직전) 매핑 fail → handsClimbing=NONE →
+        //   wantClimbUp 분기 fallback HOLD_MOTION → 위로 못 올라감 (사용자 보고).
+        //   이 분기들이 base/baseBelow 가 fence/iron_bars 인 모서리 케이스 처리.
         if (cfg.freeFenceClimbing) {
             BlockState remoteBelowState = getRemoteBlockId(-1);
+            BlockState baseStateLocal = getBaseBlockId(0);
+            BlockState baseBelowState = getBaseBlockId(-1);
+
+            // 1. 원본 L573-577: remote=fence/iron_bars + base 모서리 케이스
+            boolean remoteIsBars = remoteState.getBlock() == Blocks.IRON_BARS || isFence(remoteState);
+            boolean baseIsBars = baseStateLocal.getBlock() == Blocks.IRON_BARS || isFence(baseStateLocal);
+            if (remoteIsBars && headedToFrontWall(remote_i, 0, remote_k, remoteState)) {
+                if (!baseIsBars)
+                    return setHalfGrabType(HalfGrab, remoteState);
+                else if (headedToFrontSideWall(remote_i, 0, remote_k, remoteState))
+                    return setHalfGrabType(HalfGrab, remoteState);
+            }
+
+            // 2. 원본 L579-584: 수직 fence/iron_bars 줄 등반 (remoteBelow 매핑)
+            boolean remoteBelowIsBars = remoteBelowState.getBlock() == Blocks.IRON_BARS || isFence(remoteBelowState);
+            boolean baseBelowIsBars = baseBelowState.getBlock() == Blocks.IRON_BARS || isFence(baseBelowState);
+            if (remoteBelowIsBars && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
+                if (!baseBelowIsBars)
+                    return setHalfGrabType(HalfGrab, remoteState);
+                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
+                    return setHalfGrabType(HalfGrab, remoteState);
+            }
+
+            // 3. 원본 L589-591: base 아래 fence/iron_bars wall
+            BlockState belowWallState = getWallBlockId(base_i, -1, base_k);
+            if (belowWallState != null) {
+                boolean belowWallIsBars = belowWallState.getBlock() == Blocks.IRON_BARS || isFence(belowWallState);
+                if (belowWallIsBars && headedToBaseWall(-1, belowWallState))
+                    return setHalfGrabType(HalfGrab, belowWallState, false);
+            }
+
+            // 4. cobblestone_wall (기존)
             if (remoteState.getBlock() == Blocks.COBBLESTONE_WALL
                     && !headedToRemoteFlatWall(remoteState, 0))
                 return setHalfGrabType(HalfGrab, remoteState);
@@ -2564,10 +2597,25 @@ public class Orientation {
                 return setBottomGrabType(HalfGrab, remoteBelowState);
         }
 
-        // 🔴 사용자 요구: fence ≡ iron_bars 동일 동작. cfg.freeFenceClimbing 안의 fence
-        //   sub-branch 제거 — 통합 분기 (L2545 isEmpty+remoteBelow, L2574 belowWall) 에서
-        //   iron_bars 와 동일하게 처리됨. cobblestone_wall 만 유지.
+        // 🔴 b 옵션 (사용자 요구 fence ≡ iron_bars 통합 + 끝까지 등반 보장):
+        //   원본 L698-702 fence sub-branch 를 iron_bars 통합 형태로 복원.
+        //   기존 통합 분기 (L2562-2564) 는 base 아래가 비어있는 케이스만. 사용자 발 아래
+        //   fence/iron_bars 가 있고, 그 아래도 fence/iron_bars 인 수직 줄 등반 매핑 fail →
+        //   끝까지 못 올라감 (사용자 보고).
         if (cfg.freeFenceClimbing) {
+            BlockState baseBelowStateLocal = getBaseBlockId(-1);
+
+            // 1. 원본 L698-702: 수직 fence/iron_bars 줄 등반 (remoteBelow + baseBelow 모서리)
+            boolean remoteBelowIsBars = remoteBelowState.getBlock() == Blocks.IRON_BARS || isFence(remoteBelowState);
+            boolean baseBelowIsBars = baseBelowStateLocal.getBlock() == Blocks.IRON_BARS || isFence(baseBelowStateLocal);
+            if (remoteBelowIsBars && headedToFrontWall(remote_i, -1, remote_k, remoteBelowState)) {
+                if (!baseBelowIsBars)
+                    return setBottomGrabType(HalfGrab, remoteBelowState);
+                else if (headedToFrontSideWall(remote_i, -1, remote_k, remoteBelowState))
+                    return setBottomGrabType(HalfGrab, remoteBelowState);
+            }
+
+            // 2. cobblestone_wall (기존)
             if (remoteBelowState.getBlock() == Blocks.COBBLESTONE_WALL
                     && !headedToRemoteFlatWall(remoteBelowState, -1))
                 return setHalfGrabType(HalfGrab, remoteBelowState);
