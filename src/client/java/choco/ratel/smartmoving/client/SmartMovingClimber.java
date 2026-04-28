@@ -730,6 +730,23 @@ public final class SmartMovingClimber {
             if (sm.isClimbHolding || handsClimbing == HandsClimbing.SINK) {
                 value = HOLD_MOTION; isUp = true;
             }
+
+            // 🔴 사용자 요구 추가 (handsEdgeBlock/feetEdgeBlock = fence/iron_bars):
+            //   handsClimbing 매핑이 SINK 가 아닌 다른 enum (TopHold/Up/None 등) 이어도
+            //   잡은 블록이 fence/iron_bars 면 grab만으로 hold. 사용자 명시 의도 — 일반
+            //   블록 grab hold 와 동일 동작.
+            //   handsEdgeBlock/feetEdgeBlock 은 ClimbGap.state → 클라이밍 진입 시 잡은
+            //   실제 블록 (BlockState). null 가드 필수.
+            boolean grabbedFenceOrBars =
+                    (sm.handsEdgeBlock != null
+                            && (sm.handsEdgeBlock.getBlock() == net.minecraft.block.Blocks.IRON_BARS
+                                || Orientation.isFence(sm.handsEdgeBlock)))
+                 || (sm.feetEdgeBlock != null
+                            && (sm.feetEdgeBlock.getBlock() == net.minecraft.block.Blocks.IRON_BARS
+                                || Orientation.isFence(sm.feetEdgeBlock)));
+            if (grabbedFenceOrBars) {
+                value = HOLD_MOTION; isUp = true;
+            }
         }
 
         // 원본 L1522 factor = getCombinedSpeedFactor() + L1523-1524 isFast sprint factor.
