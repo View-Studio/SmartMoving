@@ -713,6 +713,27 @@ public final class SmartMovingClientState {
     public float smStandardFadeYaw_prevTime = -999f;
 
     /**
+     * 🔴 D-4 종료 엣지 cleanup 추적 (사용자 보고 — 등반 종료 후 standing 시 몸통 분리 잔존):
+     *   D-4 분기 (NoGrab+non-NoStep) 진입 시 모든 노드 pivotZ=-6 set. 등반 종료 시 sm_animateClimbing
+     *   호출 안 됨 → reset 안 됨. reset 인프라 (sm_setAngles TAIL) 는 anySmState 활성 시만 진입 →
+     *   종료 엣지 frame 에 anySmState=false 면 진입 안 함 → pivotZ 잔존.
+     *   이전 frame 의 climbing 상태 추적 → 종료 엣지 (true → false) 한 번 모든 pivotZ=0 reset.
+     */
+    public boolean smWasClimbingForCleanup = false;
+
+    /**
+     * 🔴 천장 등반 bodyYaw fade 보간 (사용자 보고 — 마우스 회전 시 몸통 회전 보간 원본과 다름):
+     *   원본 SmartRenderModel L209: bipedOuter.fadeRotateAngleY = true (기본).
+     *   원본 SmartMovingModel L310: bipedOuter.rotateAngleY = rotateY + horizontalAngle.
+     *   ModelRotationRenderer.fadeIntermediate 가 매 frame `prev + (target - prev) * deltaTime * 0.2F`
+     *   lerp 적용 → 마우스 회전 시 몸통 부드럽게 추적.
+     *   1.21.1 매핑: sm_captureBodyYaw 의 isCeilingClimbing 분기에 lerpFadeAngle 적용.
+     *   prev = 이전 frame lerped 라디안, prevTime = animationProgress (tick 단위).
+     */
+    public float smCeilingYaw_prev = 0f;
+    public float smCeilingFade_prevTime = -999f;
+
+    /**
      * 🔴 (세션 52b): partial tick 캐시 — setupTransforms 에서 저장 → setAngles 에서 사용.
      * Mixin static field 제약 (private 만 허용) 우회 — SmartMovingClientState 에 저장.
      * 원본 SmartRenderRender.renderPlayer L56-L57: getCurrentSpeed/getTotalDistance(renderPartialTicks)
@@ -1512,7 +1533,6 @@ public final class SmartMovingClientState {
             //   필요. 박스를 미리 복원하면 gap 측정 부정확. 종료 시 dimensions 복원은
             //   standupIfPossible 끝에서 수행 (B-N-standup 메서드 본체에 추가).
             if ((isFlying && !wasFlying) || (isLevitating && !wasLevitating)) {
-                smDebugDumpState(player, "비행 진입 엣지 (BEFORE)", "");
                 this.heightOffset = -1F;
                 // 🔴 stale restoreFromFlying 클리어 (자동 착지 1회 한정 BUG fix):
                 //   직전 비행 종료 엣지에서 restoreFromFlying=true 로 set 되었는데, 자동 착지
@@ -1526,7 +1546,6 @@ public final class SmartMovingClientState {
                 //   비행 세션 내에서만 의미 있는 신호로 유지.
                 this.restoreFromFlying = false;
                 player.calculateDimensions();
-                smDebugDumpState(player, "비행 진입 엣지 (AFTER calc)", "");
             }
             if ((!isFlying && wasFlying) || (!isLevitating && wasLevitating)) {
                 // 🔴 root cause fix (디버그 로그 분석 결과):
@@ -1538,7 +1557,6 @@ public final class SmartMovingClientState {
                 //   해결: 비행 종료 엣지에서 heightOffset=-1F 강제 재설정 → standupIfPossible
                 //   가드 통과 → 정상 standUp 호출.
                 this.heightOffset = -1F;
-                smDebugDumpState(player, "비행 종료 엣지 (감지, heightOffset=-1F 재설정)", "restoreFromFlying=" + restoreFromFlying);
             }
 
             // **포커스 #3 B-3 (세션 4)**: 원본 L2542-L2544 tryLanding 계산 + standupIfPossible
@@ -2906,27 +2924,14 @@ public final class SmartMovingClientState {
      *   패턴은 MixinClientPlayerEntity L53 에서 이미 사용 중 (착지 후 flying 복원).
      */
     public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
-        // 🔴 디버그 로그 (사용자 요청):
-        smDebugDumpState(player, "standupIfPossible enter",
-                "tryLanding=" + tryLanding + " restoreFromFlying=" + restoreFromFlying);
-
-        if (this.heightOffset >= 0) {
-            System.out.println("[SM-FLY-DEBUG] standupIfPossible early return (heightOffset >= 0)");
-            return;
-        }
+        if (this.heightOffset >= 0) return;
 
         double gapUnderneight = getGapUnderneight(player);
         boolean groundClose = gapUnderneight < 1D;
         double gapOverneight = groundClose ? getGapOverneight(player) : -1D;
         boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
 
-        System.out.println("[SM-FLY-DEBUG] gap=" + gapUnderneight
-                + " gapOver=" + gapOverneight
-                + " groundClose=" + groundClose
-                + " standUpPossible=" + standUpPossible);
-
         if (tryLanding && groundClose && standUpPossible) {
-            System.out.println("[SM-FLY-DEBUG] tryLanding 분기 진입 → isFlying=false, abilities.flying=false");
             this.isFlying = false;
             // 포커스 #3 B-3 (세션 4): 원본 L2199 `sp.capabilities.isFlying = false` 매핑.
             //   1.21.1 PlayerAbilities.flying public field 직접 할당 + 서버 sync 패킷.
@@ -2936,28 +2941,18 @@ public final class SmartMovingClientState {
             restoreFromFlying = true;
         }
 
-        if (!restoreFromFlying) {
-            System.out.println("[SM-FLY-DEBUG] !restoreFromFlying → return");
-            return;
-        }
+        if (!restoreFromFlying) return;
 
         boolean sneakPressed = player.isSneaking();
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
 
-        String branch;
         if (!groundClose && !sneakPressed) {
-            branch = "resetHeightOffset (공중)";
             resetHeightOffset();
         } else if (standUpPossible && !(sneakPressed && grabPressed)) {
-            branch = "standUp(gap=" + gapUnderneight + ")";
             standUp(player, gapUnderneight);
         } else {
-            branch = "toSlidingOrCrawling(gap=" + gapUnderneight + ")";
             toSlidingOrCrawling(player, gapUnderneight);
         }
-        System.out.println("[SM-FLY-DEBUG] 분기: " + branch
-                + " 후 entity.y=" + player.getY()
-                + " bb=" + player.getBoundingBox());
 
         // 🔴 비행 종료 dimensions 복원 (사용자 요청, 단계 3+):
         //   원본 setHeightOffset / resetHeightOffset 가 boundingBox/height 직접 조작 →
@@ -2968,12 +2963,6 @@ public final class SmartMovingClientState {
         //   호출 시점 abilities.flying=false → MixinEntity.sm_offsetBoundingBoxForFlying 가드
         //   미통과 → 박스 modify 미적용 → 박스 = (entity.y, entity.y+1.8) 정상 STANDING.
         player.calculateDimensions();
-        System.out.println("[SM-FLY-DEBUG] calculateDimensions 후"
-                + " dim.h=" + player.getDimensions(player.getPose()).height()
-                + " dim.eye=" + player.getDimensions(player.getPose()).eyeHeight()
-                + " bb=" + player.getBoundingBox()
-                + " isFlying=" + this.isFlying
-                + " isCrawling=" + this.isCrawling);
 
         // 🔴 가라앉음 안전망 (사용자 요청 — "위로 콜리전을 늘려서 원복" 보장):
         //   standUp 의 setPosition 보정 후에도 박스 발이 솔리드 안 박힐 가능성 (motion 처리
@@ -2985,14 +2974,9 @@ public final class SmartMovingClientState {
         //   solidMax > bb.minY 가능.
         Box bbAfter = player.getBoundingBox();
         double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.0, bbAfter.minY + 0.5, 0);
-        System.out.println("[SM-FLY-DEBUG] 안전망 검사: bb.minY=" + bbAfter.minY
-                + " solidUnder=" + solidUnder
-                + " 박힘=" + (bbAfter.minY < solidUnder - 1.0E-5));
         if (bbAfter.minY < solidUnder - 1.0E-5) {
             double pushY = solidUnder - bbAfter.minY;
             player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
-            System.out.println("[SM-FLY-DEBUG] 안전망 push up: pushY=" + pushY
-                    + " entity.y_new=" + player.getY());
         }
     }
 

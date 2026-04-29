@@ -132,7 +132,9 @@
       "Bash(\"/c/Program Files/Java/jdk-21/bin/javap.exe\" -p /tmp/bipdump/net/minecraft/client/render/entity/EntityRenderer.class)",
       "Bash(\"/c/Program Files/Java/jdk-21/bin/jar.exe\" -xf \"C:/Users/user/IdeaProjects/SmartMoving/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-48f5f74c97/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientOnly-48f5f74c97-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" net/minecraft/client/render/entity/EntityRenderDispatcher.class)",
       "Bash(\"/c/Program Files/Java/jdk-21/bin/javap.exe\" -p /tmp/bipdump/net/minecraft/client/render/entity/EntityRenderDispatcher.class)",
-      "Bash(\"/c/Program Files/Java/jdk-21/bin/javap.exe\" -p -c -l /tmp/bipdump/net/minecraft/client/render/entity/EntityRenderDispatcher.class)"
+      "Bash(\"/c/Program Files/Java/jdk-21/bin/javap.exe\" -p -c -l /tmp/bipdump/net/minecraft/client/render/entity/EntityRenderDispatcher.class)",
+      "Bash(./gradlew compileJava --no-daemon -q)",
+      "Bash(./gradlew compileClientJava --no-daemon)"
     ]
   }
 }

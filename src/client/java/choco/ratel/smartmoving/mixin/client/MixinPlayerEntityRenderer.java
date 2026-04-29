@@ -184,8 +184,17 @@ public class MixinPlayerEntityRenderer {
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
             float rotateY = (float) Math.cos(distance) * 0.44F * walkFactor;
+            // 🔴 fade 보간 적용 (사용자 보고 — 마우스 회전 시 몸통 회전 보간 원본과 다름):
+            //   원본 SmartRenderModel L209: bipedOuter.fadeRotateAngleY = true (기본).
+            //   ModelRotationRenderer.fadeIntermediate 가 매 frame target 으로 0.2*deltaTime lerp.
+            //   1.21.1 매핑: lerpFadeAngle 헬퍼 (라디안 단위, 0.2 factor) 사용. 비행 패턴 차용.
+            float targetYawRad = rotateY + horizontalAngle;
+            float laggedYawRad = lerpFadeAngle(sm.smCeilingYaw_prev, targetYawRad,
+                                               sm.smCeilingFade_prevTime, animationProgress);
+            sm.smCeilingYaw_prev = laggedYawRad;
+            sm.smCeilingFade_prevTime = animationProgress;
             smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(rotateY + horizontalAngle);
+            smBodyYawOverride = (float) Math.toDegrees(laggedYawRad);
             return;
         }
 
@@ -459,6 +468,13 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterTiltX = theta;
         }
 
+        // 🔴 D-4 매트릭스 변환 시도 → 회전 중심 차이로 자세 잘못 (사용자 보고 5회차).
+        //   원본 bipedTorso 회전 중심 = bipedTorso pivot (0,0,-6) = 허리/머리 위치 (작은 visual 효과).
+        //   1.21.1 matrices 회전 중심 = vanilla setupTransforms 후 위치 = entity 발 부근 (큰 효과).
+        //   같은 0.5rad 이라도 visual 차이 → 매트릭스 방식 폐기.
+        //   이전 직접 매핑 (body.pitch, pivotZ, arm 누적) 으로 복원. 분리는 그대로 (수용 가능 수준).
+        //   sm_animateClimbing 의 D-4 분기 본체 참조.
+
         // 🔴 (2026-04-27) falling matrix 분기 비활성화 — sm_modifyBodyYaw 의 fade lerp 로 통합.
         //   이전: force=0 + 추가 R_y(-yawLerped) → vanilla setupTransforms 무력화 → 원본 동작 차이.
         //   새 매핑: smBodyYawActive=false → sm_modifyBodyYaw 가 vanilla bodyYaw 에 fade lerp 만
@@ -476,6 +492,14 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterTiltX_prev = 0f;
             sm.smOuterExtraYaw_prev = (float) Math.toRadians(SmartMovingClientState.smCachedBodyYawLaggedDeg);
             sm.smOuterFade_prevTime = animationProgress;
+        }
+
+        // 🔴 천장 등반 fade prev 매 frame 갱신 (비행 prev 갱신 패턴과 동일).
+        //   천장 등반 외 분기에서 prev = 직전 vanilla 또는 SM bodyYaw (라디안).
+        //   진입 첫 frame fade 자연 시작 (이전값 → target lerp).
+        if (!sm.isCeilingClimbing) {
+            sm.smCeilingYaw_prev = (float) Math.toRadians(SmartMovingClientState.smCachedBodyYawLaggedDeg);
+            sm.smCeilingFade_prevTime = animationProgress;
         }
     }
 

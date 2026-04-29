@@ -171,6 +171,27 @@ public abstract class MixinPlayerEntityModelClient {
         if (anySmState) {
             this.leaningPitch = 0f;
         }
+
+        // 🔴 D-4 종료 엣지 cleanup (사용자 보고 — 등반 종료 후 standing 시 몸통 앞으로 빠진 잔존):
+        //   D-4 분기 진입 시 set 한 모든 노드 pivotZ=-6 가 등반 종료 시 reset 안 됨.
+        //   이전 frame climbing 상태 추적 → 종료 엣지 (true → false) 한 번 명시 cleanup.
+        //   leg.pivotX 도 sm_animateClimbing 진입부에서 ±2.0 로 set 됐으므로 vanilla default
+        //   ±1.9 로 복원 (1.21.1 PlayerEntityModel layer definition 의 정의 값).
+        boolean smIsClimbingNow = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing;
+        if (sm.smWasClimbingForCleanup && !smIsClimbingNow) {
+            body.pivotZ     = 0f;
+            head.pivotZ     = 0f;
+            rightArm.pivotZ = 0f;
+            leftArm.pivotZ  = 0f;
+            rightLeg.pivotZ = 0f;
+            leftLeg.pivotZ  = 0f;
+            rightLeg.pivotX = -1.9f;
+            leftLeg.pivotX  =  1.9f;
+            // D-4 leg.pivotY 정정 매핑 (12*cos(0.5)≈10.529) → vanilla default 12 reset.
+            rightLeg.pivotY = 12f;
+            leftLeg.pivotY  = 12f;
+        }
+        sm.smWasClimbingForCleanup = smIsClimbingNow;
         // pivot/yaw/roll reset 인프라 (B-9/B-11/B-13 부속): vanilla setAngles 는
         //   head/body pivotZ, body.yaw, head.roll 을 매 프레임 reset 하지 않는다
         //   (sneak 분기는 leg.pivotZ 만 변경 / body.yaw 는 animateArms 안
@@ -223,8 +244,16 @@ public abstract class MixinPlayerEntityModelClient {
         }
 
         // ── SM 11-state if-else 체인 (SmartMovingModel.setRotationAngles 우선순위) ──
+        // 🔴 사용자 보고 후 (천장 등반): isCeilingClimbing 을 isClimbing 보다 먼저 검사.
+        //   원본 SmartMovingModel L127-L316 은 isClimb 우선이지만 isClimb && isCeilingClimb
+        //   둘 다 true 발생 안 함을 가정. 1.21.1 측은 천장 등반 시 sm.isClimbing 도 true 로
+        //   매핑되어 둘 다 true 발생 → isClimbing 분기 진입 → 일반 클라이밍 식 적용 → 천장
+        //   등반인데 팔/다리 가만히. 우선순위 변경으로 isCeilingClimbing 시 sm_animateCeilingClimbing
+        //   호출 보장.
         if (sm.isRopeSliding) {
             sm_animateRopeSliding(animationProgress, player);
+        } else if (sm.isCeilingClimbing) {
+            sm_animateCeilingClimbing(sm, headYaw);
         } else if (sm.isClimbing || sm.isCrawlClimbing) {
             sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
         } else if (sm.isClimbJumping) {
@@ -233,8 +262,6 @@ public abstract class MixinPlayerEntityModelClient {
             leftArm.pitch  = HALF + SIXTEENTH;
             rightArm.roll  = -THIRTYTWOTH;
             leftArm.roll   =  THIRTYTWOTH;
-        } else if (sm.isCeilingClimbing) {
-            sm_animateCeilingClimbing(limbSwing, limbSwingAmount, headYaw);
         } else if (sm.isSwimming_sm) {
             sm_animateSwimming(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isDiving) {
@@ -335,90 +362,167 @@ public abstract class MixinPlayerEntityModelClient {
      * isCrawlClimbing 시 legAngleZ(roll) 보정 (R-10c).
      */
     private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch) {
-        // B-4 / §16-10: 원본 SmartMovingModel L144 = `Math.min(0.5f, currentVerticalSpeed)` —
-        //   verticalSpeed 입력은 수직 속도 (sm.stats.currentVerticalSpeed) 가 정합. 이전 구현은
-        //   limbSwingAmount (수평 속도) 로 잘못 매핑. SmartStatistics.calculate L61 이 vanilla
-        //   limbAnimator 와 동일 EMA 공식 (4× + 0.4 보간) 으로 currentVerticalSpeed 갱신 → 안전.
-        float verticalSpeed = Math.min(0.5f, sm.stats.currentVerticalSpeed);
-        float horizontalSpeed = Math.min(0.5f, limbSwingAmount);
+        // B-4 / §16-10 + 부드러움 1:1 (사용자 보고 후, 그랩 클라이밍 진자운동 부드러움 정정):
+        //   원본 SmartRenderModel 은 매 frame `getCurrentSpeed(partialTicks)` lerp getter 로
+        //   prev/current EMA 사이를 partial tick 비율로 보간 = 60Hz 부드러움.
+        //   이전 매핑 `sm.stats.currentVerticalSpeed` 직접 참조 = 매 tick 갱신값 = 20Hz 띡띡.
+        //   비행 (sm_animateFlying) 와 동일 패턴 적용 — getCurrentVerticalSpeed/getTotalVerticalDistance
+        //   lerp getter 로 통일.
+        float partialTicks = SmartMovingClientState.globalCachedTickDelta;
+        float verticalSpeed   = Math.min(0.5f, sm.stats.getCurrentVerticalSpeed(partialTicks));
+        float horizontalSpeed = Math.min(0.5f, sm.stats.getCurrentHorizontalSpeed(partialTicks));
+        float totalVerticalDistance   = sm.stats.getTotalVerticalDistance(partialTicks);
+        float totalHorizontalDistance = sm.stats.getTotalHorizontalDistance(partialTicks);
 
-        // 머리: 시야 수직 각도 반영, Y=0(몸 방향 고정)
+        // leg.pivotZ reset — D-4 분기 빠진 frame 에서 -6 누적 차단.
+        //   (head/body/arm pivotZ 는 sm_setAngles TAIL 의 reset 인프라가 0 으로 reset.)
+        rightLeg.pivotZ = 0f;
+        leftLeg.pivotZ  = 0f;
+
+        // 🔴 다리 pivotX 1:1 매핑 (사용자 보고 9회차 — 다리 디테일 차이 정밀 분석):
+        //   원본 SmartRenderModel.java L80-L87:
+        //     bipedRightLeg.setRotationPoint(-2F, 0.0F, 0.0F);  // 부모 bipedPelvic (0,12,0)
+        //     bipedLeftLeg.setRotationPoint(2.0F, 0.0F, 0.0F);
+        //     → 절대 leg pivot = (±2.0, 12, 0)
+        //   1.21.1 vanilla PlayerEntityModel layer definition:
+        //     right_leg.pivot(-1.9F, 12.0F, 0.0F)
+        //     left_leg.pivot(1.9F, 12.0F, 0.0F)
+        //     → 절대 leg pivot = (±1.9, 12, 0)
+        //   차이 0.1 픽셀 — 사용자 시각 미세 영향 가능. 원본 1:1 매핑 위해 ±2.0 명시 set.
+        //   (sm_setAngles TAIL 의 종료 엣지 cleanup 에서 vanilla default ±1.9 로 reset.)
+        rightLeg.pivotX = -2f;
+        leftLeg.pivotX  =  2f;
+
+        // 🔴 (사용자 보고 8회차 — 기본 블록 그랩 클라이밍 완전 1:1 매핑):
+        //   원본 SmartMovingModel.setRotationAngles L127-L237 의 isClimb 분기를 라인별 1:1 풀어씀.
+        //   변수명 / 식 / 분기 모두 원본 그대로 (수학적 단순화 제거).
+
+        // 원본 L131-L132: 머리 yaw=0, pitch=mouse.
         head.yaw   = 0f;
         head.pitch = headPitch * DEG_TO_RAD;
 
-        // 팔: handsClimbType 3-way 분기 (R-10)
-        // ordinal 매핑: UP(4)/FAST_UP(5)→UpGrab, TOP_HOLD(2)/BOTTOM_HOLD(3)→MiddleGrab, NONE(0)/SINK(1)→NoGrab
-        int h = sm.actualHandsClimbType;
-        // vine climbing: MiddleGrab → UpGrab 전환 (SmartMovingModel L317-319)
-        if (sm.isHandsVineClimbing && h >= 2 && h < 4) h = 4;
-        float handsDistUp, handsOffset;
-        if (h >= 4) {         // UP_GRAB: UP(4), FAST_UP(5)
-            handsDistUp = 2f;
-            handsOffset = -2.5f;
-        } else if (h >= 2) {  // MIDDLE_GRAB: TOP_HOLD(2), BOTTOM_HOLD(3)
-            handsDistUp = 2f;
-            handsOffset = -QUARTER;
-        } else {              // NO_GRAB: NONE(0), SINK(1)
-            handsDistUp = 0f;
-            handsOffset = -0.5f;
+        // 원본 L137-L138: hands/feet Frequence/Distance Up/Side Factor/Offset 변수 선언.
+        float handsFrequenceUpFactor, handsDistanceUpFactor, handsDistanceUpOffset;
+        float feetFrequenceUpFactor, feetDistanceUpFactor, feetDistanceUpOffset;
+        float handsFrequenceSideFactor, handsDistanceSideFactor, handsDistanceSideOffset;
+        float feetFrequenceSideFactor, feetDistanceSideFactor, feetDistanceSideOffset;
+
+        // 원본 L140-L142: handsClimbType + vine MiddleGrab → UpGrab 변환.
+        //   1.21.1 도메인: 0=NoGrab, 1=UpGrab, 2=MiddleGrab (handleClimbing 분기별 set 매핑).
+        int handsClimbType = sm.actualHandsClimbType;
+        if (sm.isHandsVineClimbing && handsClimbType == 2 /* MiddleGrab */) {
+            handsClimbType = 1 /* UpGrab */;
         }
-        // B-4 / §16-10: 원본 L200/L201 — arm.pitch cos 입력은 totalVerticalDistance (수직 누적).
-        //   이전 limbSwing (수평 누적) 잘못 매핑 → sm.stats.totalVerticalDistance 로 교체.
-        float rPitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f + HALF) * verticalSpeed * handsDistUp + handsOffset;
-        float lPitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f)        * verticalSpeed * handsDistUp + handsOffset;
-        float rYaw   = MathHelper.cos(limbSwing * 0.6662f + QUARTER) * horizontalSpeed;
-        float lYaw   = MathHelper.cos(limbSwing * 0.6662f)            * horizontalSpeed;
-        setAnglesYZX(rightArm, rPitch, rYaw, 0f);
-        setAnglesYZX(leftArm,  lPitch, lYaw, 0f);
-        // isHandsVineClimbing: yaw 추가 보정 (원본 SmartMovingModel.md L346-352)
+
+        // 원본 L144-L145: speed clamp (Math.min(0.5, currentVerticalSpeed/currentHorizontalSpeed)).
+        //   1.21.1: partial tick lerp getter (60Hz 부드러움 — 원본 SmartRenderRender.renderPlayer
+        //     L56-L57 의 getCurrentSpeed(renderPartialTicks) 등가).
+        // (위에서 이미 verticalSpeed/horizontalSpeed/totalVerticalDistance/totalHorizontalDistance 정의됨.)
+
+        // 원본 L147-L176: handsClimbType switch — 3-way 분기.
+        final float FrequenceFactor = 0.6662f;  // 원본 SmartMovingModel.FrequenceFactor.
+        switch (handsClimbType) {
+            case 2:  // MiddleGrab — 원본 L149-L156
+                handsFrequenceSideFactor = FrequenceFactor;
+                handsDistanceSideFactor  = 1.0f;
+                handsDistanceSideOffset  = 0.0f;
+                handsFrequenceUpFactor   = FrequenceFactor;
+                handsDistanceUpFactor    = 2f;
+                handsDistanceUpOffset    = -QUARTER;
+                break;
+            case 1:  // UpGrab — 원본 L158-L165
+                handsFrequenceSideFactor = FrequenceFactor;
+                handsDistanceSideFactor  = 1.0f;
+                handsDistanceSideOffset  = 0.0f;
+                handsFrequenceUpFactor   = FrequenceFactor;
+                handsDistanceUpFactor    = 2f;
+                handsDistanceUpOffset    = -2.5f;
+                break;
+            default: // NoGrab (0) — 원본 L167-L175
+                handsFrequenceSideFactor = FrequenceFactor;
+                handsDistanceSideFactor  = 1.0f;
+                handsDistanceSideOffset  = 0.0f;
+                handsFrequenceUpFactor   = FrequenceFactor;
+                handsDistanceUpFactor    = 0f;
+                handsDistanceUpOffset    = -0.5f;
+                break;
+        }
+
+        // 원본 L178-L198: feetClimbType switch — 2-way 분기 (UpGrab vs default).
+        //   1.21.1 도메인: 0=NoStep, 1=DownStep (handleClimbing 분기별 set).
+        //   원본 case `HandsClimbing.UpGrab` (=1) ≡ 1.21.1 DownStep (=1).
+        int feetClimbType = sm.actualFeetClimbType;
+        switch (feetClimbType) {
+            case 1:  // UpGrab/DownStep — 원본 L180-L187
+                feetFrequenceUpFactor   = FrequenceFactor;
+                feetDistanceUpFactor    = 0.3f / verticalSpeed;  // 원본 L182 그대로 (verticalSpeed=0 시 NaN 동작도 1:1)
+                feetDistanceUpOffset    = -0.3f;
+                feetFrequenceSideFactor = FrequenceFactor;
+                feetDistanceSideFactor  = 0.5f;
+                feetDistanceSideOffset  = 0.0f;
+                break;
+            default: // NoStep — 원본 L189-L196
+                feetFrequenceUpFactor   = FrequenceFactor;
+                feetDistanceUpFactor    = 0.0f;
+                feetDistanceUpOffset    = 0.0f;
+                feetFrequenceSideFactor = FrequenceFactor;
+                feetDistanceSideFactor  = 0.0f;
+                feetDistanceSideOffset  = 0.0f;
+                break;
+        }
+
+        // 원본 L200-L204: 팔 X(pitch)/Y(yaw) — 변수 풀어쓰기.
+        float rArmPitch = MathHelper.cos(totalVerticalDistance * handsFrequenceUpFactor + HALF) * verticalSpeed * handsDistanceUpFactor + handsDistanceUpOffset;
+        float lArmPitch = MathHelper.cos(totalVerticalDistance * handsFrequenceUpFactor)        * verticalSpeed * handsDistanceUpFactor + handsDistanceUpOffset;
+        float rArmYaw   = MathHelper.cos(totalHorizontalDistance * handsFrequenceSideFactor + QUARTER) * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;
+        float lArmYaw   = MathHelper.cos(totalHorizontalDistance * handsFrequenceSideFactor)            * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;
+        setAnglesYZX(rightArm, rArmPitch, rArmYaw, 0f);
+        setAnglesYZX(leftArm,  lArmPitch, lArmYaw, 0f);
+
+        // 원본 L206-L215: isHandsVineClimbing 추가 보정.
         if (sm.isHandsVineClimbing) {
-            rightArm.yaw = rightArm.yaw * (1f + 0.6662f) - EIGHTH;
-            leftArm.yaw  = leftArm.yaw  * (1f + 0.6662f) + EIGHTH;
-            // 원본 SmartMovingModel.java L353: setArmScales(abs(cos(rightArm.X)), abs(cos(leftArm.X)))
+            // 원본 L208-L209: arm.Y *= 1F + handsFrequenceSideFactor.
+            leftArm.yaw  *= 1f + handsFrequenceSideFactor;
+            rightArm.yaw *= 1f + handsFrequenceSideFactor;
+            // 원본 L211-L212: leftArm.Y += Eighth, rightArm.Y -= Eighth.
+            leftArm.yaw  += EIGHTH;
+            rightArm.yaw -= EIGHTH;
+            // 원본 L214: setArmScales(abs(cos(rightArm.X)), abs(cos(leftArm.X))).
             setArmScales(rightArm, leftArm,
                     Math.abs(MathHelper.cos(rightArm.pitch)),
                     Math.abs(MathHelper.cos(leftArm.pitch)));
         }
 
-        // 발 각도 — 원본 SmartMovingModel.java L219-L239 1:1 이식.
-        // 핵심: pitch(rotateAngleX)는 `if(!isFeetVineClimbing)` 가드 블록에서만 할당 →
-        //       vine 시 일반 경로 스킵 + vine 블록에서 `= -total` 단독 할당.
-        // 핵심: roll(rotateAngleZ)은 **무조건** 일반 경로 할당 →
-        //       vine 시 그 위에 `+=` 로 누적.
-        // FeetClimbing ordinal≥4: SLOW_UP_WITH_HOLD_WITHOUT_HANDS(4)/SLOW_UP_WITH_SINK_WITHOUT_HANDS(5)/FAST_UP(6) → UpGrab.
-        // UpGrab 파라미터(SmartMovingModel.md L331-333): feetDistSideFactor=0.5, feetDistSideOffset=0.
-        int fOrd = sm.actualFeetClimbType;
-        boolean isUpGrab = fOrd >= 4;
-
-        // pitch 일반 경로 — 원본 L219-L223 `if(!isFeetVineClimbing)` 가드.
+        // 원본 L217-L221: 다리 X(pitch) — `if(!isFeetVineClimbing)` 가드. 무조건 식 적용.
+        //   verticalSpeed=0 시 `0.3F/0 = Infinity, cos*Infinity*0 = NaN` 발생. 원본 1.7.10
+        //   GL11.glRotatef(NaN) = drivers 보통 무회전 (identity) → leg.pitch=0 시각 효과 ("다리 1자").
+        //   1.21.1 JOML Quaternionf(NaN) = matrix NaN → vertex 깨짐. NaN 가드로 0 fallback —
+        //   원본 1.7.10 OpenGL drivers 의 무회전 동작과 시각 일치 (사용자 보고 "처음 시작 시 다리 1자").
         if (!sm.isFeetVineClimbing) {
-            if (isUpGrab && verticalSpeed > 0f) {
-                float feetDistUp = 0.3f / verticalSpeed;
-                // B-4 / §16-10: 원본 L219/L220 — feet.pitch cos 입력도 totalVerticalDistance (수직 누적).
-                rightLeg.pitch = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f)        * feetDistUp * verticalSpeed - 0.3f;
-                leftLeg.pitch  = MathHelper.cos(sm.stats.totalVerticalDistance * 0.6662f + HALF) * feetDistUp * verticalSpeed - 0.3f;
-            } else {
-                rightLeg.pitch = 0f;
-                leftLeg.pitch  = 0f;
-            }
+            rightLeg.pitch = MathHelper.cos(totalVerticalDistance * feetFrequenceUpFactor)        * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
+            leftLeg.pitch  = MathHelper.cos(totalVerticalDistance * feetFrequenceUpFactor + HALF) * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
+            if (Float.isNaN(rightLeg.pitch)) rightLeg.pitch = 0f;
+            if (Float.isNaN(leftLeg.pitch))  leftLeg.pitch  = 0f;
         }
 
-        // roll 일반 경로 — 원본 L225-L226 무조건 할당.
-        // default feetClimbType: feetDistSideFactor=0 → roll=0. UpGrab: 0.5.
-        float feetDistSideFactor = isUpGrab ? 0.5f : 0f;
-        rightLeg.roll = -(MathHelper.cos(limbSwing * 0.6662f) - 1f)          * horizontalSpeed * feetDistSideFactor;
-        leftLeg.roll  = -(MathHelper.cos(limbSwing * 0.6662f + QUARTER) + 1f) * horizontalSpeed * feetDistSideFactor;
+        // 원본 L223-L224: 다리 Z(roll) — 무조건 식 적용.
+        rightLeg.roll = -(MathHelper.cos(totalHorizontalDistance * feetFrequenceSideFactor) - 1.0f)          * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
+        leftLeg.roll  = -(MathHelper.cos(totalHorizontalDistance * feetFrequenceSideFactor + QUARTER) + 1.0f) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
+        if (Float.isNaN(rightLeg.roll)) rightLeg.roll = 0f;
+        if (Float.isNaN(leftLeg.roll))  leftLeg.roll  = 0f;
 
         // vine 전용 — 원본 L228-L239.
         // B-5 / §16-12: 원본 L228/L232 cos 입력은 totalDistance (3D 누적). 이전 limbSwing
         //   (수평 누적) 잘못 매핑 → sm.stats.totalDistance 로 교체. SmartStatistics.calculate
         //   L91 = totalDistance 누적 1.7.10 등가.
         if (sm.isFeetVineClimbing) {
-            float total = (MathHelper.cos(sm.stats.totalDistance + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
+            // 부드러움: totalDistance 도 partial tick lerp getter 로 교체.
+            float totalDistanceLerped = sm.stats.getTotalDistance(partialTicks);
+            float total = (MathHelper.cos(totalDistanceLerped + HALF) + 1f) * THIRTYTWOTH + SIXTEENTH;
             rightLeg.pitch = -total;   // pitch 덮어쓰기
             leftLeg.pitch  = -total;
 
-            float diff = Math.max(0f, MathHelper.cos(sm.stats.totalDistance - QUARTER)) * SIXTYFOURTH;
+            float diff = Math.max(0f, MathHelper.cos(totalDistanceLerped - QUARTER)) * SIXTYFOURTH;
             leftLeg.roll  += -diff;    // roll 누적 (원본 `+=`)
             rightLeg.roll +=  diff;
 
@@ -428,6 +532,9 @@ public abstract class MixinPlayerEntityModelClient {
                     Math.abs(MathHelper.cos(leftLeg.pitch)));
         }
 
+        // (D-2) 원본 SmartMovingModel L134-L135: bipedLeft/RightLeg.rotationOrder = YZX.
+        //   ModelPart 기본 회전 순서는 ZYX. 다리 yaw 가 0 으로 명시되어 X/Z 회전 순서 차이는
+        //   결과에 영향 없음 (Y=0 이면 Y 위치 무관) → 헬퍼 미사용 OK.
         rightLeg.yaw = 0f;
         leftLeg.yaw  = 0f;
 
@@ -456,21 +563,64 @@ public abstract class MixinPlayerEntityModelClient {
             rightLeg.roll  =  legAngleZ;
             leftLeg.roll   = -legAngleZ;
 
-            // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286)
-            // 원본: bipedTorso.X=0.5F (L281), head.X-=0.5F (L282), bipedPelvic.X-=0.5F (L283),
-            //       bipedTorso.rotationPointZ = -6F (L285).
-            // bipedPelvic.X-=0.5F: 1.21.1 다리는 body 자식이 아니므로 leg 별도 처리 (B-19 / §16-26).
-            // body.pivotZ = -6F: B-9 / §16-14 — 원본 bipedTorso 가 root(bipedOuter)의 자식으로 모든
-            //   visual 노드를 자식으로 거느리므로 -6 = 전체 visual 이동. 1.21.1 단일 PlayerEntityModel
-            //   에서는 body 단일 노드만 대응 (head/arm/leg 이동 누락 = SR 다층 부재 근사).
-            if (sm.actualHandsClimbType < 2 && sm.actualFeetClimbType > 0) {
-                body.pitch = 0.5f;
-                head.pitch -= 0.5f;
-                body.pivotZ = -6f;   // 원본 bipedTorso.rotationPointZ = -6F (B-9 / §16-14)
-                // 원본 bipedPelvic.rotateAngleX -= 0.5F (L283) — pelvic 부재로 다리 그룹에 직접 차감
-                rightLeg.pitch -= 0.5f;   // B-19 / §16-26
-                leftLeg.pitch  -= 0.5f;
-            }
+            // (D-3) 원본 SmartMovingModel L267-L268: bipedRightShoulder/LeftShoulder.rotateAngleX = -bodyAngleX.
+            //   SmartRender 의 shoulder 는 bipedTorso 와 arm 사이 중간 노드 — shoulder pitch 회전 시
+            //   자식 arm 도 같이 회전 (어깨가 body 와 함께 기울어지는 효과).
+            //   1.21.1 PlayerEntityModel 에 shoulder 노드 부재 → arm.pitch 에 직접 `-bodyAngleX` 누적.
+            rightArm.pitch += -bodyAngleX;
+            leftArm.pitch  += -bodyAngleX;
+        }
+
+        // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286).
+        //   ⚠️ 원본은 `if(isCrawlClimb)` 블록 **밖** — 모든 클라이밍 (CrawlClimb 여부 무관) 에서 적용.
+        //   이전 구현은 `if(isCrawlClimb)` **안** 에 두어 일반 그랩 클라이밍에서 보정 누락. 정정 (D-4).
+        //   원본 식:
+        //     bipedTorso.X = 0.5F           → body.pitch = 0.5f
+        //     bipedHead.X -= 0.5F           → head.pitch -= 0.5f
+        //     bipedPelvic.X -= 0.5F         → leg.pitch -= 0.5f (1.21.1 pelvic 부재로 다리 직접)
+        //     bipedTorso.rotationPointZ = -6F → body.pivotZ = -6f
+        //   조건 매핑:
+        //     handsClimbType == NoGrab → 우리 ordinal NONE(0)/SINK(1) (h < 2).
+        //     feetClimbType != NoStep ≡ DownStep — 원본 setShouldClimbSpeed 채널은 NoStep/DownStep
+        //       2-way 만 set. "발 등반 중" 의미 = 우리 enum 의 SLOW_UP_*/FAST_UP (ordinal >= 4).
+        //       기존 `> 0` 은 BASE_HOLD/BASE_WITH_HANDS/TOP_WITH_HANDS (발 가만히) 도 포함하는 오역.
+        // 🔴 D-4 분기 도메인 변경: 원본 L279 = `handsClimbType == NoGrab && feetClimbType != NoStep`.
+        //   새 0/1/2 도메인: hands == 0 (NoGrab) && feet != 0 (DownStep).
+        if (sm.actualHandsClimbType == 0 && sm.actualFeetClimbType != 0) {
+            // 🔴 D-4 1:1 매핑 (사용자 보고 7회차 — 자세 1대1 OK + 종료 후 잔존 fix):
+            //   원본 SmartMovingModel L279-L286 분석:
+            //     bipedTorso.rotateAngleX = 0.5F;        → body, head, arm, leg 모두 +0.5 회전 (자식 효과)
+            //     bipedTorso.rotationPointZ = -6F;       → 모든 자식 z 평행이동
+            //     bipedHead.rotateAngleX -= 0.5F;        → head 자식 효과 cancel → vanilla 결과
+            //     bipedPelvic.rotateAngleX -= 0.5F;      → pelvic 자식 효과 cancel → leg = vanilla
+            //     (arm cancel 없음 → arm 만 +0.5 그대로 노출)
+            //
+            //   1.21.1 parallel 노드 매핑 (사용자 자세 1대1 검증 OK):
+            //     - body.pitch = 0.5             → bipedTorso.X 직접 매핑
+            //     - 모든 노드 pivotZ = -6         → bipedTorso.rotationPointZ 평행이동
+            //     - arm.pitch += 0.5             → 원본 arm 자식 효과 노출
+            //     - head/leg.pitch 변경 안 함     → 원본 자식 효과 + cancel = 0 = vanilla 결과
+            //
+            //   등반 종료 후 standing 시 잔존 (사용자 명시) 은 위 reset 인프라 영역의 종료 엣지
+            //   cleanup (smWasClimbingForCleanup 추적) 에서 처리.
+            body.pitch  = 0.5f;
+            body.pivotZ     = -6f;
+            head.pivotZ     = -6f;
+            rightArm.pivotZ = -6f;
+            leftArm.pivotZ  = -6f;
+            // 🔴 leg pivot 정확 매핑 (사용자 보고 — 다리 벽 안 뚫림 fix):
+            //   원본 매트릭스: T(0,0,-6) * R_x(0.5) * T(0,12,0) * T(±2,0,0).
+            //   bipedTorso 회전 (R_x 0.5) 가 자식 (leg) 위치에 적용 → leg 절대 위치 =
+            //     (±2, 12*cos(0.5), -6 + 12*sin(0.5)) ≈ (±2, 10.529, -0.247).
+            //   1.21.1 parallel 구조라 R_x(0.5) 자동 누적 안 됨. leg.pivotZ=-6 만 적용 시 leg
+            //     절대 = (±2, 12, -6). Z 차이 -5.75 픽셀 = 사용자 보고 "다리 벽 안 5.75 뚫림".
+            //   해결: leg.pivotY/Z 를 원본 매트릭스 결과 위치로 명시 set.
+            rightLeg.pivotY = 12f * MathHelper.cos(0.5f);  // ≈ 10.529
+            leftLeg.pivotY  = 12f * MathHelper.cos(0.5f);
+            rightLeg.pivotZ = -6f + 12f * MathHelper.sin(0.5f);  // ≈ -0.247
+            leftLeg.pivotZ  = -6f + 12f * MathHelper.sin(0.5f);
+            rightArm.pitch += 0.5f;
+            leftArm.pitch  += 0.5f;
         }
     }
 
@@ -483,10 +633,19 @@ public abstract class MixinPlayerEntityModelClient {
      * B-18 / §16-17: 이전 구현의 `head.yaw -= headYaw * DEG_TO_RAD` 차감은 원본에 없는
      *   잉여 보정이었으므로 제거 (세션 25).
      */
-    private void sm_animateCeilingClimbing(float limbSwing, float limbSwingAmount, float headYaw) {
-        float distance    = limbSwing * 0.7f;
-        float walkFactor  = smFactor(limbSwingAmount, 0f, 0.12951545f);
-        float standFactor = smFactor(limbSwingAmount, 0.12951545f, 0f);
+    private void sm_animateCeilingClimbing(SmartMovingClientState sm, float headYaw) {
+        // 🔴 (사용자 보고 후, 천장 등반 1:1 정정): 원본 L298-L300 입력은 SM 통계.
+        //   원본: distance = totalHorizontalDistance * 0.7F
+        //         walkFactor = Factor(currentHorizontalSpeed, 0, 0.12951545)
+        //         standFactor = Factor(currentHorizontalSpeed, 0.12951545, 0)
+        //   이전 매핑 limbSwing/limbSwingAmount (vanilla limbAnimator) → 천장 매달려 좌우 이동 시
+        //   ground walk 기준 vanilla 누적 안 됨 → walkFactor=0 → 팔/다리 진자운동 항 0 → 사용자 보고
+        //   "팔다리 가만히". sm_animateClimbing 동일 패턴 — partial tick lerp getter 적용.
+        float partialTicks = SmartMovingClientState.globalCachedTickDelta;
+        float horizontalSpeedLerped = sm.stats.getCurrentHorizontalSpeed(partialTicks);
+        float distance    = sm.stats.getTotalHorizontalDistance(partialTicks) * 0.7f;
+        float walkFactor  = smFactor(horizontalSpeedLerped, 0f, 0.12951545f);
+        float standFactor = smFactor(horizontalSpeedLerped, 0.12951545f, 0f);
 
         // 팔: 천장을 향해 위로 (XYZ 근사)
         leftArm.pitch  = (MathHelper.cos(distance) * 0.52f + HALF) * walkFactor + HALF * standFactor;

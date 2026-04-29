@@ -764,6 +764,13 @@ public final class SmartMovingClimber {
         double value;
         boolean isUp;
 
+        // 🔴 원본 setShouldClimbSpeed 의 (handsClimbType, feetClimbType) 매핑 변수.
+        //   원본 도메인: hands={NoGrab=0, UpGrab=1, MiddleGrab=2}, feet={NoStep=0, DownStep=1}.
+        //   원본 setShouldClimbSpeed(value) 1-arg 기본 = (UpGrab=1, DownStep=1).
+        //   분기별 명시 호출만 다른 값. 아래 if-else 체인이 원본 SmartMovingSelf L991-L1052 1:1.
+        int handsAnim = 1;  // default UpGrab
+        int feetAnim  = 1;  // default DownStep
+
         if (wantClimbUp) {
             // 🔴 (2026-04-27) 원본 SmartMovingSelf L981-1027 1:1 정밀 매핑.
 
@@ -782,6 +789,7 @@ public final class SmartMovingClimber {
             boolean handsNoneOnGround = (handsClimbing == HandsClimbing.NONE) && player.isOnGround();
             if (feetClimbing == FeetClimbing.FAST_UP && !handsNoneOnGround) {
                 value = FAST_UP_MOTION; isUp = true;
+                handsAnim = 0; feetAnim = 1;  // 원본 L994: NoGrab + DownStep
             }
             // ★ 원본 L996-1000: hasClimbGap || hasClimbCrawlGap + handsClimbing.FastUp +
             //   feetClimbing(None or BaseWithHands) → climb into crawl gap.
@@ -792,6 +800,7 @@ public final class SmartMovingClimber {
                             || feetClimbing == FeetClimbing.BASE_WITH_HANDS)) {
                 value = (feetClimbing == FeetClimbing.NONE) ? SLOW_UP_MOTION : FAST_UP_MOTION;
                 isUp = true;
+                handsAnim = 2; feetAnim = 1;  // 원본 L999: MiddleGrab + DownStep
             }
             // 원본 L1001-1005: feet.IsRelevant && hands.IsRelevant + 3 예외 조합 → MediumUp.
             else if (feetClimbing.isRelevant() && handsClimbing.isRelevant()
@@ -799,56 +808,87 @@ public final class SmartMovingClimber {
                     && !(handsClimbing == HandsClimbing.SINK && feetClimbing == FeetClimbing.TOP_WITH_HANDS)
                     && !(handsClimbing == HandsClimbing.TOP_HOLD && feetClimbing == FeetClimbing.TOP_WITH_HANDS)) {
                 value = MEDIUM_UP_MOTION; isUp = true;
+                // 원본 L1004: (hasGap || hasCrawlGap) && !(Sink && BaseWithHands) ? MiddleGrab : UpGrab.
+                boolean useMiddle = (sm.hasClimbGap || sm.hasClimbCrawlGap)
+                        && !(handsClimbing == HandsClimbing.SINK
+                                && feetClimbing == FeetClimbing.BASE_WITH_HANDS);
+                handsAnim = useMiddle ? 2 : 1;
+                feetAnim  = 1;
             }
-            // 원본 L1006-1010: handsClimbing.IsUp() → SlowUpMotion.
+            // 원본 L1006-1010: handsClimbing.IsUp() → SlowUpMotion (default 1-arg = UpGrab+DownStep).
             else if (handsClimbing.isUp()) {
                 value = SLOW_UP_MOTION; isUp = true;
+                handsAnim = 1; feetAnim = 1;
             }
             // 원본 L1011-1021: TopHold || BaseHold || (SlowUpWithHoldWithoutHands && hands None) → Hold.
-            //   원본은 jumpButton.StartPressed 시 climbJump 시도 (현재 미이식).
+            //   원본 L1016-1017 특수 조합 → MiddleGrab+DownStep 명시.
+            //   else (L1019) → default UpGrab+DownStep.
             else if (handsClimbing == HandsClimbing.TOP_HOLD
                     || feetClimbing == FeetClimbing.BASE_HOLD
                     || (feetClimbing == FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS
                             && handsClimbing == HandsClimbing.NONE)) {
                 value = HOLD_MOTION; isUp = true;
+                boolean special = (handsClimbing == HandsClimbing.SINK
+                                && feetClimbing == FeetClimbing.BASE_HOLD)
+                        || (handsClimbing == HandsClimbing.TOP_HOLD
+                                && feetClimbing == FeetClimbing.TOP_WITH_HANDS);
+                handsAnim = special ? 2 : 1;
+                feetAnim  = 1;
             }
-            // 원본 L1022-1026: Sink || (SlowUpWithSinkWithoutHands && hands None) → SinkDown.
+            // 원본 L1022-1026: Sink || (SlowUpWithSinkWithoutHands && hands None) → SinkDown (default).
             else if (handsClimbing == HandsClimbing.SINK
                     || (feetClimbing == FeetClimbing.SLOW_UP_WITH_SINK_WITHOUT_HANDS
                             && handsClimbing == HandsClimbing.NONE)) {
                 value = SINK_DOWN_MOTION; isUp = false;
+                handsAnim = 1; feetAnim = 1;
             }
             else {
                 // fallback (어디에도 안 걸리면 정지) — 원본은 기본값 setShouldClimbSpeed 호출 안 함.
                 // 우리는 isClimbing 발동 위해 HOLD_MOTION fallback.
                 value = HOLD_MOTION; isUp = true;
+                handsAnim = 1; feetAnim = 1;
             }
         } else {
             // 원본 L1028-1053 wantClimbDown 분기 매핑.
             handsClimbing = handsClimbing.toDown();
 
             if (handsClimbing == HandsClimbing.BOTTOM_HOLD && !feetClimbing.isIndependentlyRelevant()) {
+                // 원본 L1035: setShouldClimbSpeed(HoldMotion) default = UpGrab+DownStep.
                 value = HOLD_MOTION; isUp = false;
+                handsAnim = 1; feetAnim = 1;
             } else if (handsClimbing.isRelevant()) {
                 if (feetClimbing == FeetClimbing.FAST_UP) {
+                    // 원본 L1041: ClimbDown + NoGrab + DownStep
                     value = CLIMB_DOWN_MOTION; isUp = false;
+                    handsAnim = 0; feetAnim = 1;
                 } else if (feetClimbing == FeetClimbing.SLOW_UP_WITH_HOLD_WITHOUT_HANDS) {
+                    // 원본 L1043: default
                     value = CLIMB_DOWN_MOTION; isUp = false;
+                    handsAnim = 1; feetAnim = 1;
                 } else if (feetClimbing == FeetClimbing.TOP_WITH_HANDS) {
+                    // 원본 L1045: default
                     value = CLIMB_DOWN_MOTION; isUp = false;
+                    handsAnim = 1; feetAnim = 1;
                 } else if (feetClimbing == FeetClimbing.BASE_WITH_HANDS
                         || feetClimbing == FeetClimbing.BASE_HOLD) {
+                    // 원본 L1046-1050: 양 분기 모두 default
                     if ((handsClimbing != HandsClimbing.NONE && handsClimbing != HandsClimbing.UP)
                             || (handsClimbing == HandsClimbing.UP && feetClimbing == FeetClimbing.BASE_HOLD)) {
                         value = CLIMB_DOWN_MOTION; isUp = false;
                     } else {
                         value = SINK_DOWN_MOTION; isUp = false;
                     }
+                    handsAnim = 1; feetAnim = 1;
                 } else {
+                    // 원본 L1052: SinkDown + (handsFastUp ? MiddleGrab : UpGrab) + NoStep
                     value = SINK_DOWN_MOTION; isUp = false;
+                    handsAnim = (handsClimbing == HandsClimbing.FAST_UP) ? 2 : 1;
+                    feetAnim  = 0;
                 }
             } else {
+                // hands.isRelevant() = false fallback (1.21.1 추가)
                 value = SINK_DOWN_MOTION; isUp = false;
+                handsAnim = 1; feetAnim = 1;
             }
 
             // 🔴 원본 L1055-1058 isClimbHolding HoldMotion 분기 매핑 (sneak 키 가드).
@@ -900,6 +940,26 @@ public final class SmartMovingClimber {
             freeFactor *= cfg.sprintFactor;
         }
         setOnlyShouldClimbSpeed(player, sm, value, isUp, freeFactor);
+
+        // 🔴 원본 setShouldClimbSpeed 분기별 매핑 적용 (사용자 보고 2회차 후, 단계별 애니메이션 1:1).
+        //   원본 도메인: hands={NoGrab=0, UpGrab=1, MiddleGrab=2}, feet={NoStep=0, DownStep=1}.
+        //   sm_animateClimbing 의 분기도 같은 0/1/2 도메인으로 변경 (이전 ordinal 0~5 매핑 폐기).
+
+        // 🔴 원본 SmartMovingSelf L1083-L1094 보정 매핑 (사용자 보고 — 진입 직후 다리 1자):
+        //   `if (handsClimbing == None) actualHands=NoGrab; else if (feetClimbing == None) actualFeet=NoStep;`
+        //   setShouldClimbSpeed 분기별 set 후 추가 보정 — 인스턴스가 None 인 케이스만 강제 0 set.
+        //   진입 직후 발 공중 (feetClimbing=NONE) 시점 → actualFeet=NoStep 유지 →
+        //   feetDistanceUpFactor=0 / feetDistanceSideFactor=0 → leg.pitch=0, leg.roll=0 → 다리 1자.
+        //   발이 벽에 닿으면 (feetClimbing 인스턴스 변경) 보정 미트리거 → actualFeet=DownStep 유지.
+        //   사용자 보고 "중간까지 다리 1자" 정확 일치.
+        if (handsClimbing == HandsClimbing.NONE) {
+            handsAnim = 0;  // NoGrab 강제
+        } else if (feetClimbing == FeetClimbing.NONE) {
+            feetAnim = 0;   // NoStep 강제 (else if 라 hands.None 시 feet 보정 안 함 — 원본 1:1)
+        }
+
+        sm.actualHandsClimbType = handsAnim;
+        sm.actualFeetClimbType  = feetAnim;
 
         // fallDistance 리셋 (클라이밍 중 낙하 데미지 방지)
         player.fallDistance = 0;
