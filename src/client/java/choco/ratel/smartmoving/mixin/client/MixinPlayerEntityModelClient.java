@@ -4,6 +4,8 @@ import choco.ratel.smartmoving.client.SmartMovingClientState;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
@@ -120,7 +122,21 @@ public abstract class MixinPlayerEntityModelClient {
                 && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                 && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
                 && !player.isTouchingWater();
-        if (isFallingForReset) {
+
+        // 🔴 weeping/twisting vines 등반 + sneak 시 사다리 자세와 동일 매핑 (사용자 보고 마무리):
+        //   사다리 등반 + sneak: sm_resetSneakInClimb (MixinClientPlayerEntity L90) 가 input.sneaking
+        //     /isSneaking/pose 강제 false → vanilla setAngles sneak 분기 skip → sneak 자세 X.
+        //   weeping/twisting vines: sm_resetSneakInClimb 미트리거 (sm.isClimbing=false) →
+        //     vanilla sneak 자세 + 사다리 자세 결합 시각.
+        //   해결: 자세만 분리 — vanilla setAngles 의 sneak 분기만 skip 위해 sneaking=false 임시 set.
+        //     motion 은 vanilla 그대로 (사용자 의도 — 기능 안 건드림).
+        Block blockAtPos = player.getWorld().getBlockState(player.getBlockPos()).getBlock();
+        boolean isWeepingTwistingVines = (blockAtPos == Blocks.WEEPING_VINES
+                || blockAtPos == Blocks.WEEPING_VINES_PLANT
+                || blockAtPos == Blocks.TWISTING_VINES
+                || blockAtPos == Blocks.TWISTING_VINES_PLANT);
+
+        if (isFallingForReset || isWeepingTwistingVines) {
             sneaking = false;
         }
     }
@@ -161,10 +177,25 @@ public abstract class MixinPlayerEntityModelClient {
                 && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                 && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
                 && !player.isTouchingWater();
+        // 🔴 늘어진/휘어진 덩굴 (weeping_vines / twisting_vines) 시 사다리 자세 애니메이션 적용.
+        //   사용자 의도: SM 자유 클라이밍 / 자동 진입 / sneak hold 등 기능 일체 적용 안 함.
+        //   vanilla 1.21.1 사다리 등반 동작 그대로 (sm_travel_client 의 vanilla bypass 유지).
+        //   애니메이션만 sm_animateClimbing (isHandsVineClimbing=false → 사다리 자세) 호출.
+        //   매 frame block 검사 (player 위치).
+        boolean isWeepingTwistingVines = false;
+        if (cfgEnabled) {
+            Block blockAtPos = player.getWorld().getBlockState(player.getBlockPos()).getBlock();
+            isWeepingTwistingVines = (blockAtPos == Blocks.WEEPING_VINES
+                    || blockAtPos == Blocks.WEEPING_VINES_PLANT
+                    || blockAtPos == Blocks.TWISTING_VINES
+                    || blockAtPos == Blocks.TWISTING_VINES_PLANT);
+        }
+
         boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isClimbJumping || sm.isSwimming_sm || sm.isDiving
                 || sm.isCrawling || sm.isSliding || sm.isHeadJumping || flyingCreative
                 || isFallingForReset
+                || isWeepingTwistingVines
                 || sm.isAngleJumping();   // 🔴 (2026-04-27) angle jump 시 reset 인프라 활성화 —
                                           // head.pivotZ/body.yaw/head.roll/arm.pivot 0 reset →
                                           // 이전 SM 분기 잔존 + vanilla animateArms swing body.yaw 흔들림 cancel.
@@ -177,7 +208,9 @@ public abstract class MixinPlayerEntityModelClient {
         //   이전 frame climbing 상태 추적 → 종료 엣지 (true → false) 한 번 명시 cleanup.
         //   leg.pivotX 도 sm_animateClimbing 진입부에서 ±2.0 로 set 됐으므로 vanilla default
         //   ±1.9 로 복원 (1.21.1 PlayerEntityModel layer definition 의 정의 값).
-        boolean smIsClimbingNow = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing;
+        // 🔴 weeping/twisting vines 도 cleanup 추적 — 종료 시 leg.pivotX/Y / pivotZ vanilla 복원.
+        boolean smIsClimbingNow = sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+                || isWeepingTwistingVines;
         if (sm.smWasClimbingForCleanup && !smIsClimbingNow) {
             body.pivotZ     = 0f;
             head.pivotZ     = 0f;
@@ -256,6 +289,21 @@ public abstract class MixinPlayerEntityModelClient {
             sm_animateCeilingClimbing(sm, headYaw);
         } else if (sm.isClimbing || sm.isCrawlClimbing) {
             sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
+        } else if (isWeepingTwistingVines) {
+            // 🔴 늘어진/휘어진 덩굴 — 사다리 자세 애니메이션 적용.
+            //   사용자 의도: 기능은 vanilla 등반 그대로 (sm_travel_client bypass 유지). 애니메이션만 SM 사다리.
+            //   sm.actualHandsClimbType / actualFeetClimbType 임시 1/1 (UpGrab+DownStep) set 후
+            //   sm_animateClimbing 호출 → 호출 후 원래 값 복원 (다른 코드 영향 0).
+            //   handleClimbing 호출 안 됨 → 매 tick 잔존값 = NoGrab+NoStep (NONE.ordinal()=0).
+            //   임시 1/1 set 으로 사다리 식 (cos*0.3-0.3 leg pitch 등) 적용. isHandsVineClimbing=false
+            //   유지 → vine 분기 (arm scale boost / leg total 식) 안 들어감 = 사다리 자세.
+            int origHandsType = sm.actualHandsClimbType;
+            int origFeetType  = sm.actualFeetClimbType;
+            sm.actualHandsClimbType = 1;  // UpGrab
+            sm.actualFeetClimbType  = 1;  // DownStep
+            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
+            sm.actualHandsClimbType = origHandsType;
+            sm.actualFeetClimbType  = origFeetType;
         } else if (sm.isClimbJumping) {
             // [isClimbJump] 클라이밍 점프 — 팔을 위로 뻗은 자세
             rightArm.pitch = HALF + SIXTEENTH;
