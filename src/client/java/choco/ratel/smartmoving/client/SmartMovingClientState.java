@@ -103,6 +103,15 @@ public final class SmartMovingClientState {
 
     // ── 4-1: 이동 상태 필드 ──────────────────────────────────────────
 
+    // 🔴 (Phase 3, Crawl 1:1 fix): 원본 SmartMovingContext L43-L44 의 SwimCrawl 상수 정의.
+    //   1.21.1 에 별도 SmartMovingContext 파일 없음 → SmartMovingClientState 에 static 정의.
+    /** 원본 SwimCrawlWaterTopBorder = 0.65F. canCrawl/mustCrawl 의 dippingDepth 검사에 사용. */
+    public static final float SWIM_CRAWL_WATER_TOP_BORDER = 0.65F;
+    /** 원본 SwimCrawlWaterMediumBorder = 0.6F. B-36 (b) dipping → swim/dive 전환 임계. */
+    public static final float SWIM_CRAWL_WATER_MEDIUM_BORDER = 0.6F;
+    /** 원본 SwimCrawlWaterBottomBorder = 0.55F. B-36 (c) dipping → 얕은 물 crawl 전환 임계. */
+    public static final float SWIM_CRAWL_WATER_BOTTOM_BORDER = 0.55F;
+
     /** 히트박스 오프셋 (헤드점프 시 -1F) */
     public float heightOffset;
 
@@ -585,6 +594,8 @@ public final class SmartMovingClientState {
      * 원본 `grabButton.StartPressed` 는 틱 내 불변 불리언이므로 시멘틱 등가.
      */
     public boolean grabJustPressed;
+    /** grab 키 직전 프레임 isPressed() 값 — rising edge 검출용 (timesPressed 카운터 누적 회피). */
+    public boolean prevGrabKeyPressed;
 
     // ── IMPL-03: 더블클릭 방향 점프 카운터 ──────────────────────────────
     /** A키 더블클릭 카운터. 0=비활성, >0=첫 클릭 대기, -1=발동 예약, -2=대각선 대기. */
@@ -1002,9 +1013,12 @@ public final class SmartMovingClientState {
         prevSprintKeyPressed = curSprintPressed;
 
         // B-46 (세션 66): 원본 `grabButton.StartPressed` 이식.
-        // vanilla `KeyBinding.wasPressed()` 는 카운터 소비성이라 같은 틱 2회째부터 false.
-        // 여기서 1회만 호출 → `grabJustPressed` 필드에 저장 → 모든 소비 지점에서 필드 참조.
-        grabJustPressed = SmartMovingKeys.grab.wasPressed();
+        // 🔴 (세션 145 BUG-1+2 진짜 원인): `KeyBinding.wasPressed()` 의 timesPressed 카운터가
+        //   누적되어 grabJust=true 가 40+ 틱 stuck → isCrawling 진동/풀림 BUG.
+        //   sprintKey/sneakKey/jumpKey 와 동일 rising-edge 패턴으로 통일.
+        boolean curGrabPressed = SmartMovingKeys.grab.isPressed();
+        grabJustPressed = curGrabPressed && !prevGrabKeyPressed;
+        prevGrabKeyPressed = curGrabPressed;
 
         // 원본 SmartMovingSelf triggerWallJumping — 매 틱 시작에 리셋.
         // 리서치 파일에 원본 리셋 위치 기록 없음 → 보수적으로 "매 틱 1회용 이벤트" 로 처리.
@@ -1145,9 +1159,25 @@ public final class SmartMovingClientState {
                 //   직후 frame 은 isCrawling=false 라 검사 안 함 → mustCrawl=false 유지 →
                 //   isCrawling 잘못 활성 차단.
                 if (isCrawling || isClimbCrawling) {
-                    mustCrawl = !canStandUp(player)
-                            && !isSwimming_sm && !isDiving
-                            && (!isDipping || dippingDepth < 0.65F);
+                    // 🔴 (Phase 3, Crawl 1:1 fix — task #10): 원본 mustCrawl 정확 식 적용.
+                    //   원본 SmartMovingSelf L2399-L2401 라인별 1:1:
+                    //     crawlStandUpBottom = getMaxPlayerSolidBetween(minY - (init?0:1), minY,
+                    //                          crawlOverEdge ? 0 : -0.05);
+                    //     crawlStandUpCeiling = getMinPlayerSolidBetween(maxY, maxY + 1.1, 0);
+                    //     mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < sp.height - heightOffset;
+                    //   이전 매핑 `!canStandUp(player)` 는 STANDING box 빈 공간 검사 (~0.1 블록 근사).
+                    //   정확 식 = 천장 - 바닥 < height - heightOffset (height=1.8F, heightOffset=-1 시
+                    //   가용 공간 < 2.8 검사 = 정확 매핑).
+                    Box bb = player.getBoundingBox();
+                    double minYR = bb.minY;
+                    double maxYR = bb.maxY;
+                    double horizontalTolerance = cfg0.crawlOverEdge ? 0 : -0.05;
+                    double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
+                            minYR - (initializeCrawling ? 0D : 1D), minYR, horizontalTolerance);
+                    double crawlStandUpCeiling = SmartMovingClimber.getMinPlayerSolidBetween(player,
+                            maxYR, maxYR + 1.1D, 0);
+                    float playerHeight = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+                    mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < playerHeight - heightOffset;
                     if (player.getAbilities().flying
                             && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
                         mustCrawl = false;
@@ -1169,13 +1199,28 @@ public final class SmartMovingClientState {
 
             // contextContinueCrawl 해제 (원본 L2408-L2418).
             //   if (inputContinueCrawl || isInWater() || mustCrawl) → false
-            //   crawlStandUpLiquidCeiling 조건은 물속 천장 감지 — 1.21.1 근사: isDipping 으로 축소.
+            //   else if (isCrawling) → 액체 천장 검사 (정확 식, task #9 정정)
+            // 🔴 (Phase 3, Crawl 1:1 fix — task #9): 원본 L2412-L2417 정확 식 적용.
+            //   crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(maxY, maxY + 1.1)
+            //   if (liquidCeiling - crawlStandUpBottom >= height + 1F) → false
+            //   이전 매핑 `!isDipping` 단순 검사 (근사) → 정확 식 (액체 천장 - 바닥 >= 2.8 검사).
             if (contextContinueCrawl) {
                 if (inputContinueCrawl || player.isTouchingWater() || mustCrawl) {
                     contextContinueCrawl = false;
-                } else if (isCrawling && !isDipping) {
-                    // 원본: 포복 위 천장까지 액체 여유가 충분하면 해제. 1.21.1: 물 밖이면 해제 근사.
-                    contextContinueCrawl = false;
+                } else if (isCrawling) {
+                    Box bbCtx = player.getBoundingBox();
+                    double crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(player,
+                            bbCtx.maxY, bbCtx.maxY + 1.1D);
+                    // crawlStandUpBottom 은 mustCrawl 분기에서 isCrawling||isClimbCrawling 시 계산됨.
+                    //   여기서는 contextContinueCrawl=true 이고 isCrawling 가드 안 — 따라서
+                    //   원본 동일 시점 (mustCrawl 계산 후) 의 crawlStandUpBottom 재계산.
+                    double horizontalToleranceCtx = cfg0.crawlOverEdge ? 0 : -0.05;
+                    double crawlStandUpBottomCtx = getMaxPlayerSolidBetween(player,
+                            bbCtx.minY - (initializeCrawling ? 0D : 1D), bbCtx.minY, horizontalToleranceCtx);
+                    float playerHeightCtx = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+                    if (crawlStandUpLiquidCeiling - crawlStandUpBottomCtx >= playerHeightCtx + 1F) {
+                        contextContinueCrawl = false;
+                    }
                 }
             }
 
@@ -1627,14 +1672,29 @@ public final class SmartMovingClientState {
             // tickEssential 초반 L829 의 일괄 저장은 제거됨.
             SmartMovingConfig cfg = SmartMovingConfig.Config;
             if (cfg.crawl) {
+                // 🔴 (Phase 1, Crawl 1:1 fix): 원본 L2437 의 `(dippingDepth + heightOffset)` 1:1 매핑.
+                //   이전 매핑은 heightOffset 누락 → 크롤 중 (heightOffset=-1) 시 실제 유효 물
+                //   깊이 보정 안 됨 → 깊이 0.65 이상에서 canCrawl=false (원본은 1.65 이상).
+                //   원본 의도: 크롤 중 물 깊이 -1 보정 → 더 깊은 물에서도 크롤 유지 가능.
                 boolean canCrawl = !isSwimming_sm
                         && !isDiving
-                        && (!isDipping || dippingDepth < 0.65F)
+                        && (!isDipping || (dippingDepth + heightOffset) < SWIM_CRAWL_WATER_TOP_BORDER)
                         && !isClimbing
                         && player.fallDistance < cfg.fallingDistanceMinimum;
                 wasCrawling = isCrawling;                              // 원본 L2441
                 isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
                 // contextContinueCrawl 해제 (L2446-L2447) 는 L822 pre-compute 블록에 이미 이식.
+
+                // 🔴 heightOffset 잔존 cleanup (사용자 보고 BUG: 가만히 standing 시 heightOffset=-1F 잔존):
+                //   isCrawling/isClimbCrawling/isHeadJumping/isFlying/isLevitating/isSwimming_sm/isDiving/
+                //   isSliding 모두 false = 정상 standing → heightOffset=0F 강제. 어떤 SM state 진입
+                //   후 reset 안 된 잔존 케이스 fallback. 다음 SM state 진입 시 set 다시 가능.
+                boolean anySmallSmState = isCrawling || isClimbCrawling || isHeadJumping
+                        || isFlying || isLevitating
+                        || isSwimming_sm || isDiving || isSliding;
+                if (!anySmallSmState && heightOffset != 0F) {
+                    heightOffset = 0F;
+                }
             }
 
             // B-34 (세션 59): 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling &&
@@ -2048,8 +2108,8 @@ public final class SmartMovingClientState {
                     double groundY36a = getMaxPlayerSolidBetween(player, minY36a, maxY36a, 0);
                     player.move(MovementType.SELF, new Vec3d(0, groundY36a - minY36a, 0));
                     if (_jumpPressed3a) isStillSwimmingJump = true;
-                } else if (isDipping && wouldWantCrawl && dippingDepth >= 0.55F) {
-                    if (dippingDepth >= 0.6F) {
+                } else if (isDipping && wouldWantCrawl && dippingDepth >= SWIM_CRAWL_WATER_BOTTOM_BORDER) {
+                    if (dippingDepth >= SWIM_CRAWL_WATER_MEDIUM_BORDER) {
                         // (b) dipping → swimming/diving 전환 (원본 L2850-L2855)
                         heightOffset = -1F;
                         player.move(MovementType.SELF,
@@ -2214,6 +2274,7 @@ public final class SmartMovingClientState {
         sneakKeyStartPressed = false;
         sneakKeyStopPressed = false;
         grabJustPressed     = false;
+        prevGrabKeyPressed  = false;
         prevSneakKeyPressed = false;
         jumpKeyStopPressed = false;
         isSliding = false;
@@ -2300,6 +2361,7 @@ public final class SmartMovingClientState {
         );
         return !player.getWorld().isSpaceEmpty(player, box);
     }
+
 
     // ════════════════════════════════════════════════════════════════════════
     // B-42a (세션 117) — getMaxPlayerSolidBetween AABB 정밀 헬퍼

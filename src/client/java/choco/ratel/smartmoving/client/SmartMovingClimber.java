@@ -761,8 +761,28 @@ public final class SmartMovingClimber {
             return;
         }
 
-        double value;
-        boolean isUp;
+        // 🔴 (BUG 1+2 fix, 사용자 보고): 원본 SmartMovingSelf L979 가드 1:1 이식.
+        //   원본 흐름: handleClimbing 의 wantClimbUp/Down 분기는 `if (feetClimbing.IsRelevant()
+        //     || handsClimbing.IsRelevant())` 안에 있음. 평지 (NONE+NONE) 시 이 분기 진입 안 됨
+        //     → setShouldClimbSpeed 호출 안 됨 → isClimbing 변경 안 됨.
+        //   1.21.1 매핑 누락 → 평지에서도 분기 진입 → fallback HOLD_MOTION → setOnlyShouldClimbSpeed
+        //     → isClimbing=true → canCrawl `!isClimbing` 가드 false → isCrawling=false → 크롤 풀림.
+        //   사용자 보고: shift+grab+W 시 엎드림 ↔ 일어남 진동 + 엎드린 채 W 시 풀림 직접 원인.
+        //   해결: 평지 NONE+NONE 가드 → 즉시 return (handleClimbBackJump / handleCrash 등은 위에서
+        //     처리됨 — 이 가드는 motion/isClimbing set 분기 진입만 차단).
+        if (!feetClimbing.isRelevant() && !handsClimbing.isRelevant()) {
+            return;
+        }
+
+        double value = 0D;
+        boolean isUp = true;
+        // 🔴 (세션 145 BUG fix): wantClimbUp/Down 분기 sub-branch 매치 여부 추적.
+        //   원본 SmartMovingSelf L981-L1027 의 if-else 체인은 어떤 sub-branch 도 매치 안 되면
+        //   `setShouldClimbSpeed` 호출 자체가 발생 안 함 (= isClimbing 안 set).
+        //   이전 매핑은 fallback HOLD_MOTION 으로 강제 호출 → 평지 크롤 (feet=BaseWithHands
+        //   강제 승격, hands=NONE) 시 isClimbing=true → canCrawl=false → 크롤 풀림 BUG.
+        //   해결: 매치된 분기 없으면 setOnlyShouldClimbSpeed skip (원본 1:1).
+        boolean matched = false;
 
         // 🔴 원본 setShouldClimbSpeed 의 (handsClimbType, feetClimbType) 매핑 변수.
         //   원본 도메인: hands={NoGrab=0, UpGrab=1, MiddleGrab=2}, feet={NoStep=0, DownStep=1}.
@@ -790,6 +810,7 @@ public final class SmartMovingClimber {
             if (feetClimbing == FeetClimbing.FAST_UP && !handsNoneOnGround) {
                 value = FAST_UP_MOTION; isUp = true;
                 handsAnim = 0; feetAnim = 1;  // 원본 L994: NoGrab + DownStep
+                matched = true;
             }
             // ★ 원본 L996-1000: hasClimbGap || hasClimbCrawlGap + handsClimbing.FastUp +
             //   feetClimbing(None or BaseWithHands) → climb into crawl gap.
@@ -801,6 +822,7 @@ public final class SmartMovingClimber {
                 value = (feetClimbing == FeetClimbing.NONE) ? SLOW_UP_MOTION : FAST_UP_MOTION;
                 isUp = true;
                 handsAnim = 2; feetAnim = 1;  // 원본 L999: MiddleGrab + DownStep
+                matched = true;
             }
             // 원본 L1001-1005: feet.IsRelevant && hands.IsRelevant + 3 예외 조합 → MediumUp.
             else if (feetClimbing.isRelevant() && handsClimbing.isRelevant()
@@ -814,11 +836,13 @@ public final class SmartMovingClimber {
                                 && feetClimbing == FeetClimbing.BASE_WITH_HANDS);
                 handsAnim = useMiddle ? 2 : 1;
                 feetAnim  = 1;
+                matched = true;
             }
             // 원본 L1006-1010: handsClimbing.IsUp() → SlowUpMotion (default 1-arg = UpGrab+DownStep).
             else if (handsClimbing.isUp()) {
                 value = SLOW_UP_MOTION; isUp = true;
                 handsAnim = 1; feetAnim = 1;
+                matched = true;
             }
             // 원본 L1011-1021: TopHold || BaseHold || (SlowUpWithHoldWithoutHands && hands None) → Hold.
             //   원본 L1016-1017 특수 조합 → MiddleGrab+DownStep 명시.
@@ -834,6 +858,7 @@ public final class SmartMovingClimber {
                                 && feetClimbing == FeetClimbing.TOP_WITH_HANDS);
                 handsAnim = special ? 2 : 1;
                 feetAnim  = 1;
+                matched = true;
             }
             // 원본 L1022-1026: Sink || (SlowUpWithSinkWithoutHands && hands None) → SinkDown (default).
             else if (handsClimbing == HandsClimbing.SINK
@@ -841,13 +866,12 @@ public final class SmartMovingClimber {
                             && handsClimbing == HandsClimbing.NONE)) {
                 value = SINK_DOWN_MOTION; isUp = false;
                 handsAnim = 1; feetAnim = 1;
+                matched = true;
             }
-            else {
-                // fallback (어디에도 안 걸리면 정지) — 원본은 기본값 setShouldClimbSpeed 호출 안 함.
-                // 우리는 isClimbing 발동 위해 HOLD_MOTION fallback.
-                value = HOLD_MOTION; isUp = true;
-                handsAnim = 1; feetAnim = 1;
-            }
+            // 🔴 (세션 145 BUG fix): 어떤 sub-branch 도 매치 안 되면 setShouldClimbSpeed skip.
+            //   원본 L981-L1027 1:1 — fallback 없음. matched=false 유지 → L955 skip.
+            //   평지 크롤 (feet=BaseWithHands 강제 승격, hands=NONE) 시 위 5개 분기 모두 미매치
+            //   → matched=false → isClimbing 안 set → canCrawl=true 유지 → 크롤 지속.
         } else {
             // 원본 L1028-1053 wantClimbDown 분기 매핑.
             handsClimbing = handsClimbing.toDown();
@@ -856,6 +880,7 @@ public final class SmartMovingClimber {
                 // 원본 L1035: setShouldClimbSpeed(HoldMotion) default = UpGrab+DownStep.
                 value = HOLD_MOTION; isUp = false;
                 handsAnim = 1; feetAnim = 1;
+                matched = true;
             } else if (handsClimbing.isRelevant()) {
                 if (feetClimbing == FeetClimbing.FAST_UP) {
                     // 원본 L1041: ClimbDown + NoGrab + DownStep
@@ -885,11 +910,10 @@ public final class SmartMovingClimber {
                     handsAnim = (handsClimbing == HandsClimbing.FAST_UP) ? 2 : 1;
                     feetAnim  = 0;
                 }
-            } else {
-                // hands.isRelevant() = false fallback (1.21.1 추가)
-                value = SINK_DOWN_MOTION; isUp = false;
-                handsAnim = 1; feetAnim = 1;
+                matched = true;
             }
+            // 🔴 (세션 145 BUG fix): hands.isRelevant() = false 시 setShouldClimbSpeed skip
+            //   (원본 L1037 `else if (handsClimbing.IsRelevant())` 블록만 분기 있음 → matched 유지 false).
 
             // 🔴 원본 L1055-1058 isClimbHolding HoldMotion 분기 매핑 (sneak 키 가드).
             //   원본 isClimbHolding = wantClimb && (sneak || crawlToggled) && isClimbing.
@@ -912,6 +936,7 @@ public final class SmartMovingClimber {
             boolean grabPressed_holdGuard = SmartMovingKeys.grab.isPressed();
             if (sm.isClimbHolding || (handsClimbing == HandsClimbing.SINK && grabPressed_holdGuard)) {
                 value = HOLD_MOTION; isUp = true;
+                matched = true;
             }
 
             // 🔴 사용자 요구 추가 (handsEdgeBlock/feetEdgeBlock = fence/iron_bars):
@@ -931,7 +956,15 @@ public final class SmartMovingClimber {
                                 || Orientation.isFence(sm.feetEdgeBlock))));
             if (grabbedFenceOrBars) {
                 value = HOLD_MOTION; isUp = true;
+                matched = true;
             }
+        }
+
+        // 🔴 (세션 145 BUG fix): matched=false (어떤 sub-branch 도 매치 안 됨) 시 원본 1:1 —
+        //   setShouldClimbSpeed 호출 자체 skip. isClimbing 안 set + actualHandsClimbType /
+        //   actualFeetClimbType 갱신 안 함. 평지 크롤 풀림 BUG 직접 fix.
+        if (!matched) {
+            return;
         }
 
         // 원본 L1522 factor = getCombinedSpeedFactor() + L1523-1524 isFast sprint factor.
@@ -1205,7 +1238,7 @@ public final class SmartMovingClimber {
      * 천장 매달림 가드 3 에서 호출: getMinPlayerSolidBetween(jd, jd + 0.6, 0.2).
      * 머리 위 0.6 범위, X/Z 0.2 확장으로 머리 가까운 솔리드 블록 검출.
      */
-    private static double getMinPlayerSolidBetween(ClientPlayerEntity player,
+    public static double getMinPlayerSolidBetween(ClientPlayerEntity player,
                                                     double yMin, double yMax,
                                                     double horizontalTolerance) {
         Box bb = player.getBoundingBox();

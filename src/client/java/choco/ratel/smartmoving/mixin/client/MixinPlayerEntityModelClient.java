@@ -315,7 +315,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isDiving) {
             sm_animateDiving(sm, limbSwing, limbSwingAmount);
         } else if (sm.isCrawling) {
-            sm_animateCrawling(limbSwing, limbSwingAmount, headYaw);
+            sm_animateCrawling(sm, headYaw);
         } else if (sm.isSliding) {
             sm_animateSliding(limbSwing, limbSwingAmount, headYaw);
         } else if (flyingCreative) {
@@ -811,20 +811,28 @@ public abstract class MixinPlayerEntityModelClient {
      *   - head.pivotZ = -2F (원본 L401): 몸이 수평이므로 머리 앞쪽 2 픽셀 이동
      *   - body.pivotY = +3F (원본 L405): 수평 자세에서 몸통 위치 보정 (SR bipedTorso 단일 노드 근사)
      */
-    private void sm_animateCrawling(float limbSwing, float limbSwingAmount, float headYaw) {
-        float distance    = limbSwing * 1.3f;
-        float walkFactor  = smFactor(limbSwingAmount, 0f, 0.12951545f);
-        float standFactor = smFactor(limbSwingAmount, 0.12951545f, 0f);
+    private void sm_animateCrawling(SmartMovingClientState sm, float headYaw) {
+        // 🔴 (Phase 1, Crawl 애니메이션 1:1):
+        //   원본 SmartMovingModel L395-L397 입력 = totalHorizontalDistance + currentHorizontalSpeedFlattened.
+        //   이전 매핑 limbSwing/limbSwingAmount (vanilla limbAnimator) 잘못. 그랩 클라이밍 패턴 동일.
+        float partialTicks = SmartMovingClientState.globalCachedTickDelta;
+        float distance    = sm.stats.getTotalHorizontalDistance(partialTicks) * 1.3f;
+        float walkFactor  = smFactor(sm.stats.currentHorizontalSpeedFlattened, 0f, 0.12951545f);
+        float standFactor = smFactor(sm.stats.currentHorizontalSpeedFlattened, 0.12951545f, 0f);
 
         // 머리
         head.roll  = -headYaw * DEG_TO_RAD;
         head.pitch = -EIGHTH;
         head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-12 / §16-18)
 
-        // 몸통: 앞으로 78° 기울임 (수평 자세)
-        body.pitch = QUARTER - THIRTYTWOTH;
-        body.roll  = MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor;
-        body.yaw   = MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor;
+        // 🔴 (Phase 1, Crawl 애니메이션 1:1): 몸통 회전 순서 YZX 매핑.
+        //   원본 L403 `bipedTorso.rotationOrder = ModelRotationRenderer.YZX` 명시.
+        //   1.21.1 ModelPart 기본 ZYX → setAnglesYZX 헬퍼로 정확 변환.
+        //   pitch = X (큰 값 78°), yaw = Y (작은 cos), roll = Z (작은 cos).
+        setAnglesYZX(body,
+                QUARTER - THIRTYTWOTH,                                   // 원본 L404 bipedTorso.X
+                MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor,    // 원본 L407 bipedBody.Y
+                MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor); // 원본 L406 bipedTorso.Z
         body.pivotY = 3f;    // 원본 bipedTorso.rotationPointY = +3F (B-12 / §16-18, SR 다층 부재로 body 단일 노드 근사)
 
         // 다리
