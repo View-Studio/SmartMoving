@@ -9,6 +9,7 @@ import net.minecraft.entity.EntityPose;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -194,5 +195,44 @@ public abstract class MixinClientPlayerEntity {
     private void sm_sendStatePacket(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
         SmartMovingClientState.get(player).sendStatePacket(player);
+    }
+
+    /**
+     * 낙하 중 sneak 시 모델/카메라 Y -0.125 점프 차단 — `inSneakingPose` 필드 결정 가로채기.
+     *
+     * 배경: ClientPlayerEntity 가 자체 `inSneakingPose` boolean 필드를 보유하며,
+     * `isInSneakingPose()` 를 override 해 entity.pose 가 아니라 이 필드를 반환.
+     * `PlayerEntityRenderer.getPositionOffset` 가 `isInSneakingPose()=true` 시
+     * Y = scale × -2/16 = -0.125 offset 적용 → 모델/카메라 점프.
+     *
+     * `inSneakingPose` 필드는 ClientPlayerEntity.tickMovement (bytecode offset 80-145)
+     * 에서 매 tick 별도로 결정:
+     *   inSneakingPose = !flying && !swimming && !hasVehicle && canChangeIntoPose(CROUCHING)
+     *                    && (isSneaking() || (!isSleeping() && !canChangeIntoPose(STANDING)));
+     *
+     * MixinPlayerEntity.sm_redirectIsSneakingForFallingPose 가 PlayerEntity.updatePose 의
+     * isSneaking() 만 가로챘으나, 이 ClientPlayerEntity.tickMovement 의 isSneaking() 호출은
+     * 별도라 그대로 통과 → inSneakingPose=true → getPositionOffset Y -0.125 적용.
+     *
+     * 해결: tickMovement 안의 `isSneaking()` 호출 (offset 114) 만 redirect → 낙하 중 false
+     * 반환 → inSneakingPose 의 isSneaking() term 무력화 → inner = (!isSleeping &&
+     * !canChangeIntoPose(STANDING)) 만 남음 → 일반 공중 낙하 시 false → inSneakingPose=false.
+     *
+     * 좁은 천장 시나리오 (canChangeIntoPose(STANDING)=false) 에서는 vanilla 가 자체 판단으로
+     * inSneakingPose=true 강제 — vanilla 안전 fallback 으로 사용자 강제 STANDING 시 끼임 방지.
+     */
+    @Redirect(method = "tickMovement",
+            at = @At(value = "INVOKE",
+                     target = "Lnet/minecraft/client/network/ClientPlayerEntity;isSneaking()Z"))
+    private boolean sm_redirectIsSneakingForInSneakingPose(ClientPlayerEntity self) {
+        boolean original = self.isSneaking();
+        if (!original) return false;
+        if (!SmartMovingConfig.Config.enabled) return original;
+
+        boolean isFalling = !self.isOnGround()
+                && self.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                && !self.isTouchingWater()
+                && !self.getAbilities().flying;
+        return !isFalling && original;
     }
 }

@@ -20,6 +20,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -68,6 +69,62 @@ public abstract class MixinPlayerEntityModelClient {
     /** BipedEntityModel.leaningPitch — animateModel()에서 entity.getLeaningPitch()로 세팅됨 */
     @Shadow protected float leaningPitch;
 
+    /**
+     * BipedEntityModel.sneaking — PlayerEntityRenderer.setModelPose 가 매 프레임
+     * `model.sneaking = entity.isInSneakingPose()` 로 set. setAngles 의 sneak 분기
+     * (body.pitch=0.5, leg.pivotZ=4, head.pivotY=4.2, body.pivotY=3.2, arm.pivotY=5.2 등)
+     * 가 이 필드를 본다.
+     */
+    @Shadow public boolean sneaking;
+
+    /**
+     * 낙하 중 vanilla sneak pose 차단을 위해 setAngles HEAD 진입 시 원본 sneaking 값을
+     * 보관. TAIL 시작부에서 원복하여 layer renderer 등 외부 참조와의 일관성 유지.
+     *
+     * 원본 1.7.10 1:1 근거 — SmartMovingModel.animateSneaking (L681-685):
+     *   `if(isStandard && !isAngleJumping) imp.superAnimateSneaking(...);`
+     *   isFalling 분기 진입 시 isStandard=false → vanilla sneak super 호출 SKIP.
+     *
+     * 1.21.1 vanilla 는 setAngles 가 통합 메서드라 SKIP 불가 → sneaking 필드를 false 로
+     * 임시 set 해 vanilla `if(this.sneaking)` 분기를 else 분기 (정상 standing 값) 로
+     * 우회. 결과적으로 body.pitch=0, leg.pivotZ=0, leg.pivotY=12.0, head.pivotY=0,
+     * body.pivotY=0, arm.pivotY=2.0F 가 적용되어 sneak 자세 잔존 cancel.
+     */
+    @Unique
+    private boolean smOriginalSneakingForFalling;
+
+    // ── [12-1] setAngles Mixin (HEAD — 낙하 중 vanilla sneak 분기 차단) ─────────
+    //
+    // 원본 1.7.10 SmartMovingModel.animateSneaking 가 isStandard=false 시 vanilla
+    // superAnimateSneaking 호출을 skip 한 것과 1:1 등가. 1.21.1 에서는 setAngles 가
+    // 단일 메서드라 직접 SKIP 불가하므로 sneaking 필드를 false 로 임시 set.
+    //
+    // 조건: cfgEnabled && !onGround && fallDistance > fallAnimationDistanceMinimum
+    //       && !climbing 계열 && !touchingWater (= isFallingForReset 와 동일).
+    @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V",
+            at = @At("HEAD"))
+    private void sm_setAnglesHead(
+            LivingEntity entity,
+            float limbSwing, float limbSwingAmount,
+            float animationProgress, float headYaw, float headPitch,
+            CallbackInfo ci) {
+        if (!(entity instanceof ClientPlayerEntity player)) return;
+
+        // 항상 원본 저장 (cfgEnabled=false 분기에서도 TAIL 원복 안전 보장)
+        smOriginalSneakingForFalling = sneaking;
+
+        if (!SmartMovingConfig.Config.enabled) return;
+
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        boolean isFallingForReset = !player.isOnGround()
+                && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
+                && !player.isTouchingWater();
+        if (isFallingForReset) {
+            sneaking = false;
+        }
+    }
+
     // ── [12-1] setAngles Mixin (TAIL — vanilla 애니메이션 완료 후 SM이 덮어씀) ──
 
     @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V",
@@ -78,6 +135,13 @@ public abstract class MixinPlayerEntityModelClient {
             float animationProgress, float headYaw, float headPitch,
             CallbackInfo ci) {
         if (!(entity instanceof ClientPlayerEntity player)) return;
+
+        // 🔴 sneaking 원복 — HEAD 에서 임시 false 로 set 한 값을 vanilla setAngles 종료 직후
+        //   복구. 같은 프레임 내 layer renderer (cape/armor) 가 copyBipedStateTo 등으로
+        //   sneaking 을 참조해도 entity 의 실제 pose 와 일관 유지.
+        //   (조건 무관 무조건 set — HEAD 에서 항상 원본 저장하므로 안전.)
+        sneaking = smOriginalSneakingForFalling;
+
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
         // ── [8-3][6-4] SM 활성 상태에서 leaningPitch 강제 0 ─────────────────

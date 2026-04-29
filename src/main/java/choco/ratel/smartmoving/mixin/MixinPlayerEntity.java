@@ -9,6 +9,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -99,6 +100,51 @@ public abstract class MixinPlayerEntity {
         //   = SLIDING 강제 → 카메라 발끝. 정정: vanilla 통과 → STANDING POSE → eyeHeight 1.62.
         //   클라/서버 대칭 유지 → datatracker 진동 0.
         // isFlying/isLevitating/isDipping/그 외 → vanilla updatePose() 통과 (STANDING 등)
+    }
+
+    /**
+     * 낙하 중 sneak pose 차단 — vanilla updatePose() 의 isSneaking() 호출만 redirect.
+     *
+     * 원본 1.7.10 1:1 근거 (SmartMovingModel.animateSneaking L681-685):
+     *   `if(isStandard && !isAngleJumping) imp.superAnimateSneaking(...);`
+     *   isFalling 분기 진입 시 isStandard=false → vanilla sneak 시각 적용 SKIP.
+     *
+     * 1.21.1 EntityPose 시스템 차이:
+     *   1.7.10 vanilla 는 sneak 시 boundingBox 변경 없음 + eyeHeight 0.08 차감만 → 떨림 미미.
+     *   1.21.1 vanilla 는 pose=CROUCHING → boundingBox.height 1.5 (vs 1.8) + eyeHeight 1.27
+     *     (vs 1.62) → 카메라/hitbox 토글 시 lerp 점프 발생.
+     *
+     * 해결: PlayerEntity.updatePose 의 isSneaking() 호출 (bytecode offset 68) 만 redirect →
+     *   낙하 중에는 false 반환 → CROUCHING 분기 (offset 67-88) skip → STANDING fallthrough.
+     *   vanilla 의 다른 분기 (FallFlying/Sleeping/Swimming/SpinAttack) 우선순위는 그대로.
+     *
+     * 위치: main mixin set 이라 client + server 양측 자동 적용 (instanceof 가드 불필요).
+     *   - 클라: pose=STANDING → hitbox/eye height 토글 없음 + setModelPose 가 model.sneaking=false
+     *     자동 set → BipedEntityModel.setAngles 의 sneak 분기 자동 SKIP.
+     *   - 서버: pose=STANDING → 클라/서버 hitbox 동기화 → 좁은 천장 통과 등 위치 reject 회피.
+     *
+     * SM 상태 (Crawling/CrawlClimbing/HeadJumping/Sliding/Swimming/Diving) 는 sm_updatePose_*
+     * 가 이미 ci.cancel() 후 setPose() 처리 → vanilla 본체 미실행 → 이 redirect 영향 없음.
+     */
+    @Redirect(method = "updatePose",
+            at = @At(value = "INVOKE",
+                     target = "Lnet/minecraft/entity/player/PlayerEntity;isSneaking()Z"))
+    private boolean sm_redirectIsSneakingForFallingPose(PlayerEntity self) {
+        boolean original = self.isSneaking();
+        if (!original) return false;
+        if (!SmartMovingConfig.Config.enabled) return original;
+
+        // isFalling 가드 (sm_setAnglesHead 와 동일 조건):
+        //   !onGround && fallDistance > fallAnimationDistanceMinimum && !touchingWater &&
+        //   !abilities.flying.
+        // SM 상태 (isClimbing 등) 는 SmartMovingClientState/Server 에 분리 저장이라 양측
+        // 직접 참조 불가. 그러나 climbing 중에는 SmartMovingClimber 가 fallDistance=0 으로
+        // reset 하므로 fallDistance > minimum 조건이 자연스레 climbing 제외.
+        boolean isFalling = !self.isOnGround()
+                && self.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                && !self.isTouchingWater()
+                && !self.getAbilities().flying;
+        return !isFalling && original;
     }
 
     /**
