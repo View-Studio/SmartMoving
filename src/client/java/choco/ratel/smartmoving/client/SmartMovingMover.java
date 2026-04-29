@@ -116,12 +116,8 @@ public final class SmartMovingMover {
         // 🔴 (2026-04-28) 원본 SmartMovingSelf L197-227 1:1 정밀 매핑.
         //   원본: isFast 시 sprintFactor (1.5). !isFast 시 1.0.
         //   landMotion L712 에서 별도: isRunning && !isFast 시 runFactor (1.3) 곱.
-        // 🔴 (세션 145 BUG-sprint, 사용자 의도): 크롤 시 sprint 효과 전체 차단.
-        //   원본 isFast 식 자체는 isCrawling 시 true 가능 (식에 가드 없음) → SM sprintFactor
-        //   1.5 곱 적용 → 사용자가 "엎드린 채 sprint 발동" 인지. 사용자 명시 의도에 따라
-        //   sprintFactor 곱셈만 isCrawling 가드 추가 (isFast 식 자체는 원본 그대로 유지).
         float speedFactor = 1.0F;
-        if (sm.isFast && !sm.isCrawling) {
+        if (sm.isFast) {
             // 원본: !isLevitating ? sprintFactor : sprintFactorLevitate. Levitate 는 SmartMovingFlyer 에서 별도 처리.
             speedFactor *= cfg.sprintFactor;  // 1.5
         }
