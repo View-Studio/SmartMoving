@@ -1695,6 +1695,7 @@ public final class SmartMovingClientState {
                 if (!anySmallSmState && heightOffset != 0F) {
                     heightOffset = 0F;
                 }
+
             }
 
             // B-34 (세션 59): 원본 L2449-L2450 이식 — `wasCrawling && !isCrawling &&
@@ -2218,7 +2219,13 @@ public final class SmartMovingClientState {
                         0.1f + cfg.perspectiveSpeedFactorMax * 0.1f);
             }
             if (player.isSprinting()) perspectiveFactor *= 1.3F;
-            if (isFast || isSprintJump) {
+            // 🔴 (세션 145 BUG-FOV, 사용자 의도): 크롤 시 sprint 시각효과 (FOV 변경) 전체 차단.
+            //   원본 식 (L2249) 은 isCrawling 가드 없음 → 크롤+sprint키+W 시 perspectiveSprintFactor
+            //   곱 적용 → fadingPerspectiveFactor 점진 증가 → FOV multiplier 1.0→1.25 변동.
+            //   사용자 명시 의도 "엎드린 채 sprint 발동 안 됨" 1:1 위반이지만 사용자 보고 반영.
+            //   `isFast && !isCrawling` 가드 추가 — sprintFactor 곱셈 (Mover.getNonSlowInputSpeedFactor)
+            //   과 동일 패턴.
+            if ((isFast || isSprintJump) && !isCrawling) {
                 if (player.isSprinting()) perspectiveFactor /= 1.3F;
                 perspectiveFactor *= cfg.perspectiveSprintFactor;
             }

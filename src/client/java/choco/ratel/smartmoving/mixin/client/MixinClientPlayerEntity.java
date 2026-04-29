@@ -54,6 +54,26 @@ public abstract class MixinClientPlayerEntity {
     }
 
     /**
+     * 🔴 (세션 145 BUG-sneak속도): vanilla 1.21.1 `KeyboardInput.tick(slowDown, factor)` 가
+     *   `slowDown=true` 시 movementForward/Sideways *= **PLAYER_SNEAKING_SPEED** (=**0.3**)
+     *   곱셈 적용. `slowDown` 결정자 = `ClientPlayerEntity.shouldSlowDown()` =
+     *   `isInSneakingPose() || isCrawling()`.
+     *
+     * SM 의 `getSlowInputSpeedFactor` 도 sneak/crawl 시 sneakFactor (0.3) / crawlFactor (0.15)
+     * 곱 추가 → vanilla 0.3 × SM 0.3 = **0.09** 이중 감속 BUG. SM 활성/비활성 시 약 3.3x
+     * 차이 (사용자 보고).
+     *
+     * 해결: SM 활성 시 vanilla 의 `shouldSlowDown()` 결과 강제 false → vanilla movement 곱
+     * 차단. SM 자체 sneakFactor/crawlFactor 만 적용 → 0.3/0.15 base. SM 비활성 시 inject
+     * 통과 → vanilla 정상 작동 (0.3) + SM 가드 자동 비활성 → 0.3 base. 동일 효과.
+     */
+    @Inject(method = "shouldSlowDown", at = @At("HEAD"), cancellable = true)
+    private void sm_blockVanillaSlowDown(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        cir.setReturnValue(false);
+    }
+
+    /**
      * 🔴 (세션 145 BUG-edge): vanilla `ClientPlayerEntity.isSneaking()` override 가
      *   `input.sneaking` 직접 검사 — Entity.isSneaking() 의 DataTracker flag 우회.
      *   우리 MixinEntityClient.sm_isSneaking inject (Entity.isSneaking 대상) 가

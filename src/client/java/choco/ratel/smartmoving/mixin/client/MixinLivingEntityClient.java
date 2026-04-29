@@ -444,6 +444,35 @@ public abstract class MixinLivingEntityClient {
      *   - 스프린트 점프 +0.2F: SM tryJump()에서 자체 계산
      *   - jumpingCooldown=10 (5-3): jump() 미실행으로 자동 차단
      */
+    /**
+     * 🔴 (세션 145 BUG-sprint): 크롤/슬라이드 등 SM small state 시 vanilla sprint 효과 차단.
+     *
+     * vanilla `LivingEntity.setSprinting(true)` 가 두 작업 수행:
+     *   1. super.Entity.setSprinting → SPRINTING flag set.
+     *   2. GENERIC_MOVEMENT_SPEED attribute 에 SPRINTING_SPEED_BOOST modifier 추가 (1.3x).
+     * Entity.setSprinting inject 만으로는 attribute modifier 추가 (#2) 차단 불가 →
+     * 스프린트 속도 효과 그대로 발동 (사용자 보고 "엎드린 채 sprint 발동").
+     *
+     * 원본 SmartMovingSelf L2700 `setSprinting(isStandupSprintingOrRunning())` 1:1 매핑.
+     * `isStandupSprintingOrRunning() = ... && !isCrawling` 가드 (L3236) 적용 효과 = 크롤
+     * 시 setSprinting(true) 호출 자체 차단 → SPRINTING flag false + 1.3x modifier 미추가.
+     *
+     * 1.21.1 vanilla 가 매 tick `setSprinting(true)` 자동 호출 (sprint 키 hold 시) →
+     * 우리 SM 의 엣지 set `setSprinting(false)` (SmartMovingClientState L1518) 무력화.
+     * 이 inject 가 vanilla 자동 호출 자체 차단해 원본 1:1 효과.
+     */
+    @Inject(method = "setSprinting", at = @At("HEAD"), cancellable = true)
+    private void sm_blockVanillaSprintInSmStates(boolean sprinting, CallbackInfo ci) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        if (!SmartMovingConfig.Config.enabled) return;
+        if (!sprinting) return;  // setSprinting(false) 는 항상 통과.
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isSliding || sm.isHeadJumping
+                || sm.isSwimming_sm || sm.isDiving) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "jump", at = @At("HEAD"), cancellable = true)
     private void sm_jump(CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
