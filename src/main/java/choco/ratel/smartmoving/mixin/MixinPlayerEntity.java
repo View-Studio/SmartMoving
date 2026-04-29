@@ -60,6 +60,21 @@ public abstract class MixinPlayerEntity {
             return;
         }
 
+        // 🔴 비행 콜리전 원본 1:1 복원 시도 (사용자 요청, 단계 1):
+        //   원본 setHeightOffset(-1F) (L1694-L1704) → height 0.8, eyeHeight 변경 없음 (1.62).
+        //   1.21.1 매핑: dimensions = (0.6, 0.8, eyeHeight=1.62).
+        //   서버 측 isFlying 공식 (원본 L2510): cfg.fly && abilities.flying && !swim && !dive.
+        //   클라/서버 hitbox 일관 위해 양측 동일 적용. instanceof ServerPlayerEntity 가드는
+        //   메서드 진입부에 이미 있음 — player 변수 사용 가능.
+        boolean serverIsFlying = SmartMovingConfig.Config.fly
+                              && player.getAbilities().flying
+                              && !sm.isSwimming
+                              && !sm.isDiving;
+        if (serverIsFlying || sm.isLevitating) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
+
         // SLIDING POSE 가 vanilla 가 아닌 경로로 들어온 경우 보강 (외부 모드 등).
         if (pose == EntityPose.SLIDING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));

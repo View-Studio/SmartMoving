@@ -89,6 +89,24 @@ public abstract class MixinPlayerEntityClient {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔴 비행 콜리전 원본 1:1 복원 시도 (사용자 요청, 단계 1):
+        //   원본 SmartMovingSelf.setHeightOffset(-1F) (L1694-L1704):
+        //     sp.boundingBox.minY -= -1   // minY += 1 (박스 1블록 위로)
+        //     sp.height += -1             // 1.8 → 0.8
+        //   eyeHeight 변경 없음 (1.7.10 vanilla 1.62 그대로).
+        //
+        //   1.21.1 매핑: dimensions = (0.6, 0.8, eyeHeight=1.62).
+        //   ⚠️ boundingBox.minY +1 보정은 EntityDimensions 만으로는 불가 →
+        //     단계 2 (Entity.setBoundingBox 가로채기) 별도 적용 예정.
+        //   현재 단계 1 만 적용 시 박스 = (y, y+0.8) (원본 (y+1, y+1.8) 와 위치 다름).
+        //   카메라 = y + 1.62 (원본 동일). 콜리전 박스 크기는 0.8 (원본 동일).
+        //
+        //   sm.isFlying 공식 (원본 L2510): cfg.fly && abilities.flying && !swim && !dive.
+        //   isLevitating 도 동일 (cfg.fly false + cfg.levitateSmall true 시 활성).
+        if (sm.isFlying || sm.isLevitating) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         boolean smSmall = sm.isCrawling
                        || sm.isHeadJumping || sm.isSliding
                        || sm.isSwimming_sm || sm.isDiving;

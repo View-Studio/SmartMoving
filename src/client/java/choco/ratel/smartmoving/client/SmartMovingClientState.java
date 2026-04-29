@@ -1106,11 +1106,32 @@ public final class SmartMovingClientState {
             //   && !isSwimming && !isDiving` 으로 이미 cfg.fly 내포. 원본은 `capabilities.flying`
             //   vanilla 기반 + OR levitateSmall. 정밀 복원.
             if (cfg0.crawl && cfg0.enabled) {
-                mustCrawl = !canStandUp(player)
-                        && !isSwimming_sm && !isDiving
-                        && (!isDipping || dippingDepth < 0.65F);
-                if (player.getAbilities().flying
-                        && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
+                // 🔴 원본 1:1 fix (디버그 로그 분석 결과):
+                //   원본 SmartMovingSelf L2395-L2402:
+                //     boolean mustCrawl = false;
+                //     if (isCrawling || isClimbCrawling) {
+                //         mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < sp.height - heightOffset;
+                //     }
+                //   원본은 isCrawling || isClimbCrawling 시에만 mustCrawl 검사. 그 외 false 유지.
+                //
+                //   기존 1.21.1 매핑: 가드 없이 항상 검사. 비행 종료 엣지 frame N 시작 시점
+                //   entity.y=y_ground-1 (비행 중 위치) 기반 standBox 검사 → dirt block 안 박힘 →
+                //   canStandUp=false → mustCrawl=true. 그 후 standUp 으로 entity.y 보정 됐어도
+                //   L1559 isCrawling 갱신 시점 mustCrawl=true 잔존 → isCrawling=true 활성 →
+                //   다음 frame sm_updatePose_client SWIMMING POSE → 엎드리기 자세.
+                //
+                //   해결: 원본 1:1 가드 (isCrawling || isClimbCrawling) 로 변경. 비행 중/종료
+                //   직후 frame 은 isCrawling=false 라 검사 안 함 → mustCrawl=false 유지 →
+                //   isCrawling 잘못 활성 차단.
+                if (isCrawling || isClimbCrawling) {
+                    mustCrawl = !canStandUp(player)
+                            && !isSwimming_sm && !isDiving
+                            && (!isDipping || dippingDepth < 0.65F);
+                    if (player.getAbilities().flying
+                            && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
+                        mustCrawl = false;
+                    }
+                } else {
                     mustCrawl = false;
                 }
             } else {
@@ -1478,6 +1499,48 @@ public final class SmartMovingClientState {
                 }
             }
 
+            // 🔴 비행/Levitate 진입 엣지: heightOffset = -1F + calculateDimensions (단계 3+):
+            //   원본 SmartMovingSelf L2511-L2512 `setHeightOffset(-1)` 매핑.
+            //   - heightOffset = -1F: standupIfPossible 가드 (`if (heightOffset >= 0) return`)
+            //     통과 신호 (종료 엣지에서 standUp 호출되도록).
+            //   - calculateDimensions: dimensions/boundingBox 갱신. 우리 inject 가
+            //     (0.6, 0.8, 1.62) 반환 + MixinEntity.sm_offsetBoundingBoxForFlying 가
+            //     box.offset(0, 1, 0) 적용 → 박스 (y+1, y+1.8).
+            //
+            //   ⚠️ 종료 엣지에서는 calculateDimensions 호출하지 않음 — standupIfPossible 의
+            //   standUp 안 player.move 가 비행 modified 박스 기준 gap 측정 → entity.y 보정
+            //   필요. 박스를 미리 복원하면 gap 측정 부정확. 종료 시 dimensions 복원은
+            //   standupIfPossible 끝에서 수행 (B-N-standup 메서드 본체에 추가).
+            if ((isFlying && !wasFlying) || (isLevitating && !wasLevitating)) {
+                smDebugDumpState(player, "비행 진입 엣지 (BEFORE)", "");
+                this.heightOffset = -1F;
+                // 🔴 stale restoreFromFlying 클리어 (자동 착지 1회 한정 BUG fix):
+                //   직전 비행 종료 엣지에서 restoreFromFlying=true 로 set 되었는데, 자동 착지
+                //   (tryLanding 트리거) 없이 사용자가 수동으로 비행 해제한 경우, 이 플래그가
+                //   클리어되지 않은 채 다음 비행 진입까지 이월된다. 이 상태로 다음 비행 진입 직후
+                //   첫 standupIfPossible 호출 시 `restoreFromFlying=true && tryLanding=false &&
+                //   !groundClose && !sneak` 분기가 resetHeightOffset() 을 호출 → heightOffset=0
+                //   reset → 이후 모든 standupIfPossible 가드 (heightOffset >= 0) 미통과 →
+                //   조기 return → 자동 착지 영구 불가능.
+                //   해결: 비행 진입 엣지에서 stale 플래그 클리어 → restoreFromFlying 은 진입한
+                //   비행 세션 내에서만 의미 있는 신호로 유지.
+                this.restoreFromFlying = false;
+                player.calculateDimensions();
+                smDebugDumpState(player, "비행 진입 엣지 (AFTER calc)", "");
+            }
+            if ((!isFlying && wasFlying) || (!isLevitating && wasLevitating)) {
+                // 🔴 root cause fix (디버그 로그 분석 결과):
+                //   비행 진입 엣지 직후 자동 착지 시도 (tryLanding=true && groundClose=false) 가
+                //   resetHeightOffset → heightOffset=0 reset 함. 그 후 비행 중 매 tick
+                //   standupIfPossible 호출되지만 가드 (heightOffset >= 0) 미통과 → 즉시 return.
+                //   비행 종료 엣지 시점에도 heightOffset=0 → standupIfPossible 가드 미통과 →
+                //   standUp 미호출 → entity.y +=1 보정 안 됨 → 가라앉음 + isCrawling 트리거.
+                //   해결: 비행 종료 엣지에서 heightOffset=-1F 강제 재설정 → standupIfPossible
+                //   가드 통과 → 정상 standUp 호출.
+                this.heightOffset = -1F;
+                smDebugDumpState(player, "비행 종료 엣지 (감지, heightOffset=-1F 재설정)", "restoreFromFlying=" + restoreFromFlying);
+            }
+
             // **포커스 #3 B-3 (세션 4)**: 원본 L2542-L2544 tryLanding 계산 + standupIfPossible
             //   호출 이식. 1.21.1 SmartMovingClientState 의 isFlying 엣지 처리 (위 블록) 직후
             //   원본 흐름과 동일하게 배치.
@@ -1504,6 +1567,19 @@ public final class SmartMovingClientState {
                         && player.getVelocity().y > -0.03D;
                 if (restoreFromFlying || tryLanding) {
                     standupIfPossible(player, tryLanding, restoreFromFlying);
+                }
+
+                // 🔴 비행 종료 엣지 안전망 (단계 4):
+                //   standupIfPossible 의 standUp / toSlidingOrCrawling 분기 안에서 dimensions
+                //   복원 호출 (player.calculateDimensions) 이 어떤 이유로 작동 안 했을 경우
+                //   강제 보강. 종료 엣지에서 무조건 calculateDimensions 호출 → dimensions 가
+                //   잔존 (0.6, 0.8, 1.62) 라도 STANDING (1.8) 으로 복원.
+                //
+                //   호출 위치: standupIfPossible 후 (gap 측정 시점에는 비행 modified 박스 유지
+                //   필요했으므로 진입 엣지 처리만으로는 부족).
+                //   중복 호출 무해 (vanilla calculateDimensions 는 idempotent).
+                if ((!isFlying && wasFlying) || (!isLevitating && wasLevitating)) {
+                    player.calculateDimensions();
                 }
             }
 
@@ -2642,6 +2718,48 @@ public final class SmartMovingClientState {
     }
 
     /**
+     * 🔴 디버그 헬퍼 (사용자 요청): SM 모든 상태 dump.
+     *   호출 위치: standupIfPossible 진입, 비행 진입/종료 엣지.
+     *   콘솔 출력 → 사용자가 복사해서 보고.
+     */
+    private void smDebugDumpState(ClientPlayerEntity player, String tag, String extra) {
+        System.out.println("[SM-FLY-DEBUG] === " + tag + " === " + extra);
+        System.out.println("  entity.y=" + player.getY()
+                + " bb=" + player.getBoundingBox()
+                + " onGround=" + player.isOnGround()
+                + " fallDistance=" + player.fallDistance);
+        System.out.println("  vanilla: abilities.flying=" + player.getAbilities().flying
+                + " isSneaking=" + player.isSneaking()
+                + " isInSneakingPose=" + player.isInSneakingPose()
+                + " pose=" + player.getPose()
+                + " velocity=" + player.getVelocity());
+        System.out.println("  dim.h=" + player.getDimensions(player.getPose()).height()
+                + " dim.eye=" + player.getDimensions(player.getPose()).eyeHeight()
+                + " standingEyeHeight=" + player.getStandingEyeHeight());
+        System.out.println("  SM: heightOffset=" + heightOffset
+                + " isFlying=" + isFlying
+                + " isLevitating=" + isLevitating
+                + " restoreFromFlying=" + restoreFromFlying);
+        System.out.println("  SM small: isCrawling=" + isCrawling
+                + " isClimbCrawling=" + isClimbCrawling
+                + " isHeadJumping=" + isHeadJumping
+                + " isSliding=" + isSliding
+                + " isSwimming_sm=" + isSwimming_sm
+                + " isDiving=" + isDiving
+                + " isDipping=" + isDipping);
+        System.out.println("  SM climb: isClimbing=" + isClimbing
+                + " isClimbJumping=" + isClimbJumping
+                + " isCeilingClimbing=" + isCeilingClimbing);
+        System.out.println("  SM input: isSlow=" + isSlow
+                + " isFast=" + isFast
+                + " isJumping=" + isJumping
+                + " sneakHeldDuringClimb=" + sneakHeldDuringClimb
+                + " grab=" + SmartMovingKeys.grab.isPressed()
+                + " mustCrawl=" + mustCrawl
+                + " wantCrawl=" + wantCrawl);
+    }
+
+    /**
      * 원본 `SmartMovingBase.getGapUnderneight()` L845-L848 정밀 이식.
      *   return sp.boundingBox.minY - getMaxPlayerSolidBetween(minY - 1.1D, minY, 0);
      *
@@ -2650,7 +2768,15 @@ public final class SmartMovingClientState {
      */
     public static double getGapUnderneight(ClientPlayerEntity player) {
         Box bb = player.getBoundingBox();
-        return bb.minY - getMaxPlayerSolidBetween(player, bb.minY - 1.1D, bb.minY, 0);
+        // 🔴 yMax clamping 회피 fix: yMax = bb.minY + 0.5 (박스 발 위 0.5m 까지 검사).
+        //   원본 yMax = bb.minY 였지만, getMaxPlayerSolidBetween 의 Math.min(result, yMax)
+        //   clamping 때문에 박스 발이 솔리드 안 살짝 박힌 case (vanilla 충돌 처리 epsilon
+        //   등) 에서 solidMax 가 bb.minY 로 잘못 clamp → gap=0 잘못 산출 → standUp 의
+        //   entity.y +=1 보정 후도 박스 발이 솔리드 안 박힌 채 잔존 (가라앉음).
+        //   fix: yMax 를 박스 발 위 0.5m 로 → solidMax 가 bb.minY 보다 위에 있으면 음수 gap
+        //   측정 가능 → standUp 의 entity.y += (1-(-gap)) = +1+gap 보정으로 정확히 solidMax
+        //   위치 도달.
+        return bb.minY - getMaxPlayerSolidBetween(player, bb.minY - 1.1D, bb.minY + 0.5D, 0);
     }
 
     /**
@@ -2677,8 +2803,19 @@ public final class SmartMovingClientState {
      * B-N-standup-3 (세션 136).
      */
     public void standUp(ClientPlayerEntity player, double gapUnderneight) {
-        // 원본 L2216: move(0, 1D - gapUnderneight, 0, true)
-        player.move(MovementType.SELF, new Vec3d(0, 1D - gapUnderneight, 0));
+        // 🔴 원본 1:1 매핑 (SmartMovingSelf L2214-L2219):
+        //   move(0, 1-gap, 0): entity.posY += (1-gap). 박스 평행이동.
+        //   resetHeightOffset: boundingBox.minY -= -1 → 박스 minY = entity.posY_new.
+        //   결과: entity.posY_new = entity.posY_old + (1-gap) = solidMax (땅).
+        //
+        //   1.21.1 매핑: setPosition(entity.y + (1-gap)) + calculateDimensions(STANDING)
+        //   (calculateDimensions 는 standupIfPossible 끝에서 호출).
+        //
+        //   ⚠️ 가라앉음 fix: gap 측정 정확성에 의존. getGapUnderneight 의 yMax clamping
+        //   (Math.min(result, yMax) 에서 yMax=bb.minY) 때문에 박스 발이 솔리드 안 살짝 박힌
+        //   case 에서 gap=0 잘못 산출 → 보정 부족 → 가라앉음. getGapUnderneight 의 yMax 를
+        //   bb.minY+0.5 로 정정해 음수 gap 측정 가능 → 정확한 보정.
+        player.setPosition(player.getX(), player.getY() + (1D - gapUnderneight), player.getZ());
         this.isCrawling    = false;
         this.isHeadJumping = false;
         resetHeightOffset();
@@ -2769,14 +2906,27 @@ public final class SmartMovingClientState {
      *   패턴은 MixinClientPlayerEntity L53 에서 이미 사용 중 (착지 후 flying 복원).
      */
     public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
-        if (this.heightOffset >= 0) return;
+        // 🔴 디버그 로그 (사용자 요청):
+        smDebugDumpState(player, "standupIfPossible enter",
+                "tryLanding=" + tryLanding + " restoreFromFlying=" + restoreFromFlying);
+
+        if (this.heightOffset >= 0) {
+            System.out.println("[SM-FLY-DEBUG] standupIfPossible early return (heightOffset >= 0)");
+            return;
+        }
 
         double gapUnderneight = getGapUnderneight(player);
         boolean groundClose = gapUnderneight < 1D;
         double gapOverneight = groundClose ? getGapOverneight(player) : -1D;
         boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
 
+        System.out.println("[SM-FLY-DEBUG] gap=" + gapUnderneight
+                + " gapOver=" + gapOverneight
+                + " groundClose=" + groundClose
+                + " standUpPossible=" + standUpPossible);
+
         if (tryLanding && groundClose && standUpPossible) {
+            System.out.println("[SM-FLY-DEBUG] tryLanding 분기 진입 → isFlying=false, abilities.flying=false");
             this.isFlying = false;
             // 포커스 #3 B-3 (세션 4): 원본 L2199 `sp.capabilities.isFlying = false` 매핑.
             //   1.21.1 PlayerAbilities.flying public field 직접 할당 + 서버 sync 패킷.
@@ -2786,17 +2936,63 @@ public final class SmartMovingClientState {
             restoreFromFlying = true;
         }
 
-        if (!restoreFromFlying) return;
+        if (!restoreFromFlying) {
+            System.out.println("[SM-FLY-DEBUG] !restoreFromFlying → return");
+            return;
+        }
 
         boolean sneakPressed = player.isSneaking();
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
 
+        String branch;
         if (!groundClose && !sneakPressed) {
+            branch = "resetHeightOffset (공중)";
             resetHeightOffset();
         } else if (standUpPossible && !(sneakPressed && grabPressed)) {
+            branch = "standUp(gap=" + gapUnderneight + ")";
             standUp(player, gapUnderneight);
         } else {
+            branch = "toSlidingOrCrawling(gap=" + gapUnderneight + ")";
             toSlidingOrCrawling(player, gapUnderneight);
+        }
+        System.out.println("[SM-FLY-DEBUG] 분기: " + branch
+                + " 후 entity.y=" + player.getY()
+                + " bb=" + player.getBoundingBox());
+
+        // 🔴 비행 종료 dimensions 복원 (사용자 요청, 단계 3+):
+        //   원본 setHeightOffset / resetHeightOffset 가 boundingBox/height 직접 조작 →
+        //   1.21.1 우리 매핑은 calculateBoundingBox modify + sm_getBaseDimensions inject 으로
+        //   대체. standUp 의 player.move() 가 entity.y 보정 + 박스 평행이동까지 수행하지만
+        //   dimensions (height 0.8 → 1.8) 복원은 별도 calculateDimensions 호출 필요.
+        //   호출 시점: 본 메서드 끝 — 가드 (heightOffset>=0) 미통과해 정상 처리된 경우만.
+        //   호출 시점 abilities.flying=false → MixinEntity.sm_offsetBoundingBoxForFlying 가드
+        //   미통과 → 박스 modify 미적용 → 박스 = (entity.y, entity.y+1.8) 정상 STANDING.
+        player.calculateDimensions();
+        System.out.println("[SM-FLY-DEBUG] calculateDimensions 후"
+                + " dim.h=" + player.getDimensions(player.getPose()).height()
+                + " dim.eye=" + player.getDimensions(player.getPose()).eyeHeight()
+                + " bb=" + player.getBoundingBox()
+                + " isFlying=" + this.isFlying
+                + " isCrawling=" + this.isCrawling);
+
+        // 🔴 가라앉음 안전망 (사용자 요청 — "위로 콜리전을 늘려서 원복" 보장):
+        //   standUp 의 setPosition 보정 후에도 박스 발이 솔리드 안 박힐 가능성 (motion 처리
+        //   차이로 미세 epsilon 박힘 등) 대비. 박스 발 아래 1m 범위 솔리드 max 검사 → 박스
+        //   발보다 위 솔리드 발견 시 entity.y push up.
+        //
+        //   getMaxPlayerSolidBetween 의 yMax clamping (`Math.min(result, yMax)`) 회피 위해
+        //   yMax 를 bb.minY + 0.5 (박스 발 위 0.5m) 로 설정 — 박스 발이 솔리드 안 박힌 경우
+        //   solidMax > bb.minY 가능.
+        Box bbAfter = player.getBoundingBox();
+        double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.0, bbAfter.minY + 0.5, 0);
+        System.out.println("[SM-FLY-DEBUG] 안전망 검사: bb.minY=" + bbAfter.minY
+                + " solidUnder=" + solidUnder
+                + " 박힘=" + (bbAfter.minY < solidUnder - 1.0E-5));
+        if (bbAfter.minY < solidUnder - 1.0E-5) {
+            double pushY = solidUnder - bbAfter.minY;
+            player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
+            System.out.println("[SM-FLY-DEBUG] 안전망 push up: pushY=" + pushY
+                    + " entity.y_new=" + player.getY());
         }
     }
 
