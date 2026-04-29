@@ -53,6 +53,58 @@ public abstract class MixinClientPlayerEntity {
         SmartMovingClientState.get(player).tickEssential(player);
     }
 
+    /**
+     * 🔴 (세션 145 BUG-edge): vanilla `ClientPlayerEntity.isSneaking()` override 가
+     *   `input.sneaking` 직접 검사 — Entity.isSneaking() 의 DataTracker flag 우회.
+     *   우리 MixinEntityClient.sm_isSneaking inject (Entity.isSneaking 대상) 가
+     *   ClientPlayerEntity 에서 우회됨 → shift 누름 시 무조건 isSneaking()=true →
+     *   `clipAtLedge()=true` → vanilla edge protection 발동 → 엎드린 채 안 떨어짐.
+     *
+     * 원본 SmartMovingSelf.isSneaking() L3226-L3232 1:1 동일 식 적용.
+     *   crawlOverEdge=true (기본) + isCrawling 시 모든 항 false → return false →
+     *   edge protection 미발동 → 떨어짐.
+     */
+    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
+    private void sm_isSneaking_ClientPlayer(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        if (!SmartMovingConfig.Config.enabled || player.hasVehicle()) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        boolean result = (sm.isSlow && player.isOnGround())
+                || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
+                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
+        cir.setReturnValue(result);
+    }
+
+    /**
+     * 🔴 (세션 145 BUG-점프): 크롤/슬라이드 등 SM 상태 시 vanilla 점프 차단 1:1 매핑.
+     *
+     * 원본 SmartMovingSelf L2366-L2370 `setIsJumpingField(...)` 가드:
+     *   movementInput.jump && !isCrawling && !isSliding
+     *   && !(headJumpEnabled && grab && sprint)
+     *   && !(jumpChargeEnabled && wouldIsSneaking && onGround && isStanding)
+     *   && !blockJumpTillButtonRelease
+     *
+     * 1.21.1 vanilla 흐름:
+     *   ClientPlayerEntity.tickNewAi() 안에서 `this.jumping = this.input.jumping` (offset 38-41).
+     *   기존 sm_jumpingFilter (LivingEntity.tickMovement HEAD) 는 tickNewAi 보다 먼저 실행 →
+     *   가드 적용 후 vanilla 가 다시 input.jumping 으로 set → 무력화. 점프 발동 BUG 직접 원인.
+     *
+     * 해결: ClientPlayerEntity.tickNewAi TAIL inject — vanilla `this.jumping = input.jumping`
+     *       이후 우리 가드 적용해 false 로 강제 set.
+     */
+    @Inject(method = "tickNewAi", at = @At("TAIL"))
+    private void sm_jumpingFilter_tickNewAi(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isSliding || sm.isHeadJumping
+                || sm.jumpCharge > 0 || sm.blockJumpTillButtonRelease) {
+            ((net.minecraft.entity.LivingEntity)(Object)this).setJumping(false);
+        }
+    }
+
     @Inject(method = "tickMovement", at = @At("TAIL"))
     private void sm_tickMovementYawRestore(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
