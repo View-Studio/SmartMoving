@@ -1630,6 +1630,17 @@ public final class SmartMovingClientState {
                         && player.getVelocity().y > -0.03D;
                 if (restoreFromFlying || tryLanding) {
                     standupIfPossible(player, tryLanding, restoreFromFlying);
+                    // 🔴 (사용자 보고 — 비행 → 엎드리기 박스 0.6 BUG / 2026-04-30):
+                    //   `restoreFromFlying = true` 는 비행/헤드점프 종료 엣지 (L1573/L1577/L1804)
+                    //   에서 set 되는데 어디서도 클리어 안 됨 → stale 잔존 → 매 틱 standupIfPossible
+                    //   호출 → 끝부분 player.calculateDimensions() (L3137) 가 sm.isCrawling 갱신
+                    //   (L1697) 전 시점에 호출되어 mixin 가드 매치 못 함 → vanilla SWIMMING POSE
+                    //   dim (0.6×0.6) 적용 → box height 0.6 → mustCrawl=true 오발동 → sneak 릴리즈
+                    //   해도 isCrawling 유지.
+                    //   해결: 호출 후 즉시 클리어 → 종료 엣지 1회만 유지.
+                    //   원본 1.7.10 은 setHeightOffset 가 box 직접 조작 → calculateDimensions 호출
+                    //   자체 없음. 1.21.1 EntityPose 호환 위해 L3137 추가했고 stale 결합이 BUG 발현.
+                    this.restoreFromFlying = false;
                 }
 
                 // 🔴 비행 종료 엣지 안전망 (단계 4):
