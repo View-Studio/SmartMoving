@@ -549,6 +549,22 @@ public final class SmartMovingClientState {
     /** 원본 wasClimbCrawling — 이전 틱 isClimbCrawling 저장. */
     public boolean wasClimbCrawling;
 
+    /**
+     * 사다리/덩굴 ICC EXIT toCrawling 직후 isCrawlClimbing 식 차단 플래그.
+     *
+     * 우리 1.21.1 매핑: ICC EXIT 후 박스 발 = ladder maxY 부근 (= grip 영역 안).
+     *   → handleClimbing 결과 isClimbing=true 잔존 → L1970 isCrawlClimbing 식 매치
+     *   (wasCrawling=true && isClimbing=true && ...) → L1985 _canStandUp=false (= ladder solid)
+     *   → L1989 분기 진입 → L1992 isCrawling=false reset BUG.
+     *
+     * 원본 1.7.10: 박스 발 = posY+1 = ladder maxY+1 (= 빈공간) → grip X → isClimbing=false 자연
+     *   → isCrawlClimbing 식 미매치.
+     *
+     * 해결: ICC EXIT toCrawling 시 플래그 set → 다음 tick L1970 식 false 강제 → L1992 reset 회피.
+     * isCrawling=false 자연 시 reset (= 사용자 sneak release).
+     */
+    public boolean iccExitJustToCrawl;
+
 
     /** 원본 sneakButton.StartPressed — 이번 틱 스닉키 엣지(새로 눌림). */
     public boolean sneakKeyStartPressed;
@@ -1686,13 +1702,25 @@ public final class SmartMovingClientState {
                 //   이전 매핑은 heightOffset 누락 → 크롤 중 (heightOffset=-1) 시 실제 유효 물
                 //   깊이 보정 안 됨 → 깊이 0.65 이상에서 canCrawl=false (원본은 1.65 이상).
                 //   원본 의도: 크롤 중 물 깊이 -1 보정 → 더 깊은 물에서도 크롤 유지 가능.
+                // 🔴 사다리/덩굴 ICC EXIT crawl 유지 fix (사용자 보고 — 사다리 끝 + sneak crawl 안 됨):
+                //   원본 1.7.10 박스 위치 = (posY+1, posY+1.8) (= mixin offset 박스 +1) → ladder Y range
+                //   밖 → 사다리 grip X → isClimbing=false → canCrawl=true → isCrawling 유지.
+                //   1.21.1 우리 매핑 박스 = (entity.y, entity.y+0.8) (= bottom snap 후 ladder maxY 표면) →
+                //   ladder grip 영역 안 → 다음 tick handleClimbing → isClimbing=true → canCrawl=false →
+                //   isCrawling 즉시 false 복원 BUG.
+                //   해결: `!isClimbing` 가드 → `(!isClimbing || isCrawling)` = isCrawling 유지 시
+                //   isClimbing 가드 우회. 1.7.10 ↔ 1.21.1 사다리 collision 영역 차이 보정.
+                //   부수효과 분석: 일반 ICC 케이스 isClimbing=false 라 영향 X. 사용자 사다리 옆 crawl →
+                //   climbing 전환 (= isCrawlClimbing Feature 3) 시 isClimbing+isCrawling 동시 활성 OK.
                 boolean canCrawl = !isSwimming_sm
                         && !isDiving
                         && (!isDipping || (dippingDepth + heightOffset) < SWIM_CRAWL_WATER_TOP_BORDER)
-                        && !isClimbing
+                        && (!isClimbing || isCrawling)
                         && player.fallDistance < cfg.fallingDistanceMinimum;
                 wasCrawling = isCrawling;                              // 원본 L2441
                 isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
+                // ICC EXIT 후 isCrawling 자연 false 시 iccExitJustToCrawl 플래그 reset.
+                if (!isCrawling) iccExitJustToCrawl = false;
                 // contextContinueCrawl 해제 (L2446-L2447) 는 L822 pre-compute 블록에 이미 이식.
 
                 // 🔴 heightOffset 잔존 cleanup (사용자 보고 BUG: 가만히 standing 시 heightOffset=-1F 잔존):
@@ -1947,7 +1975,15 @@ public final class SmartMovingClientState {
                 boolean _moveForward17 = player.input.movementForward > 0F;
                 // 원본 L2736 지역 변수 — 전환 블록에서 사용 (공식 직전 저장).
                 boolean _wasCrawlClimbing17 = isCrawlClimbing;
-                isCrawlClimbing = (wasCrawling || isCrawlClimbing)
+                // 🔴 사다리/덩굴 ICC EXIT 직후 isCrawlClimbing 식 차단 가드 (사용자 보고 fix —
+                //   사다리 끝 + sneak → crawl 안 됨):
+                //   1.21.1 우리 매핑 박스 발 = ladder maxY 부근 → handleClimbing 결과 isClimbing=true
+                //   잔존 → 식 매치 → L1985-L1992 분기 isCrawling=false reset BUG. 원본 1.7.10
+                //   박스 발 = ladder maxY+1 (빈공간) → grip 미인식 → 식 미매치. 박스 위치 차이.
+                //   해결: iccExitJustToCrawl 시 식 false 강제 → reset 회피. isCrawling=false 자연 시
+                //   플래그 reset.
+                isCrawlClimbing = !iccExitJustToCrawl
+                        && (wasCrawling || isCrawlClimbing)
                         && isClimbing
                         && isNeighborClimbing
                         && (_sneakPressed17 || crawlToggled)
@@ -2092,6 +2128,35 @@ public final class SmartMovingClientState {
                         //     MixinPlayerEntity.sm_getBaseDimensions_server 에 isClimbCrawling 분기
                         //     추가 (= 클라와 동일 dim 1.62 + mixin offset 박스 +1) → 서버 박스 동기화.
                         wasCrawling = toCrawling();
+                        // 🔴 사다리/덩굴 grip 회피 가드 (사용자 보고 fix — 사다리 끝 + sneak crawl 안 됨):
+                        //   ICC EXIT 직전 isClimbing=true → 사다리/덩굴 grip 영역. bottom snap 적용 시
+                        //   박스 발 = ladder maxY 표면 → 다음 tick handleClimbing → isClimbing=true 갱신
+                        //   → L1970 isCrawlClimbing 식 매치 (wasCrawling=true && isClimbing=true && ...)
+                        //   → L1985 _canStandUp=false (= ladder solid) → L1992 isCrawling=false reset → BUG.
+                        //   원본 1.7.10 = setHeightOffset(-1F) 매핑 = posY 변경 X + box.minY +=1 → 박스 발
+                        //   = posY+1 = ladder maxY+1 (= 빈공간 위). ladder grip 미인식. 자연 isClimbing=false.
+                        //   해결: 사다리/덩굴 grip 시 snap 미적용 → 박스 발 = entity.y_new = old+1 = ladder
+                        //   maxY+1 유지. 일반 블록 케이스 (isClimbing=false) snap 적용 정상.
+                        boolean wasClimbingBeforeFix = isClimbing;
+                        // 🔴 사다리/덩굴 ICC EXIT 케이스 fix (사용자 보고 — 사다리 끝 + sneak → crawl 진입 안 됨):
+                        //   사다리/덩굴 ICC EXIT 시점 isClimbing=true 잔존 (= 사다리 grip 마지막 tick).
+                        //   setPos(y+1) + calculateDimensions 시점 dim 매핑 결정:
+                        //     L97 분기 `isClimbCrawling || (isCrawling=true && isClimbing=true)` 매치 →
+                        //     dim 1.62 → mixin offset 박스 +1 적용 → 박스 = (entity.y+1, entity.y+1.8) =
+                        //     (old.y+2, old.y+2.8) → **박스 +2m double mixin offset BUG**.
+                        //   일반 블록 ICC 케이스는 isClimbing=false 라 smSmall 매치 → dim 0.62 → mixin
+                        //   offset 미적용 → 박스 정상. 사다리/덩굴 케이스만 BUG.
+                        //
+                        //   해결: setPos + calculateDimensions 전에 isClimbing=false 강제 → dim 매핑이
+                        //   smSmall (isCrawling) 매치 → dim 0.62 → mixin offset 미적용 → 박스 정상.
+                        //
+                        //   같은 tick L1683 isCrawling 재계산 BUG (Feature 2 동일 패턴) 도 함께 차단:
+                        //     `canCrawl = !isClimbing` 가드 통과 (isClimbing=false) + mustCrawl=true 강제
+                        //     → `canCrawl && (false || true)` = true 유지. 다음 tick 부터는 박스 위치
+                        //     검사로 자연 유지.
+                        this.isClimbing = false;
+                        this.mustCrawl = true;
+                        this.iccExitJustToCrawl = true;
                         player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                         player.lastRenderY += 1.0;
                         player.prevY += 1.0;
@@ -2105,11 +2170,16 @@ public final class SmartMovingClientState {
                             ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
                         }
                         // 박스 = (entity.y, entity.y+0.8). 1m 아래 솔리드 max → bottom snap (원본 L2813).
-                        double minY18 = player.getBoundingBox().minY;
-                        double gapUnderneight = minY18
-                                - getMaxPlayerSolidBetween(player, minY18 - 1D, minY18, 0);
-                        if (gapUnderneight >= 0D && gapUnderneight < 1D) {
-                            player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
+                        // 🔴 사다리/덩굴 케이스 (wasClimbingBeforeFix=true) snap 미적용 — 박스 발이 ladder maxY
+                        //   표면에 정렬되면 다음 tick handleClimbing 결과 isClimbing=true 재갱신 → isCrawlClimbing
+                        //   식 매치 → B-17b1 분기 isCrawling=false reset BUG. 박스 발 ladder maxY+1 위 유지.
+                        if (!wasClimbingBeforeFix) {
+                            double minY18 = player.getBoundingBox().minY;
+                            double gapUnderneight = minY18
+                                    - getMaxPlayerSolidBetween(player, minY18 - 1D, minY18, 0);
+                            if (gapUnderneight >= 0D && gapUnderneight < 1D) {
+                                player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
+                            }
                         }
                     } else {
                         // sneak 안 누름 — 박스 1.8 복원 (원본 resetHeightOffset).
