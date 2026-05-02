@@ -3073,7 +3073,56 @@ public final class SmartMovingClientState {
         } else if (standUpPossible && !(sneakPressed && grabPressed)) {
             standUp(player, gapUnderneight);
         } else {
+            // 🔴 비행 박스 → small 박스 전환 entity.y +1 보정 (사용자 보고 fix —
+            //   비행 → 1칸 공간 → 비행 풀림 → 엎드리기 안 됨, 블록 아래 파고들기):
+            //
+            //   비행 박스 (mixin offset 박스 +1 적용) = (entity.y+1, entity.y+1.8). entity.y =
+            //   Y_floor - 1 (= 디딤발 minY 위치). 1칸 공간 fit.
+            //   toSlidingOrCrawling 후 isCrawling=true → smSmall 분기 → dim eyeHeight=0.62 →
+            //   mixin offset 가드 미통과 → 박스 = (entity.y, entity.y+0.8) = (Y_floor-1, Y_floor-0.2).
+            //   박스 -1m 떨어짐 + 디딤발 안 박힘 → vanilla push out → 사용자 보고 "1칸 공간 밖으로
+            //   나와짐, 블록 아래 파고들기".
+            //
+            //   해결: ICC EXIT toCrawling 매핑과 동일 = setPos(y+1) + lastRenderY/prevY 동기화 +
+            //   Camera baseline 보정. 박스 위치 = (entity.y_new, entity.y_new+0.8) =
+            //   (Y_floor, Y_floor+0.8) = 비행 박스 위치 (Y 차원) 와 동등 → 1칸 공간 안 유지.
+            // 🔴 비행/Levitate/HeadJumping 종료 → toSlidingOrCrawling 매핑 (사용자 보고 fix —
+            //   "비행 → 1칸 공간 → 비행 풀림 → 즉시 엎드리기"):
+            //
+            //   비행 박스 (mixin offset 박스 +1 적용) = (entity.y+1, entity.y+1.8). entity.y =
+            //   Y_floor - 1 (= 디딤발 minY 위치). 1칸 공간 fit.
+            //   toSlidingOrCrawling 후 isCrawling=true → smSmall 분기 → dim eyeHeight=0.62 →
+            //   mixin offset 가드 미통과 → 박스 = (entity.y, entity.y+0.8) = (Y_floor-1, Y_floor-0.2).
+            //   박스 -1m 떨어짐 + 디딤발 안 박힘 → vanilla push out → 사용자 보고 "1칸 공간 밖으로
+            //   나와짐, 블록 아래 파고들기".
+            //
+            //   해결 1: ICC EXIT toCrawling 매핑과 동일 = setPos(y+1) + lastRenderY/prevY 동기화 +
+            //   Camera baseline 보정. 박스 = (entity.y_new, entity.y_new+0.8) = (Y_floor, Y_floor+0.8)
+            //   = 비행 박스 위치 (Y) 동등 → 1칸 공간 안 유지.
+            //
+            //   해결 2 (same-tick isCrawling 재계산 BUG): 원본 1.7.10 = isCrawling 재계산 (L2441) 이
+            //   standupIfPossible (L2543) 이전 → toCrawling() 의 isCrawling=true 가 다음 tick 까지
+            //   유지 → 다음 tick mustCrawl 재계산 (1칸 공간 박스 기반) 시 자연 유지.
+            //   1.21.1 매핑 순서 차이: isCrawling 재계산이 standupIfPossible 후 → 같은 tick
+            //   mustCrawl=false (이미 위에서 결정) → isCrawling 즉시 false 복원 BUG.
+            //   해결: mustCrawl=true 강제 set → 같은 tick L1683 isCrawling 재계산 시
+            //   `canCrawl && (false || true)` = true 유지. 다음 tick 부터는 박스 위치 검사로 자연 유지.
+            boolean wasSmallBox = (this.heightOffset == -1F);
             toSlidingOrCrawling(player, gapUnderneight);
+            if (wasSmallBox && this.isCrawling) {
+                player.calculateDimensions();
+                player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                player.lastRenderY += 1.0;
+                player.prevY += 1.0;
+                net.minecraft.client.render.Camera cam =
+                        net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                if (cam != null) {
+                    float eye = player.getStandingEyeHeight();
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                }
+                this.mustCrawl = true;
+            }
         }
 
         // 🔴 비행 종료 dimensions 복원 (사용자 요청, 단계 3+):
