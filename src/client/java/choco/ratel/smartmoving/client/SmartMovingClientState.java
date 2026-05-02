@@ -2112,7 +2112,34 @@ public final class SmartMovingClientState {
                 } else if (!isClimbCrawling && wasClimbCrawling) {
                     // 해제 엣지 (원본 L2804-L2820) — B-42-B18a 해소 완전 이식 (AABB 정밀).
                     climbIntoCount = 0;
-                    if (mustCrawl || sneakPressedRaw || crawlToggled) {
+                    // 🔴 sneak hold 가드 (사용자 보고 fix — grab 떼고 sneak hold 시 W 뗀 시점 떨어짐 BUG):
+                    //   ICC 활성 중 사용자 W 뗌 → wantClimbUp=false → canClimbCrawling=false → ICC EXIT.
+                    //   ICC EXIT toCrawling → 박스 (entity.y, entity.y+0.8) + isCrawling=true → 사용자
+                    //   "엎드리며 grab 풀림". 사용자 의도 = 그 자리 hold.
+                    //   해결: isClimbHolding=true && fwd<=0 && !mustCrawl 시 ICC EXIT 분기 skip +
+                    //   isClimbCrawling=true 강제 유지 → ICC 활성 박스 + dim 1.62 + mixin offset 박스 +1
+                    //   유지. 다음 tick wasICC=true && ICC 식 결과 false → 또 가드 활성 → 무한 hold.
+                    //   사용자 sneak release 또는 W 누르거나 grab 누름 시 가드 false → 정상 처리.
+                    boolean sneakHoldGuard = isClimbHolding
+                            && player.input.movementForward <= 0F
+                            && !mustCrawl;
+                    if (sneakHoldGuard) {
+                        // ICC 활성 박스 + dim 매핑 유지 위해 isClimbCrawling=true 강제 복원.
+                        isClimbCrawling = true;
+                    } else if (mustCrawl || sneakPressedRaw || crawlToggled) {
+                        // 🔴 gap 검사 후 분기 (원본 L2807-L2819 1:1 — 사용자 보고 fix):
+                        //   원본: gap 측정 → gap < 1 시 toCrawling, gap >= 1 시 resetHeightOffset.
+                        //   사용자 시나리오 — sneak hold 중 좌/우/후 이동으로 grab 블록 영역 밖 → 박스 발
+                        //   아래 빈공간 (gap >= 1) → 원본은 resetHeightOffset (= 박스 1.8 복원) 으로
+                        //   떨어지면서 sneak. 우리 매핑이 강제 toCrawling 했음 → 잘못된 엎드리기 BUG.
+                        Box bbExit = player.getBoundingBox();
+                        double exitGap = bbExit.minY
+                                - getMaxPlayerSolidBetween(player, bbExit.minY - 1D, bbExit.minY, 0);
+                        if (!(exitGap >= 0D && exitGap < 1D)) {
+                            // gap >= 1 (또는 음수) → 박스 발 아래 빈공간 → resetHeightOffset.
+                            heightOffset = 0F;
+                            player.calculateDimensions();
+                        } else {
                         // 🔴 ICC EXIT toCrawling 매핑 (원본 1.7.10 setHeightOffset(-1F) 1:1):
                         //   원본 1.7.10: posY 변경 X + box.minY +=1 + height -=1 + ySize/yOffset 동기화.
                         //   효과 = 박스 +1m 위, 사용자 시점 변경 X.
@@ -2154,7 +2181,16 @@ public final class SmartMovingClientState {
                         //     `canCrawl = !isClimbing` 가드 통과 (isClimbing=false) + mustCrawl=true 강제
                         //     → `canCrawl && (false || true)` = true 유지. 다음 tick 부터는 박스 위치
                         //     검사로 자연 유지.
-                        this.isClimbing = false;
+                        // 🔴 isClimbHolding=true 가드 추가 (사용자 보고 fix — grab sneak hold 깨짐):
+                        //   사용자 grab 떼고 sneak hold 시 isClimbHolding=true. ICC EXIT 처리에서
+                        //   isClimbing=false 강제 시 isClimbHolding = wantClimbHolding && isClimbing
+                        //   재계산 → false → 자가 hold 메커니즘 깨짐 → 떨어짐 BUG.
+                        //   해결: isClimbHolding=true 시 (= 자가 hold) isClimbing=false 강제 미적용.
+                        //   사다리 grip 잔존 케이스 (= isClimbHolding=false) 만 강제 → Feature 3
+                        //   사다리 ICC EXIT crawl 진입 fix 유지.
+                        if (!this.isClimbHolding) {
+                            this.isClimbing = false;
+                        }
                         this.mustCrawl = true;
                         this.iccExitJustToCrawl = true;
                         player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
@@ -2181,6 +2217,7 @@ public final class SmartMovingClientState {
                                 player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
                             }
                         }
+                        }  // toCrawling 분기 (gap < 1) 닫기
                     } else {
                         // sneak 안 누름 — 박스 1.8 복원 (원본 resetHeightOffset).
                         heightOffset = 0F;

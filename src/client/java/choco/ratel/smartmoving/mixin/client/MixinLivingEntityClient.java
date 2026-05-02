@@ -158,11 +158,15 @@ public abstract class MixinLivingEntityClient {
         // ── 매 틱 클라이밍 상태 리셋 (G-01) ─────────────────────────────────
         // 원본: SmartMovingSelf.resetClimbing() + resetState() 호출 (updateEntityActionState 상단)
         // 클라이밍 표면을 벗어나도 상태가 true로 남는 버그 방지
+        // 🔴 사용자 보고 fix (grab climbing sneak hold 안 됨):
+        //   isClimbHolding 은 원본 resetClimbing() (L1474-L1486) reset 대상 아님 — 우리 G-01 reset
+        //   에 잘못 포함됨 → 매 tick false reset → wantClimbHolding 식 wch1 (`isClimbHolding && sneak`)
+        //   영원히 false → 자가 hold 메커니즘 (wouldWantClimb 가지 2 + wantClimbHolding 가지 1) 깨짐.
+        //   grab 떼면 hold 안 됨 → 사용자 보고 BUG. isClimbHolding reset 제거 = 원본 1:1.
         sm.isClimbing        = false;
         sm.isCrawlClimbing   = false;
         sm.isCeilingClimbing = false;
         sm.isClimbJumping    = false;
-        sm.isClimbHolding    = false;
         // 🔴 isClimbCrawling 은 SmartMovingClientState L1877 메인 식이 매 틱 갱신 + 진입/해제
         //   엣지 (L1880-1908) 가 heightOffset 처리. G-01 강제 reset 하면 wasClimbCrawling 추적
         //   불가 → 해제 엣지 미발동 → heightOffset=-1 잔존 → vanilla CROUCHING 자세에 박스
