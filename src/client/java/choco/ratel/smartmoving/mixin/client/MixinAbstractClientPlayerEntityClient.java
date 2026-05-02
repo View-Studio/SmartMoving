@@ -1,13 +1,16 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.skin.LocalSkinOverride;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.util.SkinTextures;
 import net.minecraft.item.Items;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -61,5 +64,27 @@ public abstract class MixinAbstractClientPlayerEntityClient {
 
         float fovScale = ((Double) MinecraftClient.getInstance().options.getFovEffectScale().getValue()).floatValue();
         cir.setReturnValue(MathHelper.lerp(fovScale, 1.0F, f));
+    }
+
+    /**
+     * 개발 런 컨피그 전용 — 본인 플레이어 스킨을 C:/Work/minecraft/texture/my_skin.png 로 강제.
+     * 오프라인 모드(--username)에서 Mojang 스킨 미수신 → 기본 스티브 노출 문제 우회.
+     * 모델(SLIM/WIDE)·케이프·엘리트라는 원본값 유지, texture 식별자만 교체.
+     */
+    @Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
+    private void sm_overrideLocalSkin(CallbackInfoReturnable<SkinTextures> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity)) return;
+        Identifier custom = LocalSkinOverride.get();
+        if (custom == null) return;
+        SkinTextures original = cir.getReturnValue();
+        if (original == null) return;
+        cir.setReturnValue(new SkinTextures(
+                custom,
+                original.textureUrl(),
+                original.capeTexture(),
+                original.elytraTexture(),
+                original.model(),
+                original.secure()
+        ));
     }
 }
