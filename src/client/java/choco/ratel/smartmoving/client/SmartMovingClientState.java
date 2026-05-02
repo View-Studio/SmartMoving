@@ -2242,7 +2242,28 @@ public final class SmartMovingClientState {
                 double horizontalTolerance = cfg.crawlOverEdge ? 0 : -0.05;
                 double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
                         minY - 1D, minY, horizontalTolerance);
-                player.move(MovementType.SELF, new Vec3d(0, crawlStandUpBottom - minY, 0));
+                double b35Dy = crawlStandUpBottom - minY;
+                player.move(MovementType.SELF, new Vec3d(0, b35Dy, 0));
+                // 🔴 Camera lerp 점프 차단 (사용자 보고 fix — 엎드린 채 떨어지면서 풀림 시 1인칭 덜컹):
+                //   B-35 분기 `move(0, crawlStandUpBottom - minY, 0)` = 박스 발 정렬. 떨어지는 중
+                //   solid 없으면 dy=-1m → entity.y -1m. lastRenderY/prevY 미동기화 → lerp baseline
+                //   1m 차이 → 시점 점프. + dim eyeHeight 0.62 → 1.62 변화로 cameraY lerp 0.5 추격
+                //   → +0.5m 시점 점프. 사용자 "덜컹" 인식.
+                //   원본 1.7.10: setHeightOffset 매핑 = box.minY 만 변경 (entity.posY 변경 X) +
+                //   lerp 보간 없음 → 시점 점프 0.
+                //   해결: dy 만큼 lastRenderY/prevY 동기화 + Camera.cameraY/lastCameraY = STANDING
+                //   dim eye 직접 사용 (= 1.62, getStandingEyeHeight() cached 우회) 강제.
+                if (b35Dy != 0D) {
+                    player.lastRenderY += b35Dy;
+                    player.prevY += b35Dy;
+                    net.minecraft.client.render.Camera cam =
+                            net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                    if (cam != null) {
+                        float eye = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).eyeHeight();
+                        ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                        ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                    }
+                }
             }
             // 분기 B: (isCrawling && !wasCrawling) || initializeCrawling
             //   → setHeightOffset(-1F) + move(0, -1D, 0) + (initializeCrawling → toCrawling())
