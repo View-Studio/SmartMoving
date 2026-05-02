@@ -1,6 +1,7 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingRenderContext;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -113,6 +114,10 @@ public abstract class MixinPlayerEntityModelClient {
             CallbackInfo ci) {
         if (!(entity instanceof ClientPlayerEntity player)) return;
 
+        // 1인칭 손 렌더 컨텍스트 (PlayerEntityRenderer.renderArm 진입 중) — SM 후킹 일체 skip.
+        //   사용자 의도: 1인칭 시점의 손은 항상 vanilla 기본 자세 유지.
+        if (SmartMovingRenderContext.firstPersonArmRender) return;
+
         // 항상 원본 저장 (cfgEnabled=false 분기에서도 TAIL 원복 안전 보장)
         smOriginalSneakingForFalling = sneaking;
 
@@ -152,6 +157,12 @@ public abstract class MixinPlayerEntityModelClient {
             float animationProgress, float headYaw, float headPitch,
             CallbackInfo ci) {
         if (!(entity instanceof ClientPlayerEntity player)) return;
+
+        // 1인칭 손 렌더 컨텍스트 — SM 변경 / outer layer 재동기화 모두 skip.
+        //   HEAD inject 도 같은 가드로 skip 되므로 sneaking 임시 변경 없음 → 원복 불필요.
+        //   renderArm 이 직접 arm.pitch / sleeve.pitch 를 0 으로 reset 후 렌더하므로
+        //   1인칭 손은 vanilla 기본 자세로 그려짐.
+        if (SmartMovingRenderContext.firstPersonArmRender) return;
 
         // 🔴 sneaking 원복 — HEAD 에서 임시 false 로 set 한 값을 vanilla setAngles 종료 직후
         //   복구. 같은 프레임 내 layer renderer (cape/armor) 가 copyBipedStateTo 등으로

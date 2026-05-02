@@ -1,9 +1,11 @@
 package choco.ratel.smartmoving.mixin.client;
 
 import choco.ratel.smartmoving.client.SmartMovingClientState;
+import choco.ratel.smartmoving.client.SmartMovingRenderContext;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -583,5 +585,35 @@ public class MixinPlayerEntityRenderer {
         if (s > p && (s - p) > HALF) p += WHOLE;
         if (s < p && (p - s) > HALF) s += WHOLE;
         return p + (s - p) * deltaTime * 0.2f;
+    }
+
+    // ── 1인칭 손 렌더 컨텍스트 마킹 ────────────────────────────────────────────
+    //
+    // PlayerEntityRenderer.renderArm 은 HeldItemRenderer 가 1인칭 손을 그릴 때
+    //   model.setAngles(player, 0,0,0,0,0)
+    //   arm.pitch = 0F; arm.render(...);
+    //   sleeve.pitch = 0F; sleeve.render(...);
+    // 흐름으로 호출. 이 setAngles 호출 시 SM 의 sm_setAnglesHead/sm_setAngles 가
+    // 발동하면 1인칭 손이 SM 분기 자세로 덮여 사라지거나 이상해짐.
+    //
+    // HEAD 에서 firstPersonArmRender=true → sm_setAngles 가 즉시 return → 손은 vanilla
+    // 기본 자세. RETURN 에서 false 로 복원 → 같은 frame 의 3인칭 본체 렌더는 정상 SM 적용.
+    //
+    // private 메서드지만 Mixin 으로 인젝트 가능. renderRightArm/renderLeftArm 둘 다 이
+    // private renderArm 으로 위임하므로 한 곳만 후킹하면 양쪽 모두 커버.
+    @Inject(method = "renderArm(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;ILnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/client/model/ModelPart;Lnet/minecraft/client/model/ModelPart;)V",
+            at = @At("HEAD"))
+    private void sm_renderArmHead(MatrixStack matrices, VertexConsumerProvider vc, int light,
+                                  AbstractClientPlayerEntity player, ModelPart arm, ModelPart sleeve,
+                                  CallbackInfo ci) {
+        SmartMovingRenderContext.firstPersonArmRender = true;
+    }
+
+    @Inject(method = "renderArm(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;ILnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/client/model/ModelPart;Lnet/minecraft/client/model/ModelPart;)V",
+            at = @At("RETURN"))
+    private void sm_renderArmReturn(MatrixStack matrices, VertexConsumerProvider vc, int light,
+                                    AbstractClientPlayerEntity player, ModelPart arm, ModelPart sleeve,
+                                    CallbackInfo ci) {
+        SmartMovingRenderContext.firstPersonArmRender = false;
     }
 }
