@@ -179,7 +179,7 @@ public abstract class MixinEntityClient {
      * multiPlayerInitialized > 0이면 실행 취소 후 카운터 1 감소.
      * 1.21.1: Entity.pushOutOfBlocks(double,double,double) — Entity에 정의됨.
      */
-    @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "pushOutOfBlocks(DDD)V", at = @At("HEAD"), cancellable = true)
     private void sm_pushOutOfBlocks(double x, double y, double z, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
@@ -188,5 +188,4 @@ public abstract class MixinEntityClient {
             ci.cancel();
         }
     }
-
 }

@@ -85,24 +85,23 @@ public abstract class MixinPlayerEntityClient {
         //   호출 → 1 틱 isCrawling=true → 등반 중인데 eyeHeight 0.62F 강제 → 카메라
         //   1.62↔0.62 토글 = 사용자 보고 "몸 애니메이션 주기적 요동". 등반 중이면 STANDING
         //   eyeHeight 유지.
+        // 🔴 ICC 분리: 원본 1.7.10 사다리 매달림 자세 STANDING 유지 (POSE 시스템
+        //   없음). setHeightOffset(-1F) 는 박스만 변경, eyeHeight 변경 없음 (BUG-29 동일 패턴).
+        //   1.21.1 잘못된 매핑: 0.6×0.8 + eyeHeight 0.62F 강제 → 카메라 발끝으로 1m 떨어짐 →
+        //   사용자가 "엎드리기" 로 인식.
+        //   정정: isClimbCrawling 시 박스만 0.6×0.8, eyeHeight 1.62F (vanilla STANDING 유지).
+        // 🔴 isCrawling && isClimbing 케이스 추가: isClimbCrawling 해제 엣지의 toCrawling()
+        //   호출 → 1 틱 isCrawling=true → 등반 중인데 eyeHeight 0.62F 강제 → 카메라
+        //   1.62↔0.62 토글 = 사용자 보고 "몸 애니메이션 주기적 요동". 등반 중이면 STANDING
+        //   eyeHeight 유지.
         if (sm.isClimbCrawling || (sm.isCrawling && sm.isClimbing)) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
-        // 🔴 비행 콜리전 원본 1:1 복원 시도 (사용자 요청, 단계 1):
-        //   원본 SmartMovingSelf.setHeightOffset(-1F) (L1694-L1704):
-        //     sp.boundingBox.minY -= -1   // minY += 1 (박스 1블록 위로)
-        //     sp.height += -1             // 1.8 → 0.8
-        //   eyeHeight 변경 없음 (1.7.10 vanilla 1.62 그대로).
-        //
-        //   1.21.1 매핑: dimensions = (0.6, 0.8, eyeHeight=1.62).
-        //   ⚠️ boundingBox.minY +1 보정은 EntityDimensions 만으로는 불가 →
-        //     단계 2 (Entity.setBoundingBox 가로채기) 별도 적용 예정.
-        //   현재 단계 1 만 적용 시 박스 = (y, y+0.8) (원본 (y+1, y+1.8) 와 위치 다름).
-        //   카메라 = y + 1.62 (원본 동일). 콜리전 박스 크기는 0.8 (원본 동일).
-        //
-        //   sm.isFlying 공식 (원본 L2510): cfg.fly && abilities.flying && !swim && !dive.
-        //   isLevitating 도 동일 (cfg.fly false + cfg.levitateSmall true 시 활성).
+        // 🔴 비행 콜리전 — 사용자 명시 (2026-05-02): "비행은 건드리지 마".
+        //   기존 매핑 (567dbec) 유지: dim=(0.6, 0.8, 1.62) + MixinEntity.sm_offsetBoundingBoxForFlying
+        //   가드 (eyeHeight > 1) 통과 → 박스 +1 적용 → 사용자 시점 보존 매핑 그대로.
+        //   ICC 와 다른 매핑 (ICC 는 setPos(y+1) + eyeHeight 0.62 원본 1:1).
         if (sm.isFlying || sm.isLevitating) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;

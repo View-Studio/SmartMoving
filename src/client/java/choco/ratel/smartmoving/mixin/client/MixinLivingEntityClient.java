@@ -359,24 +359,26 @@ public abstract class MixinLivingEntityClient {
         //   가드 1 (L757-775): motionX/Z ±0.15 clamp.
         //   가드 2 (L779-780): fallDistance=0 + motionY = max(motionY, -0.15*factor).
         //   가드 3 (L782-794): sneak 시 motionY=0 (떨어지지 않게).
-        if (onClimbable) {
+        //
+        // 🔴 ICC 추가 (사용자 보고 — 그랩 클라이밍 + sneak 진동/덜컹 BUG fix):
+        //   ICC=true 시 박스 = (entity.y+1, entity.y+1.8) (mixin offset 적용). 박스가 사다리
+        //   영역 위 (사다리 끝 통과 후) 도달 시 onClimbable=false (사다리 인접 인식 X) →
+        //   기존 가드 미진입 → setLandMotions 후 motion 음수 누적 → 박스 떨어짐 → ICC 진동.
+        //   원본 1.7.10 은 vanilla 사다리 grip (motion clamp -0.15, sneak my=0) 자체 처리 →
+        //   박스 떨어짐 차단. 우리 매핑은 sm_travel_client 가 vanilla travel cancel 하므로
+        //   vanilla grip 미작동 → 직접 매핑 필요.
+        if (onClimbable || sm.isClimbCrawling) {
             Vec3d v = player.getVelocity();
             double clampH = 0.15D;
             double mx = Math.max(-clampH, Math.min(clampH, v.x));
             double mz = Math.max(-clampH, Math.min(clampH, v.z));
             double my = v.y;
 
-            // 🔴 sneak 가드 — 원본 L782-794 1:1 매핑.
-            //   원본은 esp.movementInput.sneak (input source) 직접 사용.
-            //   우리 매핑이 player.isSneaking() (SNEAKING flag) 사용 → 자세 차단
-            //   (input.sneaking=false 강제) 과 충돌 (motion hold 미활성).
-            //   해결: vanilla sneak 키 직접 체크 (자세 차단과 독립).
             boolean sneakKeyPressed = net.minecraft.client.MinecraftClient.getInstance()
                     .options.sneakKey.isPressed();
             if (sneakKeyPressed && my < 0) {
                 my = 0;
             } else {
-                // sneak 아닐 때 vertical clamp -0.15*factor.
                 double clampFactor = -0.15D * SmartMovingMover.getCombinedSpeedFactor(
                         player, SmartMovingConfig.Config);
                 if (my < clampFactor) my = clampFactor;
@@ -385,7 +387,7 @@ public abstract class MixinLivingEntityClient {
             if (mx != v.x || mz != v.z || my != v.y) {
                 player.setVelocity(mx, my, mz);
             }
-            player.fallDistance = 0;  // setLandMotions 후 다시 한번 안전 장치
+            player.fallDistance = 0;
         }
 
         // g. 원본 L655 등가: vanilla move() 호출로 위치 갱신.

@@ -823,6 +823,9 @@ public final class SmartMovingClimber {
                 isUp = true;
                 handsAnim = 2; feetAnim = 1;  // 원본 L999: MiddleGrab + DownStep
                 matched = true;
+                // === DEBUG (기능 1 — 작업 후 제거) ===
+                System.out.println(String.format("[GAP-MATCH] L996 분기 매치 — value=%.3f hands=2 feet=1 hC=%s fC=%s hG=%b hCG=%b iCC=%b",
+                    value, handsClimbing, feetClimbing, sm.hasClimbGap, sm.hasClimbCrawlGap, sm.isClimbCrawling));
             }
             // 원본 L1001-1005: feet.IsRelevant && hands.IsRelevant + 3 예외 조합 → MediumUp.
             else if (feetClimbing.isRelevant() && handsClimbing.isRelevant()

@@ -52,6 +52,16 @@ public abstract class MixinPlayerEntity {
         //
         // 원본 setHeightOffset(-1F) 상태 전수 — Crawling/Sliding/Swimming 등만 0.6 × 0.8 +
         // eyeHeight 0.62F. isFlying/isLevitating 은 vanilla 통과.
+        // 🔴 isClimbCrawling 분기 추가 (사용자 보고 fix — X/Z 땡김 server reconcile 차단):
+        //   ICC 활성 중 클라 dim eyeHeight=1.62 (mixin offset 박스 +1 적용) ↔ 서버 vanilla
+        //   dim 1.8 (mixin offset 미적용) → 박스 1m Y 차이 → 서버가 박스 ladder collision
+        //   안 → 차단 → server position correction packet → 클라 위치 reset.
+        //   클라 sm_getBaseDimensions_client 와 동일한 isClimbCrawling 분기 추가 → 서버 박스
+        //   클라와 동일 (entity.y+1, entity.y+1.8) → 서버 reconcile 발생 X.
+        if (sm.isClimbCrawling) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
                        || sm.isHeadJumping || sm.isSliding
                        || sm.isSwimming || sm.isDiving;

@@ -97,6 +97,12 @@ public final class SmartMovingServer {
     public boolean isHeadJumping;
     /** SmartMovingState bit 21. SM 슬라이딩 상태. POSE.SLIDING 매핑. */
     public boolean isSliding;
+    /**
+     * SmartMovingState bit 22. SM 클라이밍 크롤 상태. 박스 +1 mixin offset 적용.
+     * 사용자 보고 fix (X/Z 땡김): ICC 활성 중 클라/서버 박스 1m Y 차이 → server reconcile.
+     * 클라/서버 dim 동기화 위해 추가 비트.
+     */
+    public boolean isClimbCrawling;
 
     // ── 인스턴스 관리 ─────────────────────────────────────────────
 
@@ -153,6 +159,12 @@ public final class SmartMovingServer {
         isLevitating   = ((bits >> 19) & 1) != 0;
         isHeadJumping  = ((bits >> 20) & 1) != 0;
         isSliding      = ((bits >> 21) & 1) != 0;
+        // ── X/Z 땡김 fix: 클라/서버 박스 동기화 (bit 34, bit 22 는 angleJumpType 사용) ──
+        boolean newClimbCrawling = ((bits >> 34) & 1) != 0;
+        if (newClimbCrawling != isClimbCrawling) {
+            isClimbCrawling = newClimbCrawling;
+            player.calculateDimensions();
+        }
 
         // 3-9: 낙하 거리 리셋 조건 (벽점프 포함)
         resetFallDistance     = isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping;

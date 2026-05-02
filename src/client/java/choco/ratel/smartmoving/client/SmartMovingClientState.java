@@ -549,6 +549,7 @@ public final class SmartMovingClientState {
     /** 원본 wasClimbCrawling — 이전 틱 isClimbCrawling 저장. */
     public boolean wasClimbCrawling;
 
+
     /** 원본 sneakButton.StartPressed — 이번 틱 스닉키 엣지(새로 눌림). */
     public boolean sneakKeyStartPressed;
     /** 원본 sneakButton.StopPressed — 이번 틱 스닉키 엣지(새로 뗌). */
@@ -1369,25 +1370,23 @@ public final class SmartMovingClientState {
                 // B-17b2-pre (세션 72): `wantClimb16` 지역 → public 필드 승격.
                 wantClimb = cfg0.freeClimb && cfg0.enabled && wouldWantClimb;
 
-                // 원본 L2721-L2732 3-OR:
-                // B-18-pre (세션 81): 지역 `wantClimbHolding` → `this.wantClimbHolding` 필드 승격.
-                // 🔴 사용자 의도 (원본 위반): 사다리 등반 + W + sneak → W 우선, sneak hold 무시.
-                //   원본은 W 누름 무관 sneak → wantClimbHolding=true → climbIntoCount 발동 →
-                //   isClimbCrawling 토글 → 자세/박스 토글 + 찔끔찔끔 등반. 사용자 명시 의도:
-                //   "쉬프트가 씹히고 올라가는게 우선이 되야됨". 모든 분기에 !forwardPressed
-                //   가드 추가 → W 누름 시 hold 무효 → 정상 등반 속도.
-                //   영향:
-                //   - sneak 만 (W X): forwardPressed=false → 가드 통과 → hold 정상 (사용자 인정).
-                //   - W 만 (sneak X): sneak 가드 false → wantClimbHolding=false → 정상 등반.
-                //   - W + sneak: forwardPressed=true → 모든 분기 차단 → wantClimbHolding=false →
-                //     isClimbCrawling 차단 → 자세/박스 토글 X, 정상 등반 속도.
-                boolean forwardPressed_holdGuard = player.input.movementForward > 0F;
-                wantClimbHolding = !forwardPressed_holdGuard && (
-                        (isClimbHolding && sneakPressedRaw)
+                // 원본 L2721-L2732 3-OR — 원본 1:1 매핑.
+                //
+                // 이전 매핑은 forwardPressed_holdGuard 가드 추가. 가드 의도 = "사다리 등반 + W + sneak
+                // 시 찔끔찔끔 등반 BUG fix". 그러나 가드의 순환 결함:
+                //   일반 갭 시나리오 (hG=true, hCG=false) 에서 isClimbHolding=false 시작 →
+                //   needClimbCrawling17=false → 가드 활성 → wCH=false → isClimbHolding=false 유지 →
+                //   영원히 ICC 진입 X.
+                //
+                // 사용자 보고 (2026-05-02) — "사다리 끝 + sneak → 엎드리기 전환" 동작이 가드 때문에
+                // 차단됨. 원본 1.7.10 은 가드 없이 정상 작동 → 가드 제거 = 원본 동작 회복.
+                //
+                // 이전 BUG ("찔끔찔끔 등반") 는 다른 매핑 차이로 발생했던 부수효과로 추정 (= ICC 메인 식
+                // 정상 동작인 cic 카운트다운 + 해제 + 재진입 사이클을 사용자가 부정적으로 인식했을 가능성).
+                wantClimbHolding = (isClimbHolding && sneakPressedRaw)
                         || (isClimbing && blocked)
                         || (wantClimb && !isSwimming_sm && !isDiving && !isCrawling
-                                && (sneakPressedRaw || crawlToggled))
-                );
+                                && (sneakPressedRaw || crawlToggled));
                 isClimbHolding = wantClimbHolding && isClimbing;
             }
 
@@ -2041,8 +2040,32 @@ public final class SmartMovingClientState {
                         && ((needClimbCrawling && climbIntoCount == 0) || climbIntoCount > 1);
 
                 if (isClimbCrawling && !wasClimbCrawling) {
-                    // 진입 엣지 (원본 L2797-L2803) — B-42-B18a 해소 완전 이식.
+                    // 진입 엣지 (원본 L2797-L2803) — 박스 발 +1m 매핑 (원본 1.7.10 1:1).
+                    //
+                    // 원본 SmartMovingSelf.setHeightOffset L1694-L1704:
+                    //   sp.boundingBox.minY -= heightOffset  // -= -1 = +=1 (박스 발 +1)
+                    //   sp.height += heightOffset            // 1.8 - 1 = 0.8 (박스 작아짐)
+                    // → 박스 = (foot+1, foot+1.8). 박스 발 +1m, 머리 그대로.
+                    // → 핵심: posY (entity 위치) 변경 X. 충돌 박스만 위로 이동. 사용자 시점 그대로.
+                    //
+                    // 1.21.1 매핑 (사용자 추측 1:1):
+                    //   - heightOffset=-1F set → sm_getBaseDimensions inject 가 ICC 시
+                    //     dimensions=(0.6, 0.8, eyeHeight=1.62) 반환 (박스 작아짐 + 시점 1.62 유지).
+                    //   - calculateDimensions() 명시 호출 → dimensions 즉시 갱신 (vanilla setPose
+                    //     는 ICC 시 POSE 변경 안 하므로 자동 호출 안 됨).
+                    //   - dimensions 갱신 후 MixinEntity.sm_offsetBoundingBoxForFlying 가드
+                    //     (dim.height < 1 && dim.eyeHeight > 1) 통과 → calculateBoundingBox
+                    //     결과 box.offset(0, 1, 0) → 박스만 +1 위로 (entity.y 변경 X).
+                    //   결과: 박스 = (entity.y+1, entity.y+1.8) ⊆ 좁은 갭. 사용자 시점 그대로.
                     heightOffset = -1F;
+                    // 🔴 사용자 의도 매핑 (2026-05-02):
+                    //   ICC 활성 = 박스만 작아짐, 사용자 시점 그대로 (= standing 1.62).
+                    //   - dim = (0.6, 0.8, 1.62) (sm_getBaseDimensions).
+                    //   - MixinEntity.sm_offsetBoundingBoxForFlying 가드 (eyeHeight > 1) 통과 → 박스 +1.
+                    //   - 박스 = (entity.y+1, entity.y+1.8) ⊆ 좁은 갭. entity.y 변경 X.
+                    //   - 사용자 시점 = entity.y + 1.62 = old.y + 1.62 (변경 X).
+                    //   사다리 grip 효과는 sm_travel_client 의 ICC clamp 분기에서 직접 매핑.
+                    player.calculateDimensions();
                     // 원본 L2800: `boolean wasCollidedHorizontally = sp.isCollidedHorizontally;`
                     boolean wasColH = player.horizontalCollision;
                     // 원본 L2801: move(0, 0.05, 0) — solid 머리 위에 서있을 때 crawl 진입 방지
@@ -2054,19 +2077,44 @@ public final class SmartMovingClientState {
                     // 해제 엣지 (원본 L2804-L2820) — B-42-B18a 해소 완전 이식 (AABB 정밀).
                     climbIntoCount = 0;
                     if (mustCrawl || sneakPressedRaw || crawlToggled) {
-                        // 원본 L2809: getMaxPlayerSolidBetween(minY - 1D, minY, 0)
+                        // 🔴 ICC EXIT toCrawling 매핑 (원본 1.7.10 setHeightOffset(-1F) 1:1):
+                        //   원본 1.7.10: posY 변경 X + box.minY +=1 + height -=1 + ySize/yOffset 동기화.
+                        //   효과 = 박스 +1m 위, 사용자 시점 변경 X.
+                        //
+                        //   1.21.1 매핑: entity.y +=1 + dim 0.62 (smSmall) → 박스 = (entity.y, entity.y+0.8)
+                        //   = (old+1, old+1.8) = ICC 활성 박스 위치 동일. 사용자 시점 = entity.y + 0.62
+                        //   = old+1.62 = ICC 시점 동일.
+                        //
+                        //   X/Z 땡김 fix (server reconcile 차단):
+                        //     ICC 활성 중 클라 박스 (mixin offset 박스 +1) ↔ 서버 박스 1m Y 차이 →
+                        //     서버 ladder collision 차단 → server position correction → 클라 reset.
+                        //     해결: SmartMovingState bit 34 (isClimbCrawling) 추가 동기화 +
+                        //     MixinPlayerEntity.sm_getBaseDimensions_server 에 isClimbCrawling 분기
+                        //     추가 (= 클라와 동일 dim 1.62 + mixin offset 박스 +1) → 서버 박스 동기화.
+                        wasCrawling = toCrawling();
+                        player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                        player.lastRenderY += 1.0;
+                        player.prevY += 1.0;
+                        player.calculateDimensions();
+                        // Camera.cameraY 보간 baseline 보정 (= 1.62 → 0.62 lerp 점프 차단).
+                        net.minecraft.client.render.Camera cam =
+                                net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                        if (cam != null) {
+                            float eye = player.getStandingEyeHeight();
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                        }
+                        // 박스 = (entity.y, entity.y+0.8). 1m 아래 솔리드 max → bottom snap (원본 L2813).
                         double minY18 = player.getBoundingBox().minY;
                         double gapUnderneight = minY18
                                 - getMaxPlayerSolidBetween(player, minY18 - 1D, minY18, 0);
                         if (gapUnderneight >= 0D && gapUnderneight < 1D) {
-                            // 원본 L2812-L2813: 크롤 전환 + move(0, -gap, 0)
-                            wasCrawling = toCrawling();
                             player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
-                        } else {
-                            heightOffset = 0F;  // 원본 L2816 resetHeightOffset
                         }
                     } else {
-                        heightOffset = 0F;  // 원본 L2819 resetHeightOffset
+                        // sneak 안 누름 — 박스 1.8 복원 (원본 resetHeightOffset).
+                        heightOffset = 0F;
+                        player.calculateDimensions();
                     }
                 }
             }
@@ -3342,6 +3390,7 @@ public final class SmartMovingClientState {
         s.isWallJumping        = isWallJumping;
         s.isRopeSliding        = isRopeSliding;
         s.isSneakButtonPressed = player.isSneaking();
+        s.isClimbCrawling      = isClimbCrawling;
 
         long bits = SmartMovingState.encode(s);
         if (bits != lastSentBits) {

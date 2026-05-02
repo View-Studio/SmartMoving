@@ -30,6 +30,7 @@ package choco.ratel.smartmoving.network;
  * bit  31:    isWallJumping
  * bit  32:    isRopeSliding
  * bit  33:    isSneakButtonPressed (서버만 읽음)
+ * bit  34:    isClimbCrawling      (서버만 읽음 — 박스 +1 mixin offset 동기화)
  */
 public final class SmartMovingState {
 
@@ -62,6 +63,7 @@ public final class SmartMovingState {
     public boolean isWallJumping;
     public boolean isRopeSliding;
     public boolean isSneakButtonPressed;
+    public boolean isClimbCrawling;
 
     public static long encode(SmartMovingState s) {
         long bits = 0L;
@@ -91,6 +93,7 @@ public final class SmartMovingState {
         if (s.isWallJumping)        bits |= 1L << 31;
         if (s.isRopeSliding)        bits |= 1L << 32;
         if (s.isSneakButtonPressed) bits |= 1L << 33;
+        if (s.isClimbCrawling)      bits |= 1L << 34;
         return bits;
     }
 
@@ -122,6 +125,7 @@ public final class SmartMovingState {
         s.isWallJumping       = ((bits >> 31) & 1) != 0;
         s.isRopeSliding       = ((bits >> 32) & 1) != 0;
         s.isSneakButtonPressed = ((bits >> 33) & 1) != 0;
+        s.isClimbCrawling      = ((bits >> 34) & 1) != 0;
         return s;
     }
 }
