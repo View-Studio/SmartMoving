@@ -2105,7 +2105,21 @@ public final class SmartMovingClientState {
                     // 원본 L2800: `boolean wasCollidedHorizontally = sp.isCollidedHorizontally;`
                     boolean wasColH = player.horizontalCollision;
                     // 원본 L2801: move(0, 0.05, 0) — solid 머리 위에 서있을 때 crawl 진입 방지
+                    double iccEnterYBefore = player.getY();
                     player.move(MovementType.SELF, new Vec3d(0, 0.05, 0));
+                    // 🔴 entity.y 복원 (사용자 보고 fix — grab climbing 중 sneak 시 카메라 움찔움찔):
+                    //   ICC 진입/해제 매 tick 진동 (= isClimbing/isClimbHolding 매 tick true↔false) 시
+                    //   매 ICC ENTER edge 마다 player.move(0, 0.05, 0) → entity.y +0.05m 누적.
+                    //   다음 tick baseTick 가 prevY=y 갱신 → 매 tick 경계 lerp baseline +0.05m 점프 →
+                    //   사용자 시점 매 tick 0.05m 진동 = "움찔움찔".
+                    //   이전 fix v1 (lastRenderY/prevY 동기화) 시도 → 같은 tick 안 frame Δ 일정 했지만
+                    //   tick 경계는 baseTick 가 prevY=y 강제 갱신 → +0.05m 점프 잔존.
+                    //   해결: player.move 의 entity.y 변경 자체 cancel (setPosition 복원). 박스 위치
+                    //   (= mixin offset +1m) + horizontalCollision 효과 보존. 원본 의도 = entity.y
+                    //   +0.05m 영구 적용 (= 박스 천장 close 검사 안전 마진) 부분 손실 가능.
+                    if (player.getY() != iccEnterYBefore) {
+                        player.setPosition(player.getX(), iccEnterYBefore, player.getZ());
+                    }
                     // 원본 L2802: sp.isCollidedHorizontally = wasCollidedHorizontally;
                     //   (water 밖으로 crawl 탈출 버그 방지)
                     player.horizontalCollision = wasColH;
@@ -2135,8 +2149,17 @@ public final class SmartMovingClientState {
                         Box bbExit = player.getBoundingBox();
                         double exitGap = bbExit.minY
                                 - getMaxPlayerSolidBetween(player, bbExit.minY - 1D, bbExit.minY, 0);
-                        if (!(exitGap >= 0D && exitGap < 1D)) {
-                            // gap >= 1 (또는 음수) → 박스 발 아래 빈공간 → resetHeightOffset.
+                        // 🔴 사다리/덩굴 끝 + sneak crawl 진입 시 RESET-HEIGHT 분기 차단 가드:
+                        //   사용자 보고 — 사다리 끝 + sneak 시 콜리전 한번 커졌다가 작아짐.
+                        //   진동 cycle: 첫 ICC EXIT (gap<1) → TO-CRAWLING → entity.y+1m + isCrawling=true.
+                        //   다음 ICC EXIT 시 박스 발 = entity.y+1+1 = 사다리 위 위 → gap=1m → 일반
+                        //   RESET-HEIGHT 분기 진입 → 박스 1.8 잠시 → 다음 tick B-35 진입 → 박스 0.8.
+                        //   해결: gap>=1 분기에 !isCrawling 가드 추가. isCrawling=true 잔존 (= 사다리/
+                        //   덩굴 끝 + sneak 케이스) 시 RESET-HEIGHT 차단 → toCrawling 강제 → 박스 0.8
+                        //   유지. 좌/우/후 이동 (= isCrawling=false) 케이스는 기존 분기 유지 (= Fix 4).
+                        if (!(exitGap >= 0D && exitGap < 1D) && !isCrawling) {
+                            // gap >= 1 (또는 음수) && isCrawling=false → 박스 발 아래 빈공간 (= 좌/우/후
+                            //   이동 standing 떨어짐) → resetHeightOffset.
                             heightOffset = 0F;
                             player.calculateDimensions();
                         } else {
@@ -2188,9 +2211,20 @@ public final class SmartMovingClientState {
                         //   해결: isClimbHolding=true 시 (= 자가 hold) isClimbing=false 강제 미적용.
                         //   사다리 grip 잔존 케이스 (= isClimbHolding=false) 만 강제 → Feature 3
                         //   사다리 ICC EXIT crawl 진입 fix 유지.
-                        if (!this.isClimbHolding) {
-                            this.isClimbing = false;
-                        }
+                        // 🔴 isClimbHolding 가드 제거 (사용자 보고 fix — 사다리 끝 + sneak 시 콜리전 한번 커짐):
+                        //   기존 가드: isClimbHolding=true 시 isClimbing=true 잔존 → dim 매핑 =
+                        //   (isCrawling && isClimbing) 매치 → ICC dim + mixin offset 박스 +1m →
+                        //   entity.y +1m + 박스 +1m 위로 → 사용자 시점 +1m 점프 BUG.
+                        //   해결: isClimbing=false 항상 강제 → dim 매핑 = smSmall (isCrawling) 매치 →
+                        //   crawl dim (eye=0.62) + mixin offset 미적용 → 박스 = (entity.y, entity.y+0.8)
+                        //   = (old+1, old+1.8) = ICC 박스 위치 동일 → 사용자 시점 변화 X (= 덩굴 케이스
+                        //   와 동일).
+                        //   회귀 우려 분석:
+                        //   - 자가 hold (= grab 떼고 sneak hold, fwd<=0) 시나리오 = sneakHoldGuard
+                        //     분기 (L2137-L2142) 매치 → ICC EXIT 분기 미진입 → fix 영향 없음.
+                        //   - 자가 hold + W (= fwd>0) 시나리오 = 사다리 climbing 끝 도달 후 crawl 진입
+                        //     의도 (= 메모리 명시). isClimbing=false 강제 = 의도 일치.
+                        this.isClimbing = false;
                         this.mustCrawl = true;
                         this.iccExitJustToCrawl = true;
                         player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
