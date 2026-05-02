@@ -62,6 +62,7 @@ public abstract class MixinPlayerEntityModelClient {
 
     // ── BipedEntityModel 파트 @Shadow ────────────────────────────────────────
     @Shadow public ModelPart head;
+    @Shadow public ModelPart hat;
     @Shadow public ModelPart body;
     @Shadow public ModelPart rightArm;
     @Shadow public ModelPart leftArm;
@@ -350,6 +351,24 @@ public abstract class MixinPlayerEntityModelClient {
 
         // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
         //   원본 SmartRenderModel L251 = SM 상태 무관 항상 적용. cfgEnabled false 시에도 0 reset 보장.
+
+        // ── outer layer 재동기화 (hat / jacket / sleeves / pants) ──────────────
+        // 1.21.1 PlayerEntityModel 의 outer layer 6개는 root 의 직접 자식 — 부모
+        //   transform 자동 상속 X. vanilla 는 super.setAngles 의 마지막에서 한 번만
+        //   copyTransform 으로 동기화 (BipedEntityModel 끝의 hat ← head, PlayerEntityModel
+        //   super 직후의 jacket/sleeves/pants ← body/arms/legs).
+        // SM 의 sm_setAngles 는 @At("TAIL") 진입 → super 동기화가 끝난 뒤 head/body/arm/leg
+        //   를 광범위 변경 → outer layer 가 super 종료 시점의 vanilla 값으로 정지 → 분리.
+        // 해결: SM 의 모든 변경을 마친 직후 outer layer 6개 동기화를 다시 한번 실행.
+        //   cfgEnabled=false 분기는 위에서 return 했으므로 여기는 SM 활성 분기 한정.
+        hat.copyTransform(head);
+        if ((Object) this instanceof PlayerEntityModel<?> playerModel) {
+            playerModel.leftPants.copyTransform(leftLeg);
+            playerModel.rightPants.copyTransform(rightLeg);
+            playerModel.leftSleeve.copyTransform(leftArm);
+            playerModel.rightSleeve.copyTransform(rightArm);
+            playerModel.jacket.copyTransform(body);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
