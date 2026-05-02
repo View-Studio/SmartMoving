@@ -562,13 +562,16 @@ public class Orientation {
      * 원본 L2616-L2619 `isSolid(Material material)` — `material.isSolid() && blocksMovement()`.
      *
      * **§7 근사 이식 (B-19a1a-approx-3)**: 1.21.1 (1.19+) 에서 Material API 완전 제거.
-     * `state.isSolidBlock(world, pos)` 가 원본 2-조건 AND 와 가장 근접 — Material.isSolid 는
-     * "블록 공간을 solid 로 채움", blocksMovement 은 "이동 막음". 1.21.1 isSolidBlock 은
-     * "light propagation + collision" 통합 기준. 실용상 유사.
+     * `state.isFullCube(world, pos)` = "풀큐브 충돌 형상" (opacity 무관) — 원본 의미인
+     * Material.isSolid("공간을 solid 로 채움") + blocksMovement("이동 막음") 와 등가.
+     *
+     * 이전 매핑 `state.isSolidBlock` 은 opacity (불투명) 검사가 추가로 들어가 leaves /
+     * glass / ice 등 투명+풀큐브 블록을 누락 → 사용자 보고 "잎 블록 그랩 클라이밍 안 됨".
+     * 1.7.10 원본은 Material.leaves / Material.glass 모두 isSolid=true 로 그랩 가능했음.
      */
     public static boolean isSolid(BlockState state, World world, BlockPos pos) {
-        // 근사 이식 — 원본과 차이: Material API 제거 → state.isSolidBlock() 단일 기준
-        return state != null && state.isSolidBlock(world, pos);
+        // 근사 이식 — 원본과 차이: Material API 제거 → state.isFullCube() (풀큐브 충돌, opacity 무관)
+        return state != null && state.isFullCube(world, pos);
     }
 
     /**
