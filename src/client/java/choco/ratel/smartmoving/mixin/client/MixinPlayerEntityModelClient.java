@@ -235,6 +235,13 @@ public abstract class MixinPlayerEntityModelClient {
             // D-4 leg.pivotY 정정 매핑 (12*cos(0.5)≈10.529) → vanilla default 12 reset.
             rightLeg.pivotY = 12f;
             leftLeg.pivotY  = 12f;
+            // 🔴 사용자 보고 fix (2026-05-04 — "사다리/덩굴 sneak+s 후 다시 붙으면 가끔 팔 짧아짐"):
+            //   sm_animateClimbing 의 isHandsVineClimbing 분기 (L591) = setArmScales(abs(cos), abs(cos)) →
+            //   arm yScale 변경. vine 종료 시 vanilla setAngles 가 yScale reset 안 함 → 잔존.
+            //   isFeetVineClimbing 분기 (L631) 의 setLegScales 도 동일 패턴.
+            //   fix: 클라이밍 종료 엣지 cleanup 에 scale reset 추가 (= 1.0 default 복원).
+            setArmScales(rightArm, leftArm, 1f, 1f);
+            setLegScales(rightLeg, leftLeg, 1f, 1f);
         }
         sm.smWasClimbingForCleanup = smIsClimbingNow;
 
@@ -479,6 +486,14 @@ public abstract class MixinPlayerEntityModelClient {
         //   (head/body/arm pivotZ 는 sm_setAngles TAIL 의 reset 인프라가 0 으로 reset.)
         rightLeg.pivotZ = 0f;
         leftLeg.pivotZ  = 0f;
+
+        // 🔴 사용자 보고 fix (2026-05-04 — "사다리/덩굴 sneak+s 후 다시 붙으면 가끔 팔 짧아짐"):
+        //   isHandsVineClimbing/isFeetVineClimbing 분기 (L591/L631) 의 setArmScales/setLegScales 가
+        //   abs(cos) 식 적용. 분기 미진입 frame (= ladder grab + vine 미접촉 등) 시 호출 X →
+        //   이전 frame 변경값 잔존 → 시각적 팔/다리 짧음.
+        //   fix: 매 frame default 1.0 reset → 분기 진입 시 cos 식이 덮어쓰기. 미진입 시 1.0 유지.
+        setArmScales(rightArm, leftArm, 1f, 1f);
+        setLegScales(rightLeg, leftLeg, 1f, 1f);
 
         // 🔴 다리 pivotX 1:1 매핑 (사용자 보고 9회차 — 다리 디테일 차이 정밀 분석):
         //   원본 SmartRenderModel.java L80-L87:
