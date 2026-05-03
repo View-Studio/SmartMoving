@@ -904,7 +904,7 @@ public abstract class MixinPlayerEntityModelClient {
         setAnglesYZX_v2(body,
                 0f,                                                              // ← entity 회전이 대신 적용
                 MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor,    // 원본 L407 bipedBody.Y
-                MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor); // 원본 L406 bipedTorso.Z
+                0f);                                                             // L406 bipedTorso.Z 는 sm_setupTransforms 의 matrices.rotate(R_z) 에서 매핑 (= 부모 효과 1:1)
         // body.pivotY = 3f 제거 — entity translate 가 대신 적용
 
         // 다리

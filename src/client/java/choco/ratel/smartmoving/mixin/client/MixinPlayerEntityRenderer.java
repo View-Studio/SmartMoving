@@ -80,7 +80,11 @@ public class MixinPlayerEntityRenderer {
             //   원본 흐름: d1 += heightOffset(-1) + d1 += getYOffset(-0.125) + bipedTorso 효과.
             //   1.21.1 매핑 차이로 정확 -1.125 안 맞음. 시각 결과 우선 fix.
             if (sm.isCrawling) {
-                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.21D, 0D));
+                // 🔴 회전 중심 변경 보정 (사용자 보고 fix 2026-05-03):
+                //   직전 커밋 (회전 중심 1.5 → 1.3125, 17.5 cm 아래) → vertex Y 시뮬상 약 14 cm 아래
+                //   ((I - R_x) * pivot_diff 항 변화). getPositionOffset Y 14 cm 위로 보정.
+                //   -0.21 → -0.06 (= 0.21 - 0.15. scale 0.9375 적용 시 0.15 * 0.9375 = 0.141 m 위로).
+                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
             }
             return;
         }
@@ -462,8 +466,24 @@ public class MixinPlayerEntityRenderer {
             //   fix: pivotY = 1.5 - 3/16 = 1.3125 → 회전 중심 = entity.y + 1.231 = 원본 일치.
             //   하단 추가 translate(0, -3/16, 0) 는 모델 전체 위치 보정 (= 별도 효과) 유지.
             float pivotY = 1.5f - 3f / 16f;  // = 1.3125 = 21/16
+
+            // 🔴 사용자 보고 fix (2026-05-03 — "팔/다리/몸통/머리 디테일 미세 차이"):
+            //   원본 SmartMovingModel L406: bipedTorso.rotateAngleZ = cos(distance + Quarter) * Sixtyfourth * walkFactor.
+            //   bipedTorso 는 head/body/arm/leg 모두의 부모 → Z 회전이 모든 자식에 영향.
+            //   이전 매핑 = body.roll 만 적용 (= bipedBody 자체 회전) → head/arm/leg 미적용 → 차이.
+            //   fix: matrices stack 의 R_z 추가 → 모든 자식 일괄 적용 (= 원본 부모 효과 1:1).
+            //   원본 YZX rotationOrder + Y=0 → vertex 적용 = R_z first → R_x. matrices stack 적용
+            //     순서 = matrices.rotate(R_x) → matrices.rotate(R_z) → vertex 적용 = R_z → R_x. 일치.
+            //   sm_animateCrawling 의 body.roll 인자는 0 으로 변경 (= 자식 효과 중복 방지).
+            float partialTicks = SmartMovingClientState.globalCachedTickDelta;
+            float distance = sm.stats.getTotalHorizontalDistance(partialTicks) * 1.3f;
+            float speed = sm.stats.currentHorizontalSpeedFlattened;
+            float walkFactor = (speed >= 0.12951545f) ? 1f : (speed <= 0f ? 0f : speed / 0.12951545f);
+            float zAngle = (float)(Math.cos(distance + Math.PI / 2) * (Math.PI / 64)) * walkFactor;
+
             matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));   // 부호 반전 (scale -1,-1,1 보정)
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation(zAngle));        // L406 매핑 — 그대로 (scale commute)
             matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
             // 🔴 bipedTorso.rotationPointY = 3F 매핑 — 부호 반전 (사용자 보고 fix — "여전히 살짝 떠있음",
