@@ -108,8 +108,6 @@ public abstract class MixinLivingEntityRenderer {
      */
     @Unique private AbstractClientPlayerEntity sm_currentRenderPlayer;
 
-    @Unique private static int sm_climbDebugCounter = 0;
-
     @Inject(method = "render", at = @At("HEAD"))
     private void sm_captureRenderEntity(LivingEntity entity, float yaw, float tickDelta,
                                          MatrixStack matrices, VertexConsumerProvider vertexConsumers,
@@ -126,58 +124,6 @@ public abstract class MixinLivingEntityRenderer {
         if (SmartMovingConfig.Config.enabled
                 && entity instanceof net.minecraft.client.network.ClientPlayerEntity localPlayer) {
             SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
-
-            // 🔴 디버그 로그 (2026-05-04 — "다리 처음 standing → 중반 모임" 진단):
-            //   원본 식 + 우리 fix 식 + 옵션 B 매핑 결과 (leg.pitch/leg.roll) + leg.pivot 보정.
-            //   매 frame 100개 dump. 사이클 (= 새 1m 등반) 자동 표시.
-            if (sm.isCrawlClimbing && sm_climbDebugCounter < 100) {
-                sm_climbDebugCounter++;
-                float h = sm.smallOverGroundHeight + 0.25f;
-                String branch;
-                float bAX, lAX_orig, lAZ_orig;  // 원본 식.
-                float lAX_new, lAZ_new;          // 우리 fix 식.
-                if (h < 0.7f) {
-                    branch = "FIRST(<0.7)";
-                    bAX = Math.max(0f, (float) Math.acos(h / 0.7f));
-                    lAX_orig = (float) (Math.PI / 4 - bAX);
-                    lAZ_orig = (float) (Math.PI / 32);
-                    lAX_new = -bAX;             // fix: cancel
-                    lAZ_new = 0f;                // fix: 진입 시 모임 X
-                } else if (h < 1.25f) {
-                    branch = "MID(0.7~1.25)";
-                    bAX = 0f;
-                    lAX_orig = Math.max(0f, (float) Math.acos((h - 0.7f) / 0.55f));
-                    lAZ_orig = (float) (Math.PI / 32) * (lAX_orig / 1.537f);
-                    lAX_new = lAX_orig;         // 원본 동일
-                    lAZ_new = lAZ_orig;
-                } else {
-                    branch = "END(>=1.25)";
-                    bAX = 0f; lAX_orig = 0f; lAZ_orig = 0f;
-                    lAX_new = 0f; lAZ_new = 0f;
-                }
-                // 옵션 B 매핑 결과 (실제 leg.pitch/leg.roll 적용 값).
-                float legPitchApplied = bAX + lAX_new;
-                float legRollApplied = lAZ_new;
-                float legPivotY = 12f * (float) Math.cos(bAX);
-                float legPivotZ = 12f * (float) Math.sin(bAX);
-
-                // 사이클 reset 감지 (= smallOverGround 가 0 가까이 reset).
-                String cycleMark = (sm.smallOverGroundHeight < 0.05f) ? " ★CYCLE-START" : "";
-
-                System.out.println("[SM-CLIMB-DBG] f=" + sm_climbDebugCounter
-                        + cycleMark
-                        + " | y=" + String.format("%.3f", localPlayer.getY())
-                        + " sog=" + String.format("%.3f", sm.smallOverGroundHeight)
-                        + " h=" + String.format("%.3f", h)
-                        + " [" + branch + "]"
-                        + " | body.X=" + String.format("%.3f", bAX)
-                        + " orig: legX=" + String.format("%.3f", lAX_orig) + " legZ=" + String.format("%.3f", lAZ_orig)
-                        + " | new: legX=" + String.format("%.3f", lAX_new) + " legZ=" + String.format("%.3f", lAZ_new)
-                        + " | applied: leg.pitch=" + String.format("%.3f", legPitchApplied)
-                        + " leg.roll=" + String.format("%.3f", legRollApplied)
-                        + " leg.pivotY=" + String.format("%.3f", legPivotY)
-                        + " leg.pivotZ=" + String.format("%.3f", legPivotZ));
-            }
 
             // 원본 `remote` = multi player. integrated server (single player) 면 무관.
             boolean isRemoteServer = net.minecraft.client.MinecraftClient.getInstance().getServer() == null;

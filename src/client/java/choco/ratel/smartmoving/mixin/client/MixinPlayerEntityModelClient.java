@@ -323,7 +323,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isCeilingClimbing) {
             sm_animateCeilingClimbing(sm, headYaw);
         } else if (sm.isClimbing || sm.isCrawlClimbing) {
-            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
+            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch, animationProgress);
         } else if (isWeepingTwistingVines) {
             // 🔴 늘어진/휘어진 덩굴 — 사다리 자세 애니메이션 적용.
             //   사용자 의도: 기능은 vanilla 등반 그대로 (sm_travel_client bypass 유지). 애니메이션만 SM 사다리.
@@ -336,7 +336,7 @@ public abstract class MixinPlayerEntityModelClient {
             int origFeetType  = sm.actualFeetClimbType;
             sm.actualHandsClimbType = 1;  // UpGrab
             sm.actualFeetClimbType  = 1;  // DownStep
-            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch);
+            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch, animationProgress);
             sm.actualHandsClimbType = origHandsType;
             sm.actualFeetClimbType  = origFeetType;
         } else if (sm.isClimbJumping) {
@@ -462,7 +462,7 @@ public abstract class MixinPlayerEntityModelClient {
      * handsClimbType/feetClimbType ordinal로 손/발 포즈 분기 (R-10/R-10b).
      * isCrawlClimbing 시 legAngleZ(roll) 보정 (R-10c).
      */
-    private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch) {
+    private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch, float animationProgress) {
         // B-4 / §16-10 + 부드러움 1:1 (사용자 보고 후, 그랩 클라이밍 진자운동 부드러움 정정):
         //   원본 SmartRenderModel 은 매 frame `getCurrentSpeed(partialTicks)` lerp getter 로
         //   prev/current EMA 사이를 partial tick 비율로 보간 = 60Hz 부드러움.
@@ -657,29 +657,33 @@ public abstract class MixinPlayerEntityModelClient {
                 legAngleX  = 0f;
                 legAngleZ  = 0f;
             }
-            // 🔴 (2026-05-04) 옵션 B + fade — 사용자 검증 OK 매핑 (옵션 D 회귀 X):
-            //   setupTransforms 가 setAngles 보다 먼저 호출 → 같은 frame 의 faded 값 read.
+            // 🔴 fade 보간 (2026-05-04 — 사용자 보고 fix "다리 땅 침투"):
+            //   bodyAngleX 만 fade 시 legAngleX = QUARTER - bodyAngleX 식 → bodyAngleX=0 시작 시
+            //   legAngleX = π/4 = 큰 앞쪽 회전 → leg vertex 박스 침투.
+            //   fix: legAngleX/legAngleZ 도 별도 fade 적용 (= 각각 prev=0 시작 → target lerp).
+            //   setupTransforms 가 먼저 호출 → bodyAngleX_faded store 됨. 여기서 read.
             bodyAngleX = SmartMovingClientState.smCrawlClimbBodyAngleXFaded;
-            if (height < bodyLength) {
-                legAngleX = QUARTER - bodyAngleX;
-                legAngleZ = THIRTYTWOTH;
-            }
-            body.pitch     =  bodyAngleX;
-            head.pitch     =  0f;
-            rightLeg.pitch =  bodyAngleX + legAngleX;
-            leftLeg.pitch  =  bodyAngleX + legAngleX;
-            rightLeg.roll  =  legAngleZ;
-            leftLeg.roll   = -legAngleZ;
-            float pivotCos = MathHelper.cos(bodyAngleX);
-            float pivotSin = MathHelper.sin(bodyAngleX);
-            rightLeg.pivotY = 12f * pivotCos;
-            leftLeg.pivotY  = 12f * pivotCos;
-            rightLeg.pivotZ = 12f * pivotSin;
-            leftLeg.pivotZ  = 12f * pivotSin;
-            rightArm.pivotY = 2f * pivotCos;
-            leftArm.pivotY  = 2f * pivotCos;
-            rightArm.pivotZ = 2f * pivotSin;
-            leftArm.pivotZ  = 2f * pivotSin;
+            // legAngleX/legAngleZ target = 위 if/else if/else 분기 결과. fade 0 시작 → target 점진.
+            legAngleX = SmartMovingClientState.applyCrawlClimbLegAngleXFade(legAngleX, animationProgress);
+            legAngleZ = SmartMovingClientState.applyCrawlClimbLegAngleZFade(legAngleZ, animationProgress);
+            // 옵션 D 정확 1:1 매핑 (원본 isCrawlClimb 분기 L265-L276):
+            //   L265 bipedTorso.X = bodyAngleX → setupTransforms 의 root R_x (별도 inject).
+            //   L267-L268 bipedShoulder.X = -bodyAngleX → arm.pitch += -bodyAngleX (shoulder cancel).
+            //   L270 bipedHead.X = -bodyAngleX → head.pitch 직접 set.
+            //   L272-L273 bipedLeg.X = legAngleX → leg.pitch 직접 set (= 부모 R_x 효과 setupTransforms).
+            //   L275-L276 bipedLeg.Z = ±legAngleZ → leg.roll 직접 set.
+
+            body.pitch     =  0f;                     // L265 부모 매핑 (setupTransforms)
+            head.pitch     = -bodyAngleX;             // L270 head cancel = 무회전
+            rightLeg.pitch =  legAngleX;              // L272 leg local
+            leftLeg.pitch  =  legAngleX;              // L273
+            rightLeg.roll  =  legAngleZ;              // L275
+            leftLeg.roll   = -legAngleZ;              // L276
+            rightArm.pitch += -bodyAngleX;            // L267 shoulder cancel
+            leftArm.pitch  += -bodyAngleX;            // L268
+            // leg/arm pivot = vanilla default (= setupTransforms 부모 회전이 자동 적용).
+            //   sm_animateClimbing L494-L495 의 leg.pivotX = ±2.0 그대로.
+            //   leg.pivotY/Z, arm.pivotY/Z 는 vanilla default (= 12, 0) / (2, 0).
         }
 
         // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286).

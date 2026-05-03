@@ -8,24 +8,9 @@
 - isClimb 일반 매핑 (L465+) 영향 없음.
 - crawl-climbing 기능 (state/box/collision) 절대 침범 X.
 
-## Phase 1: setAngles 단일 노드 부모 효과 합산 fix
+## ✅ 완결 (2026-05-04)
 
-- [ ] `head.pitch = -bodyAngleX` → `head.pitch = 0f` (= 부모 + cancel = 무회전).
-- [ ] `rightLeg.pitch = legAngleX` → `rightLeg.pitch = bodyAngleX + legAngleX` (= 부모 + local 합산).
-- [ ] `leftLeg.pitch = legAngleX` → `leftLeg.pitch = bodyAngleX + legAngleX`.
-- [ ] `rightArm.pitch += -bodyAngleX` 제거 (= 부모 + shoulder cancel = vanilla 결과).
-- [ ] `leftArm.pitch += -bodyAngleX` 제거.
-- [ ] body.pitch / leg.roll / leg.yaw 그대로 유지.
+옵션 D (= setupTransforms root R_x + setAngles cancel) 매핑 + 3축 별도 fade 정착.
+사용자 명시 "너무 완벽하다. 원본보다 더 부드럽고, 원본의 움직임은 그대로 가져오고" (2026-05-04).
 
-## Phase 2: 인게임 검증
-
-- [ ] 빌드 성공.
-- [ ] 사용자 테스트 — 좁은 천장 (height < 0.7) crawl-climb 자세가 원본과 일치.
-- [ ] 모델 위로 올라옴 효과 사라짐.
-- [ ] 다리 정상 앞으로 회전.
-- [ ] head 무회전 (= mouse pitch 영향 X).
-
-## Phase 3: 메모리 + 커밋
-
-- [ ] 사용자 OK 시 커밋.
-- [ ] 메모리 기록 (bipedTorso 부모 효과 매핑 패턴).
+자세한 내용은 메모리 `project_crawl_climbing_complete.md` 참조.

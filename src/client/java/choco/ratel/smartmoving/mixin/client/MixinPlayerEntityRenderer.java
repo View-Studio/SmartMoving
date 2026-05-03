@@ -513,20 +513,44 @@ public class MixinPlayerEntityRenderer {
             matrices.translate(0f, -3f / 16f, 0f);
         }
 
-        // 🔴 (2026-05-04) crawl-climbing fade 만 update:
-        //   사용자 검증 OK 매핑 = 옵션 B (= setAngles 의 leg.pivot 보정 + leg.pitch 합산).
-        //   여기서는 fade 만 update — bodyAngleX 계산 + applyCrawlClimbFade 호출 → setAngles 가 read.
-        //   setupTransforms R_x 매핑 X (= 옵션 D 회귀 X, 사용자 명시).
+        // 🔴 (2026-05-04) crawl-climbing 옵션 D 정확 매핑 (사용자 명시 "옵션 D 거부 해제"):
+        //   원본 SmartMovingModel L265 `bipedTorso.rotateAngleX = bodyAngleX` (= 부모 회전).
+        //   bipedTorso = head/body/arm/shoulder/pelvic/leg 모두의 부모 → 모든 자식이 R_x(B) 누적.
+        //   ModelPart 단일 노드로는 R_z(Z) 가 두 R_x 사이에 있는 구조 표현 X.
+        //   해결: setupTransforms 의 root R_x(-bodyAngleX) (= 부호 반전 by scale) → 부모 효과 정확.
+        //   setAngles 의 leg.pitch/leg.roll/body/head/arm 매핑 변경 (= 부모 + cancel = 원본 1:1).
+        //   회전 중심 = bipedTorso pivot = modelpart (0, 0, 0) ≈ matrices stack (0, 1.5, 0).
         else if (sm.isCrawlClimbing) {
             float height = sm.smallOverGroundHeight + 0.25f;
             float bodyLength = 0.7f;
-            float bodyAngleX;
+            float bodyAngleX_target;
             if (height < bodyLength) {
-                bodyAngleX = Math.max(0f, (float) Math.acos(height / bodyLength));
+                bodyAngleX_target = Math.max(0f, (float) Math.acos(height / bodyLength));
             } else {
-                bodyAngleX = 0f;
+                bodyAngleX_target = 0f;
             }
-            SmartMovingClientState.applyCrawlClimbFade(bodyAngleX, animationProgress);
+            // 🔴 fade 보간 (2026-05-04 — 사용자 명시 "이 로직에 맞는 페이드"):
+            //   첫 호출 = 즉시 target (= 진입 시 jump 허용 — 원본과 동일).
+            //   그 후 매 frame height 변화 → target 변화 → lerp 부드러움 (= jitter 차단).
+            //   원본 ModelRotationRenderer.GetIntermediateAngle 식 0.2 * deltaT 1:1.
+            float bodyAngleX = SmartMovingClientState.applyCrawlClimbFade(bodyAngleX_target, animationProgress);
+
+            // 부모 R_x 매핑 (원본 L265 bipedTorso.X = bodyAngleX 1:1).
+            // 부호 반전 (메모리 feedback_render_scale_negation.md): input -bodyAngleX → 시각 +bodyAngleX.
+            matrices.translate(0f, 1.5f, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-bodyAngleX));
+            matrices.translate(0f, -1.5f, 0f);
+        }
+        // 🔴 fade reset (2026-05-04): isCrawlClimbing 종료 시 모든 fade prev field reset →
+        //   다음 진입 시 첫 호출 = prev=0 시작 (= 부드러운 전환).
+        //   bodyAngleX + legAngleX + legAngleZ 3 개 fade 모두 reset.
+        if (!sm.isCrawlClimbing) {
+            SmartMovingClientState.smCrawlClimbBodyAngleXFaded = Float.NaN;
+            SmartMovingClientState.smCrawlClimbFadeTimePrev = Float.NaN;
+            SmartMovingClientState.smCrawlClimbLegAngleXFaded = Float.NaN;
+            SmartMovingClientState.smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
+            SmartMovingClientState.smCrawlClimbLegAngleZFaded = Float.NaN;
+            SmartMovingClientState.smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
         }
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)

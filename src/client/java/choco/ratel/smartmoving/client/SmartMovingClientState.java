@@ -808,27 +808,82 @@ public final class SmartMovingClientState {
     public static float smCrawlClimbBodyAngleXFaded = Float.NaN;
     public static float smCrawlClimbFadeTimePrev = Float.NaN;
 
+    // 🔴 (2026-05-04) 사용자 보고 fix — "다리가 살짝 땅으로 잠김":
+    //   bodyAngleX 만 fade 시 legAngleX = QUARTER - bodyAngleX 식 → bodyAngleX=0 시작 시
+    //   legAngleX = π/4 = 큰 앞쪽 회전 → leg vertex 박스 침투.
+    //   fix: legAngleX/legAngleZ 도 별도 fade 적용 → prev=0 시작 → 점진적 target 도달.
+    public static float smCrawlClimbLegAngleXFaded = Float.NaN;
+    public static float smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
+    public static float smCrawlClimbLegAngleZFaded = Float.NaN;
+    public static float smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
+
     /**
      * crawl-climbing 의 bodyAngleX fade lerp helper.
      * setupTransforms 에서 호출 → faded 값 저장 + 반환. setAngles 가 같은 frame 에서 read.
      */
+    /** isCrawling setupTransforms 의 부모 R_x 회전값 (= π/2 - π/16). isCrawlClimbing fade 시작값. */
+    public static final float CRAWL_TILT_ANGLE = (float) (Math.PI / 2 - Math.PI / 16);
+
     public static float applyCrawlClimbFade(float target, float curTime) {
         float prev = smCrawlClimbBodyAngleXFaded;
         float prevTime = smCrawlClimbFadeTimePrev;
+        // 🔴 fade 보간 (2026-05-04 — 사용자 보고 fix "다리 땅 침투"):
+        //   진입 직전 = isCrawling 자세 (= setupTransforms R_x(-CRAWL_TILT_ANGLE) ≈ 78.75°).
+        //   prev=0 시작 시 = R_x(0) = 직선 → isCrawling R_x(-tilt) 와 ~78° 차이 → leg vertex 박스 침투.
+        //   fix: prev = CRAWL_TILT_ANGLE 시작 → 진입 시 isCrawling 자세와 동일 시작 → 점진적 target.
+        //   isCrawlClimbing 진입 = 항상 isCrawling 상태에서 가능 (= ICC = crawl + climbing).
         if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
-            smCrawlClimbBodyAngleXFaded = target;
+            smCrawlClimbBodyAngleXFaded = CRAWL_TILT_ANGLE;
             smCrawlClimbFadeTimePrev = curTime;
-            return target;
+            return CRAWL_TILT_ANGLE;
         }
         float deltaT = curTime - prevTime;
         if (deltaT <= 0F || deltaT > 2F) {
-            smCrawlClimbBodyAngleXFaded = target;
+            // timeout/역방향 → prev 유지하고 그대로 반환 (= jump 차단).
             smCrawlClimbFadeTimePrev = curTime;
-            return target;
+            return prev;
         }
         float faded = prev + (target - prev) * deltaT * 0.2F;
         smCrawlClimbBodyAngleXFaded = faded;
         smCrawlClimbFadeTimePrev = curTime;
+        return faded;
+    }
+
+    public static float applyCrawlClimbLegAngleXFade(float target, float curTime) {
+        float prev = smCrawlClimbLegAngleXFaded;
+        float prevTime = smCrawlClimbLegAngleXFadeTimePrev;
+        if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
+            smCrawlClimbLegAngleXFaded = 0f;
+            smCrawlClimbLegAngleXFadeTimePrev = curTime;
+            return 0f;
+        }
+        float deltaT = curTime - prevTime;
+        if (deltaT <= 0F || deltaT > 2F) {
+            smCrawlClimbLegAngleXFadeTimePrev = curTime;
+            return prev;
+        }
+        float faded = prev + (target - prev) * deltaT * 0.2F;
+        smCrawlClimbLegAngleXFaded = faded;
+        smCrawlClimbLegAngleXFadeTimePrev = curTime;
+        return faded;
+    }
+
+    public static float applyCrawlClimbLegAngleZFade(float target, float curTime) {
+        float prev = smCrawlClimbLegAngleZFaded;
+        float prevTime = smCrawlClimbLegAngleZFadeTimePrev;
+        if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
+            smCrawlClimbLegAngleZFaded = 0f;
+            smCrawlClimbLegAngleZFadeTimePrev = curTime;
+            return 0f;
+        }
+        float deltaT = curTime - prevTime;
+        if (deltaT <= 0F || deltaT > 2F) {
+            smCrawlClimbLegAngleZFadeTimePrev = curTime;
+            return prev;
+        }
+        float faded = prev + (target - prev) * deltaT * 0.2F;
+        smCrawlClimbLegAngleZFaded = faded;
+        smCrawlClimbLegAngleZFadeTimePrev = curTime;
         return faded;
     }
     /**
