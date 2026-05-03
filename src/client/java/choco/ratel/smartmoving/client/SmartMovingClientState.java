@@ -2254,7 +2254,19 @@ public final class SmartMovingClientState {
                         //     의도 (= 메모리 명시). isClimbing=false 강제 = 의도 일치.
                         this.isClimbing = false;
                         this.mustCrawl = true;
-                        this.iccExitJustToCrawl = true;
+                        // 🔴 iccExit fwd>0 가드 (사용자 보고 fix — isClimbCrawling → isCrawlClimbing
+                        //   자연 전환 차단 BUG, 2026-05-03):
+                        //   본래 iccExit 의도 = 사다리/덩굴 끝 + sneak hold (fwd<=0) 시 다음 tick
+                        //   isCrawlClimbing 식 잘못 매치 → L1992 isCrawling reset BUG 차단
+                        //   (project_ladder_vine_iccexit_complete.md).
+                        //   그러나 fwd>0 (= climbing 계속 의도) 시나리오 = 좁은 갭 통과 후 사용자
+                        //   의도 isCrawlClimbing 자연 전환. iccExit set 시 식 영구 차단 → 진동 BUG.
+                        //   해결: fwd<=0 시만 set → 사다리/덩굴 끝 hold 케이스 한정 → 좁은 갭 통과
+                        //   시나리오 자연 전환 허용. 원본 1.7.10 은 ICC EXIT 분기에 isClimbing/
+                        //   mustCrawl/iccExit 같은 강제 set 없음 (= 자연 전환).
+                        if (player.input.movementForward <= 0F) {
+                            this.iccExitJustToCrawl = true;
+                        }
                         player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                         player.lastRenderY += 1.0;
                         player.prevY += 1.0;

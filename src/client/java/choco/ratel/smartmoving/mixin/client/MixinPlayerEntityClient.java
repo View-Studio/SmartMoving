@@ -113,7 +113,15 @@ public abstract class MixinPlayerEntityClient {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
-        boolean smSmall = sm.isCrawling
+        // 🔴 isCrawlClimbing 추가 (사용자 보고 fix — 콜리전 standing 크기 BUG, 2026-05-03):
+        //   isCrawlClimbing 진입 엣지 (원본 L2752 1:1) 에서 isCrawling=false 강제 → 다음 tick까지
+        //   isCrawling=false 잔존 → smSmall 분기 미매치 → vanilla pose dim (CROUCHING 1.5) 통과
+        //   = "standing 크기 콜리전" 사용자 보고. ICC 활성 + 사다리 grip 시 isCrawling=false 시점에
+        //   도 동일 문제로 박스 더 작아짐 (vanilla SWIMMING 0.6).
+        //   해결: smSmall 에 isCrawlClimbing 직접 추가 → 자가유지 동안 항상 (0.8, 0.62) 보장.
+        //   eye=0.62 → mixin offset 가드 (eye>1) 미매치 → 박스 +1m offset 안 됨 → ICC EXIT 후
+        //   entity.y +1m 위치에 박스 (entity.y, entity.y+0.8) = (old+1, old+1.8) = 원본 1:1.
+        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
                        || sm.isHeadJumping || sm.isSliding
                        || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
