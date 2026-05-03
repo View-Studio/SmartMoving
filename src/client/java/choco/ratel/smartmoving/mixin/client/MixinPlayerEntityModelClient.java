@@ -237,6 +237,29 @@ public abstract class MixinPlayerEntityModelClient {
             leftLeg.pivotY  = 12f;
         }
         sm.smWasClimbingForCleanup = smIsClimbingNow;
+
+        // 🔴 isCrawling 종료 cleanup (사용자 보고 fix — "엎드린 상태에서 벗어났을 때 잔존", 2026-05-03):
+        //   sm_animateCrawling 가 set 한 vanilla 비-reset 값들 (head.pivotZ, head.roll, body.yaw/roll,
+        //   leg.roll, arm.yaw/roll, scales) 종료 엣지 한 번 vanilla default reset.
+        //   메모리 `feedback_animation_porting.md` 의 잘못된 패턴 (pivotY/leg.pivotZ 무조건 reset)
+        //   회피 — sneaking 시 vanilla 가 set 하는 값 (pivotY 3.2 등) 안 건드림.
+        //   D-4 cleanup 패턴 그대로 따름 (= 종료 엣지 한 번만 적용).
+        if (sm.smWasCrawlingForCleanup && !sm.isCrawling) {
+            head.pivotZ = 0f;
+            head.roll   = 0f;
+            body.yaw    = 0f;
+            body.roll   = 0f;
+            rightLeg.roll = 0f;
+            leftLeg.roll  = 0f;
+            rightArm.yaw  = 0f;
+            leftArm.yaw   = 0f;
+            rightArm.roll = 0f;
+            leftArm.roll  = 0f;
+            // scales = 1.0 (default) 복원 — sm_animateCrawling 의 setLegScales/setArmScales cancel
+            setLegScales(rightLeg, leftLeg, 1f, 1f);
+            setArmScales(rightArm, leftArm, 1f, 1f);
+        }
+        sm.smWasCrawlingForCleanup = sm.isCrawling;
         // pivot/yaw/roll reset 인프라 (B-9/B-11/B-13 부속): vanilla setAngles 는
         //   head/body pivotZ, body.yaw, head.roll 을 매 프레임 reset 하지 않는다
         //   (sneak 분기는 leg.pivotZ 만 변경 / body.yaw 는 animateArms 안
@@ -851,19 +874,38 @@ public abstract class MixinPlayerEntityModelClient {
         float standFactor = smFactor(sm.stats.currentHorizontalSpeedFlattened, 0.12951545f, 0f);
 
         // 머리
+        // 🔴 사용자 보고 fix (2026-05-03 — "엎드린 상태에서 머리 움직임 원본과 다름"):
+        //   원본 SmartMovingModel.java L399-L401 isCrawl 분기:
+        //     bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle
+        //     bipedHead.rotateAngleX = -Eighth
+        //     bipedHead.rotationPointZ = -2F
+        //     ⚠ bipedHead.rotateAngleY 는 미설정 → reset() 값 0 유지.
+        //   원본 animateHeadRotation (L626-L632) 의 isStandard 가드 → isCrawl != isStandard →
+        //     superAnimateHeadRotation 호출 X → SR default head.rotateAngleY 매핑 미적용.
+        //   우리 sm_setAngles 가 @At("TAIL") → vanilla BipedEntityModel.setAngles 이미
+        //     head.yaw = headYaw * π/180 설정. cancel 안 하면 살아있음 → 마우스 좌우 회전이
+        //     head.roll (= -headYaw 매핑) + head.yaw (= vanilla 잔존) 양쪽 적용 → 어긋남.
+        //   fix: head.yaw = 0 명시.
         head.roll  = -headYaw * DEG_TO_RAD;
         head.pitch = -EIGHTH;
+        head.yaw   = 0f;
         head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-12 / §16-18)
 
         // 🔴 (Phase 1, Crawl 애니메이션 1:1): 몸통 회전 순서 YZX 매핑.
         //   원본 L403 `bipedTorso.rotationOrder = ModelRotationRenderer.YZX` 명시.
-        //   1.21.1 ModelPart 기본 ZYX → setAnglesYZX 헬퍼로 정확 변환.
-        //   pitch = X (큰 값 78°), yaw = Y (작은 cos), roll = Z (작은 cos).
-        setAnglesYZX(body,
-                QUARTER - THIRTYTWOTH,                                   // 원본 L404 bipedTorso.X
+        //   1.21.1 ModelPart 기본 ZYX → setAnglesYZX_v2 (정확 매핑) 사용.
+        // 🔴 Phase 3 자식 효과 매핑 (2026-05-03): body.pitch 의 QUARTER-THIRTYTWOTH 항 제거 +
+        //   body.pivotY = 3f 제거. entity 회전 + translate 가 sm_setupTransforms 의 isCrawling 분기에서
+        //   대신 적용 (= 모든 자식 노드 일괄 처리). 원본 bipedTorso 부모 효과 1:1.
+        //   본 위치는 LOCAL 미세 진동 (Y/Z cos) 만 유지.
+        // 🔴 setAnglesYZX → setAnglesYZX_v2 변경 (2026-05-03 사용자 보고 fix — "팔/몸통 디테일"):
+        //   기존 setAnglesYZX BUG (vertex 적용 X→Z→Y, 원본 Y→Z→X 와 반대). v2 = 정확 매핑.
+        //   body 의 yaw/roll 작은 cos 라 영향 미세하지만 1:1 정확.
+        setAnglesYZX_v2(body,
+                0f,                                                              // ← entity 회전이 대신 적용
                 MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor,    // 원본 L407 bipedBody.Y
                 MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor); // 원본 L406 bipedTorso.Z
-        body.pivotY = 3f;    // 원본 bipedTorso.rotationPointY = +3F (B-12 / §16-18, SR 다층 부재로 body 단일 노드 근사)
+        // body.pivotY = 3f 제거 — entity translate 가 대신 적용
 
         // 다리
         rightLeg.pitch = (MathHelper.cos(distance - QUARTER) * SIXTYFOURTH + THIRTYTWOTH) * walkFactor
@@ -878,8 +920,11 @@ public abstract class MixinPlayerEntityModelClient {
                 + SIXTEENTH * standFactor;
         float lRoll = (MathHelper.cos(distance + HALF) * SIXTYFOURTH - THIRTYTWOTH) * walkFactor
                 - SIXTEENTH * standFactor;
-        setAnglesYZX(rightArm, HALF + EIGHTH, -QUARTER, rRoll);
-        setAnglesYZX(leftArm,  HALF + EIGHTH,  QUARTER, lRoll);
+        // 🔴 setAnglesYZX_v2 사용 (2026-05-03 사용자 보고 fix — "팔이 하늘로 들림"):
+        //   원본 YZX vertex 적용 = Y → Z → X. arm yaw=±90° 큰 회전 + pitch=225° 큰 회전 →
+        //   회전 순서 차이가 팔 위치에 큰 visual 영향. v2 = 원본 1:1.
+        setAnglesYZX_v2(rightArm, HALF + EIGHTH, -QUARTER, rRoll);
+        setAnglesYZX_v2(leftArm,  HALF + EIGHTH,  QUARTER, lRoll);
 
         // 원본 SmartMovingModel.java L622-L626 + L645-L648: 다리/팔 yScale.
         // 원본 가드 `if (scaleLegType != NoScaleStart)` / `scaleArmType != NoScaleStart` — 메인 모델 = Scale.
@@ -1294,12 +1339,42 @@ public abstract class MixinPlayerEntityModelClient {
     /**
      * 원본 YZX GL 순서(glRotate Y → Z → X) → ModelPart pitch/yaw/roll 변환.
      * JOML: qY*qZ*qX → getEulerAnglesZYX → (e.x=pitch, e.y=yaw, e.z=roll).
+     *
+     * ⚠️ BUG 가능성 (메모리 `feedback_zxy_zyx_rotation_order.md` 의 BUG-30 패턴 동일):
+     *   원본 ModelRotationRenderer YZX 분기 (L145/L151/L154) GL call 순서 = X → Z → Y.
+     *   GL post-multiply: vertex 적용 = call 역순 = Y → Z → X.
+     *   현재 q = q_Y*q_Z*q_X → vertex 적용 X → Z → Y (원본 반대).
+     *   사용처: 그랩 클라이밍 (`project_grab_climbing_complete.md` 16라운드 정착) — 함부로 수정 금지.
+     *   crawl 분기는 정확 매핑 위해 `setAnglesYZX_v2` 별도 사용.
      */
     private static void setAnglesYZX(ModelPart part, float pitch, float yaw, float roll) {
         Quaternionf q = new Quaternionf()
                 .rotationY(yaw)
                 .mul(new Quaternionf().rotationZ(roll))
                 .mul(new Quaternionf().rotationX(pitch));
+        Vector3f e = q.getEulerAnglesZYX(new Vector3f());
+        part.pitch = e.x;
+        part.yaw   = e.y;
+        part.roll  = e.z;
+    }
+
+    /**
+     * 원본 YZX rotationOrder 의 정확 1:1 매핑 — vertex 적용 순서 Y → Z → X.
+     *
+     * 원본 ModelRotationRenderer YZX (L145, L151, L154) GL call 순서 = X → Z → Y.
+     * GL post-multiply: vertex 적용 = call 역순 = Y → Z → X.
+     * JOML: q = q_X * q_Z * q_Y → vertex 적용 right-most first = Y → Z → X. ✓
+     *
+     * 사용자 보고 fix (2026-05-03 — "엎드린 자세 팔이 하늘로 들림"):
+     *   crawl arm yaw=±90° (= 큰 회전) 시 setAnglesYZX (= q_Y*q_Z*q_X) 의 vertex 적용 X → Z → Y
+     *   가 원본 vertex 적용 Y → Z → X 와 정반대 → arm 위치 잘못. 메모리 BUG-30 (setAnglesXZY)
+     *   와 동일 패턴. crawl 만 별도 함수로 정확 매핑 — 다른 사용처 (climbing/sliding) 영향 없음.
+     */
+    private static void setAnglesYZX_v2(ModelPart part, float pitch, float yaw, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationX(pitch)
+                .mul(new Quaternionf().rotationZ(roll))
+                .mul(new Quaternionf().rotationY(yaw));
         Vector3f e = q.getEulerAnglesZYX(new Vector3f());
         part.pitch = e.x;
         part.yaw   = e.y;

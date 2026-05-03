@@ -750,6 +750,15 @@ public final class SmartMovingClientState {
     public boolean smWasClimbingForCleanup = false;
 
     /**
+     * 🔴 isCrawling 종료 엣지 cleanup 추적 (사용자 보고 — 엎드림 해제 시 자세 잔존, 2026-05-03):
+     *   sm_animateCrawling 가 head.pivotZ=-2, head.roll, body.yaw/roll, leg.roll, arm.yaw/roll, scales 등
+     *   set. vanilla setAngles 는 이 값들 자동 reset 안 함 (= pivotZ/yaw/roll/scales 비reset).
+     *   isCrawling 종료 후 sm_animateCrawling 미호출 → 잔존 값으로 자세 고정 BUG.
+     *   해결: D-4 cleanup 패턴 따라 종료 엣지 (true → false) 한 번 모든 변경값 vanilla default reset.
+     */
+    public boolean smWasCrawlingForCleanup = false;
+
+    /**
      * 🔴 천장 등반 bodyYaw fade 보간 (사용자 보고 — 마우스 회전 시 몸통 회전 보간 원본과 다름):
      *   원본 SmartRenderModel L209: bipedOuter.fadeRotateAngleY = true (기본).
      *   원본 SmartMovingModel L310: bipedOuter.rotateAngleY = rotateY + horizontalAngle.
@@ -779,6 +788,17 @@ public final class SmartMovingClientState {
     public static float smCachedAnimationProgress = 0f;
     public static float smStandardBodyYawPrev = Float.NaN;
     public static float smStandardFadeTimePrev = Float.NaN;
+
+    /**
+     * 🔴 (2026-05-03) isCrawl 전용 flag — body fade lag 활성화 + head 보정 skip.
+     *
+     * 원본 SmartRender bipedOuter.fadeRotateAngleY = true → bodyYaw 0.2 lerp 적용 (= 부드러움).
+     * 단 isCrawl 의 head 매핑 (head.rotateAngleZ = -netHeadYaw / RadToAngle) 은 vanilla netHeadYaw
+     * (= bodyYaw_natural 기준) 사용해야 max 50° clamp 가 head.roll 에 그대로 반영됨.
+     * sm_modifyNetHeadYaw 의 head 보정 (netHeadYaw + bodyYaw_diff) 은 isCrawl 에서 max 깨짐 →
+     * smCrawlMode=true 시 보정 skip.
+     */
+    public static boolean smCrawlMode = false;
     /**
      * sm_captureBodyYaw 가 비행/SM force 분기 활성 시 true 로 set.
      * MixinPlayerEntityModelClient.sm_setAngles 가 body.yaw fade adjustment skip 위해 사용.

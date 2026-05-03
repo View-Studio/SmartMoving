@@ -65,8 +65,22 @@ public class MixinPlayerEntityRenderer {
             }
 
             // 크롤링: SWIMMING 포즈 오프셋 대신 SM 크롤링 오프셋
+            // 🔴 -1m 추가 보정 (사용자 보고 fix — "공중에 떠있음", 2026-05-03):
+            //   원본 SmartMovingRender L160: `d1 += moving.heightOffset` (heightOffset=-1F isCrawling).
+            //   우리 매핑은 -0.125 만 (= vanilla getYOffset 만) → 모델 위치 1m 부족 → 박스 위 떠있음.
+            //   원본 박스 = (posY+1, posY+1.8) (heightOffset=-1F 박스 +1m 위) + 모델 -1m → 박스 안.
+            //   우리 박스 = (entity.y, entity.y+0.8) (mixin offset 안 됨, 기능 침범 금지) + 모델 -0.125
+            //   → 박스 위. 모델 위치만 -1m 추가 보정 (= 박스 dim/위치 영향 X) → 박스 안.
+            // 🔴 사용자 보고 단계별 fix (2026-05-03):
+            //   - 처음 -0.125 만: 위로 0.1m 떠있음 → -1m heightOffset 추가.
+            //   - -1.125: 시뮬 +0.1m 위. 사용자 "여전히 떠있음".
+            //   - -1.25: 시뮬 -0.025m 아래. 사용자 "땅 들어감".
+            //   → 정확 매핑 = 중간 값. 매핑 단위 일관성 (1/16 블록 = 1 px, 3/16 = bipedTorso.rotationPointY)
+            //     고려해 -1 - 3/16 = -1.1875 시도. 시뮬 위 0.04m (= 거의 일치).
+            //   원본 흐름: d1 += heightOffset(-1) + d1 += getYOffset(-0.125) + bipedTorso 효과.
+            //   1.21.1 매핑 차이로 정확 -1.125 안 맞음. 시각 결과 우선 fix.
             if (sm.isCrawling) {
-                cir.setReturnValue(new Vec3d(0D, -entity.getScale() * 0.125D, 0D));
+                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.21D, 0D));
             }
             return;
         }
@@ -97,6 +111,7 @@ public class MixinPlayerEntityRenderer {
         smFlyingExtraYaw = 0f;
         SmartMovingClientState.smStandardFadeActive = false;  // 낙하/기본 상태 fade flag reset.
         SmartMovingClientState.smFallingFadeMode = false;     // 낙하 mode flag reset.
+        SmartMovingClientState.smCrawlMode = false;            // isCrawl 전용 flag reset (head 보정 skip).
         // 🔴 (세션 52b): partial tick 캐시 저장 (Mixin private static 제약 우회 — SmartMovingClientState 사용).
         //   setAngles inject (sm_animateFlying 등) 에서 getCurrentSpeed/getTotalDistance lerped getter 호출용.
         SmartMovingClientState.globalCachedTickDelta = tickDelta;
@@ -115,6 +130,29 @@ public class MixinPlayerEntityRenderer {
                 || sm.isFlying || sm.isSwimming_sm || sm.isDiving
                 || sm.isCeilingClimbing || sm.isHeadJumping
                 || sm.isSliding || sm.isAngleJumping();
+
+        // 🔴 사용자 보고 fix 정정 (2026-05-03 — "max 후 body 가 마우스 따라 확 회전, 부드러운 lag 필요"):
+        //   원본 SmartMovingRender L147 강제 분기에 isCrawl 단독 미포함 → vanilla 1.21.1 의
+        //   LivingEntity.turnHead 자연 동작 (= getMaxRelativeHeadRotation = 50°).
+        //
+        //   원본 SmartRenderModel L208-L209: bipedOuter.rotateAngleY = actualRotation /
+        //     RadiantToAngle (= bodyYaw 라디안), bipedOuter.fadeRotateAngleY = true (player).
+        //   원본 fadeIntermediate (ModelRotationRenderer L323-L325) + GetIntermediateAngle (L347-L364):
+        //     result = prev + (target - prev) * deltaT * 0.2F
+        //   = bipedOuter.Y 가 0.2 lerp 추가 적용 → body 가 head 따라가는 속도 부드러움.
+        //
+        //   1차 fix (smStandardFadeActive=false) → vanilla 동작 그대로 → max 작동 OK 지만 body
+        //     가 head 따라 확 회전 (사용자 보고).
+        //   2차 fix (smStandardFadeActive=true + 그대로) → fade lag 적용되지만 sm_modifyNetHeadYaw
+        //     의 head 보정 (netHeadYaw + bodyYaw_diff) 가 head.roll 에 영향 → max 50° 깨짐.
+        //   진짜 fix: smStandardFadeActive=true 로 body fade lag + smCrawlMode=true 로 head 보정 skip.
+        if (sm.isCrawling && !sm.isClimbing) {
+            SmartMovingClientState.smStandardFadeActive = true;   // body fade lag (= 부드러움)
+            SmartMovingClientState.smFallingFadeMode = false;
+            SmartMovingClientState.smCrawlMode = true;             // head 보정 skip (= max 50° 유지)
+            return;
+        }
+
         if (!smActive) {
             // 🔴 (2026-04-27) 낙하/기본 상태 분기 — 두 모드:
             //   - 낙하: force 매핑 (smBodyYawActive=true; smBodyYawOverride=0) + head force.
@@ -280,8 +318,10 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // isHeadJumping/isCrawling/isRopeSliding (원본 L740/L668/L279) — threshold 없이 currentHorizontalAngle
-        if (sm.isHeadJumping || sm.isCrawling || sm.isRopeSliding) {
+        // (2026-05-03 정리) 이전 isCrawling 단독 가드는 위 !smActive 분기에서 이미 처리됨 → 도달 X.
+        //   진짜 fix 는 sm_captureBodyYaw 의 !smActive 분기 위 isCrawl && !isClimbing 가드 (위 참조).
+        // isHeadJumping/isRopeSliding (원본 L740/L279) — threshold 없이 currentHorizontalAngle
+        if (sm.isHeadJumping || sm.isRopeSliding) {
             smBodyYawActive = true;
             smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
             return;
@@ -397,6 +437,41 @@ public class MixinPlayerEntityRenderer {
             // ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정.
             // 단위: 픽셀 → 블록 (/16). slide 분기 안에서만 적용 (push/pop 자동 관리).
             matrices.translate(0f, -0.4f / 16f, 0f);
+        }
+
+        // 🔴 SM 엎드리기(isCrawling) — Phase 3 자식 효과 매핑 (2026-05-03):
+        //   원본 SmartMovingModel L404: bipedTorso.rotateAngleX = Quarter - Thirtytwoth = 78.75°.
+        //   원본 SmartMovingModel L405: bipedTorso.rotationPointY = 3F.
+        //   원본 1.7.10 SR 모델 = bipedTorso 가 head/body/arm/leg 부모 → 회전/위치가 자식 모두 적용.
+        //   1.21.1 평탄 모델 → entity 회전 + translate 로 모든 노드 일괄 처리.
+        //   진입 가드: `(isCrawling && !isClimbing)` = 원본 isCrawl 진입 조건 (SmartMovingRender L75).
+        // 🔴 부호 반전 (사용자 보고 fix — "배가 하늘 보고 있음", 2026-05-03):
+        //   메모리 `feedback_render_scale_negation.md`: vanilla LivingEntityRenderer.render 의
+        //   matrices.scale(-1,-1,1) 가 setupTransforms TAIL 다음에 적용 → POSITIVE_X.rotation(+θ)
+        //   시각 결과 = R_x(-θ). 즉 +tiltAngle 입력 = 시각상 머리 뒤로 회전 (= 등이 땅, 배가 위).
+        //   원본 isCrawling 의도 = 배가 땅 (엎드림) → 시각 R_x(+θ) 필요 → 입력 -θ 적용.
+        //   isFlying 분기도 같은 부호 반전 사용 (메모리 BUG-31).
+        if (sm.isCrawling && !sm.isClimbing) {
+            float tiltAngle = (float)(Math.PI / 2 - Math.PI / 16);  // Quarter - Thirtytwoth = 78.75°
+            // 🔴 머리 기준 회전 보정 (사용자 보고 fix — "엎드리는 중심이 발 기준", 2026-05-03):
+            //   메모리 `feedback_rotation_pivot_pattern.md`: 원본 SmartMovingRender 의
+            //   bipedOuter.rotateAngleX 회전 = head pivot 기준 (= 모델 root). 비행 분기 (L457-L465)
+            //   와 동일 패턴.
+            matrices.translate(0f, 1.5f, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));   // 부호 반전 (scale -1,-1,1 보정)
+            matrices.translate(0f, -1.5f, 0f);
+            sm.smOuterTiltX = tiltAngle;
+            // 🔴 bipedTorso.rotationPointY = 3F 매핑 — 부호 반전 (사용자 보고 fix — "여전히 살짝 떠있음",
+            //   2026-05-03):
+            //   원본 SmartMovingModel L405 의 +3F (= +3 px = +3/16 블록) 자식 효과를 우리 매핑에서
+            //   matrices.translate 로 직접 적용 시 vanilla scale(-1,-1,1) 의 Y 부호 반전 영향:
+            //   - 원본 model 좌표계 +3/16 (자식 효과) = world 시점 +3/16 위
+            //   - 그러나 1.21.1 vanilla scale(-1,-1,1) 가 setupTransforms TAIL 후 적용 →
+            //     TAIL inject 의 translate(0, +3/16, 0) 가 시각상 -3/16 효과 (= world 위로 +3/16
+            //     **반대로** 시각 결과 - 사용자 보고 시각상 위로 0.1m 떠있음).
+            //   해결: 메모리 `feedback_render_scale_negation.md` 패턴 = -3/16 입력 → 시각 +3/16
+            //     원본 자식 효과와 일치 (= 모델 -3/16 아래로 보정 = 사용자 보고 fix).
+            matrices.translate(0f, -3f / 16f, 0f);
         }
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)

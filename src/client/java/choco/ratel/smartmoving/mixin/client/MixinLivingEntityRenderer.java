@@ -74,6 +74,9 @@ public abstract class MixinLivingEntityRenderer {
         //   = netHeadYaw + bodyYaw_natural - lagged.
         //
         //   낙하 (smFallingFadeMode=true): sm_animateFalling head.yaw=0 force 가 덮어씀 → skip.
+        // 🔴 (2026-05-03) isCrawl 시 head 보정 skip — head.roll 에 vanilla netHeadYaw (= max 50°
+        //   clamp 그대로) 적용. body 는 sm_modifyBodyYaw 의 fade lag 그대로.
+        if (SmartMovingClientState.smCrawlMode) return netHeadYaw;
         if (!SmartMovingClientState.smStandardFadeActive) return netHeadYaw;
         if (SmartMovingClientState.smFallingFadeMode) return netHeadYaw;
         return netHeadYaw + SmartMovingClientState.smCachedBodyYawNaturalDeg
