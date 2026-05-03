@@ -812,3 +812,190 @@ isClimbHolding =
 - 우리 1.21.1 매핑 vs 원본 라인별 cross-check (별도 체크리스트).
 - 차이 2 (`!forwardPressed_holdGuard`) 의 기능 1 영향 인게임 검증.
 - 차이 3 (`matched skip`) 의 좁은 갭 분기 매치 검증.
+
+---
+
+# 부록 — 2026-05-03 세션: 기능 3 (`isCrawlClimbing`) 우리 1.21.1 매핑 정밀 점검
+
+사용자 보고: "엎드린 상태로 블록 앞에서 grab 을 누르고 있으면 엎드린 채로 클라이밍이 되는 기능이 지금 포팅 안되어있는거 같은데".
+
+본 부록은 **원본 ↔ 1.21.1 매핑 라인 단위 cross-check 결과** 만 담는다. 수정 미수행.
+
+---
+
+## 부록.1 매핑 위치 일람 (라인 인용)
+
+| 원본 위치 | 의미 | 1.21.1 매핑 위치 | 상태 |
+|----------|------|------------------|------|
+| `SmartMovingSelf.java:2737` | isCrawlClimbing 5-AND 메인 식 | `SmartMovingClientState.java:1985-1990` | ✅ 이식 (가드 1 추가) |
+| `SmartMovingSelf.java:2738-2754` | canStandUp 자동 해제 분기 | `SmartMovingClientState.java:1992-2010` | ✅ 1:1 |
+| `SmartMovingSelf.java:2755-2783` | 해제 엣지 3갈래 분기 | `SmartMovingClientState.java:2011-2045` | ✅ 1:1 |
+| `SmartMovingSelf.java:2441` | wasCrawling = isCrawling | `SmartMovingClientState.java:1720` | ✅ 순서 OK |
+| `SmartMovingSelf.java:2442-2444` | isCrawling 식 | `SmartMovingClientState.java:1721` | ✅ 가드 1 추가 |
+| `SmartMovingSelf.java:2467-2477` | wouldWantClimb 4-OR | `SmartMovingClientState.java:1375-1385` | ✅ 1:1 |
+| `SmartMovingSelf.java:2479-2481` | wantClimb | `SmartMovingClientState.java:1387` | ✅ 1:1 |
+| `SmartMovingSelf.java:2489-2493` | wantClimbUp | `SmartMovingClientState.java:1424-1429` | ✅ 1:1 |
+| `SmartMovingSelf.java:2452-2463` | wantCrawlNotClimb | `SmartMovingClientState.java:1761-1768` | ✅ 1:1 |
+| `SmartMovingRender.java:65,76` | 렌더 분기 isClimb/isCrawlClimb | `MixinPlayerEntityModelClient.java` 분기 | ⚠️ 잔존 차이 3개 (메모리) |
+| `SmartMovingModel.java:239-277` | isCrawlClimb 자세 (body/leg/arm) | `MixinPlayerEntityModelClient.java:620-650` | ⚠️ head.pitch/leg.pitch/arm.pitch 잔존 |
+| `SmartMovingSelf.java:3170` | 상태 패킷 비트 | `SmartMovingClientState.sendStatePacket:3584` | ✅ 1:1 |
+
+→ **메인 식과 진입/해제 분기는 모두 매핑되어 있음**.
+
+---
+
+## 부록.2 우리 매핑 추가 가드 — 영향 분석
+
+### 가드 G1 — `iccExitJustToCrawl` (메인 식 첫 항)
+**위치**: `SmartMovingClientState.java:1985`
+```java
+isCrawlClimbing = !iccExitJustToCrawl
+        && (wasCrawling || isCrawlClimbing)
+        && ...;
+```
+- **목적**: 사다리/덩굴 ICC EXIT 직후 crawl 진입 시 isCrawlClimbing 식이 잘못 매치되어 isCrawling=false reset 되는 BUG 차단 (메모리 `project_ladder_vine_iccexit_complete.md`).
+- **set 조건** (L2229): ICC EXIT 분기 + sneak 누른 상태에서만 set.
+- **reset 조건** (L1723): `isCrawling=false` 자연 시점.
+- **사용자 시나리오 영향**: 평지 엎드리기 → 블록 앞 → grab. 이 경로에는 ICC EXIT 거치지 않음 → set 안 됨 → 가드 미작용. **영향 없음**.
+
+### 가드 G2 — `canCrawl` 의 `(!isClimbing || isCrawling)`
+**위치**: `SmartMovingClientState.java:1718`
+```java
+boolean canCrawl = ... && (!isClimbing || isCrawling) && ...;
+```
+- **목적**: 1.7.10 박스 (발=posY+1) ↔ 1.21.1 박스 (발=entity.y) 차이로 사다리 grip 영역 안 → handleClimbing 결과 isClimbing=true → canCrawl=false → isCrawling=false 강제 BUG 차단.
+- **사용자 시나리오 영향**:
+  - 이전 tick 엎드린 상태 (isCrawling=true) → 가드 매치 → canCrawl=true 유지 가능.
+  - 다음 tick: isClimbing=true(grab+block) → 가드 매치 (`isCrawling=true 이전 값`) → canCrawl=true → isCrawling=true 재진입 가능.
+  - **이 가드는 사용자 시나리오에 도움 됨**.
+
+### 가드 G3 — `wantClimbHolding` 의 forwardPressed_holdGuard
+**위치**: 부록 외 본문 §"차이 2" 참조.
+- **이전 분석**: 이 가드가 **기능 1 (isClimbCrawling)** 영원 비활성 BUG 원인 가능성.
+- **2026-05-02 세션**: 가드 제거됨 (`SmartMovingClientState.java:1402-1405` 코멘트 "가드 제거" 명시).
+- **현재 상태**: 정상. **isCrawlClimbing 에는 영향 없음** (wantClimbHolding 은 기능 1 의존 변수).
+
+→ 추가 가드 3종 모두 사용자 시나리오 (엎드림 → grab → 엎드린 채 climbing) 에는 부정적 영향 없음.
+
+---
+
+## 부록.3 사용자 시나리오 1 tick 흐름 추적
+
+### 시나리오: 평지 엎드림 → 블록 정면 → grab + W + sneak hold
+**Tick N-1 (평지 엎드림)**:
+- isCrawling=true, wasCrawling=true, isClimbing=false, isCrawlClimbing=false
+
+**Tick N (블록 정면 + grab + W 시작)**:
+1. `wasCrawling = isCrawling` (= true) — `SmartMovingClientState:1720`
+2. handleClimbing → grab + isFacedToBlock → isClimbing=true 가능 (조건: wantClimbUp=true)
+3. wantClimbUp 식: `wantClimb && fwd > 0` → wantClimb=true (grab + freeClimb) + fwd>0 → wantClimbUp=true ✓
+4. isClimbing=true 가정 (handleClimbing 결과)
+5. isCrawlClimbing 식 평가:
+   - `!iccExitJustToCrawl` = true (set 안 됨) ✓
+   - `wasCrawling=true || ...` ✓
+   - `isClimbing=true` ✓
+   - `isNeighborClimbing` = ? (8방향 grip 결과)
+   - `sneak=true || crawlToggled` = true ✓
+   - `fwd > 0` = true ✓
+6. **isNeighborClimbing 매치 시 → isCrawlClimbing=true 진입**
+7. canStandUp 검사: 위 1m 빈공간 있으면 자동 해제 → 일반 climbing 으로 전환됨
+8. canStandUp=false (위 막힘) → isCrawlClimbing=true 유지 + isCrawling=false set (진입 엣지)
+
+**관전 포인트**:
+- (P1) `isNeighborClimbing` — 엎드린 박스 (height=0.8) 기준 8방향 grip 검사가 정상 동작하는지
+- (P2) `isClimbing` — handleClimbing 분기가 엎드린 상태에서도 wantClimbUp 매치 처리하는지
+- (P3) canStandUp 검사 — 사용자 시나리오 (블록 앞, 위 빈공간) 에서 캐시 결과가 어떻게 나오는지
+- (P4) 자세 — isCrawlClimbing=true 진입 후 D-4 분기 + isCrawlClimb 분기 동시 적용 결과 자세
+
+---
+
+## 부록.4 핵심 의심 지점 — 인게임 검증/디버그 로그 필요
+
+### 의심 1 — canStandUp 즉시 해제
+사용자가 블록 1개 짜리 앞에서 시도 시 → 위 1m 빈공간 → canStandUp=true → isCrawlClimbing=false 즉시 해제 → 일반 climbing 으로 전환 → 자동 standing 등반.
+- **사용자 보고와 일치 가능성 高**: "엎드린 채 climbing 안 됨" = canStandUp 자동 해제로 standing 등반.
+- **검증 방법**: 위에 천장 있는 블록 (= 2블록 이상 높이 + 위 막힘) 에서 시도. 이 경우 canStandUp=false → 유지.
+- **확인 위치**: `SmartMovingClientState.java:1996-2003` `_canStandUp17` 계산.
+
+### 의심 2 — isNeighborClimbing 누락
+엎드린 박스 (height=0.8) 기준 8방향 grip 검사가 standing 박스 기준과 다른 결과 나올 가능성.
+- **확인 위치**: `SmartMovingClimber.handleClimbing` 의 8방향 seekClimbGap 호출 (B-19a4 세션 108).
+- **검증 방법**: 엎드린 상태에서 isNeighborClimbing 디버그 log dump.
+
+### 의심 3 — isClimbing 미진입
+handleClimbing 의 `if (!matched) return;` (메모리 `feedback_climb_branch_fallback_forbidden.md`) 가드 때문에 wantClimbUp/Down 미매치 시 setShouldClimbSpeed skip → isClimbing 안 set.
+- 엎드린 상태 wantClimbUp 식: `wantClimb && fwd > 0F` (L1424) — 정상 매치돼야.
+- 단 `(!isCrawling || hCollision)` 보조 조건 (vine+jump 분기 한정) 은 영향 없음 (wantClimb && fwd>0 분기는 별도).
+- **검증 방법**: isClimbing 디버그 log dump.
+
+### 의심 4 — 자세만 standing
+isCrawlClimbing=true 정상이나 자세 매핑 잔존 차이 (메모리 `project_crawl_climbing_pending.md` head.pitch/leg.pitch/arm.pitch 3가지) 로 시각만 standing.
+- **검증 방법**: 디버그 화면 (F3) 에서 박스 dim 확인 (height=0.8 이면 isCrawling 또는 isCrawlClimbing 활성).
+
+---
+
+## 부록.5 추가 매핑 누락 의심 (영향도 낮음)
+
+### A1 — `getInputSpeedFactor` crawl factor 분기
+- 원본 L186: `isCrawling || (isCrawlClimbing && !isClimbCrawling)` → `_crawlFactor` 적용
+- 우리 매핑: `MixinLivingEntityClient` 또는 SmartMovingClientState 의 속도 factor 계산. **확인 안 됨**.
+- 영향: isCrawlClimbing 진입은 OK 이나 등반 속도가 일반 climbing 속도. **사용자 시나리오 핵심 영향 X**.
+
+### A2 — `isDipping` 의 isCrawlClimbing 분기
+- 원본 L301: `isCrawling || isClimbCrawling || isCrawlClimbing` → isDipping=true
+- 우리 매핑: 확인 안 됨.
+- 영향: 물 표면 머리 잠김 처리. 일반 시나리오 무관.
+
+### A3 — `Config.getFactor` hunger/exhaustion 인자
+- 원본 L1202/L1278: 인자 리스트에 isCrawlClimbing 전달
+- 우리 매핑: Config.getFactor 자체 매핑 여부 확인 안 됨.
+- 영향: 배고픔/피로 계산. 사용자 시나리오 핵심 영향 X.
+
+---
+
+## 부록.6 검증 단계 권고
+
+1. **사용자에게 시나리오 정확화 요청**
+   - 시도한 블록 종류 (사다리 / 덩굴 / 일반 블록)
+   - 위에 천장 있는지 (= canStandUp 검증용)
+   - 자세는 standing 으로 보였는지 / 박스 크기는 어땠는지 (시각 vs 기능 분리)
+   - sneak 누름 방식 (hold vs toggle)
+
+2. **디버그 로그 1회 추가** (메모리 `feedback_debug_log_first.md`)
+   - 위치: `SmartMovingClientState.java:1990` 직후
+   - 변수: `iccExitJustToCrawl, wasCrawling, isCrawlClimbing(old), isClimbing, isNeighborClimbing, sneak||toggle, fwd, _canStandUp17, isCrawlClimbing(new)`
+   - 1 tick dump 로 정확한 실패 지점 식별
+
+3. **메모리 `project_crawl_climbing_pending.md` 잔존 차이 3가지 자세 검증**
+   - 자세만 안 맞으면 그것이 원인 (= 의심 4)
+
+4. **§부록.5 누락 항목 (A1/A2/A3) 매핑 확인** (별도 체크리스트)
+
+---
+
+## 부록.7 절대 건드리지 말 것
+
+- `project_isclimbcrawling_complete.md` (ICC 시스템) — 메모리상 완결
+- `project_grab_climbing_complete.md` (그랩 클라이밍) — 메모리상 완결
+- `project_ladder_vine_iccexit_complete.md` (사다리/덩굴 ICC EXIT) — 메모리상 완결
+- `project_restoreFromFlying_complete.md` (비행 → crawl) — 메모리상 완결
+- `project_grab_sneak_hold_complete.md` (grab sneak hold) — 메모리상 완결
+- `project_icc_camera_collision_fix.md` (ICC 카메라/콜리전 fix) — 메모리상 완결
+
+이번 작업 = **isCrawlClimbing 진입 확인 + 자세 잔존 차이 fix** 만. 위 시스템 회귀 검증 필수.
+
+---
+
+## 부록.8 — 작업 완료 (2026-05-03)
+
+사용자 "이제 너무 잘된다" 명시. **isCrawlClimbing 시스템 완결**.
+
+5단계 fix 정착 (메모리 `project_isCrawlClimbing_complete.md`):
+1. `MixinLivingEntityClient.java:167` — 매 tick `sm.isCrawlClimbing = false` reset 제거 (자가유지 보존)
+2. `MixinPlayerEntityClient.java:97` — dim 분기에 `&& sm.wasClimbCrawling` 가드 (= ICC 해제 엣지 1 tick 한정)
+3. `SmartMovingClimber.java:558` — `jd += -1D` (원본 L920 1:1, jh 자동 -2 보정)
+4. `SmartMovingClientState.java:2171` — `canClimbCrawling` 식에 `&& !isCrawlClimbing` 가드 (ICC 차단)
+5. `SmartMovingClientState.java:2230 부근` — ICC 진입 시 `cameraY/lastCameraY = ICC eye` 강제 set
+
+**잔존 작업**: 자세 매핑 잔존 차이 3가지 (`project_crawl_climbing_pending.md`) — 본 fix 와 무관. 별도 작업.
+

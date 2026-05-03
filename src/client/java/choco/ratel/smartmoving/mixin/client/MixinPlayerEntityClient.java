@@ -94,7 +94,14 @@ public abstract class MixinPlayerEntityClient {
         //   호출 → 1 틱 isCrawling=true → 등반 중인데 eyeHeight 0.62F 강제 → 카메라
         //   1.62↔0.62 토글 = 사용자 보고 "몸 애니메이션 주기적 요동". 등반 중이면 STANDING
         //   eyeHeight 유지.
-        if (sm.isClimbCrawling || (sm.isCrawling && sm.isClimbing)) {
+        // 🔴 (isCrawling && isClimbing) 분기 가드 추가 (사용자 보고 fix — 끊김, 2026-05-03):
+        //   본래 의도 (메모리 코멘트): ICC 해제 엣지 1 tick 한정 (= toCrawling() 후 isCrawling=true
+        //   잔존하면서 등반 자세 유지). 그러나 가드 없어 isCrawlClimbing 자가유지 중에도 매치 →
+        //   박스 +1m offset → grip 영역 위로 → wantClimbHolding 매치 → 의도치 않은 ICC 진입 → ICC
+        //   EXIT 시 entity.y +1m 변경 → 사용자 시점 점프 (= 끊김).
+        //   해결: `&& wasClimbCrawling` 가드 추가 → ICC 활성 중 + 해제 엣지 1 tick 만 매치.
+        //   isCrawlClimbing 자가유지 중 wasClimbCrawling=false → smSmall 분기로 떨어져 박스 안정.
+        if (sm.isClimbCrawling || (sm.isCrawling && sm.isClimbing && sm.wasClimbCrawling)) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }

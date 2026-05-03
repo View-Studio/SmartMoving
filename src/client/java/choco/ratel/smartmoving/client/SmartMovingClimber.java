@@ -535,13 +535,17 @@ public final class SmartMovingClimber {
             // 원본 L918: isSmallClimbing = isCrawling || isSliding
             boolean isSmallClimbing = sm.isCrawling || sm.isSliding;
 
-            // 원본 L919-L920: isClimbCrawling || isCrawlClimbing || isSmallClimbing → jd += -1D
-            // initializeOffset 에 전달할 jhd = jd * 2D + 1 (원본 L926).
-            // jd 가 -1 이면 jhd = (jd - 1) * 2 + 1 = jh - 2
-            double jh = jd * 2D + 1;
+            // 원본 L919-L920: `isClimbCrawling || isCrawlClimbing || isSmallClimbing → jd += -1D`
+            //   ★ jd 자체에 보정. jh 는 jd 의존이라 자동으로 -2 보정됨 (= jh = (jd-1)*2+1 = jh_orig-2).
+            // 🔴 jd 누락 fix (사용자 보고 — 크롤 클라이밍 끊김, 2026-05-03):
+            //   기존 매핑 = `jh += -2D` 만 (jd 보정 누락). seekClimbGap 인자 jd 가 보정 안 된 채
+            //   전달 → grip 검사 박스 발 위치 잘못 → handsClimbing=NONE → isClimbing=false →
+            //   isCrawlClimbing 식 풀림 + ICC EXIT entity.y +1m → 사용자 시점 점프 (= 끊김).
+            //   원본 1:1 = jd 자체 보정 → seekClimbGap 인자 jd / jh 둘 다 정확.
             if (sm.isClimbCrawling || sm.isCrawlClimbing || isSmallClimbing) {
-                jh += -2D;
+                jd += -1D;
             }
+            double jh = jd * 2D + 1;
 
             // 🔴 (2026-04-27) 원본 SmartMovingSelf L928-961 정밀 1:1 매핑:
             //   원본은 main handsClimbing/feetClimbing 와 inout 변수가 동일 (별도 NONE 시작 후

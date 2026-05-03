@@ -58,6 +58,10 @@ public abstract class MixinPlayerEntity {
         //   안 → 차단 → server position correction packet → 클라 위치 reset.
         //   클라 sm_getBaseDimensions_client 와 동일한 isClimbCrawling 분기 추가 → 서버 박스
         //   클라와 동일 (entity.y+1, entity.y+1.8) → 서버 reconcile 발생 X.
+        // 🔴 isCrawlClimbing ICC 분기 추가 시도 revert (2026-05-03):
+        //   클라 sm_getBaseDimensions_client 와 동일 — isCrawlClimbing 시 박스 +1m mixin offset
+        //   발동 → ladder grip 영역 벗어남 → 의도치 않은 ICC 발동. 원본 1:1 = smSmall dim
+        //   (0.8, 0.62) 적용 (원본 setHeightOffset 호출 없음 → 이전 isCrawling 박스 잔존).
         if (sm.isClimbCrawling) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;

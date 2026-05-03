@@ -1996,6 +1996,7 @@ public final class SmartMovingClientState {
                     double _crawlOffset17 = isClimbCrawling ? 0.95D : 1D;
                     boolean _canStandUp17 = !isPlayerInSolidBetween(player,
                             player.getY() - _crawlOffset17, player.getY());
+
                     if (_canStandUp17) {
                         _wasCrawlClimbing17 = false;
                         isCrawlClimbing = false;
@@ -2064,7 +2065,17 @@ public final class SmartMovingClientState {
                 // B-44c (세션 82): 공식 직전 저장 (원본 L2786 대응).
                 wasClimbCrawling = isClimbCrawling;
                 boolean needClimbCrawling = hasClimbCrawlGap || (hasClimbGap && isClimbHolding);
-                boolean canClimbCrawling = wantClimbHolding && wantClimbUp;
+                // 🔴 isCrawlClimbing 가드 추가 (사용자 보고 fix — 크롤 클라이밍 안 올라감/확 빨리 올라감,
+                //   2026-05-03):
+                //   isCrawlClimbing 시나리오 (= 평지 엎드림 → grab+W+sneak) 에서 ICC 자동 진입 →
+                //   박스 +1m offset (mixin offset) → 사용자 시점 +1m 점프. 카운트다운 6 tick 후 ICC EXIT
+                //   → setPos(y+1) → entity.y +1m → iccExitJustToCrawl=true 영구 잔존 (mustCrawl 강제로
+                //   isCrawling=true 유지 → reset 안 됨) → isCrawlClimbing 식 영구 차단 → "안 올라감".
+                //   해결: isCrawlClimbing 활성 시 ICC 진입 차단 → ICC EXIT cycle 자체 안 일어남 →
+                //   iccExit 잔존 X → isCrawlClimbing 정상 자가유지.
+                //   원본 1.7.10 도 ICC 발동되나 박스 +1m / 시점 +1m 비대칭 없음 (= STANDING eye cached
+                //   1.62 유지). 우리 매핑은 dim eye 0.62 ↔ 1.62 토글로 시점 점프 발생.
+                boolean canClimbCrawling = wantClimbHolding && wantClimbUp && !isCrawlClimbing;
 
                 if (climbIntoCount > 1) {
                     climbIntoCount--;
@@ -2123,6 +2134,23 @@ public final class SmartMovingClientState {
                     // 원본 L2802: sp.isCollidedHorizontally = wasCollidedHorizontally;
                     //   (water 밖으로 crawl 탈출 버그 방지)
                     player.horizontalCollision = wasColH;
+                    // 🔴 ICC 진입 cameraY 강제 set (사용자 보고 fix — 크롤 클라이밍 확 빨리 올라감, 2026-05-03):
+                    //   isCrawlClimbing 시나리오 → ICC 자동 진입 → dim eye 0.62 → 1.62 변화 →
+                    //   vanilla Camera.updateEyeHeight 가 cameraY 를 0.5 step lerp 추격 →
+                    //   6+ frame 동안 사용자 시점 +1m 점진 점프 = "확 올라가는 느낌".
+                    //   해결: ICC 해제 시 cameraY 0.62 강제 fix 와 동일한 패턴 — ICC 진입 직후
+                    //   cameraY/lastCameraY = ICC eye (1.62) 강제 set → lerp 차단 → 시점 안정.
+                    //   getDimensions(STANDING).eyeHeight() 사용 (= cached getStandingEyeHeight 회피,
+                    //   메모리 feedback_standingEyeHeight_cached.md).
+                    {
+                        net.minecraft.client.render.Camera camEnter =
+                                net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                        if (camEnter != null) {
+                            float iccEye = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).eyeHeight();
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) camEnter).sm_setCameraY(iccEye);
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) camEnter).sm_setLastCameraY(iccEye);
+                        }
+                    }
                 } else if (!isClimbCrawling && wasClimbCrawling) {
                     // 해제 엣지 (원본 L2804-L2820) — B-42-B18a 해소 완전 이식 (AABB 정밀).
                     climbIntoCount = 0;

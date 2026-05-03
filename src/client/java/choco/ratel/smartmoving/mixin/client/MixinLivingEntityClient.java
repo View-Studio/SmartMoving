@@ -164,7 +164,14 @@ public abstract class MixinLivingEntityClient {
         //   영원히 false → 자가 hold 메커니즘 (wouldWantClimb 가지 2 + wantClimbHolding 가지 1) 깨짐.
         //   grab 떼면 hold 안 됨 → 사용자 보고 BUG. isClimbHolding reset 제거 = 원본 1:1.
         sm.isClimbing        = false;
-        sm.isCrawlClimbing   = false;
+        // 🔴 isCrawlClimbing reset 제거 (사용자 보고 fix — 엎드린 채 grab climbing 단 1 tick 후 풀림):
+        //   원본 SmartMovingSelf.resetClimbing() (L1474-L1486) 은 isCrawlClimbing 미포함.
+        //   원본 식 (L2737) 첫 항 `(wasCrawling || isCrawlClimbing)` 의 OR 두 번째 항이 진입 후
+        //   `wasCrawling=false` 강제 (L2749-L2753 진입 엣지) 이후에도 식을 self-perpetuating 으로
+        //   유지하는 핵심 매커니즘. 매 tick reset 하면 자가유지 깨짐 → 1 tick 진입 후 즉시 풀림.
+        //   해제는 식 자체 (모든 5조건 풀리면 자연 false) + canStandUp 자동 해제 (L2744) +
+        //   ICC EXIT iccExitJustToCrawl 가드 로 충분. (2026-05-03)
+        // sm.isCrawlClimbing   = false;
         sm.isCeilingClimbing = false;
         sm.isClimbJumping    = false;
         // 🔴 isClimbCrawling 은 SmartMovingClientState L1877 메인 식이 매 틱 갱신 + 진입/해제
