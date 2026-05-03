@@ -634,4 +634,27 @@ public abstract class MixinLivingEntityClient {
             cir.setReturnValue(false);
         }
     }
+
+    /**
+     * 🔴 사용자 보고 fix (2026-05-04 — "1칸 공간 재진입 시 잠깐 SWIMMING 모델 보임"):
+     *   원인: vanilla PlayerEntityRenderer.setupTransforms L261-L282 의
+     *     `m = lerp(leaningPitch, 0, -90); matrices.rotate(POSITIVE_X(m));` →
+     *     leaningPitch>0 시 모델 X 회전. 우리 SM crawl R_x(-78.75°) 매핑과 합산.
+     *   leaningPitch field 는 LivingEntity.updateLeaningPitch 에서 매 tick lerp.
+     *     SM mixin 의 isInSwimmingPose=false 강제로 -=0.09 → 0 까지 감소. 근데 게임
+     *     재진입 시 첫 client tick 전 (= server sync 직후) entity 의 leaningPitch 가
+     *     이미 일정 값 잔존 가능 (= server tick 누적 값 sync).
+     *   fix: SM crawl 활성 시 getLeaningPitch HEAD inject 로 0 강제 → setupTransforms
+     *     의 R_x(0) → 회전 영향 X. anySmState 모두 적용.
+     */
+    @Inject(method = "getLeaningPitch", at = @At("HEAD"), cancellable = true)
+    private void sm_getLeaningPitch(float tickDelta, CallbackInfoReturnable<Float> cir) {
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isCrawling || sm.isCrawlClimbing || sm.isSwimming_sm || sm.isDiving
+                || sm.isHeadJumping || sm.isSliding) {
+            cir.setReturnValue(0F);
+        }
+    }
 }

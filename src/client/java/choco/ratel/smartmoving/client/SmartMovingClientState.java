@@ -1156,13 +1156,43 @@ public final class SmartMovingClientState {
             //   > minY` (머리 위 AABB 내 고체 존재) 정밀 복원. B-42a 헬퍼 소비로 기존
             //   `!canStandUp` 근사 해소.
             this.initializeCrawling = false;
+            // 🔴 사용자 보고 fix (2026-05-04 — "5 tick 동안 SWIMMING 잔존"):
+            //   원본 SmartMovingSelf L2344: `!(remote && multiPlayerInitialized != 0)`.
+            //   `remote` = multi player (외부 서버) — vanilla 1.7.10 의 worldObj.isRemote 동등.
+            //   1.21.1 매핑: `world.isClient()` 가 항상 true (integrated server 도 client world)
+            //   → single player 도 multiPlayerInitialized=5 (= server sync) 동안 init 미진입.
+            //   정확 매핑: MinecraftClient.getInstance().getServer() == null = multi player.
+            boolean isRemoteServer = net.minecraft.client.MinecraftClient.getInstance().getServer() == null;
             if (!this.initialized
-                    && !(player.getWorld().isClient() && this.multiPlayerInitialized != 0)
+                    && !(isRemoteServer && this.multiPlayerInitialized != 0)
                     && !player.hasVehicle()) {
+                // 🔴 사용자 보고 fix (2026-05-03 — "1칸 공간 엎드린 채 게임 나갔다 들어오면
+                //   SM crawl 미인식, vanilla SWIMMING pose"):
+                //   원인: player.getBoundingBox() 가 동적 pose 박스 (= SWIMMING 0.6m). 1칸 공간
+                //     안 fit → bb 안 solid 검사 false → toCrawling 미호출 → SM 인식 X.
+                //   원본 1.7.10 vanilla 박스는 항상 STANDING (1.8m) → 자연스럽게 천장 검사 매칭.
+                //   fix: STANDING height 로 yMax 명시 → 원본 동작 1:1 매핑.
                 Box bb31c = player.getBoundingBox();
-                if (getMaxPlayerSolidBetween(player, bb31c.minY, bb31c.maxY, 0) > bb31c.minY) {
+                double standingHeight = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+                double standMinY = bb31c.minY;
+                double standMaxY = standMinY + standingHeight;
+                double solidTop = getMaxPlayerSolidBetween(player, standMinY, standMaxY, 0);
+                boolean shouldCrawl = solidTop > standMinY;
+                if (shouldCrawl) {
                     this.initializeCrawling = true;
                     this.toCrawling();
+                    // 🔴 사용자 보고 fix #2 (2026-05-03 — "콜리전 작음, shift 뗀 후 안 풀림"):
+                    //   원본 SmartMovingSelf L2827-L2836 의 후속 처리:
+                    //     setHeightOffset(-1F);
+                    //     if(!initializeCrawling || sp.worldObj.isRemote) move(0, -1D, 0);
+                    //     if(initializeCrawling) wasCrawling = toCrawling();
+                    //   = setHeightOffset(-1F) + move(0,-1,0). 이전 우리 매핑은 toCrawling() 만 호출 →
+                    //     heightOffset=0 잔존 → 콜리전 = SWIMMING (0.6m) 잔존.
+                    //   fix: heightOffset=-1F + calculateDimensions → SM crawl 박스 (0.6 x 0.8) 적용.
+                    //   ignoreNextStopSneakButtonPressed (toCrawling 안 set) → 다음 sneak release 무시
+                    //     = 만약 이게 standUp 막는다면 추가 검토 필요.
+                    this.heightOffset = -1F;
+                    player.calculateDimensions();
                 }
                 this.initialized = true;
             }

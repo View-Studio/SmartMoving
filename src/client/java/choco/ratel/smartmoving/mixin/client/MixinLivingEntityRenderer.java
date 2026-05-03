@@ -113,6 +113,35 @@ public abstract class MixinLivingEntityRenderer {
                                          MatrixStack matrices, VertexConsumerProvider vertexConsumers,
                                          int light, CallbackInfo ci) {
         sm_currentRenderPlayer = entity instanceof AbstractClientPlayerEntity p ? p : null;
+
+        // 🔴 사용자 보고 fix (2026-05-04 — "1칸 공간 재진입 시 잠깐 SWIMMING 모델 보임"):
+        //   원인: server 가 pose=SWIMMING 동기화 → client 첫 frame render 시점
+        //   SmartMovingClientState 새로 생성 (= isCrawling=false). client tick 의 init 분기
+        //   (= tickEssential 안) 실행 전 render → vanilla SWIMMING 모델 보임.
+        //   fix: render HEAD 에 SmartMovingClientState init 검사 (= tickEssential init 분기 1:1)
+        //        강제 → 첫 frame 부터 isCrawling=true → SM 매핑 적용.
+        //   ClientPlayerEntity (자기 자신) 만 적용. 다른 player 는 server sync 만 사용.
+        if (SmartMovingConfig.Config.enabled
+                && entity instanceof net.minecraft.client.network.ClientPlayerEntity localPlayer) {
+            SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
+            // 원본 `remote` = multi player. integrated server (single player) 면 무관.
+            boolean isRemoteServer = net.minecraft.client.MinecraftClient.getInstance().getServer() == null;
+            if (!sm.initialized
+                    && !(isRemoteServer && sm.multiPlayerInitialized != 0)
+                    && !localPlayer.hasVehicle()) {
+                net.minecraft.util.math.Box bb = localPlayer.getBoundingBox();
+                double standH = localPlayer.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+                double solidTop = SmartMovingClientState.getMaxPlayerSolidBetween(localPlayer, bb.minY, bb.minY + standH, 0);
+                if (solidTop > bb.minY) {
+                    sm.initializeCrawling = true;
+                    sm.toCrawling();
+                    sm.heightOffset = -1F;
+                    localPlayer.calculateDimensions();
+                    localPlayer.setPose(net.minecraft.entity.EntityPose.SWIMMING);
+                }
+                sm.initialized = true;
+            }
+        }
     }
 
     @ModifyArg(
