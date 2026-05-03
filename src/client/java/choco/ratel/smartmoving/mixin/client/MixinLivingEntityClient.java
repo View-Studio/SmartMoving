@@ -72,13 +72,17 @@ public abstract class MixinLivingEntityClient {
         // 🔴 사용자 의도: 늘어진 덩굴 (weeping_vines) / 휘어진 덩굴 (twisting_vines) 은 vanilla
         //   동작 그대로 (나중에 grab 애니메이션만 추가 예정). SM 처리 통째로 skip → vanilla
         //   travel 본체 진행 (motion clamp ±0.15 + sneak motionY=0 등 vanilla 사다리 등반 동작).
+        // 🔴 사용자 보고 fix (2026-05-04 — "비행 중 vine 콜리전 겹치면 아래로 쭉 내려감"):
+        //   비행 시 SM 처리 skip → vanilla travel 만 작동 → vy 음수 발생 (= 떨어짐).
+        //   fix: !flying 가드 추가 → 비행 시 SM 처리 진행 → handleFlying 정상 비행 motion.
         net.minecraft.block.BlockState _stateAtPos = player.getWorld()
                 .getBlockState(player.getBlockPos());
         net.minecraft.block.Block _blockAtPos = _stateAtPos.getBlock();
-        if (_blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+        boolean _isVineBlock = _blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
                 || _blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
                 || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
-                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT;
+        if (_isVineBlock && !player.getAbilities().flying) {
             return;  // vanilla travel 본체 진행 (cancel 안 함)
         }
 
@@ -526,6 +530,21 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(false);
+            return;
+        }
+        // 🔴 사용자 보고 fix (2026-05-04 — "비행 시 휘어진/늘어진 덩굴 안 타지도록"):
+        //   비행 중 vine block 위 = vanilla isClimbing()=true → travel 안 climbing clamp ±0.15
+        //   적용 → 비행 속도 제한. 사용자 의도 = 비행 자유.
+        //   fix: isFlying + vine block 시 isClimbing()=false 강제 → clamp skip → 비행 정상.
+        if (player.getAbilities().flying) {
+            net.minecraft.block.Block blockAtPos = player.getWorld()
+                    .getBlockState(player.getBlockPos()).getBlock();
+            if (blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                    || blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                    || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                    || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+                cir.setReturnValue(false);
+            }
         }
     }
 
@@ -545,6 +564,20 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             cir.setReturnValue(velocity);
+            return;
+        }
+        // 🔴 사용자 보고 fix (2026-05-04 — "비행 시 vine 자동 등반 + clamp"):
+        //   isFlying + vine block 시 vanilla clamp ±0.15 차단 (= isClimbing mixin 의 우회 경로 대비
+        //   이중 방어). velocity 그대로 반환 → 비행 속도 유지.
+        if (player.getAbilities().flying) {
+            net.minecraft.block.Block blockAtPos = player.getWorld()
+                    .getBlockState(player.getBlockPos()).getBlock();
+            if (blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                    || blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                    || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                    || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+                cir.setReturnValue(velocity);
+            }
         }
     }
 

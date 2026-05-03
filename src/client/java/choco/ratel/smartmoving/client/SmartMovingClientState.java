@@ -1295,6 +1295,15 @@ public final class SmartMovingClientState {
             //   && !isSwimming && !isDiving` 으로 이미 cfg.fly 내포. 원본은 `capabilities.flying`
             //   vanilla 기반 + OR levitateSmall. 정밀 복원.
             if (cfg0.crawl && cfg0.enabled) {
+                // 🔴 사용자 보고 fix (2026-05-04 — "ICC 후 1칸 공간 shift 뗌 → isCrawling 풀림"):
+                //   디버그 로그 분석 = heightOffset=0 잔존인데 isCrawling=true 케이스 발생.
+                //   mustCrawl 식 = ceiling-bottom < height - heightOffset. heightOffset=0 시
+                //   우측 = 1.8 → 1칸 공간 (ceiling-bottom = 1.8) 정확 → false → mustCrawl=false →
+                //   shift release 시 isCrawling=false 풀림 → vanilla SWIMMING POSE BUG.
+                //   fix: mustCrawl 계산 전 isCrawling=true 잔존 시 heightOffset=-1 강제 동기화.
+                if (isCrawling && heightOffset != -1F) {
+                    heightOffset = -1F;
+                }
                 // 🔴 원본 1:1 fix (디버그 로그 분석 결과):
                 //   원본 SmartMovingSelf L2395-L2402:
                 //     boolean mustCrawl = false;
@@ -3448,7 +3457,12 @@ public final class SmartMovingClientState {
             //   `canCrawl && (false || true)` = true 유지. 다음 tick 부터는 박스 위치 검사로 자연 유지.
             boolean wasSmallBox = (this.heightOffset == -1F);
             toSlidingOrCrawling(player, gapUnderneight);
-            if (wasSmallBox && this.isCrawling) {
+            // 🔴 사용자 보고 fix (2026-05-04 — "비행 중 1칸 공간 + shift+grab 동시 → 땅속"):
+            //   toSlidingOrCrawling 가 grab pressed 시 isSliding=true 설정 (= isCrawling=false).
+            //   기존 가드 `wasSmallBox && isCrawling` → false → setPos(y+1) 미적용 →
+            //   entity.y 비행 박스 위치 (Y_floor-1) + small box 0.8 적용 → 박스 = (Y_floor-1, Y_floor-0.2)
+            //   = 디딤발 안 박힘. fix: isSliding 케이스 도 가드 통과.
+            if (wasSmallBox && (this.isCrawling || this.isSliding)) {
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                 player.lastRenderY += 1.0;

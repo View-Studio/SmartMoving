@@ -201,6 +201,11 @@ public abstract class MixinPlayerEntityModelClient {
                     || blockAtPos == Blocks.WEEPING_VINES_PLANT
                     || blockAtPos == Blocks.TWISTING_VINES
                     || blockAtPos == Blocks.TWISTING_VINES_PLANT);
+            // 🔴 사용자 보고 fix (2026-05-04 — "비행 중 vine 애니메이션 안 나오게"):
+            //   비행 중 vine 자세 적용 X → 비행 자세 (= isFlying 분기) 진입.
+            if (isWeepingTwistingVines && player.getAbilities().flying) {
+                isWeepingTwistingVines = false;
+            }
         }
 
         boolean anySmState = sm.isRopeSliding || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
