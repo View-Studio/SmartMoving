@@ -453,13 +453,18 @@ public class MixinPlayerEntityRenderer {
         //   isFlying 분기도 같은 부호 반전 사용 (메모리 BUG-31).
         if (sm.isCrawling && !sm.isClimbing) {
             float tiltAngle = (float)(Math.PI / 2 - Math.PI / 16);  // Quarter - Thirtytwoth = 78.75°
-            // 🔴 머리 기준 회전 보정 (사용자 보고 fix — "엎드리는 중심이 발 기준", 2026-05-03):
-            //   메모리 `feedback_rotation_pivot_pattern.md`: 원본 SmartMovingRender 의
-            //   bipedOuter.rotateAngleX 회전 = head pivot 기준 (= 모델 root). 비행 분기 (L457-L465)
-            //   와 동일 패턴.
-            matrices.translate(0f, 1.5f, 0f);
+            // 🔴 회전 중심 정정 (사용자 보고 fix 2026-05-03 — "엎드리면 모델 몸통이 좀 더 뒤로 옴"):
+            //   원본 SmartMovingModel L405 `bipedTorso.rotationPointY = 3F` → 원본 회전 중심
+            //     = bipedTorso pivot = vanilla biped head pivot - 3F/16 (modelpart Y down).
+            //     scale(-1,-1,1) 후 world Y +1.407 - 0.176 = entity.y + 1.231 (= 어깨 부근).
+            //   이전 매핑 (matrices.translate(0, 1.5, 0)) → 회전 중심 = entity.y + 1.406 (= 머리 부근).
+            //     17.5 cm 위쪽. 회전 후 몸통 vertex 가 더 큰 호 그리며 회전 → 몸통이 더 뒤쪽 이동.
+            //   fix: pivotY = 1.5 - 3/16 = 1.3125 → 회전 중심 = entity.y + 1.231 = 원본 일치.
+            //   하단 추가 translate(0, -3/16, 0) 는 모델 전체 위치 보정 (= 별도 효과) 유지.
+            float pivotY = 1.5f - 3f / 16f;  // = 1.3125 = 21/16
+            matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));   // 부호 반전 (scale -1,-1,1 보정)
-            matrices.translate(0f, -1.5f, 0f);
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
             // 🔴 bipedTorso.rotationPointY = 3F 매핑 — 부호 반전 (사용자 보고 fix — "여전히 살짝 떠있음",
             //   2026-05-03):
