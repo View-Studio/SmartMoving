@@ -14,3 +14,6 @@ run/
 # OS
 .DS_Store
 Thumbs.db
+
+# 디버깅 로그 전달용 (사용자가 인게임 로그 붙여넣기, 절대 삭제 금지)
+docs/log_temp.txt
