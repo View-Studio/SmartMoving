@@ -870,8 +870,11 @@ public abstract class MixinPlayerEntityModelClient {
         //   이전 매핑 limbSwing/limbSwingAmount (vanilla limbAnimator) 잘못. 그랩 클라이밍 패턴 동일.
         float partialTicks = SmartMovingClientState.globalCachedTickDelta;
         float distance    = sm.stats.getTotalHorizontalDistance(partialTicks) * 1.3f;
-        float walkFactor  = smFactor(sm.stats.currentHorizontalSpeedFlattened, 0f, 0.12951545f);
-        float standFactor = smFactor(sm.stats.currentHorizontalSpeedFlattened, 0.12951545f, 0f);
+        // 🔴 (2026-05-03 crawl 디테일 fix): partial ticks lerp getter 사용 (= 60Hz 부드러움).
+        //   원본 SmartStatistics.getCurrentHorizontalSpeedFlattened(partialTicks, -1) 매핑.
+        float speedFlat   = sm.stats.getCurrentHorizontalSpeedFlattened(partialTicks);
+        float walkFactor  = smFactor(speedFlat, 0f, 0.12951545f);
+        float standFactor = smFactor(speedFlat, 0.12951545f, 0f);
 
         // 머리
         // 🔴 사용자 보고 fix (2026-05-03 — "엎드린 상태에서 머리 움직임 원본과 다름"):

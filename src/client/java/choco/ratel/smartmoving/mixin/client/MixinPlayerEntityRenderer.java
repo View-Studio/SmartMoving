@@ -477,7 +477,8 @@ public class MixinPlayerEntityRenderer {
             //   sm_animateCrawling 의 body.roll 인자는 0 으로 변경 (= 자식 효과 중복 방지).
             float partialTicks = SmartMovingClientState.globalCachedTickDelta;
             float distance = sm.stats.getTotalHorizontalDistance(partialTicks) * 1.3f;
-            float speed = sm.stats.currentHorizontalSpeedFlattened;
+            // 🔴 (2026-05-03 crawl 디테일 fix): partial ticks lerp getter — sm_animateCrawling 동일.
+            float speed = sm.stats.getCurrentHorizontalSpeedFlattened(partialTicks);
             float walkFactor = (speed >= 0.12951545f) ? 1f : (speed <= 0f ? 0f : speed / 0.12951545f);
             float zAngle = (float)(Math.cos(distance + Math.PI / 2) * (Math.PI / 64)) * walkFactor;
 

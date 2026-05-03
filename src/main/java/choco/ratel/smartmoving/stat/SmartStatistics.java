@@ -30,6 +30,8 @@ public class SmartStatistics {
     public float prevTotalHorizontalDistance;
     public float prevTotalVerticalDistance;
     public float prevTotalDistance;
+    /** 🔴 (2026-05-03 crawl) currentHorizontalSpeedFlattened 의 partial ticks lerp 보간용 prev. */
+    public float prevCurrentHorizontalSpeedFlattened;
 
     // ── 프레임 단위 이동량 ────────────────────────────────────
     public double horizontalDistance;
@@ -76,6 +78,7 @@ public class SmartStatistics {
         prevTotalHorizontalDistance = totalHorizontalDistance;
         prevTotalVerticalDistance   = totalVerticalDistance;
         prevTotalDistance           = totalDistance;
+        prevCurrentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened;
 
         // 원본: SmartStatisticsData.calcualte() — distance *= 4F; legYaw += (dist - legYaw) * 0.4F
         // legYaw = EMA(rawDistance * 4, factor=0.4). 일반 보행(~0.22 b/t) → ~0.88, 비행(~0.3 b/t) → 1.0(clamp).
@@ -146,6 +149,16 @@ public class SmartStatistics {
         return Math.min(1.0F, prevCurrentSpeed + (currentSpeed - prevCurrentSpeed) * partialTicks);
     }
 
+    /**
+     * 🔴 (2026-05-03 crawl 디테일 fix) 원본 SmartStatistics.getCurrentHorizontalSpeedFlattened
+     *   (partialTicks, -1) = data history 평균 + partialTicks 보간. 우리는 단일 EMA on EMA
+     *   필드 + partial ticks lerp 매핑 (= 60Hz 부드러움 보간).
+     */
+    public float getCurrentHorizontalSpeedFlattened(float partialTicks) {
+        return Math.min(1.0F, prevCurrentHorizontalSpeedFlattened
+                + (currentHorizontalSpeedFlattened - prevCurrentHorizontalSpeedFlattened) * partialTicks);
+    }
+
     public float getCurrentHorizontalSpeed(float partialTicks) {
         return Math.min(1.0F, prevCurrentHorizontalSpeed
                 + (currentHorizontalSpeed - prevCurrentHorizontalSpeed) * partialTicks);
@@ -179,6 +192,7 @@ public class SmartStatistics {
         prevCurrentHorizontalSpeed = 0;
         prevCurrentVerticalSpeed = 0;
         prevCurrentSpeed = 0;
+        prevCurrentHorizontalSpeedFlattened = 0;
         prevTotalHorizontalDistance = 0;
         prevTotalVerticalDistance = 0;
         prevTotalDistance = 0;
