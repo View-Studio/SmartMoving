@@ -657,19 +657,29 @@ public abstract class MixinPlayerEntityModelClient {
                 legAngleX  = 0f;
                 legAngleZ  = 0f;
             }
+            // 🔴 (2026-05-04) 옵션 B + fade — 사용자 검증 OK 매핑 (옵션 D 회귀 X):
+            //   setupTransforms 가 setAngles 보다 먼저 호출 → 같은 frame 의 faded 값 read.
+            bodyAngleX = SmartMovingClientState.smCrawlClimbBodyAngleXFaded;
+            if (height < bodyLength) {
+                legAngleX = QUARTER - bodyAngleX;
+                legAngleZ = THIRTYTWOTH;
+            }
             body.pitch     =  bodyAngleX;
-            head.pitch     = -bodyAngleX;
-            rightLeg.pitch =  legAngleX;
-            leftLeg.pitch  =  legAngleX;
+            head.pitch     =  0f;
+            rightLeg.pitch =  bodyAngleX + legAngleX;
+            leftLeg.pitch  =  bodyAngleX + legAngleX;
             rightLeg.roll  =  legAngleZ;
             leftLeg.roll   = -legAngleZ;
-
-            // (D-3) 원본 SmartMovingModel L267-L268: bipedRightShoulder/LeftShoulder.rotateAngleX = -bodyAngleX.
-            //   SmartRender 의 shoulder 는 bipedTorso 와 arm 사이 중간 노드 — shoulder pitch 회전 시
-            //   자식 arm 도 같이 회전 (어깨가 body 와 함께 기울어지는 효과).
-            //   1.21.1 PlayerEntityModel 에 shoulder 노드 부재 → arm.pitch 에 직접 `-bodyAngleX` 누적.
-            rightArm.pitch += -bodyAngleX;
-            leftArm.pitch  += -bodyAngleX;
+            float pivotCos = MathHelper.cos(bodyAngleX);
+            float pivotSin = MathHelper.sin(bodyAngleX);
+            rightLeg.pivotY = 12f * pivotCos;
+            leftLeg.pivotY  = 12f * pivotCos;
+            rightLeg.pivotZ = 12f * pivotSin;
+            leftLeg.pivotZ  = 12f * pivotSin;
+            rightArm.pivotY = 2f * pivotCos;
+            leftArm.pivotY  = 2f * pivotCos;
+            rightArm.pivotZ = 2f * pivotSin;
+            leftArm.pivotZ  = 2f * pivotSin;
         }
 
         // NoGrab + non-NoStep 추가 보정 (원본 SmartMovingModel L279-L286).
@@ -1294,20 +1304,15 @@ public abstract class MixinPlayerEntityModelClient {
      * 반환값 범위: 0.0F (지면 위) ~ 5.0F (5블록 아래까지 고체 없음).
      */
     private static float computeSmallOverGroundHeight(ClientPlayerEntity player, World world) {
-        double playerY = player.getY(); // feet Y (= bounding box minY)
-        int px = MathHelper.floor(player.getX());
-        int pz = MathHelper.floor(player.getZ());
-        int startY = MathHelper.floor(playerY) - 1;
-
-        for (int i = 0; i < 5; i++) {
-            BlockPos pos = new BlockPos(px, startY - i, pz);
-            VoxelShape shape = world.getBlockState(pos).getCollisionShape(world, pos);
-            if (!shape.isEmpty()) {
-                double blockTopY = (startY - i) + shape.getMax(Direction.Axis.Y);
-                return (float) Math.max(0D, playerY - blockTopY);
-            }
-        }
-        return 5f;
+        // 🔴 사용자 보고 fix (2026-05-04 — "다리가 처음부터 모임"):
+        //   원본 SmartMovingBase.getOverGroundHeight: bb.minY - getMaxPlayerSolidBetween(minY-5, minY, 0).
+        //   getMaxPlayerSolidBetween = 박스 horizontal area (= 0.6 x 0.6) 안 max solid Y.
+        //   이전 매핑은 single column (player.x/z floor) 만 → 등반 블록이 column 밖이면 측정 못 함.
+        //   fix: SmartMovingClientState.getMaxPlayerSolidBetween 사용 (= horizontal area 정확).
+        net.minecraft.util.math.Box bb = player.getBoundingBox();
+        double minY = bb.minY;
+        double solidTop = SmartMovingClientState.getMaxPlayerSolidBetween(player, minY - 5D, minY, 0);
+        return (float) Math.max(0D, minY - solidTop);
     }
 
     /**

@@ -799,6 +799,38 @@ public final class SmartMovingClientState {
      * smCrawlMode=true 시 보정 skip.
      */
     public static boolean smCrawlMode = false;
+
+    /**
+     * 🔴 (2026-05-04) crawl-climbing 의 bodyAngleX fade lerp 보간용 prev field.
+     *   원본 ModelRotationRenderer.GetIntermediateAngle 식 (= prev + (target - prev) * deltaT * 0.2F)
+     *   적용. height 변화 (= smallOverGroundHeight 매 tick 갱신) 의 시각 부드러움 추가.
+     */
+    public static float smCrawlClimbBodyAngleXFaded = Float.NaN;
+    public static float smCrawlClimbFadeTimePrev = Float.NaN;
+
+    /**
+     * crawl-climbing 의 bodyAngleX fade lerp helper.
+     * setupTransforms 에서 호출 → faded 값 저장 + 반환. setAngles 가 같은 frame 에서 read.
+     */
+    public static float applyCrawlClimbFade(float target, float curTime) {
+        float prev = smCrawlClimbBodyAngleXFaded;
+        float prevTime = smCrawlClimbFadeTimePrev;
+        if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
+            smCrawlClimbBodyAngleXFaded = target;
+            smCrawlClimbFadeTimePrev = curTime;
+            return target;
+        }
+        float deltaT = curTime - prevTime;
+        if (deltaT <= 0F || deltaT > 2F) {
+            smCrawlClimbBodyAngleXFaded = target;
+            smCrawlClimbFadeTimePrev = curTime;
+            return target;
+        }
+        float faded = prev + (target - prev) * deltaT * 0.2F;
+        smCrawlClimbBodyAngleXFaded = faded;
+        smCrawlClimbFadeTimePrev = curTime;
+        return faded;
+    }
     /**
      * sm_captureBodyYaw 가 비행/SM force 분기 활성 시 true 로 set.
      * MixinPlayerEntityModelClient.sm_setAngles 가 body.yaw fade adjustment skip 위해 사용.

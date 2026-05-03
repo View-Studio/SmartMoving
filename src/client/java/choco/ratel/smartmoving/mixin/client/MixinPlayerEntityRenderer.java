@@ -86,6 +86,19 @@ public class MixinPlayerEntityRenderer {
                 //   -0.21 → -0.06 (= 0.21 - 0.15. scale 0.9375 적용 시 0.15 * 0.9375 = 0.141 m 위로).
                 cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
             }
+            // 🔴 사용자 보고 fix (2026-05-04 — "crawl-climbing 모델 1칸 위"):
+            //   원본 SmartMovingRender L156-L161: heightOffset 적용은 EntityOtherPlayerMP 만.
+            //     자기 자신 (local player) = heightOffset 무관 → 모델 = entity.posY + 1.5 (정상 STANDING 위치).
+            //   원본 entity.posY = 변경 X. 박스만 +1m (= setHeightOffset). 모델 발 = posY (= 지면).
+            //   우리 매핑 = isCrawlClimbing 시 entity.y 가 원본 posY + 1m (= setPos 보정으로 박스 위치 매핑).
+            //     → 모델 = entity.y + 1.5 = old + 2.5 (= 원본 보다 1m 위).
+            //   로그 검증: bb=(entity.y, entity.y+0.8), 사용자 시점 = entity.y + 0.62 = 원본 동일.
+            //     박스 + 시점 OK. 모델만 +1m 위쪽.
+            //   fix: 모델 -1m 보정 (= 박스/시점 영향 X). 일반 경로 + ICC 경로 모두 적용
+            //     (둘 다 entity.y +1m 잔존).
+            else if (sm.isCrawlClimbing) {
+                cir.setReturnValue(new Vec3d(0D, -1.0D, 0D));
+            }
             return;
         }
 
@@ -498,6 +511,22 @@ public class MixinPlayerEntityRenderer {
             //   해결: 메모리 `feedback_render_scale_negation.md` 패턴 = -3/16 입력 → 시각 +3/16
             //     원본 자식 효과와 일치 (= 모델 -3/16 아래로 보정 = 사용자 보고 fix).
             matrices.translate(0f, -3f / 16f, 0f);
+        }
+
+        // 🔴 (2026-05-04) crawl-climbing fade 만 update:
+        //   사용자 검증 OK 매핑 = 옵션 B (= setAngles 의 leg.pivot 보정 + leg.pitch 합산).
+        //   여기서는 fade 만 update — bodyAngleX 계산 + applyCrawlClimbFade 호출 → setAngles 가 read.
+        //   setupTransforms R_x 매핑 X (= 옵션 D 회귀 X, 사용자 명시).
+        else if (sm.isCrawlClimbing) {
+            float height = sm.smallOverGroundHeight + 0.25f;
+            float bodyLength = 0.7f;
+            float bodyAngleX;
+            if (height < bodyLength) {
+                bodyAngleX = Math.max(0f, (float) Math.acos(height / bodyLength));
+            } else {
+                bodyAngleX = 0f;
+            }
+            SmartMovingClientState.applyCrawlClimbFade(bodyAngleX, animationProgress);
         }
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)
