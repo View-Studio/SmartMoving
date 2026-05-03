@@ -42,8 +42,14 @@ public class SmartMovingFlyer {
         //   되지 않은 경우만 → 수영/lava 처리 안 됨 = reset 의미 동일 (이미 false 유지). 매핑 생략.
 
         // 원본 L611-L620: sneak/jump → motionY ± 0.15 + moveUpward ± 0.98 (esp.movementInput 직접)
+        // 🔴 sneak 검사 정정 (사용자 보고 fix — 비행 sneak 빠른 하강 BUG, 2026-05-03):
+        //   기존 `player.isSneaking()` 은 SM `MixinClientPlayerEntity.sm_isSneaking_ClientPlayer`
+        //   inject 가 비행 시 false 반환 → 분기 미진입 → vanilla -=0.15 cancel 실패 + SM moveFlying
+        //   미적용 + damping x0.91 만 → 매 frame -=0.15 누적 → 수렴 -1.5/tick = -30m/sec 무시무시한 하강.
+        //   원본 SmartMovingSelf L611 = `esp.movementInput.sneak` 직접 검사. player.input.sneaking
+        //   으로 변경 = 원본 1:1.
         float moveUpward = 0F;
-        if (player.isSneaking()) {
+        if (player.input.sneaking) {
             Vec3d vel = player.getVelocity();
             player.setVelocity(vel.x, vel.y + 0.14999999999999999D, vel.z);
             moveUpward -= 0.98F;
