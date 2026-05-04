@@ -1872,7 +1872,14 @@ public final class SmartMovingClientState {
                         && (!isClimbing || isCrawling)
                         && player.fallDistance < cfg.fallingDistanceMinimum;
                 wasCrawling = isCrawling;                              // 원본 L2441
-                isCrawling = canCrawl && (wantCrawl || mustCrawl);     // 원본 L2442
+                // 🔴 (2026-05-04 사용자 보고 — "비행 → 슬라이딩 시 5 frame 90° 꺾인 엎드리기 자세"):
+                //   dump 분석: f=29~25 ROTATION_ACCUMULATE 알람 — slide=true + crawl=true 동시
+                //   잔존 (5 frame). root = mustCrawl=true 강제 set (project_restoreFromFlying_complete.md
+                //   "same-tick mustCrawl=true 강제"). 이전 fix 의 wouldWantCrawl !isSliding 가드는
+                //   wantCrawl 만 차단 → mustCrawl=true 매치 시 isCrawling=true.
+                //   해결: isCrawling 결정에 !isSliding 추가 → wantCrawl + mustCrawl 모두 차단.
+                //   wouldWantCrawl 가드와 동일 패턴 (메모리 feedback_slide_crawl_concurrent_state.md).
+                isCrawling = !isSliding && canCrawl && (wantCrawl || mustCrawl);
                 // ICC EXIT 후 isCrawling 자연 false 시 iccExitJustToCrawl 플래그 reset.
                 if (!isCrawling) iccExitJustToCrawl = false;
                 // contextContinueCrawl 해제 (L2446-L2447) 는 L822 pre-compute 블록에 이미 이식.
