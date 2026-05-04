@@ -1927,7 +1927,13 @@ public final class SmartMovingClientState {
             //   SlideDown tryJump 경량 이식 — `SmartMovingJumper.trySlideDownJump` 로 수평
             //   속도 증폭 + isJumping=true 설정. factor 인프라 (§7 B-42-B26-approx) 는
             //   기본 1F 가정.
-            if (!isSliding && cfg0.slide && cfg0.enabled
+            // B-Slide-FlyToSlide-fix (2026-05-04): `!isSliding` 가드 제거 — 원본 L2553 1:1.
+            //   원본은 `!isSliding` 가드 없음. 비행 → 착지 + grab+sneak 시나리오에서
+            //   restoreFromFlying 으로 toSlidingOrCrawling → isSliding=true (motion 부스트 X)
+            //   직후 같은 tick 직접 진입 6-AND 매치 → tryJump(SLIDE_DOWN) → motion 부스트.
+            //   `!isSliding` 가드 가 있으면 이 두 번째 매치 차단 → motion 부스트 안 됨 →
+            //   다음 종료 분기 (sneak hold + speed²<0.01) 매치 → 즉시 종료. 사용자 보고 BUG.
+            if (cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
                     && (isGroundSprinting
                             || (wasRunning && !isRunning(player) && player.isOnGround()))

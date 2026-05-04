@@ -432,6 +432,21 @@ public final class SmartMovingJumper {
         //         headJumpCharge++
         //     else  if (headJumpCharge > 0 && sp.onGround) tryJump(HeadUp); headJumpCharge = 0;
         //   else  if (headJumpCharge > 0) blockJumpTillButtonRelease = true; headJumpCharge = 0;
+        //
+        // B-Slide-HeadJump-fix (2026-05-04): `!sm.isSliding` 가드 추가 — 크롤과 동일 패턴.
+        //   원본 코드 fact 분석: `!isCrawling` 만 명시 가드. 슬라이딩 중 헤드점프 차단은
+        //   vanilla `setSprinting(false)` 자동 호출 (forward<0.8F 시) 의존 — 사용자가
+        //   forward+sprint+grab+sneak 슬라이딩 후 forward hold 유지 시 vanilla 자동 종료
+        //   미발화 → sp.isSprinting()=true 잔존 → isRunning()=true → headJumpCharging
+        //   활성 → 점프키 떼면 tryJump(HeadUp) 발화. 사용자 보고 BUG (changelog L656
+        //   `disabled jumping while sliding` 의도와 모순).
+        //   fix: `!sm.isSliding` 명시 가드 추가. 원본 1:1 위반이지만 사용자 의도 매치 +
+        //   1.21.1 vanilla sprint 자동 종료 동작 차이 회피. SlideToHeadJumping 자동 전환
+        //   (SmartMovingClientState L1982-L1986) 은 별경로 (tryJump 호출 X, 직접 set) 라
+        //   이 가드 영향 받지 않음 — 슬라이딩 → 낙하 → 자동 헤드점프 전환 정상 작동.
+        //   `MixinClientPlayerEntity.sm_jumpingFilter_tickNewAi` (L117-L126) 는 이미
+        //   `sm.isSliding` 가드 포함 — vanilla 점프 차단은 정상. 본 추가는 SM 헤드점프
+        //   차징 차단 보완.
         boolean isGroundSprinting = (sm.isFast || player.isSprinting())
                 && player.isOnGround() && !sm.isSliding && !sm.isCrawling;
         boolean isRunning = player.isSprinting() && !sm.isFast
@@ -440,7 +455,8 @@ public final class SmartMovingJumper {
         if (cfg.headJump) {
             isHeadJumpCharging = grabKeyPressed
                     && (isGroundSprinting || sm.isSprintJump || (isRunning && player.isOnGround()))
-                    && !sm.isCrawling;
+                    && !sm.isCrawling
+                    && !sm.isSliding;
             if (isHeadJumpCharging) {
                 if (jumpKeyPressed) {
                     sm.headJumpCharge = Math.min(sm.headJumpCharge + 1F, cfg.headJumpChargeMaximum);
