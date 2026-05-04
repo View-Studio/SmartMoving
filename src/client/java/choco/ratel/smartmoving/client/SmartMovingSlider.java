@@ -16,8 +16,11 @@ import net.minecraft.util.math.Vec3d;
  * 원본: SmartMovingSelf.landMotion() 슬라이딩 분기, SmartMoving.spawnParticles() 이식.
  *
  * 포함 항목:
- *   9-4: handleSliding() — 슬라이딩 감쇠 공식 + travel() 대체
+ *   9-4: handleSliding() — 슬라이딩 감쇠 공식 + strafe 강제 회전 + travel() 대체
  *   9-5: spawnSlidingParticle() — BlockState 기반 파티클 생성
+ *
+ * 종료 조건 (sneak 떼기 / 속도 임계) 은 SmartMovingClientState 메인 tick 의
+ * SlideToHeadJumping 다음 위치에서 처리한다. 원본 L2563-L2567 1:1.
  */
 @Environment(EnvType.CLIENT)
 public final class SmartMovingSlider {
@@ -27,17 +30,16 @@ public final class SmartMovingSlider {
     // ── [9-4] handleSliding ──────────────────────────────────────────────────
 
     /**
-     * 슬라이딩 수평 감쇠를 적용하고 종료 조건을 판정한다.
+     * 슬라이딩 수평 감쇠를 적용한다.
      * vanilla travel()을 대체하여 직접 move()를 호출한다.
      *
-     * 감쇠 공식 (원본 SmartMovingSelf.landMotion() isSliding 분기):
+     * 감쇠 공식 (원본 SmartMovingSelf.landMotion() L729 isSliding 분기):
      *   damping = 1 / (((1/slip - 1) / 25) * _slideSlipperinessFactor + 1) * 0.98F
      *   - slip: 발 아래 블록의 slipperiness (얼음=0.98, 일반=0.6)
-     *   - _slideSlipperinessFactor: Config 값 (기본 1.0F, 미확인)
+     *   - _slideSlipperinessFactor: Config 값 (기본 1.0F)
      *   - 0.98F: 공기 저항 유사 계수
      *
-     * 종료 조건:
-     *   수평 속도 < _slidingSpeedStopFactor → isSliding = false
+     * 종료 조건은 SmartMovingClientState 메인 tick 에서 처리 (원본 L2563-L2567 1:1).
      *
      * @return true if SM이 처리 (travel() cancel 대상)
      */
@@ -64,18 +66,32 @@ public final class SmartMovingSlider {
         double newVy = vel.y - player.getAttributeValue(EntityAttributes.GENERIC_GRAVITY);
         newVy *= 0.98D;
 
+        // 원본 L730-L744: strafe 강제 회전 (좌우 키로 슬라이딩 방향 컨트롤).
+        //   moveStrafing != 0 && _slideControlDegrees > 0 일 때 motionX/Z 를 회전.
+        //   _slideControlDegrees: tick 당 회전량 (deg). 기본 1F.
+        //   moveStrafing 부호 = Math.signum() → 좌/우 회전 방향 결정.
+        //   원본 RadiantToAngle = 180/π → Math.toRadians 로 1:1.
+        //   damping 적용 후 newVx/newVz 에 회전 (스칼라 damping × 단위 보존 회전 = commute → 결과 동일).
+        float moveStrafing = player.input.movementSideways;
+        if (moveStrafing != 0F && cfg.slideControlDegrees > 0F) {
+            double angle = -Math.atan(newVx / newVz);
+            if (!Double.isNaN(angle)) {
+                if (newVz < 0) angle += Math.PI;
+                angle -= Math.toRadians(cfg.slideControlDegrees) * Math.signum(moveStrafing);
+                double hMotion = Math.sqrt(newVx * newVx + newVz * newVz);
+                newVx = hMotion * -Math.sin(angle);
+                newVz = hMotion *  Math.cos(angle);
+            }
+        }
+
         player.setVelocity(newVx, newVy, newVz);
         player.move(MovementType.SELF, player.getVelocity());
 
         // [9-5] 슬라이딩 파티클
         spawnSlidingParticle(player, sm, new Vec3d(newVx, 0, newVz));
 
-        // 종료 조건: 수평 속도 < _slidingSpeedStopFactor
-        double horizontalSpeed = Math.sqrt(newVx * newVx + newVz * newVz);
-        if (horizontalSpeed < cfg.slidingSpeedStopFactor) {
-            sm.isSliding = false;
-        }
-
+        // 종료 조건은 SmartMovingClientState 메인 tick (SlideToHeadJumping 다음 위치, 원본 L2563-L2567)
+        // 에서 sneak 떼기 + horizontalSpeedSquare < stopFactor*0.01 + wasCrawling=toCrawling() 1:1 처리.
         return true;
     }
 

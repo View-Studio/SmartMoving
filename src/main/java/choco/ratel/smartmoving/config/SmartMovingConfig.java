@@ -778,6 +778,9 @@ public class SmartMovingConfig {
     public float slideParticlePeriodFactor = 0.5F;
     // 원본: SmartMovingConfig._slidingSpeedStopFactor (PositiveFactor, 기본값 1F)
     public float slidingSpeedStopFactor = 1.0F;
+    // 원본: SmartMovingConfig._slideControlDegrees (PositiveFactor, 기본값 1F, deg/tick)
+    //   슬라이딩 중 좌우 입력으로 방향 회전. SmartMovingSelf L730-L744.
+    public float slideControlDegrees = 1.0F;
 
     // ── Flying ──────────────────────────────────────────────────
     // 원본: Config._flyingSpeedFactor (PositiveFactor, 기본값 1F)
@@ -1681,6 +1684,7 @@ public class SmartMovingConfig {
         slideSlipperinessFactor  = getFloat(p,  "move.slide.slipperiness.factor", slideSlipperinessFactor);
         slideParticlePeriodFactor = getFloat(p, "move.slide.particle.period.factor", slideParticlePeriodFactor);
         slidingSpeedStopFactor   = getFloat(p,  "move.slide.speed.stop.factor",  slidingSpeedStopFactor);
+        slideControlDegrees      = getFloat(p,  "move.slide.control.angle",      slideControlDegrees);
         flyingSpeedFactor        = getFloat(p,  "move.fly.speed.factor",          flyingSpeedFactor);
         flyControlVertical       = getBool(p,   "move.fly.control.vertical",      flyControlVertical);
         diveControlVertical      = getBool(p,   "move.dive.control.vertical",     diveControlVertical);
@@ -1848,6 +1852,7 @@ public class SmartMovingConfig {
         p.setProperty("move.slide.slipperiness.factor",  String.valueOf(slideSlipperinessFactor));
         p.setProperty("move.slide.particle.period.factor", String.valueOf(slideParticlePeriodFactor));
         p.setProperty("move.slide.speed.stop.factor",    String.valueOf(slidingSpeedStopFactor));
+        p.setProperty("move.slide.control.angle",        String.valueOf(slideControlDegrees));
         p.setProperty("move.fly.speed.factor",           String.valueOf(flyingSpeedFactor));
         p.setProperty("move.fly.control.vertical",       String.valueOf(flyControlVertical));
         p.setProperty("move.dive.control.vertical",      String.valueOf(diveControlVertical));

@@ -1985,6 +1985,28 @@ public final class SmartMovingClientState {
                 isAerodynamic = true;
             }
 
+            // B-Slide-Stop (2026-05-04): 원본 L2563-L2567 sneak 떼기 / 속도² 임계 종료 분기.
+            //   if (isSliding && (!sneakButton.Pressed
+            //                     || horizontalSpeedSquare < Config._slidingSpeedStopFactor.value * 0.01))
+            //   {
+            //       isSliding   = false;
+            //       wasCrawling = toCrawling();   // 종료 즉시 크롤 진입
+            //   }
+            // 단위: 원본 horizontalSpeedSquare = motionX² + motionZ² (L2389), stopFactor 기본 1F →
+            //   임계 = 0.01 (= speed 0.1 m/tick).
+            // 위치: SlideToHeadJumping (위) 와 큰 낙하 → crawl (아래) 사이. 원본 L2563 자리 1:1.
+            // ※ 이전 매핑: SmartMovingSlider.handleSliding 안에 horizontalSpeed (linear) 단위 + sneak
+            //   누락 + toCrawling() 미호출 의 부분 매핑 → 원본 1:1 로 정정.
+            if (isSliding) {
+                Vec3d _vel2563 = player.getVelocity();
+                double horizontalSpeedSquare = _vel2563.x * _vel2563.x + _vel2563.z * _vel2563.z;
+                if (!sneakPressedRaw
+                        || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
+                    isSliding   = false;
+                    wasCrawling = toCrawling();
+                }
+            }
+
             // B-27 (세션 54): 원본 L2569-L2574 fallDistance > _fallingDistanceMinimum 분기.
             //   isSliding && fallDistance > fallingDistanceMinimum →
             //     isSliding=false, wasCrawling=true, isCrawling=false.
