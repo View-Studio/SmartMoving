@@ -14,9 +14,20 @@ public class SmartStatistics {
 
     // ── 현재 속도 (0~1 정규화) ──────────────────────────────────
     public float currentHorizontalSpeed;         // limbSwingAmount 등가
-    public float currentHorizontalSpeedFlattened;
+    public float currentHorizontalSpeedFlattened;  // ← 사용 안 함 (FIR history 로 대체).
     public float currentVerticalSpeed;
     public float currentSpeed;
+
+    // 🔴 (2026-05-04 사용자 요청 — "원본 1:1 매핑"): currentHorizontalSpeedFlattened
+    //   = 원본 SmartStatistics.getCurrentHorizontalSpeedFlattened(pt, -1) 1:1.
+    //   원본 = datas[10] history 의 getCurrentHorizontalSpeed() 평균.
+    //   각 data 의 getCurrentHorizontalSpeed = min(1, prevLegYaw + (legYaw-prev)*pt).
+    //   기존 EMA(0.5) 매핑 → FIR 10-tick 평균.
+    private static final int FLATTENED_HISTORY_SIZE = 10;
+    private final float[] flattenedLegYawHistory = new float[FLATTENED_HISTORY_SIZE];
+    private final float[] flattenedPrevLegYawHistory = new float[FLATTENED_HISTORY_SIZE];
+    private final boolean[] flattenedHistoryReady = new boolean[FLATTENED_HISTORY_SIZE];
+    private int flattenedHistoryIndex = -1;
 
     // ── 🔴 prev 필드 (Flying Phase / 세션 48): partial tick lerp 보간용 ─────
     //   원본 SmartStatisticsData (SmartRender) 는 prevLegYaw / legYaw 두 필드 + 매 프레임
@@ -94,8 +105,17 @@ public class SmartStatistics {
         //   사용자 보고 "팔/다리 진자운동 디테일이 원본이랑 다른 느낌" 직접 원인.
         //   정정: total += currentSpeed (EMA 결과, clamp 전).
 
-        // 평탄화 수평 속도 (EMA on EMA: factor=0.5)
-        currentHorizontalSpeedFlattened = currentHorizontalSpeedFlattened * 0.5f + currentHorizontalSpeed * 0.5f;
+        // 🔴 (2026-05-04 사용자 요청 "원본 1:1") — Flattened FIR 10-tick history 저장.
+        //   원본 SmartStatistics.calculateAllStats: datas[currentDataIndex] 에 새 entry +
+        //     prev datas 로 initialize. 각 entry 의 prevLegYaw/legYaw 는 직전 entry 의 legYaw
+        //     로 init 후 calcualte() 에서 갱신.
+        //   우리 매핑은 단일 currentHorizontalSpeed 필드 쓰므로, 매 tick 의 prev/curr 값을
+        //     ring buffer 에 저장. getCurrentHorizontalSpeedFlattened(pt) 가 history 평균.
+        flattenedHistoryIndex++;
+        if (flattenedHistoryIndex >= FLATTENED_HISTORY_SIZE) flattenedHistoryIndex = 0;
+        flattenedPrevLegYawHistory[flattenedHistoryIndex] = prevCurrentHorizontalSpeed;
+        flattenedLegYawHistory[flattenedHistoryIndex] = currentHorizontalSpeed;
+        flattenedHistoryReady[flattenedHistoryIndex] = true;
 
         // 원본 SmartRenderRender L95: currentCameraAngle = rotationYaw / RadiantToAngle (= Math.toRadians)
         currentCameraAngle = (float) Math.toRadians(yawDegrees);
@@ -150,13 +170,24 @@ public class SmartStatistics {
     }
 
     /**
-     * 🔴 (2026-05-03 crawl 디테일 fix) 원본 SmartStatistics.getCurrentHorizontalSpeedFlattened
-     *   (partialTicks, -1) = data history 평균 + partialTicks 보간. 우리는 단일 EMA on EMA
-     *   필드 + partial ticks lerp 매핑 (= 60Hz 부드러움 보간).
+     * 🔴 (2026-05-04 사용자 요청 "원본 1:1") 원본 SmartStatistics.getCurrentHorizontalSpeedFlattened
+     *   (partialTicks, -1) = data history 평균 + partialTicks 보간. FIR 10-tick.
+     *   각 history entry 의 getCurrentSpeed = min(1.0, prevLegYaw + (legYaw-prev)*pt).
+     *   직전 EMA(0.5) on EMA(0.4) 매핑은 transient 차이 사용자 보고 → FIR 10-tick 1:1 매핑.
      */
     public float getCurrentHorizontalSpeedFlattened(float partialTicks) {
-        return Math.min(1.0F, prevCurrentHorizontalSpeedFlattened
-                + (currentHorizontalSpeedFlattened - prevCurrentHorizontalSpeedFlattened) * partialTicks);
+        if (flattenedHistoryIndex < 0) return 0f;
+        float sum = 0f;
+        int count = 0;
+        for (int i = 0, idx = flattenedHistoryIndex; i < FLATTENED_HISTORY_SIZE; i++, idx--) {
+            if (idx < 0) idx = FLATTENED_HISTORY_SIZE - 1;
+            if (!flattenedHistoryReady[idx]) break;
+            float prevLegYaw = flattenedPrevLegYawHistory[idx];
+            float legYaw = flattenedLegYawHistory[idx];
+            sum += Math.min(1.0F, prevLegYaw + (legYaw - prevLegYaw) * partialTicks);
+            count++;
+        }
+        return count > 0 ? sum / count : 0f;
     }
 
     public float getCurrentHorizontalSpeed(float partialTicks) {
@@ -189,6 +220,9 @@ public class SmartStatistics {
         currentHorizontalSpeedFlattened = 0;
         currentVerticalSpeed = 0;
         currentSpeed = 0;
+        // 🔴 Flattened FIR history reset.
+        flattenedHistoryIndex = -1;
+        for (int i = 0; i < FLATTENED_HISTORY_SIZE; i++) flattenedHistoryReady[i] = false;
         prevCurrentHorizontalSpeed = 0;
         prevCurrentVerticalSpeed = 0;
         prevCurrentSpeed = 0;
