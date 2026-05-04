@@ -92,6 +92,15 @@ public abstract class MixinPlayerEntity {
         // SLIDING POSE 가 vanilla 가 아닌 경로로 들어온 경우 보강 (외부 모드 등).
         if (pose == EntityPose.SLIDING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+            return;
+        }
+
+        // 🔴 orphan SWIMMING pose 가드 (2026-05-04 사용자 보고 — "1칸 진입 직전 슬라이딩 풀면
+        //   가끔 콜리전 정상 엎드리기보다 작음"):
+        //   클라 sm_getBaseDimensions_client 와 동일 가드 — pose=SWIMMING + smSmall 미매치 시
+        //   STANDING dim 강제. 클라/서버 대칭으로 박스 sync 일관 유지 (server reconcile 차단).
+        if (pose == EntityPose.SWIMMING) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 1.8F).withEyeHeight(1.62F));
         }
     }
 

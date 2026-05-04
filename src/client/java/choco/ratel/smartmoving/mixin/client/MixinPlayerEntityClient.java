@@ -132,6 +132,20 @@ public abstract class MixinPlayerEntityClient {
         // SLIDING POSE 가 vanilla 가 아닌 경로로 들어온 경우 (외부 모드 등) 보강 처리
         if (pose == EntityPose.SLIDING) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
+            return;
+        }
+
+        // 🔴 orphan SWIMMING pose 가드 (2026-05-04 사용자 보고 — "1칸 진입 직전 슬라이딩 풀면
+        //   가끔 콜리전 정상 엎드리기보다 작음 + 애니메이션 STANDING"):
+        //   원인: 슬라이딩 → standing 1 frame 사이 server→client pose sync lag (1~4 frame)
+        //         로 pose=SWIMMING 잔존. SM smSmall 분기 (isCrawling/isCrawlClimbing/
+        //         isHeadJumping/isSliding/isSwimming_sm/isDiving) 모두 false → 위 분기 미매치
+        //         → vanilla SWIMMING dim (0.6×0.6) 통과 → 박스 0.6×0.8 보다 작음.
+        //         애니메이션은 SM 분기 모두 false 라 vanilla setAngles → STANDING 자세.
+        //   해결: pose=SWIMMING + smSmall 미매치 = orphan → STANDING dim 강제 (sync 풀리면
+        //         정상 standing). 메모리 feedback_smSmall_dim_omission.md 동일 패턴.
+        if (pose == EntityPose.SWIMMING) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 1.8F).withEyeHeight(1.62F));
         }
     }
 
