@@ -364,7 +364,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isCrawling) {
             sm_animateCrawling(sm, headYaw);
         } else if (sm.isSliding) {
-            sm_animateSliding(limbSwing, limbSwingAmount, headYaw);
+            sm_animateSliding(sm, headYaw);
         } else if (flyingCreative) {
             sm_animateFlying(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
@@ -986,12 +986,34 @@ public abstract class MixinPlayerEntityModelClient {
      *   - body.offsetY = -0.4F (원본 L452): ModelPart 에 offsetY 필드 부재로 sm_setupTransforms 의
      *     matrices.translate(0, -0.4F/16F, 0) 로 보정 (slide 분기 안에 통합)
      */
-    private void sm_animateSliding(float limbSwing, float limbSwingAmount, float headYaw) {
-        float distance   = limbSwing * 0.7f;
-        float walkFactor = smFactor(limbSwingAmount, 0f, 1f) * 0.8f;
+    private void sm_animateSliding(SmartMovingClientState sm, float headYaw) {
+        // 🔴 BUG-Slide-Anim-6 fix (2026-05-04 사용자 보고 — "디테일 값 다름"):
+        //   원본 SmartMovingModel.java L439-L440 입력 = totalHorizontalDistance + currentHorizontalSpeed.
+        //   SmartMovingModel L62/L84: `currentHorizontalSpeedFlattened` 가 NaN 아닐 때
+        //     `currentHorizontalSpeed = currentHorizontalSpeedFlattened` 덮어씀.
+        //   원본 SmartRenderRender L56-L57: getTotalDistance/getCurrentSpeed(renderPartialTicks) lerped getter.
+        //   이전 매핑 limbSwing/limbSwingAmount (vanilla limbAnimator) 잘못 — sm_animateCrawling
+        //     동일 패턴으로 정정 (= partial tick lerp + Flattened 속도).
+        float partialTicks = SmartMovingClientState.globalCachedTickDelta;
+        float distance   = sm.stats.getTotalHorizontalDistance(partialTicks) * 0.7f;
+        float speedFlat  = sm.stats.getCurrentHorizontalSpeedFlattened(partialTicks);
+        float walkFactor = smFactor(speedFlat, 0f, 1f) * 0.8f;
 
+        // 🔴 BUG-Slide-Anim-7 fix (2026-05-04 사용자 보고 — "마우스 움직임에 따른 머리 고정"):
+        //   원본 SmartMovingModel.java L442-L444 isSlide 분기:
+        //     bipedHead.rotateAngleZ = -viewHorizontalAngelOffset / RadiantToAngle
+        //     bipedHead.rotateAngleX = -Eighth - Sixteenth
+        //     bipedHead.rotationPointZ = -2F
+        //     ⚠ bipedHead.rotateAngleY 는 미설정 → SR reset() 효과로 0 유지.
+        //   우리 sm_setAngles 가 @At("TAIL") → vanilla BipedEntityModel.setAngles 이미
+        //     head.yaw = headYaw * π/180 설정. cancel 안 하면 잔존 → 마우스 좌우 회전이
+        //     head 따라옴 → 사용자 보고 BUG.
+        //   메모리 feedback_smbody_yaw_force_head_yaw_zero.md: smBodyYawOverride force +
+        //     head.yaw=0 force 동시 적용 패턴.
+        //   sm_animateCrawling (L928) 동일 패턴 차용 — head.yaw=0 명시.
         head.pitch  = -EIGHTH - SIXTEENTH;
         head.roll   = -headYaw * DEG_TO_RAD;   // 원본 bipedHead.rotateAngleZ = -viewHorizontalAngelOffset/RadiantToAngle (B-13)
+        head.yaw    = 0f;                      // ★ vanilla netHeadYaw cancel
         head.pivotZ = -2f;                     // 원본 bipedHead.rotationPointZ = -2F (B-13)
 
         // 몸통 (YXZ 순서) — 원본 SmartMovingModel.java L672-L676:
@@ -1003,7 +1025,16 @@ public abstract class MixinPlayerEntityModelClient {
                 MathHelper.cos(distance - EIGHTH) * SIXTYFOURTH * walkFactor,
                 MathHelper.cos(distance + EIGHTH) * SIXTYFOURTH * walkFactor,
                 0f);
-        body.pivotY = 6.5f;   // 원본 bipedBody.rotationPointY = +6.5F (B-13 / §16-19, SR 다층 부재로 body 단일 노드 근사)
+        // 🔴 사용자 보고 fix (2026-05-04 — "몸통 자체가 다리쪽으로 내려감"):
+        //   원본 `bipedBody.rotationPointY = +6.5F` (L453) 직접 매핑은 body cuboid 를 modelpart Y
+        //   +6.5 (다리쪽) 으로 이동 → R_x(-π/2) 회전 후 modelpart Z -6.5 (= 다리 방향) → body 가
+        //   다리쪽 너머로 이동 BUG.
+        //   원본 SR 다층 구조 (bipedOuter → bipedTorso → bipedBody) 의 부모-자식 누적 효과가
+        //   1.21.1 vanilla biped 단일 노드 매핑에서 다른 결과. body.pivotY 직접 매핑은 부정확.
+        //   회전 origin 변경 (sm_setupTransforms pivotY) 이 이미 모든 노드 +5 효과 내포 →
+        //   body.pivotY 추가 적용 = 누적 효과 + 6.5 = body 만 다리쪽 너무 많이.
+        //   fix: body.pivotY = 0 (default, body 자체 추가 이동 제거) → 어깨 부근 정상 위치.
+        body.pivotY = 0f;
 
         // 다리
         rightLeg.pitch = MathHelper.cos(distance + HALF) * SIXTYFOURTH * walkFactor + SIXTYFOURTH;

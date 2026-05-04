@@ -99,6 +99,16 @@ public class MixinPlayerEntityRenderer {
             else if (sm.isCrawlClimbing) {
                 cir.setReturnValue(new Vec3d(0D, -1.0D, 0D));
             }
+            // 🔴 사용자 보고 fix (2026-05-04 — "슬라이딩 모델 공중 떠있음"):
+            //   원본 setHeightOffset(-1F) → 박스 +1m up + 모델 = entity.posY + 1.501 (vanilla 위치) → 박스 안.
+            //   1.21.1 매핑: 박스 +1m offset 안 함 (기능 침범 금지) → 박스 = (entity.y, entity.y+0.8).
+            //     모델 vanilla 위치 = entity.y + 1.501 → 박스 위로 떠있음 BUG.
+            //   fix: 엎드리기 isCrawling 분기와 동일 -1m 보정 → 모델 박스 안.
+            //   엎드리기는 78.75° 회전 + scale*0.06 미세 보정 추가하지만, 슬라이딩은 90° 회전 +
+            //   pivotY 1.3125 (엎드리기 동일) → 같은 보정 적용 시 거의 동일 위치 유지.
+            else if (sm.isSliding) {
+                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
+            }
             return;
         }
 
@@ -357,9 +367,40 @@ public class MixinPlayerEntityRenderer {
         //   라 마우스 따라 모델 같이 회전 → 사용자 보고 BUG.
         //   fix: smBodyYawOverride = currentHorizontalAngle (도) — 원본 1:1.
         //   fade 비활성 (원본 L446) → isHeadJumping/isRopeSliding 패턴 동일 (단순 적용).
+        // 🔴 BUG-Slide-Anim-A fix (2026-05-04 사용자 보고 — "마우스 회전 시 머리 좌우 흔들림"):
+        //   원본 1.7.10: SR 의 renderYawOffset = forwardRotation 강제 → entity.bodyYaw 자체
+        //     force → vanilla netHeadYaw = headYaw - bodyYaw = 마우스 - 마우스 ≈ 0 → head.rotateAngleZ
+        //     ≈ 0 → 흔들림 X.
+        //   1.21.1 우리 매핑: sm_modifyBodyYaw (ModifyArg) 만 force. entity.bodyYaw field 자연 lerp
+        //     (마우스 yaw 추적). vanilla netHeadYaw ≈ 0 (자연 lerp 결과).
+        //     ★ 그러나 sm_modifyNetHeadYaw 가 추가 보정 = netHeadYaw + (natural - lagged) =
+        //       0 + (마우스 yaw - 이동 방향) = 마우스 회전 시 큰 값 → head.roll = -netHeadYaw_rad
+        //       변화 → 머리 좌우 기울어짐 BUG.
+        //   엎드리기 isCrawling 분기 (위 L179) 와 동일 패턴: smCrawlMode=true → sm_modifyNetHeadYaw
+        //     보정 skip → vanilla netHeadYaw (≈ 0) 그대로 → head.roll ≈ 0.
         if (sm.isSliding) {
             smBodyYawActive = true;
             smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
+            SmartMovingClientState.smCrawlMode = true;   // ★ sm_modifyNetHeadYaw 보정 skip
+            // 🔴 BUG-Slide-Anim-A2 fix (2026-05-04 사용자 보고 — "마우스 회전 시 머리 흔들림 안 사라짐"):
+            //   원본 SmartMovingRender.rotatePlayer L145-L148 1:1: SM 활성 분기 (isSliding 포함)
+            //   에서 `entity.renderYawOffset = forwardRotation (=lerpedYaw)` 매 frame 강제.
+            //   메모리 feedback_entity_bodyyaw_force_branch_transition.md 패턴.
+            //   비행 분기 (위 L332-L334) 적용 패턴 동일 차용.
+            //
+            //   원리:
+            //     - vanilla setAngles `netHeadYaw = entity.headYaw_lerp - entity.bodyYaw_lerp`.
+            //     - 이전 매핑: entity.bodyYaw 자연 lerp (이동 방향 따라 vanilla 처리) → 마우스
+            //       yaw 와 차이 → netHeadYaw ≠ 0 → head.roll = -netHeadYaw_rad 변화 → 머리 좌우
+            //       흔들림 BUG.
+            //     - fix: entity.bodyYaw 를 마우스 yaw 로 force → headYaw_lerp = bodyYaw_lerp →
+            //       netHeadYaw = 0 → head.roll = 0 → 흔들림 X.
+            //   smBodyYawOverride (= currentHorizontalAngle, ModifyArg) 는 setupTransforms 의
+            //   bodyYaw 인자만 수정 → 모델 회전은 이동 방향 (별개). entity.bodyYaw force 와 무관.
+            float lerpedYaw = localPlayer.prevYaw
+                    + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
+            localPlayer.setBodyYaw(lerpedYaw);
+            localPlayer.prevBodyYaw = lerpedYaw;
             return;
         }
 
@@ -463,25 +504,30 @@ public class MixinPlayerEntityRenderer {
         }
 
         // SM 슬라이딩(isSliding): bipedOuter.rotateAngleX = Quarter
-        // 🔴 BUG-Slide-Anim-2 fix (2026-05-04 사용자 보고 — "모델이 하늘 보고 있어"):
-        //   원본 `bipedOuter.rotateAngleX = +π/2` 는 ModelPart 좌표계. vanilla scale(-1,-1,1)
-        //   영향으로 world 효과 = R_x(-π/2) → 모델 정면 → 아래쪽 (땅 봄).
-        //   우리 매핑 `matrices.multiply(POSITIVE_X.rotation(+π/2))` 는 vanilla setupTransforms
-        //   의 matrices stack 직접 조작 (= world 매트릭스). vanilla scale 후 적용이지만 회전은
-        //   부호 반전 효과 없음 → world R_x(+π/2) → 모델 정면 → 위쪽 (하늘 봄) BUG.
-        //   메모리 feedback_render_scale_negation.md 패턴: ModelPart R_x(theta) = world R_x(-theta).
-        //   matrices 직접 호출 시 부호 보정 필수 → -tiltAngle 사용.
-        //   smOuterTiltX 캐시 (망토 rotateX 클램프) 는 ModelPart 등가값 (원본 +π/2) 그대로 보존.
+        // 🔴 BUG-Slide-Anim-2 fix (2026-05-04 — "하늘 봄"): tilt 부호 반전 (scale -1,-1,1 보정).
+        // 🔴 BUG-Slide-Anim-3/4 정정 (2026-05-04 사용자 보고 — "몸통이 다리쪽으로 너무 가있음"):
+        //   이전 매핑은 엎드리기 isCrawling 분기 (`bipedTorso.rotationPointY=3F` 매핑) 를 슬라이딩에
+        //   그대로 따라했음 — 원본 isCrawl 분기 매핑이지 isSlide 분기 매핑 아님.
+        //   원본 isSlide L448: `bipedOuter.rotationPointY = 5F` (bipedTorso 가 아니라 bipedOuter).
+        //   즉 슬라이딩 정확 매핑:
+        //     pivotY = 1.5 - 5/16 = 1.1875 (= bipedOuter pivot world Y, vanilla biped pivot 보다 5/16 위).
+        //     추가 translate = -5/16 (= bipedOuter.rotationPointY=+5F 자식 효과).
+        //   엎드리기 (3/16) vs 슬라이딩 (5/16) 차이 = 2/16 = 12.5cm 회전 origin 위쪽 + body 위치
+        //     12.5cm 회전 후 다리쪽 추가.
+        //   ※ 모델 위치 -1m 보정 (박스 안) 은 sm_getPositionOffset 분기에서 처리 (BUG#5).
         if (sm.isSliding) {
             float tiltAngle = (float) Math.PI / 2f; // Quarter
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));   // ★ 부호 반전
+            float pivotY = 1.5f - 5f / 16f;    // = 1.1875 (bipedOuter pivot Y=+5 회전 origin)
+
+            matrices.translate(0f, pivotY, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
-            // bipedOuter.rotationPointY = 5F
-            matrices.translate(0f, 5f / 16f, 0f);
-            // bipedBody.offsetY = -0.4F (원본 SmartMovingModel.java L452, B-13 / §16-19)
-            // ModelPart 에 offsetY 필드 부재 → MatrixStack translate 보정.
-            // 단위: 픽셀 → 블록 (/16). slide 분기 안에서만 적용 (push/pop 자동 관리).
-            matrices.translate(0f, -0.4f / 16f, 0f);
+
+            // 🔴 (실험) matrices.translate(0, -5/16, 0) 제거 — bipedOuter +5 자식 효과는
+            //   회전 origin pivotY 변경으로 등가 처리됨. 추가 translate 가 body 를 다리쪽으로
+            //   너무 보내는 듯 하여 제거 시도.
+            matrices.translate(0f, -0.4f / 16f, 0f);  // bipedBody.offsetY 만 유지
         }
 
         // 🔴 SM 엎드리기(isCrawling) — Phase 3 자식 효과 매핑 (2026-05-03):
