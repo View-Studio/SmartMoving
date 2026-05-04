@@ -1,5 +1,6 @@
 package choco.ratel.smartmoving.mixin.client;
 
+import choco.ratel.smartmoving.client.SmModelPartOverride;
 import choco.ratel.smartmoving.client.SmartMovingClientState;
 import choco.ratel.smartmoving.client.SmartMovingRenderContext;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
@@ -117,6 +118,13 @@ public abstract class MixinPlayerEntityModelClient {
         // 1인칭 손 렌더 컨텍스트 (PlayerEntityRenderer.renderArm 진입 중) — SM 후킹 일체 skip.
         //   사용자 의도: 1인칭 시점의 손은 항상 vanilla 기본 자세 유지.
         if (SmartMovingRenderContext.firstPersonArmRender) return;
+
+        // 🔴 매 frame ModelPart override 클리어 (2026-05-04 sliding arm fix):
+        //   sm_animateSliding 이 setOverrideQuat 으로 의도 q 직접 적용 → 다음 frame 진입 시
+        //   sliding 종료됐어도 이전 q 잔존 → 잘못 적용 BUG. setAngles HEAD 에서 일괄 clear.
+        //   sliding 분기는 TAIL 에서 다시 set 하므로 영향 없음.
+        ((SmModelPartOverride)(Object) rightArm).sm_clearOverrideQuat();
+        ((SmModelPartOverride)(Object) leftArm).sm_clearOverrideQuat();
 
         // 항상 원본 저장 (cfgEnabled=false 분기에서도 TAIL 원복 안전 보장)
         smOriginalSneakingForFalling = sneaking;
@@ -1042,12 +1050,39 @@ public abstract class MixinPlayerEntityModelClient {
         rightLeg.roll  =  THIRTYTWOTH;
         leftLeg.roll   = -THIRTYTWOTH;
 
-        // 팔 (YZX 순서): pitch=X(앞뒤), yaw=Y(±Quarter), roll=Z(±Sixteenth)
+        // ★★ 원본 SmartMovingModel.java L463-L473 원자 단위 1:1 번역 ★★
+        //   bipedRightArm.rotationOrder = ModelRotationRenderer.YZX  ← R_x * R_z * R_y (vertex Y→Z→X)
+        //   bipedRightArm.rotateAngleX = cos(distance + Quarter) * Sixtyfourth * walkFactor + Half - Sixtyfourth
+        //   bipedLeftArm.rotateAngleX  = cos(distance - Half)    * Sixtyfourth * walkFactor + Half - Sixtyfourth
+        //   bipedRightArm.rotateAngleZ =  Sixteenth     bipedLeftArm.rotateAngleZ = -Sixteenth
+        //   bipedRightArm.rotateAngleY = -Quarter       bipedLeftArm.rotateAngleY =  Quarter
+        //
+        // 🔴 사용자 보고 fix v4 (2026-05-04 — "팔 흔들림 좌우 → 위아래" 13단계 시행착오 정착):
+        //   원인: vanilla ModelPart.rotate 의 rotationZYX(roll, yaw, pitch) hardcoded.
+        //         원본 yaw = -π/2 정확히 ZYX gimbal lock 영역.
+        //         JOML getEulerAnglesZYX 분해 부정확 → qDiff angle = π (정반대 회전 손실).
+        //         setAnglesYZX/YXZ 헬퍼 + 직접 set 모두 손실 발생.
+        //   디버그 dump 검증:
+        //     INTENT (의도 1.7.10 YZX) hand X = -8.83 정적 (어깨 옆 펼침), slidY 진동 1.4 (위아래 ✓).
+        //     REAL (분해 후 vanilla ZYX) hand X = -1.36~-2.85 (가운데 모임 ✗), slidY 정적 (위아래 X ✗).
+        //   해결: MixinModelPart 으로 ModelPart.rotate 의 rotationZYX 우회 → 의도 q 직접 적용.
+        //         메모리 feedback_zxy_zyx_rotation_order.md 가이드라인 (큰 yaw 헬퍼 금지) 준수.
+        float armYaw = -QUARTER;
         float rPitch = MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
-        float lPitch = MathHelper.cos(distance - HALF) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
-        setAnglesYZX(rightArm, rPitch, -QUARTER,  SIXTEENTH);
-        setAnglesYZX(leftArm,  lPitch,  QUARTER, -SIXTEENTH);
+        float lPitch = MathHelper.cos(distance - HALF)    * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
+
+        // 의도 q = q_x(pitch) * q_z(roll) * q_y(yaw) — 원본 1.7.10 YZX 매트릭스.
+        Quaternionf qRight = new Quaternionf().rotationY(armYaw);
+        qRight.premul(new Quaternionf().rotationZ(SIXTEENTH));
+        qRight.premul(new Quaternionf().rotationX(rPitch));
+        ((SmModelPartOverride)(Object) rightArm).sm_setOverrideQuat(qRight);
+
+        Quaternionf qLeft = new Quaternionf().rotationY(-armYaw);
+        qLeft.premul(new Quaternionf().rotationZ(-SIXTEENTH));
+        qLeft.premul(new Quaternionf().rotationX(lPitch));
+        ((SmModelPartOverride)(Object) leftArm).sm_setOverrideQuat(qLeft);
     }
+
 
     /**
      * isFlying (creative): 창작 모드 비행.

@@ -13,6 +13,7 @@
     "MixinKeyboardInput",
     "MixinLivingEntityClient",
     "MixinLivingEntityRenderer",
+    "MixinModelPart",
     "MixinPlayerEntityClient",
     "MixinCapeFeatureRenderer",
     "MixinPlayerEntityModelClient",
