@@ -665,6 +665,18 @@ public abstract class MixinLivingEntityClient {
         // isSwimming_sm/isDiving: SM 자체 body X 기울기 애니메이션과 충돌 방지
         if (sm.isCrawling || sm.isCrawlClimbing || sm.isSwimming_sm || sm.isDiving) {
             cir.setReturnValue(false);
+            return;
+        }
+        // 🔴 (2026-05-04 사용자 보고 — "슬라이딩 → standing 시 잠깐 수영 애니"):
+        //   원인: SM crawl 종료 후 standing 진입 시 1 frame 동안 server→client pose sync
+        //         lag 로 pose=SWIMMING 잔존 (SM swim state 모두 false 인데도). vanilla
+        //         updateLeaningPitch 가 isInSwimmingPose=true → leaningPitch +=0.09.
+        //         다음 6~7 frame 동안 lerp down 하며 vanilla setupTransforms 가 -90° X
+        //         회전 lerp 적용 → 잠깐 수영 자세 보임.
+        //   해결: SM enabled + pose=SWIMMING + SM swim 분기 모두 false = orphan pose.
+        //         isInSwimmingPose=false 강제 → leaningPitch +=0.09 차단 → 누적 X.
+        if (player.getPose() == net.minecraft.entity.EntityPose.SWIMMING) {
+            cir.setReturnValue(false);
         }
     }
 
@@ -687,6 +699,13 @@ public abstract class MixinLivingEntityClient {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isCrawlClimbing || sm.isSwimming_sm || sm.isDiving
                 || sm.isHeadJumping || sm.isSliding) {
+            cir.setReturnValue(0F);
+            return;
+        }
+        // 🔴 orphan SWIMMING pose 가드 (sm_isInSwimmingPose_client 와 동일 가드):
+        //   pose=SWIMMING 인데 SM swim 분기 모두 false → leaningPitch field 잔존 가능 →
+        //   setupTransforms 의 swim 회전 lerp 적용 차단.
+        if (player.getPose() == net.minecraft.entity.EntityPose.SWIMMING) {
             cir.setReturnValue(0F);
         }
     }
