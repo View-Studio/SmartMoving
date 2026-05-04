@@ -517,7 +517,12 @@ public class MixinPlayerEntityRenderer {
         //   ※ 모델 위치 -1m 보정 (박스 안) 은 sm_getPositionOffset 분기에서 처리 (BUG#5).
         if (sm.isSliding) {
             float tiltAngle = (float) Math.PI / 2f; // Quarter
-            float pivotY = 1.5f - 5f / 16f;    // = 1.1875 (bipedOuter pivot Y=+5 회전 origin)
+            // 🔴 (2026-05-04 사용자 요청 — "슬라이딩 머리 위치 엎드리기와 통일"):
+            //   원본 isSlide L448 = bipedOuter.rotationPointY=5F (= pivotY 1.1875).
+            //   원본 isCrawl L405 = bipedTorso.rotationPointY=3F (= pivotY 1.3125).
+            //   원본은 두 자세 회전 중심 12.5cm 차이 → 슬라이딩 머리가 엎드리기보다 앞.
+            //   사용자 명시 일관성 우선 — 슬라이딩 pivotY 를 엎드리기와 동일 (1.3125) 로 통일.
+            float pivotY = 1.5f - 3f / 16f;    // = 1.3125 (엎드리기와 동일 회전 중심)
 
             matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
