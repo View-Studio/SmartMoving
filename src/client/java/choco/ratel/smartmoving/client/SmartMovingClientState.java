@@ -1402,6 +1402,14 @@ public final class SmartMovingClientState {
                     || SmartMovingClimber.isFacedToSolidVine(player, isClimbCrawling);
             wouldWantCrawl =
                     !player.getAbilities().flying &&
+                    !isSliding &&  // 🔴 (2026-05-04 사용자 보고 — "비행 → grab+sneak 착지 슬라이딩 90° 꺾임"):
+                    //   원본은 분기 1 (isCrawling 자가유지) + 분기 2 (grab rising edge) 모두
+                    //   sliding 진입 시점에 자연 false (grabHold 라 rising edge 안 발생 + 진입
+                    //   직전 isCrawling=false 잔존). 우리 매핑은 어떤 path 가 비행 종료 시 1
+                    //   tick isCrawling=true 만들어 분기 1 자가유지 → 슬라이딩 + isCrawling=true
+                    //   동시 잔존 → setupTransforms 가 sliding R_x(-π/2) + crawling R_x(-78.75°)
+                    //   둘 다 적용 (별도 if) → 90° 꺾임 + setAngles 가 isCrawling 분기 우선 →
+                    //   엎드리기 자세. 명시 가드로 cycle 자체 차단.
                     (
                         (isCrawling && (inputContinueCrawl || contextContinueCrawl))
                         ||
@@ -3355,6 +3363,13 @@ public final class SmartMovingClientState {
         // 원본 L2226-L2229: grabPressed || wasHeadJumping 이면 isSliding, 아니면 toCrawling
         if (cfg.slide && cfg.enabled
                 && (SmartMovingKeys.grab.isPressed() || this.wasHeadJumping)) {
+            // 🔴 (2026-05-04 사용자 보고 — "비행 → grab+sneak 착지 슬라이딩 시 90° 꺾임 +
+            //   엎드리기 애니"): 진입 시점에 isCrawling=true 잔존 (다른 path 가 set 한 것)
+            //   할 수 있음. 원본은 standupIfPossible 호출 시점 isCrawling=false 보장 invariant.
+            //   우리 매핑은 잔존 가능 → setupTransforms 가 sliding R_x(-π/2) + crawling
+            //   R_x(-78.75°) 둘 다 적용 (별도 if) → 90° 꺾임. setAngles 도 isCrawling 분기
+            //   가 isSliding 보다 먼저 (= 엎드리기 자세). 진입 시 isCrawling=false 명시.
+            this.isCrawling = false;
             this.isSliding = true;
         } else {
             this.wasCrawling = this.toCrawling();
