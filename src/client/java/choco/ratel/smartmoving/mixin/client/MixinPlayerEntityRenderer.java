@@ -344,7 +344,26 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // 나머지(isClimb/isClimbCrawling/isCeilingClimb/isSliding/isAngleJumping) — 원본 rotatePlayer L269:
+        // 🔴 BUG-Slide-Anim-1 fix (2026-05-04): 원본 SmartMovingModel L447 1:1 복원.
+        //   원본 isSlide 분기:
+        //     L446 bipedOuter.fadeRotateAngleY = false   (fade 보간 비활성)
+        //     L447 bipedOuter.rotateAngleY = currentHorizontalAngle   (이동 방향, 절대값)
+        //   원본 rotatePlayer L147 의 renderYawOffset = forwardRotation 은 vanilla setupTransforms
+        //   가 R_y(-forwardRotation) cancel 효과 → 그 후 bipedOuter.Y = currentHorizontalAngle 직접
+        //   적용 → 최종 모델 yaw = currentHorizontalAngle (이동 방향). 마우스 회전 무관 → 모델은
+        //   진입 시점 이동 방향 유지 = 슬라이딩 미끄러짐 자연스러움.
+        //
+        //   이전 1.21.1 매핑은 fallthrough (smBodyYawOverride = forwardRotation = 마우스 yaw lerp)
+        //   라 마우스 따라 모델 같이 회전 → 사용자 보고 BUG.
+        //   fix: smBodyYawOverride = currentHorizontalAngle (도) — 원본 1:1.
+        //   fade 비활성 (원본 L446) → isHeadJumping/isRopeSliding 패턴 동일 (단순 적용).
+        if (sm.isSliding) {
+            smBodyYawActive = true;
+            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
+            return;
+        }
+
+        // 나머지(isClimb/isClimbCrawling/isCeilingClimb/isAngleJumping) — 원본 rotatePlayer L269:
         //   forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2 (player yaw 보간, 도)
         // isClimb/ClimbCrawling 은 원본 L308 forwardRotation/RadiantToAngle(라디안) 과 동등.
         // isCeilingClimb 의 `rotateY + horizontalAngle`(L476) 은 rotateY 공식 이식 필요 — 후속.
@@ -444,9 +463,18 @@ public class MixinPlayerEntityRenderer {
         }
 
         // SM 슬라이딩(isSliding): bipedOuter.rotateAngleX = Quarter
+        // 🔴 BUG-Slide-Anim-2 fix (2026-05-04 사용자 보고 — "모델이 하늘 보고 있어"):
+        //   원본 `bipedOuter.rotateAngleX = +π/2` 는 ModelPart 좌표계. vanilla scale(-1,-1,1)
+        //   영향으로 world 효과 = R_x(-π/2) → 모델 정면 → 아래쪽 (땅 봄).
+        //   우리 매핑 `matrices.multiply(POSITIVE_X.rotation(+π/2))` 는 vanilla setupTransforms
+        //   의 matrices stack 직접 조작 (= world 매트릭스). vanilla scale 후 적용이지만 회전은
+        //   부호 반전 효과 없음 → world R_x(+π/2) → 모델 정면 → 위쪽 (하늘 봄) BUG.
+        //   메모리 feedback_render_scale_negation.md 패턴: ModelPart R_x(theta) = world R_x(-theta).
+        //   matrices 직접 호출 시 부호 보정 필수 → -tiltAngle 사용.
+        //   smOuterTiltX 캐시 (망토 rotateX 클램프) 는 ModelPart 등가값 (원본 +π/2) 그대로 보존.
         if (sm.isSliding) {
             float tiltAngle = (float) Math.PI / 2f; // Quarter
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));   // ★ 부호 반전
             sm.smOuterTiltX = tiltAngle;
             // bipedOuter.rotationPointY = 5F
             matrices.translate(0f, 5f / 16f, 0f);
