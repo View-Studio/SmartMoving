@@ -3441,7 +3441,14 @@ public final class SmartMovingClientState {
 
         if (!restoreFromFlying) return;
 
-        boolean sneakPressed = player.isSneaking();
+        // 🔴 BUG-Fly2Slide (2026-05-04): `player.isSneaking()` → raw key state.
+        //   원본 L2207-L2208 `sneakButton.Pressed` = raw sneak key. 우리 매핑이 잘못
+        //   `player.isSneaking()` 사용 → `MixinClientPlayerEntity.sm_isSneaking_ClientPlayer`
+        //   inject 가 비행 직후 `isSlow=false` 등으로 false 반환 → `(sneak&&grab)=false` →
+        //   standUp 분기 잘못 매치 → heightOffset reset → 슬라이딩 진입 안 됨.
+        //   메모리 feedback_movementInput_vs_isSneaking.md 패턴 적용.
+        boolean sneakPressed = net.minecraft.client.MinecraftClient.getInstance()
+                .options.sneakKey.isPressed();
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
 
         if (!groundClose && !sneakPressed) {

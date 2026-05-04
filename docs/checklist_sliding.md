@@ -1,8 +1,9 @@
-# Sliding 기능 작업 체크리스트
+# Sliding 기능 작업 체크리스트 (완료)
 
 > 기반: `docs/research_sliding.md`. 범위: **기능**만 (애니메이션 별도).
 >
-> 핵심 누락 2건 fix + 1건 검증.
+> 핵심 누락 2건 fix + 1건 검증 + 인게임 검증 시 추가 발견 3건 fix 정착.
+> 사용자 2026-05-04 명시 완결 선언. 메모리: `project_sliding_complete.md`.
 
 ---
 
@@ -121,13 +122,30 @@
 
 ---
 
-## Phase E — 완료 처리
+## Phase E — 완료 처리 (완료)
 
 ### E-1. 메모리 등록
-- [ ] 모든 시나리오 통과 시 `project_sliding_function_complete.md` 작성 + `MEMORY.md` 인덱스 등록 — 다른 완결 메모리들과 동일한 "함부로 수정 금지" 패턴.
+- [x] `project_sliding_complete.md` 작성 + `MEMORY.md` 인덱스 등록.
 
 ### E-2. 다음 단계 안내
-- [ ] 슬라이딩 **애니메이션** 작업 (별도 리서치/체크리스트) — 사용자 다음 지시 대기.
+- [x] 슬라이딩 **애니메이션** 작업 (별도 리서치/체크리스트) 대기.
+
+---
+
+## 추가 fix (인게임 검증 시 발견)
+
+### F-1. 직접 진입 6-AND `!isSliding` 가드 제거
+- [x] `SmartMovingClientState.java` L1930 — 원본 L2553 1:1 (가드 없음). 비행 → 착지 + grab+sneak hold → toSlidingOrCrawling 후 같은 tick 직접 진입 매치 → `tryJump(SLIDE_DOWN)` motion 부스트 → 종료 분기 미매치 → 진입 유지.
+
+### F-2. 헤드점프 차징 차단 (`!sm.isSliding` 명시 가드)
+- [x] `SmartMovingJumper.java` L443 — 슬라이딩 중 점프키 입력 → 헤드점프 차징 차단. 원본은 vanilla sprint 자동 종료 의존이지만 forward hold 시 차단 미작동 → 명시 가드로 보완. SlideToHeadJumping 자동 전환은 별경로라 영향 없음.
+
+### F-3. ★ standupIfPossible(2) sneak raw key 사용 ★
+- [x] `SmartMovingClientState.java` L3566 — `player.isSneaking()` → `MinecraftClient.options.sneakKey.isPressed()`. `MixinClientPlayerEntity.sm_isSneaking_ClientPlayer` inject 가 비행 직후 false 반환 → 분기 결정 잘못 → BUG. 메모리 `feedback_movementInput_vs_isSneaking.md` 패턴 정확 매치.
+
+### F-4. debug log 추가 + 분석 + 제거
+- [x] DEBUG_SLIDE flag + slogSlide helper 한시 추가 → 인게임 trace → log_temp.txt 분석 → F-3 근본 원인 5분 만에 확정.
+- [x] fix 적용 + 인게임 검증 통과 후 debug log 코드 모두 제거.
 
 ---
 
