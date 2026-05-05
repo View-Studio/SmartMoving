@@ -830,6 +830,7 @@ public final class SmartMovingClientState {
     public boolean smPrevWasFlyingForLerpFix = false;
     public int smFlyingExitYSyncTicks = 0;
 
+
     /**
      * crawl-climbing 의 bodyAngleX fade lerp helper.
      * setupTransforms 에서 호출 → faded 값 저장 + 반환. setAngles 가 같은 frame 에서 read.

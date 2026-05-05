@@ -16,11 +16,21 @@ import net.minecraft.text.Text;
 public class SmartMovingClient implements ClientModInitializer {
 
     /**
-     * 🔴 (Phase 2 multi BUG-7 fix 디테일 조절용) remote ICC EXIT 시 entity.y up offset.
-     *   원리상 +1.0m (= ICC dim offset) 가 정확하지만 시각 자연스러움 위해 사용자 미세 조정.
-     *   사용처: registerClientReceivers 의 packet 처리 lambda 안 setPos +offset.
+     * 🔴 (Phase 2 multi BUG-7 fix) remote ICC EXIT 시 entity.y up offset.
+     *   ICC dim offset (= bb +1m, MixinEntity.sm_offsetBoundingBoxForFlying) 와 일치 →
+     *   bb 일관성 유지. 그랩 climbing (= 일반 블록) ICC EXIT 시 사용.
      */
     public static final double ICC_EXIT_REMOTE_Y_OFFSET = 1.0;
+
+    /**
+     * 🔴 (Phase 2 multi BUG-7 fix) remote ICC EXIT 사다리류 (= ladder/vine/scaffolding) 전용 offset.
+     *   사용자 보고 사다리에서 +1.0m fix 시 살짝 진동 → server-side 가 setPos +1m + gravity 후
+     *   broadcast 까지 2 단계 (= +1m → 위 칸 바닥). client v25.3 fix 가 +1.0m 즉시 → 0.16m 너무 위 →
+     *   vanilla lerp -0.16m down 추적 (= 5 tick = 250ms) 진동 인지.
+     *   사다리류는 server.y diff 가 정확 +0.84m 정도 (= setPos +1m - gravity 0.16m).
+     *   사용처: entity.isClimbing()=true (= ladder/vine/scaffolding) 시 적용.
+     */
+    public static final double ICC_EXIT_LADDER_Y_OFFSET = 0.84;
 
     /**
      * 🔴 (2026-05-05 사용자 보고 — "a 콘피그 off 시 a 측에서 모두 vanilla 보임"):
@@ -92,7 +102,11 @@ public class SmartMovingClient implements ClientModInitializer {
                     if (wasIcc && !target.isClimbCrawling
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
-                        double newY = remote.getY() + ICC_EXIT_REMOTE_Y_OFFSET;
+                        // 사다리류 (= ladder/vine/scaffolding) detect → 작은 offset.
+                        // 그랩류 (= 일반 블록 climbing) 는 ICC dim offset (= +1m) 그대로.
+                        boolean isLadderType = remote.isClimbing();
+                        double offset = isLadderType ? ICC_EXIT_LADDER_Y_OFFSET : ICC_EXIT_REMOTE_Y_OFFSET;
+                        double newY = remote.getY() + offset;
                         remote.setPosition(remote.getX(), newY, remote.getZ());
                         choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
                                 (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
