@@ -248,16 +248,11 @@ public final class SmartMovingServer {
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.initialized) return;
         sm.initialized = true;
-        // 원본: SmartMovingServerOptions.writeToProperties(player, toggle=false) → 플레이어별 속도 치환.
-        // playerSpeedExponents 에 해당 username 값이 있으면 move.speed.user.exponent 가 개인값으로 교체됨.
-        String username = player.getName().getString();
-        String[] lines = SmartMovingConfig.INSTANCE.globalConfig
-                ? SmartMovingConfig.INSTANCE.toArray(username)
-                : new String[0];
-        ServerPlayNetworking.send(player,
-                new SmartMovingNetwork.ConfigContentPayload(lines, null));
-        // 원본: SmartMovingServerOptions 생성자 끝에서 logConfigState(config, null, false) 호출.
-        // 1.21.1: initialize가 접속 시 매번 호출되므로 첫 접속자만 로그 남기도록 initialized 가드 뒤에 배치.
+        // 🔴 (2026-05-05 사용자 요청 — "config 는 자기 자체 toggle. 다른 player 무영향"):
+        //   server INSTANCE.globalConfig=true (default) 라 모든 client 에 config broadcast →
+        //   client Config = SERVER_CONFIG 강제 → 모든 client SM enabled/disabled 통제 BUG.
+        //   해결: broadcast 자체 stop. 각 client 가 자기 INSTANCE 사용.
+        //   server-side block-code 등 일부 옵션 사용자 명시 시 별도 작업.
         logConfigState(SmartMovingConfig.INSTANCE, null, false);
     }
 
@@ -269,15 +264,10 @@ public final class SmartMovingServer {
      * 1.21.1: initialize 와 동일 경로를 재사용하되, sm.initialized 체크 대신 강제 전송.
      */
     public static void broadcastConfig(MinecraftServer server) {
-        boolean global = SmartMovingConfig.INSTANCE.globalConfig;
-        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            SmartMovingServer sm = SmartMovingServer.get(p);
-            if (!sm.initialized) continue;
-            String un = p.getName().getString();
-            String[] lines = global ? SmartMovingConfig.INSTANCE.toArray(un) : new String[0];
-            ServerPlayNetworking.send(p,
-                    new SmartMovingNetwork.ConfigContentPayload(lines, null));
-        }
+        // 🔴 (2026-05-05 사용자 요청 — "config 자기 자체 toggle. 다른 player 무영향"):
+        //   adminToggleConfig (= server console / admin 권한) 가 호출하면 모든 client 의
+        //   Config 변경 → 모든 player SM disabled BUG. broadcast 자체 stop.
+        //   server-side INSTANCE 변경은 server-only 옵션 (= block-code) 용으로 유지.
     }
 
     /**

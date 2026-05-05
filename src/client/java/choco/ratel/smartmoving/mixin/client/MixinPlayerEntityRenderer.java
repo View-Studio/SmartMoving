@@ -33,10 +33,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Environment(EnvType.CLIENT)
 public class MixinPlayerEntityRenderer {
 
-    @Unique private static boolean smBodyYawActive;
-    @Unique private static float smBodyYawOverride;
-    /** BUG-27/32 (세션 47): 비행 시 추가 Y 회전 (horizontalAngle - lerpedYaw, 라디안). 0 = 추가 회전 없음. */
-    @Unique private static float smFlyingExtraYaw;
+    // 🔴 (Phase 2 fix-3-1) mixin static 3 개 → SmartMovingClientState instance field 로 이동.
+    //   기존 smBodyYawActive, smBodyYawOverride, smFlyingExtraYaw 가 mixin 의 single instance 라
+    //   multiplayer 시 두 player 동시 render 시 마지막 값으로 mixed → bodyYaw force 잘못 (BUG-C).
+    //   사용처: sm_captureBodyYaw 가 sm 인스턴스 통해 set, sm_modifyBodyYaw / sm_setupTransforms_TAIL
+    //   (ModifyArg / TAIL) 가 SmartMovingClientState.currentRenderTargetSm() 통해 read.
 
     /**
      * [9-6][12-6] getPositionOffset() 오버라이드.
@@ -54,71 +55,38 @@ public class MixinPlayerEntityRenderer {
             at = @At("HEAD"), cancellable = true)
     private void sm_getPositionOffset(AbstractClientPlayerEntity entity, float tickDelta,
                                        CallbackInfoReturnable<Vec3d> cir) {
-        // 자기 자신 (ClientPlayerEntity): 헤드점프 + 크롤링 분기
-        if (entity instanceof ClientPlayerEntity player) {
-            SmartMovingClientState sm = SmartMovingClientState.get(player);
+        // 🔴 (Phase 2 multi BUG-3) ClientPlayerEntity 분기 → 모든 player 통합.
+        //   기존: self 만 isCrawling/isCrawlClimbing/isSliding 시 -1m 보정. remote 는 미적용 →
+        //         사용자 보고 "슬라이딩 1블록 위 떠있음" + 엎드리기/CC 도 동일 BUG.
+        //   변경: 모든 player 처리. 기존 remote +0.125 (= 지면 뚫림 방지) 는 별도 case.
+        SmartMovingClientState sm = SmartMovingClientState.get(entity);
 
-            // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
-            if (sm.isHeadJumping && sm.heightOffset != 0f) {
-                cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
-                return;
-            }
+        // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
+        if (sm.isHeadJumping && sm.heightOffset != 0f) {
+            cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
+            return;
+        }
 
-            // 크롤링: SWIMMING 포즈 오프셋 대신 SM 크롤링 오프셋
-            // 🔴 -1m 추가 보정 (사용자 보고 fix — "공중에 떠있음", 2026-05-03):
-            //   원본 SmartMovingRender L160: `d1 += moving.heightOffset` (heightOffset=-1F isCrawling).
-            //   우리 매핑은 -0.125 만 (= vanilla getYOffset 만) → 모델 위치 1m 부족 → 박스 위 떠있음.
-            //   원본 박스 = (posY+1, posY+1.8) (heightOffset=-1F 박스 +1m 위) + 모델 -1m → 박스 안.
-            //   우리 박스 = (entity.y, entity.y+0.8) (mixin offset 안 됨, 기능 침범 금지) + 모델 -0.125
-            //   → 박스 위. 모델 위치만 -1m 추가 보정 (= 박스 dim/위치 영향 X) → 박스 안.
-            // 🔴 사용자 보고 단계별 fix (2026-05-03):
-            //   - 처음 -0.125 만: 위로 0.1m 떠있음 → -1m heightOffset 추가.
-            //   - -1.125: 시뮬 +0.1m 위. 사용자 "여전히 떠있음".
-            //   - -1.25: 시뮬 -0.025m 아래. 사용자 "땅 들어감".
-            //   → 정확 매핑 = 중간 값. 매핑 단위 일관성 (1/16 블록 = 1 px, 3/16 = bipedTorso.rotationPointY)
-            //     고려해 -1 - 3/16 = -1.1875 시도. 시뮬 위 0.04m (= 거의 일치).
-            //   원본 흐름: d1 += heightOffset(-1) + d1 += getYOffset(-0.125) + bipedTorso 효과.
-            //   1.21.1 매핑 차이로 정확 -1.125 안 맞음. 시각 결과 우선 fix.
-            if (sm.isCrawling) {
-                // 🔴 회전 중심 변경 보정 (사용자 보고 fix 2026-05-03):
-                //   직전 커밋 (회전 중심 1.5 → 1.3125, 17.5 cm 아래) → vertex Y 시뮬상 약 14 cm 아래
-                //   ((I - R_x) * pivot_diff 항 변화). getPositionOffset Y 14 cm 위로 보정.
-                //   -0.21 → -0.06 (= 0.21 - 0.15. scale 0.9375 적용 시 0.15 * 0.9375 = 0.141 m 위로).
-                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
-            }
-            // 🔴 사용자 보고 fix (2026-05-04 — "crawl-climbing 모델 1칸 위"):
-            //   원본 SmartMovingRender L156-L161: heightOffset 적용은 EntityOtherPlayerMP 만.
-            //     자기 자신 (local player) = heightOffset 무관 → 모델 = entity.posY + 1.5 (정상 STANDING 위치).
-            //   원본 entity.posY = 변경 X. 박스만 +1m (= setHeightOffset). 모델 발 = posY (= 지면).
-            //   우리 매핑 = isCrawlClimbing 시 entity.y 가 원본 posY + 1m (= setPos 보정으로 박스 위치 매핑).
-            //     → 모델 = entity.y + 1.5 = old + 2.5 (= 원본 보다 1m 위).
-            //   로그 검증: bb=(entity.y, entity.y+0.8), 사용자 시점 = entity.y + 0.62 = 원본 동일.
-            //     박스 + 시점 OK. 모델만 +1m 위쪽.
-            //   fix: 모델 -1m 보정 (= 박스/시점 영향 X). 일반 경로 + ICC 경로 모두 적용
-            //     (둘 다 entity.y +1m 잔존).
-            else if (sm.isCrawlClimbing) {
-                cir.setReturnValue(new Vec3d(0D, -1.0D, 0D));
-            }
-            // 🔴 사용자 보고 fix (2026-05-04 — "슬라이딩 모델 공중 떠있음"):
-            //   원본 setHeightOffset(-1F) → 박스 +1m up + 모델 = entity.posY + 1.501 (vanilla 위치) → 박스 안.
-            //   1.21.1 매핑: 박스 +1m offset 안 함 (기능 침범 금지) → 박스 = (entity.y, entity.y+0.8).
-            //     모델 vanilla 위치 = entity.y + 1.501 → 박스 위로 떠있음 BUG.
-            //   fix: 엎드리기 isCrawling 분기와 동일 -1m 보정 → 모델 박스 안.
-            //   엎드리기는 78.75° 회전 + scale*0.06 미세 보정 추가하지만, 슬라이딩은 90° 회전 +
-            //   pivotY 1.3125 (엎드리기 동일) → 같은 보정 적용 시 거의 동일 위치 유지.
-            else if (sm.isSliding) {
-                cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
-            }
+        // 크롤링: SWIMMING 포즈 오프셋 대신 SM 크롤링 오프셋
+        // 원본 SmartMovingRender L156-L161: heightOffset 적용 (= self+remote 모두).
+        if (sm.isCrawling) {
+            cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
+            return;
+        }
+        if (sm.isCrawlClimbing) {
+            cir.setReturnValue(new Vec3d(0D, -1.0D, 0D));
+            return;
+        }
+        if (sm.isSliding) {
+            // 🔴 (Phase 2 multi BUG-9 디테일 조정) 슬라이딩 모델 떠보임 — 0.06 → 0.19 (사용자 보고 기반 미세 조정 정착).
+            //   엎드리기 (-1.0 - scale*0.06) 와 다른 계수. multiplayer server reconcile 영향 추정.
+            cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.19D, 0D));
             return;
         }
 
         // 타인 플레이어 (B-14 / §16-22 / 원본 SmartMovingRender L124-L125):
         // !isOwnPlayer && entity.isSneaking() && isCrawl → d1 += 0.125 (지면 뚫림 방지)
-        // SM 상태는 C-24 State 패킷으로 동기화 (UUID 기반 조회).
-        SmartMovingClientState sm = SmartMovingClientState.get(entity.getUuid());
-        if (entity.isSneaking() && sm.isCrawling) {
-            cir.setReturnValue(new Vec3d(0D, 0.125D, 0D));
-        }
+        //   위 isCrawling 분기에서 이미 처리되므로 도달 X. (legacy 보존만)
     }
 
     /**
@@ -134,22 +102,35 @@ public class MixinPlayerEntityRenderer {
     private void sm_captureBodyYaw(AbstractClientPlayerEntity player, MatrixStack matrices,
                                     float animationProgress, float bodyYaw, float tickDelta, float scale,
                                     CallbackInfo ci) {
-        smBodyYawActive = false;
-        smFlyingExtraYaw = 0f;
-        SmartMovingClientState.smStandardFadeActive = false;  // 낙하/기본 상태 fade flag reset.
-        SmartMovingClientState.smFallingFadeMode = false;     // 낙하 mode flag reset.
-        SmartMovingClientState.smCrawlMode = false;            // isCrawl 전용 flag reset (head 보정 skip).
+        // 🔴 (Phase 2 fix-3-1) flag reset 도 player 별 instance — multiplayer 시 두 player 분리.
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        sm.smBodyYawActive = false;
+        sm.smFlyingExtraYaw = 0f;
+        sm.smStandardFadeActive = false;  // 낙하/기본 상태 fade flag reset.
+        sm.smFallingFadeMode = false;     // 낙하 mode flag reset.
+        sm.smCrawlMode = false;            // isCrawl 전용 flag reset (head 보정 skip).
         // 🔴 (세션 52b): partial tick 캐시 저장 (Mixin private static 제약 우회 — SmartMovingClientState 사용).
         //   setAngles inject (sm_animateFlying 등) 에서 getCurrentSpeed/getTotalDistance lerped getter 호출용.
+        //   tickDelta 는 player 무관 cursor 라 static 유지.
         SmartMovingClientState.globalCachedTickDelta = tickDelta;
         // 🔴 (2026-04-27) animationProgress 캐시 — 낙하/기본 상태 body fade 식 deltaT 계산용.
-        SmartMovingClientState.smCachedAnimationProgress = animationProgress;
+        sm.smCachedAnimationProgress = animationProgress;
         // body fade adjustment skip 가드 (force 분기 시 true).
-        SmartMovingClientState.smBodyYawActive_publicShared = false;
-        if (!(player instanceof ClientPlayerEntity localPlayer)) return;
-        // BUG-12 (세션 36): SM disabled 시 bodyYaw 오버라이드 안 함 → vanilla bodyYaw 그대로 (BUG-7 확장).
-        if (!SmartMovingConfig.Config.enabled) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
+        sm.smBodyYawActive_publicShared = false;
+        // 🔴 (Phase 1-A) bodyYaw force/fade 는 local 만 처리.
+        //   force 값 = sm.stats.currentHorizontalAngle 등 — stats 는 매 tick local 계산만,
+        //   다른 player 에 sync 안 됨 → force 시 default 0 적용 → 잘못된 yaw → "앞뒤 반대" BUG.
+        //   다른 player 는 vanilla bodyYaw 그대로 (= server-sync entity.bodyYaw 사용).
+
+        // 🔴 (Phase 2 fix-3-2) ClientPlayerEntity 가드 제거 — 모든 player force/fade 분기 처리.
+        //   force 값 (sm.stats.currentXxx) 은 fix-2 의 position delta 기반 stats 로 remote 도 정확.
+        //   localPlayer 변수명 그대로 두지만 실제 = 모든 player (local + remote, AbstractClientPlayerEntity).
+        AbstractClientPlayerEntity localPlayer = player;
+        // 🔴 (Phase 2 fix-3-2) cfg.enabled 검사 self-only 화 — BUG-CONFIG-2 fix 와 일관성.
+        //   self disabled → 자기 SM state 모두 false → 자동으로 vanilla.
+        //   remote 는 cfg 무관 SM 분기 진입 → SM state 따라 force 적용.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
+        // 🔴 (Phase 2 fix-3-1) sm 인스턴스는 reset 단계에서 이미 정의 (L139). 재선언 제거.
 
         // 원본 SmartMovingRender.rotatePlayer L271-274 조건 1:1.
         // 원본에는 isRopeSliding/isCrawling 단독 없음, 대신 isClimbCrawling 포함.
@@ -174,9 +155,9 @@ public class MixinPlayerEntityRenderer {
         //     의 head 보정 (netHeadYaw + bodyYaw_diff) 가 head.roll 에 영향 → max 50° 깨짐.
         //   진짜 fix: smStandardFadeActive=true 로 body fade lag + smCrawlMode=true 로 head 보정 skip.
         if (sm.isCrawling && !sm.isClimbing) {
-            SmartMovingClientState.smStandardFadeActive = true;   // body fade lag (= 부드러움)
-            SmartMovingClientState.smFallingFadeMode = false;
-            SmartMovingClientState.smCrawlMode = true;             // head 보정 skip (= max 50° 유지)
+            sm.smStandardFadeActive = true;   // body fade lag (= 부드러움)
+            sm.smFallingFadeMode = false;
+            sm.smCrawlMode = true;             // head 보정 skip (= max 50° 유지)
             return;
         }
 
@@ -204,12 +185,12 @@ public class MixinPlayerEntityRenderer {
                 //         fade lerp 만 적용 → vanilla 즉시 효과 + 추가 fade lag (원본 1:1).
                 //   smFallingFadeMode=true 는 유지 — sm_animateFalling head.yaw=0 force +
                 //   sm_modifyNetHeadYaw 보정 skip 발동용 (머리/몸 같이 회전).
-                SmartMovingClientState.smStandardFadeActive = true;
-                SmartMovingClientState.smFallingFadeMode = true;
+                sm.smStandardFadeActive = true;
+                sm.smFallingFadeMode = true;
             } else {
                 // 기본 상태: ModifyArg 가 fade lerp 적용 모드. smBodyYawActive=false 유지.
-                SmartMovingClientState.smStandardFadeActive = true;
-                SmartMovingClientState.smFallingFadeMode = false;
+                sm.smStandardFadeActive = true;
+                sm.smFallingFadeMode = false;
             }
             return;
         }
@@ -220,8 +201,8 @@ public class MixinPlayerEntityRenderer {
         //   방향으로 덮어쓰는 효과 = 분기 진입 전 카메라 방향 단독 적용과 동일).
         // 일반적으로 levitate 는 dive 자세와 함께 발생 (Levitation status effect).
         if (sm.isLevitating) {
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentCameraAngle);
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentCameraAngle);
             return;
         }
 
@@ -260,8 +241,8 @@ public class MixinPlayerEntityRenderer {
                                                sm.smCeilingFade_prevTime, animationProgress);
             sm.smCeilingYaw_prev = laggedYawRad;
             sm.smCeilingFade_prevTime = animationProgress;
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(laggedYawRad);
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = (float) Math.toDegrees(laggedYawRad);
             return;
         }
 
@@ -272,8 +253,8 @@ public class MixinPlayerEntityRenderer {
             float horizontalAngle = dist < threshold
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
             return;
         }
 
@@ -328,10 +309,10 @@ public class MixinPlayerEntityRenderer {
             float horizontalAngle = sm.stats.horizontalDistance < 0.05F
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
-            smBodyYawActive = true;
-            smBodyYawOverride = 0f;  // vanilla POSITIVE_Y(180-0)=POSITIVE_Y(180) → 모델 정면 정상.
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = 0f;  // vanilla POSITIVE_Y(180-0)=POSITIVE_Y(180) → 모델 정면 정상.
             // bipedOuter.rotateAngleY 효과: horizontalAngle (절대값, fade 보간).
-            smFlyingExtraYaw = horizontalAngle;
+            sm.smFlyingExtraYaw = horizontalAngle;
             // 🔴 (2026-04-27) 원본 SmartMovingRender L145-L148 1:1 복구.
             //   `entity.renderYawOffset = forwardRotation (=lerpedYaw)` 매 frame 강제.
             //   비행 동작 자체엔 영향 없음 (sm_modifyBodyYaw ModifyArg 가 0 으로 덮어씀,
@@ -349,8 +330,8 @@ public class MixinPlayerEntityRenderer {
         //   진짜 fix 는 sm_captureBodyYaw 의 !smActive 분기 위 isCrawl && !isClimbing 가드 (위 참조).
         // isHeadJumping/isRopeSliding (원본 L740/L279) — threshold 없이 currentHorizontalAngle
         if (sm.isHeadJumping || sm.isRopeSliding) {
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
             return;
         }
 
@@ -379,9 +360,9 @@ public class MixinPlayerEntityRenderer {
         //   엎드리기 isCrawling 분기 (위 L179) 와 동일 패턴: smCrawlMode=true → sm_modifyNetHeadYaw
         //     보정 skip → vanilla netHeadYaw (≈ 0) 그대로 → head.roll ≈ 0.
         if (sm.isSliding) {
-            smBodyYawActive = true;
-            smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
-            SmartMovingClientState.smCrawlMode = true;   // ★ sm_modifyNetHeadYaw 보정 skip
+            sm.smBodyYawActive = true;
+            sm.smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentHorizontalAngle);
+            sm.smCrawlMode = true;   // ★ sm_modifyNetHeadYaw 보정 skip
             // 🔴 BUG-Slide-Anim-A2 fix (2026-05-04 사용자 보고 — "마우스 회전 시 머리 흔들림 안 사라짐"):
             //   원본 SmartMovingRender.rotatePlayer L145-L148 1:1: SM 활성 분기 (isSliding 포함)
             //   에서 `entity.renderYawOffset = forwardRotation (=lerpedYaw)` 매 frame 강제.
@@ -408,8 +389,8 @@ public class MixinPlayerEntityRenderer {
         //   forwardRotation = prevRotationYaw + (rotationYaw - prevRotationYaw) * f2 (player yaw 보간, 도)
         // isClimb/ClimbCrawling 은 원본 L308 forwardRotation/RadiantToAngle(라디안) 과 동등.
         // isCeilingClimb 의 `rotateY + horizontalAngle`(L476) 은 rotateY 공식 이식 필요 — 후속.
-        smBodyYawActive = true;
-        smBodyYawOverride = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
+        sm.smBodyYawActive = true;
+        sm.smBodyYawOverride = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
     }
 
     /**
@@ -425,28 +406,40 @@ public class MixinPlayerEntityRenderer {
         index = 3
     )
     private float sm_modifyBodyYaw(float bodyYaw) {
+        // 🔴 (Phase 2 fix-3-1) ModifyArg 인자에 entity 없음 → currentRenderTarget cursor 통해 sm 인스턴스 lookup.
+        SmartMovingClientState sm = SmartMovingClientState.currentRenderTargetSm();
+        if (sm == null) return bodyYaw;
         // vanilla 1 frame lerped bodyYaw 캐시 (sm_modifyNetHeadYaw 의 head 보정에 사용).
-        SmartMovingClientState.smCachedBodyYawNaturalDeg = bodyYaw;
-        if (smBodyYawActive) {
-            SmartMovingClientState.smBodyYawActive_publicShared = true;
-            SmartMovingClientState.smStandardBodyYawPrev = smBodyYawOverride;
-            SmartMovingClientState.smStandardFadeTimePrev = SmartMovingClientState.smCachedAnimationProgress;
-            // 비행 외 분기에서 비행 fade prev 갱신용 — ModifyArg 의 실제 적용 결과 캐시.
-            SmartMovingClientState.smCachedBodyYawLaggedDeg = smBodyYawOverride;
-            return smBodyYawOverride;
-        }
-        // 🔴 (2026-04-27) 기본 상태 fade lerp — vanilla bodyYaw 위에 추가 lag (factor 0.2).
-        //   smStandardFadeActive=true && smBodyYawActive=false ⇔ 땅 위 기본 상태.
-        //   vanilla bodyYaw 의 자연 lerp (키보드 이동 시 몸 회전) 보존 + 마우스 회전 시 부드러움.
-        if (SmartMovingClientState.smStandardFadeActive) {
-            float lagged = SmartMovingClientState.applyFadeAngleDegrees(bodyYaw);
+        sm.smCachedBodyYawNaturalDeg = bodyYaw;
+        float result;
+        if (sm.smBodyYawActive) {
+            sm.smBodyYawActive_publicShared = true;
+            // 🔴 (Phase 2 multi BUG-10 v2) FORCE + FADE 결합 분기:
+            //   smBodyYawActive=true + smStandardFadeActive=true 동시 → force 값에 fade lerp 적용.
+            //   사용처: isCrawling remote (force = currentHorizontalAngle, fade 로 보간 유지).
+            if (sm.smStandardFadeActive) {
+                float lagged = sm.applyFadeAngleDegrees(sm.smBodyYawOverride);
+                sm.smCachedBodyYawLaggedDeg = lagged;
+                result = lagged;
+            } else {
+                sm.smStandardBodyYawPrev = sm.smBodyYawOverride;
+                sm.smStandardFadeTimePrev = sm.smCachedAnimationProgress;
+                // 비행 외 분기에서 비행 fade prev 갱신용 — ModifyArg 의 실제 적용 결과 캐시.
+                sm.smCachedBodyYawLaggedDeg = sm.smBodyYawOverride;
+                result = sm.smBodyYawOverride;
+            }
+        } else if (sm.smStandardFadeActive) {
+            // 🔴 (2026-04-27) 기본 상태 fade lerp — vanilla bodyYaw 위에 추가 lag (factor 0.2).
+            float lagged = sm.applyFadeAngleDegrees(bodyYaw);
             // head 보정용 캐시 — sm_modifyNetHeadYaw 가 lagged - natural 차이만큼 보정.
-            SmartMovingClientState.smCachedBodyYawLaggedDeg = lagged;
-            return lagged;
+            sm.smCachedBodyYawLaggedDeg = lagged;
+            result = lagged;
+        } else {
+            // vanilla 통과 — 비행 fade prev 갱신용 캐시도 vanilla bodyYaw.
+            sm.smCachedBodyYawLaggedDeg = bodyYaw;
+            result = bodyYaw;
         }
-        // vanilla 통과 — 비행 fade prev 갱신용 캐시도 vanilla bodyYaw.
-        SmartMovingClientState.smCachedBodyYawLaggedDeg = bodyYaw;
-        return bodyYaw;
+        return result;
     }
 
 
@@ -463,13 +456,16 @@ public class MixinPlayerEntityRenderer {
     private void sm_setupTransforms(AbstractClientPlayerEntity player, MatrixStack matrices,
                                      float animationProgress, float bodyYaw, float tickDelta, float scale,
                                      CallbackInfo ci) {
-        if (!(player instanceof ClientPlayerEntity localPlayer)) return;
+        // 🔴 (Phase 1-A) ClientPlayerEntity 가드 제거 — 다른 player render 도 SM 자세 적용.
+        //   localPlayer 변수명 그대로 두지만 실제 = 모든 player (local + remote).
+        AbstractClientPlayerEntity localPlayer = player;
         SmartMovingClientState sm = SmartMovingClientState.get(localPlayer);
 
         // BUG-12 (세션 36): SM disabled 시 모든 SM 분기 skip + smOuterTiltX = 0 reset →
         //   매 호출마다 0 으로 정리하므로 cape 클램프도 vanilla fallback (BUG-7 확장).
         sm.smOuterTiltX = 0f;
-        if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
 
         // B-17 capture (§16-25): outer.X 등가 tiltAngle 을 SmartMovingClientState.smOuterTiltX 에
         //   저장해 MixinCapeFeatureRenderer 에서 망토 X 회전 클램프 (70.523° - outerX_deg) 적용.
@@ -612,7 +608,7 @@ public class MixinPlayerEntityRenderer {
             //   첫 호출 = 즉시 target (= 진입 시 jump 허용 — 원본과 동일).
             //   그 후 매 frame height 변화 → target 변화 → lerp 부드러움 (= jitter 차단).
             //   원본 ModelRotationRenderer.GetIntermediateAngle 식 0.2 * deltaT 1:1.
-            float bodyAngleX = SmartMovingClientState.applyCrawlClimbFade(bodyAngleX_target, animationProgress);
+            float bodyAngleX = sm.applyCrawlClimbFade(bodyAngleX_target, animationProgress);
 
             // 부모 R_x 매핑 (원본 L265 bipedTorso.X = bodyAngleX 1:1).
             // 부호 반전 (메모리 feedback_render_scale_negation.md): input -bodyAngleX → 시각 +bodyAngleX.
@@ -621,15 +617,14 @@ public class MixinPlayerEntityRenderer {
             matrices.translate(0f, -1.5f, 0f);
         }
         // 🔴 fade reset (2026-05-04): isCrawlClimbing 종료 시 모든 fade prev field reset →
-        //   다음 진입 시 첫 호출 = prev=0 시작 (= 부드러운 전환).
-        //   bodyAngleX + legAngleX + legAngleZ 3 개 fade 모두 reset.
+        //   다음 진입 시 첫 호출 = CRAWL_TILT_ANGLE 시작 (= 부드러운 전환).
         if (!sm.isCrawlClimbing) {
-            SmartMovingClientState.smCrawlClimbBodyAngleXFaded = Float.NaN;
-            SmartMovingClientState.smCrawlClimbFadeTimePrev = Float.NaN;
-            SmartMovingClientState.smCrawlClimbLegAngleXFaded = Float.NaN;
-            SmartMovingClientState.smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
-            SmartMovingClientState.smCrawlClimbLegAngleZFaded = Float.NaN;
-            SmartMovingClientState.smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
+            sm.smCrawlClimbBodyAngleXFaded = Float.NaN;
+            sm.smCrawlClimbFadeTimePrev = Float.NaN;
+            sm.smCrawlClimbLegAngleXFaded = Float.NaN;
+            sm.smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
+            sm.smCrawlClimbLegAngleZFaded = Float.NaN;
+            sm.smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
         }
 
         // isFlying body X 기울기: θ = (Quarter - verticalAngle) * walkFactor (C-42, A-30 SmartStatistics)
@@ -650,7 +645,7 @@ public class MixinPlayerEntityRenderer {
                     ? Math.abs(sm.stats.currentVerticalAngle)
                     : sm.stats.currentVerticalAngle;
             float thetaTarget = ((float) Math.PI / 2f - verticalAngle) * walkFactor;
-            float yawTarget = smFlyingExtraYaw;
+            float yawTarget = sm.smFlyingExtraYaw;
 
             // 🔴 fade 보간 적용 (Flying Phase / 세션 49): 원본 ModelRotationRenderer.fadeIntermediate
             //   매 프레임 호출 1:1 매핑.
@@ -691,9 +686,9 @@ public class MixinPlayerEntityRenderer {
             //   여기서 yawLerped_deg 로 덮어쓰기 → 비행 → standard 전환 시 lerp 자연 시작.
             //   사용자 보고 "비행 릴리즈 시 몸통 한번 돌아감" 해소.
             float yawLerpedDeg = (float) Math.toDegrees(yawLerped);
-            SmartMovingClientState.smCachedBodyYawLaggedDeg = yawLerpedDeg;
-            SmartMovingClientState.smStandardBodyYawPrev = yawLerpedDeg;
-            SmartMovingClientState.smStandardFadeTimePrev = animationProgress;
+            sm.smCachedBodyYawLaggedDeg = yawLerpedDeg;
+            sm.smStandardBodyYawPrev = yawLerpedDeg;
+            sm.smStandardFadeTimePrev = animationProgress;
         }
 
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
@@ -725,7 +720,7 @@ public class MixinPlayerEntityRenderer {
         //   원본 SmartRender bipedOuter.previous 가 모든 분기 공통 단일 변수인 것을 매핑.
         if (!sm.isFlying) {
             sm.smOuterTiltX_prev = 0f;
-            sm.smOuterExtraYaw_prev = (float) Math.toRadians(SmartMovingClientState.smCachedBodyYawLaggedDeg);
+            sm.smOuterExtraYaw_prev = (float) Math.toRadians(sm.smCachedBodyYawLaggedDeg);
             sm.smOuterFade_prevTime = animationProgress;
         }
 
@@ -733,7 +728,7 @@ public class MixinPlayerEntityRenderer {
         //   천장 등반 외 분기에서 prev = 직전 vanilla 또는 SM bodyYaw (라디안).
         //   진입 첫 frame fade 자연 시작 (이전값 → target lerp).
         if (!sm.isCeilingClimbing) {
-            sm.smCeilingYaw_prev = (float) Math.toRadians(SmartMovingClientState.smCachedBodyYawLaggedDeg);
+            sm.smCeilingYaw_prev = (float) Math.toRadians(sm.smCachedBodyYawLaggedDeg);
             sm.smCeilingFade_prevTime = animationProgress;
         }
     }
@@ -756,7 +751,8 @@ public class MixinPlayerEntityRenderer {
         if (entity instanceof ClientPlayerEntity) return;
         SmartMovingClientState sm = SmartMovingClientState.get(entity.getUuid());
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(entity)) return;
 
         // 크롤 중 이름 숨김 (crawlNameTag=false)
         if (sm.isCrawling && !sm.isClimbing && !cfg.crawlNameTag) {

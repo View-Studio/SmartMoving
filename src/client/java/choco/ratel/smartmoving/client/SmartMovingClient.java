@@ -8,11 +8,29 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
 
 public class SmartMovingClient implements ClientModInitializer {
+
+    /**
+     * 🔴 (2026-05-05 사용자 보고 — "a 콘피그 off 시 a 측에서 모두 vanilla 보임"):
+     *   render-path 의 `Config.enabled` 검사가 자기 client cfg → a disabled 시 자기 측에서
+     *   모든 player render 의 SM 분기 차단 → 모두 vanilla. remote 측은 자기 cfg=true 라 정상.
+     *   해결: render-path enabled 검사를 self-only 로 한정.
+     *     - self → 자기 Config.enabled
+     *     - remote → 항상 true (= 자기 cfg 무관, remote 의 SM state 자체 분기)
+     *   self 가 disabled 면 자기 SM state 모두 false (= state update / packet 송신 stop) 라
+     *   remote 측에서 자기는 자동으로 vanilla 표시 (= 정확).
+     */
+    public static boolean isSmRenderEnabled(net.minecraft.entity.Entity entity) {
+        if (SmartMovingConfig.Config.enabled) return true;
+        // 자기 cfg disabled — remote player 만 통과 (= vanilla cfg 무관 + remote 의 SM 분기 정상).
+        if (!(entity instanceof AbstractClientPlayerEntity ap)) return false;
+        return ap != MinecraftClient.getInstance().player;
+    }
 
     @Override
     public void onInitializeClient() {
@@ -48,7 +66,14 @@ public class SmartMovingClient implements ClientModInitializer {
                     if (world == null) return;
                     Entity entity = world.getEntityById(payload.entityId());
                     if (entity == null) return;
-                    SmartMovingClientState.get(entity.getUuid()).processStatePacket(payload.state());
+                    SmartMovingClientState target = SmartMovingClientState.get(entity.getUuid());
+                    target.processStatePacket(payload.state());
+                    // 🔴 (Phase 2 multi BUG-12/14) packet 도착 시 dim 즉시 갱신 → vanilla pose sync 대기
+                    //   없이 sm.* 비트 따라 dim 결정. boolean OR 가드 제거 — 여러 비트 동시 변경 시
+                    //   감지 누락 회피. dim 동일 시 vanilla 자체 영향 미미.
+                    if (entity instanceof net.minecraft.entity.LivingEntity living) {
+                        living.calculateDimensions();
+                    }
                 });
             });
 
@@ -127,46 +152,23 @@ public class SmartMovingClient implements ClientModInitializer {
     // 주의: 서버 연결 해제 시 Config 복원은 registerConnectionEvents() DISCONNECT에서 처리.
     // A-26: 메시지 문자열 원본 확인 완료. 키 → en_us.json smartmoving.message.config.server.*
     private static void processConfigContentPacket(String[] content) {
+        // 🔴 (2026-05-05 사용자 요청 — "config 는 자기 자체 toggle. 다른 player 무영향"):
+        //   원본은 server admin 의 명시 활성 시만 broadcast 의도. 우리 server 매핑이
+        //   무조건 broadcast → 모든 client Config 변경 → 모든 SM disabled BUG.
+        //   해결: Config 자체 변경 제거. server-broadcast 무시 — 모든 client 자기 INSTANCE
+        //   사용. 자기 disabled = 자기 SM state 갱신 안 함 → packet 송신 안 함 → 다른
+        //   client 측에서 자기 vanilla 표시 (= 정확).
+        //   SERVER_CONFIG 자체 갱신은 server-side 옵션 (= block-code 등) 이 사용 가능하도록
+        //   유지. 그러나 client Config 는 INSTANCE 그대로.
         MinecraftClient client = MinecraftClient.getInstance();
-        if (content == null) {
-            // SM 완전 비활성 — Config = INSTANCE 유지
+        if (content == null || content.length == 0) {
+            // 메시지만 (= 원본 message). Config 변경 안 함.
             return;
         }
-        if (content.length == 0) {
-            // 서버가 클라이언트 자체 설정에 위임
-            // 원본 메시지: "Using local Smart Moving configurations"
-            SmartMovingConfig.Config = SmartMovingConfig.INSTANCE;
-            if (client.player != null)
-                client.player.sendMessage(Text.translatable("smartmoving.message.config.server.local"));
-            return;
-        }
-        // 첫 수신 여부 추적 (원본: first = Config != ServerConfig)
-        boolean first = SmartMovingConfig.Config != SmartMovingConfig.SERVER_CONFIG;
-        boolean wasEnabled = SmartMovingConfig.Config.enabled;
-        // 서버 설정 수신 → SERVER_CONFIG 갱신
+        // SERVER_CONFIG 갱신 (= server-side 일부 옵션 read 용. client Config 무관).
         SmartMovingConfig.SERVER_CONFIG.loadFromArray(content);
-        if (first) {
-            // 최초 서버 설정 적용 → Config = SERVER_CONFIG 전환
-            SmartMovingConfig.Config = SmartMovingConfig.SERVER_CONFIG;
-            // 원본 메시지: "Using Smart Moving server configuration"
-            if (client.player != null)
-                client.player.sendMessage(Text.translatable("smartmoving.message.config.server.global"));
-            // 클라이언트 버전 정보를 서버에 전송 (원본: sendConfigInfo(instance, _sm_current))
-            ClientPlayNetworking.send(new SmartMovingNetwork.ConfigInfoPayload(SmartMovingConfig.SM_VERSION));
-        } else {
-            // first=false: 재설정 — Config = SERVER_CONFIG는 이미 유지됨
-            // 원본은 wasEnabled/username/isGloballyConfigured로 세분화; 여기서는 단순화.
-            // 원본 단순 메시지: enabled→"update", disabled→"enable" or "disable"
-            String key;
-            if (wasEnabled && SmartMovingConfig.Config.enabled)
-                key = "smartmoving.message.config.server.update";
-            else if (SmartMovingConfig.Config.enabled)
-                key = "smartmoving.message.config.server.enable";
-            else
-                key = "smartmoving.message.config.server.disable";
-            if (client.player != null)
-                client.player.sendMessage(Text.translatable(key));
-        }
+        // ConfigInfo 송신 (= server 가 client 버전 인식).
+        ClientPlayNetworking.send(new SmartMovingNetwork.ConfigInfoPayload(SmartMovingConfig.SM_VERSION));
     }
 
     // ── 4-4: processBlockCode ────────────────────────────────────────────────

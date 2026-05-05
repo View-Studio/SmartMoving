@@ -38,7 +38,9 @@ public abstract class MixinLivingEntityRenderer {
         if (!(entity instanceof AbstractClientPlayerEntity) || entity instanceof ClientPlayerEntity)
             return entity.isSneaky();
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled || !cfg.sneakNameTag) return entity.isSneaky();
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(entity)) return entity.isSneaky();
+        if (!cfg.sneakNameTag) return entity.isSneaky();
         // sneakNameTag=true: 스니킹 중이어도 isSneaky()=false → 64 거리 기준 적용
         return false;
     }
@@ -66,21 +68,16 @@ public abstract class MixinLivingEntityRenderer {
         index = 4
     )
     private float sm_modifyNetHeadYaw(float netHeadYaw) {
+        // 🔴 (Phase 2 fix-3-1) sm 인스턴스 lookup — sm_currentRenderPlayer (= 현재 render 중 player).
+        if (sm_currentRenderPlayer == null) return netHeadYaw;
+        SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
         // 🔴 (2026-04-27) head 가 vanilla cameraYaw 추적 유지하도록 보정.
-        //   기본 상태: ModifyArg sm_modifyBodyYaw 가 bodyYaw → lagged 로 force.
-        //   이전 b876203 매핑 (force=0 + R_y(-yawLerped)) 의 보정식:
-        //     netHeadYaw + bodyYaw_natural - yawLerped (yawLerped = cameraAngle fade lag).
-        //   새 매핑의 등가 변수: lagged = vanilla bodyYaw 의 fade lag → yawLerped 자리에 lagged.
-        //   = netHeadYaw + bodyYaw_natural - lagged.
-        //
-        //   낙하 (smFallingFadeMode=true): sm_animateFalling head.yaw=0 force 가 덮어씀 → skip.
-        // 🔴 (2026-05-03) isCrawl 시 head 보정 skip — head.roll 에 vanilla netHeadYaw (= max 50°
-        //   clamp 그대로) 적용. body 는 sm_modifyBodyYaw 의 fade lag 그대로.
-        if (SmartMovingClientState.smCrawlMode) return netHeadYaw;
-        if (!SmartMovingClientState.smStandardFadeActive) return netHeadYaw;
-        if (SmartMovingClientState.smFallingFadeMode) return netHeadYaw;
-        return netHeadYaw + SmartMovingClientState.smCachedBodyYawNaturalDeg
-                - SmartMovingClientState.smCachedBodyYawLaggedDeg;
+        float result;
+        if (sm.smCrawlMode) result = netHeadYaw;
+        else if (!sm.smStandardFadeActive) result = netHeadYaw;
+        else if (sm.smFallingFadeMode) result = netHeadYaw;
+        else result = netHeadYaw + sm.smCachedBodyYawNaturalDeg - sm.smCachedBodyYawLaggedDeg;
+        return result;
     }
 
     /**
@@ -113,6 +110,8 @@ public abstract class MixinLivingEntityRenderer {
                                          MatrixStack matrices, VertexConsumerProvider vertexConsumers,
                                          int light, CallbackInfo ci) {
         sm_currentRenderPlayer = entity instanceof AbstractClientPlayerEntity p ? p : null;
+        // 🔴 (Phase 2 fix-3-1) ModifyArg 등 entity 인자 없는 mixin point 가 lookup 위해 사용.
+        SmartMovingClientState.currentRenderTarget = sm_currentRenderPlayer;
 
         // 🔴 사용자 보고 fix (2026-05-04 — "1칸 공간 재진입 시 잠깐 SWIMMING 모델 보임"):
         //   원인: server 가 pose=SWIMMING 동기화 → client 첫 frame render 시점
@@ -145,6 +144,18 @@ public abstract class MixinLivingEntityRenderer {
         }
     }
 
+    /**
+     * 🔴 (Phase 2 fix-3-1) render TAIL — currentRenderTarget cursor clear.
+     *   render 가 nested call 되는 경우는 거의 없으나, 안전하게 clear (= 다음 frame init 안전).
+     */
+    @Inject(method = "render", at = @At("TAIL"))
+    private void sm_clearRenderEntity(LivingEntity entity, float yaw, float tickDelta,
+                                       MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                       int light, CallbackInfo ci) {
+        sm_currentRenderPlayer = null;
+        SmartMovingClientState.currentRenderTarget = null;
+    }
+
     @ModifyArg(
         method = "render",
         at = @At(value = "INVOKE",
@@ -153,8 +164,8 @@ public abstract class MixinLivingEntityRenderer {
     )
     private float sm_modifyLimbSwing(float limbSwing) {
         if (sm_currentRenderPlayer == null) return limbSwing;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return limbSwing;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(sm_currentRenderPlayer)) return limbSwing;
         SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
         // 🔴 (사용자 보고: 점프/낙하 시 팔다리 앞뒤 swing) — 원본 SmartRenderModel.animateArmSwinging
         //   입력 `totalHorizontalDistance` (수평만) 1:1. getTotalDistance (3D, 수직 포함) 사용 시
@@ -171,8 +182,8 @@ public abstract class MixinLivingEntityRenderer {
     )
     private float sm_modifyLimbSwingAmount(float limbSwingAmount) {
         if (sm_currentRenderPlayer == null) return limbSwingAmount;
-        SmartMovingConfig cfg = SmartMovingConfig.Config;
-        if (!cfg.enabled) return limbSwingAmount;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(sm_currentRenderPlayer)) return limbSwingAmount;
         SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
         // 🔴 동일 fix — `currentHorizontalSpeed` (수평만) 1:1. `getCurrentSpeed` (3D) 사용 시
         //   점프/낙하 시 팔다리 swing 발생 (사용자 보고).

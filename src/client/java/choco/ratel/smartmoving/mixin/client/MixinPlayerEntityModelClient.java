@@ -74,6 +74,47 @@ public abstract class MixinPlayerEntityModelClient {
     /** BipedEntityModel.leaningPitch — animateModel()에서 entity.getLeaningPitch()로 세팅됨 */
     @Shadow protected float leaningPitch;
 
+    // 🔴 (Phase 2 multi BUG-4) ModelPart pivot leak 차단 — single-instance 모델의 player 간 leak 방지.
+    //   원인: PlayerEntityModel 은 모든 player render 가 공유하는 single instance.
+    //   한 player 의 SM 분기 (= sm_animateCrawling 등) 가 head.pivotZ/body.pivotZ/leg.pivotX 등 변경 →
+    //   vanilla setAngles 가 일부 field 만 매 호출 시 reset → 다음 player render 시 잔존 → A 의 자세가 B 에 leak.
+    //   해결: 첫 setAngles HEAD 시 default pivot 캐시 → 매 setAngles HEAD 마다 caching 값 복원.
+    //   vanilla setAngles 가 sneak 분기 등에서 pivot 추가 변경 → SM 분기가 추가 변경 → 정상 흐름.
+    @Unique private boolean sm_pivotDefaultsCached = false;
+    @Unique private float sm_headPivotX, sm_headPivotY, sm_headPivotZ;
+    @Unique private float sm_bodyPivotX, sm_bodyPivotY, sm_bodyPivotZ;
+    @Unique private float sm_rArmPivotX, sm_rArmPivotY, sm_rArmPivotZ;
+    @Unique private float sm_lArmPivotX, sm_lArmPivotY, sm_lArmPivotZ;
+    @Unique private float sm_rLegPivotX, sm_rLegPivotY, sm_rLegPivotZ;
+    @Unique private float sm_lLegPivotX, sm_lLegPivotY, sm_lLegPivotZ;
+
+    @Unique
+    private void sm_cachePivotDefaultsIfNeeded() {
+        if (sm_pivotDefaultsCached) return;
+        sm_headPivotX = head.pivotX; sm_headPivotY = head.pivotY; sm_headPivotZ = head.pivotZ;
+        sm_bodyPivotX = body.pivotX; sm_bodyPivotY = body.pivotY; sm_bodyPivotZ = body.pivotZ;
+        sm_rArmPivotX = rightArm.pivotX; sm_rArmPivotY = rightArm.pivotY; sm_rArmPivotZ = rightArm.pivotZ;
+        sm_lArmPivotX = leftArm.pivotX;  sm_lArmPivotY = leftArm.pivotY;  sm_lArmPivotZ = leftArm.pivotZ;
+        sm_rLegPivotX = rightLeg.pivotX; sm_rLegPivotY = rightLeg.pivotY; sm_rLegPivotZ = rightLeg.pivotZ;
+        sm_lLegPivotX = leftLeg.pivotX;  sm_lLegPivotY = leftLeg.pivotY;  sm_lLegPivotZ = leftLeg.pivotZ;
+        sm_pivotDefaultsCached = true;
+    }
+
+    @Unique
+    private void sm_restorePivotDefaults() {
+        head.pivotX = sm_headPivotX; head.pivotY = sm_headPivotY; head.pivotZ = sm_headPivotZ;
+        body.pivotX = sm_bodyPivotX; body.pivotY = sm_bodyPivotY; body.pivotZ = sm_bodyPivotZ;
+        rightArm.pivotX = sm_rArmPivotX; rightArm.pivotY = sm_rArmPivotY; rightArm.pivotZ = sm_rArmPivotZ;
+        leftArm.pivotX  = sm_lArmPivotX; leftArm.pivotY  = sm_lArmPivotY; leftArm.pivotZ  = sm_lArmPivotZ;
+        rightLeg.pivotX = sm_rLegPivotX; rightLeg.pivotY = sm_rLegPivotY; rightLeg.pivotZ = sm_rLegPivotZ;
+        leftLeg.pivotX  = sm_lLegPivotX; leftLeg.pivotY  = sm_lLegPivotY; leftLeg.pivotZ  = sm_lLegPivotZ;
+        // vanilla setAngles 가 reset 안 하는 회전 field 도 복원 (= roll/yaw 일부) — leak 차단.
+        head.roll = 0f;
+        body.roll = 0f;
+        rightArm.roll = 0f; leftArm.roll = 0f;
+        rightLeg.roll = 0f; leftLeg.roll = 0f;
+    }
+
     /**
      * BipedEntityModel.sneaking — PlayerEntityRenderer.setModelPose 가 매 프레임
      * `model.sneaking = entity.isInSneakingPose()` 로 set. setAngles 의 sneak 분기
@@ -113,10 +154,13 @@ public abstract class MixinPlayerEntityModelClient {
             float limbSwing, float limbSwingAmount,
             float animationProgress, float headYaw, float headPitch,
             CallbackInfo ci) {
-        if (!(entity instanceof ClientPlayerEntity player)) return;
+        // 🔴 (2026-05-05 Phase 1-A) 다른 player render 시 SM 자세 적용 위해 가드 변경:
+        //   AbstractClientPlayerEntity = local + remote player 모두 포함.
+        if (!(entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
 
         // 1인칭 손 렌더 컨텍스트 (PlayerEntityRenderer.renderArm 진입 중) — SM 후킹 일체 skip.
         //   사용자 의도: 1인칭 시점의 손은 항상 vanilla 기본 자세 유지.
+        //   다른 player 는 firstPersonArmRender 컨텍스트 미진입 → 영향 X (가드 그대로).
         if (SmartMovingRenderContext.firstPersonArmRender) return;
 
         // 🔴 매 frame ModelPart override 클리어 (2026-05-04 sliding arm fix):
@@ -126,16 +170,24 @@ public abstract class MixinPlayerEntityModelClient {
         ((SmModelPartOverride)(Object) rightArm).sm_clearOverrideQuat();
         ((SmModelPartOverride)(Object) leftArm).sm_clearOverrideQuat();
 
+        // 🔴 (Phase 2 multi BUG-9 회귀 차단) sm_cachePivotDefaultsIfNeeded + sm_restorePivotDefaults 비활성.
+        //   원인: 첫 setAngles 시점에 cache 한 default 가 sneak 자세 등 vanilla 변경값일 가능성 →
+        //         이후 매 frame 잘못된 default 로 복원 → 슬라이딩 등 self 자세도 회귀.
+        //   대안: 가드 제거된 reset chunk 패턴 (L301 / cleanup 분기) — BUG-8 재처리 항목.
+
         // 항상 원본 저장 (cfgEnabled=false 분기에서도 TAIL 원복 안전 보장)
         smOriginalSneakingForFalling = sneaking;
 
-        if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        boolean isFallingForReset = !player.isOnGround()
-                && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
-                && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
-                && !player.isTouchingWater();
+        // 🔴 (Phase 2 multi BUG-1) fallDistance 직접 검사 → sm.doFallingAnimation 으로.
+        //   vanilla 1.21.1 server 가 다른 player 의 fallDistance 를 sync 안 함 → remote 측 항상 0
+        //   → sm_animateFalling 분기 미진입 → 사용자 보고 "낙하 애니메이션 안 보임".
+        //   sm.doFallingAnimation 은 SmartMovingState bit 16 으로 server-relay sync (자기 client 매 tick
+        //   계산 결과 송신). 정의 자체가 isFallingForReset 식 등가로 확장됨 (sendStatePacket 참조).
+        boolean isFallingForReset = sm.doFallingAnimation;
 
         // 🔴 weeping/twisting vines 등반 + sneak 시 사다리 자세와 동일 매핑 (사용자 보고 마무리):
         //   사다리 등반 + sneak: sm_resetSneakInClimb (MixinClientPlayerEntity L90) 가 input.sneaking
@@ -164,13 +216,15 @@ public abstract class MixinPlayerEntityModelClient {
             float limbSwing, float limbSwingAmount,
             float animationProgress, float headYaw, float headPitch,
             CallbackInfo ci) {
-        if (!(entity instanceof ClientPlayerEntity player)) return;
+        // 🔴 (2026-05-05 Phase 1-A) AbstractClientPlayerEntity = local + remote.
+        //   다른 player render 시 SM 자세 적용을 위해 가드 확장.
+        if (!(entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
 
-        // 1인칭 손 렌더 컨텍스트 — SM 변경 / outer layer 재동기화 모두 skip.
-        //   HEAD inject 도 같은 가드로 skip 되므로 sneaking 임시 변경 없음 → 원복 불필요.
-        //   renderArm 이 직접 arm.pitch / sleeve.pitch 를 0 으로 reset 후 렌더하므로
-        //   1인칭 손은 vanilla 기본 자세로 그려짐.
-        if (SmartMovingRenderContext.firstPersonArmRender) return;
+        // 🔴 (Phase 2 multi BUG-13) firstPersonArmRender 가드를 reset chunk 후로 이동.
+        //   기존: 진입 즉시 return → reset chunk skip → 다른 player 의 ModelPart 변경
+        //         (arm.roll, scales, leg.roll 등) 잔존 → 본인 1인칭 손에 leak.
+        //   변경: reset chunk 적용 후 SM 분기 진입 직전 가드 → 1인칭 손 render 시도 reset 적용 →
+        //         ModelPart 가 default 로 → 본인 1인칭 손 정상 자세.
 
         // 🔴 sneaking 원복 — HEAD 에서 임시 false 로 set 한 값을 vanilla setAngles 종료 직후
         //   복구. 같은 프레임 내 layer renderer (cape/armor) 가 copyBipedStateTo 등으로
@@ -187,16 +241,18 @@ public abstract class MixinPlayerEntityModelClient {
         //   기존: vanilla `player.getAbilities().flying` 만 → SM disabled 시에도 anySmState true →
         //   sm_animateFlying 호출 + reset 인프라 작동 → SM 비행 애니메이션 잔존 (= 토글 무용지물).
         //   해결: cfgEnabled && capabilities.flying 으로 변경 (SM enabled 일 때만 SM 비행 처리).
-        boolean cfgEnabled = SmartMovingConfig.Config.enabled;
-        boolean flyingCreative = cfgEnabled && player.getAbilities().flying;
+        // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
+        boolean cfgEnabled = choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player);
+        // 🔴 (Phase 1-A) 다른 player 도 비행 자세 적용 위해 sm.isFlying 사용.
+        //   이전 `player.getAbilities().flying` 은 Mojang datatracker 가 다른 player 에 미동기화
+        //   → 다른 player 항상 false → sm_animateFlying 미호출 BUG. sm.isFlying 은
+        //   server-relay sync 정상 (= local + remote 모두).
+        boolean flyingCreative = cfgEnabled && sm.isFlying;
         // 🔴 (2026-04-27): falling 도 anySmState 에 포함 — vanilla animateArms 가 swing 시
         //   body.yaw 흔들리는 효과 (사용자 보고 "공중 낙하 휘두름 시 몸통 움찔움찔") 를 reset
         //   인프라로 cancel. 진입 조건은 if-else 체인 falling 가드 (아래) 와 동일.
-        boolean isFallingForReset = cfgEnabled
-                && !player.isOnGround()
-                && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
-                && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
-                && !player.isTouchingWater();
+        // 🔴 (Phase 2 multi BUG-1) fallDistance 직접 검사 → sm.doFallingAnimation (server-relay sync).
+        boolean isFallingForReset = cfgEnabled && sm.doFallingAnimation;
         // 🔴 늘어진/휘어진 덩굴 (weeping_vines / twisting_vines) 시 사다리 자세 애니메이션 적용.
         //   사용자 의도: SM 자유 클라이밍 / 자동 진입 / sneak hold 등 기능 일체 적용 안 함.
         //   vanilla 1.21.1 사다리 등반 동작 그대로 (sm_travel_client 의 vanilla bypass 유지).
@@ -211,7 +267,7 @@ public abstract class MixinPlayerEntityModelClient {
                     || blockAtPos == Blocks.TWISTING_VINES_PLANT);
             // 🔴 사용자 보고 fix (2026-05-04 — "비행 중 vine 애니메이션 안 나오게"):
             //   비행 중 vine 자세 적용 X → 비행 자세 (= isFlying 분기) 진입.
-            if (isWeepingTwistingVines && player.getAbilities().flying) {
+            if (isWeepingTwistingVines && sm.isFlying) {
                 isWeepingTwistingVines = false;
             }
         }
@@ -287,25 +343,33 @@ public abstract class MixinPlayerEntityModelClient {
         //   이전 sm 분기의 변경이 다음 분기까지 누적되는 위험을 막기 위해 SM 분기 진입
         //   직전 또는 SM disabled 전환 시 (BUG-7) vanilla 기본값(0) 으로 reset.
         //   anySmState 외 (!cfgEnabled) 도 포함: SM disabled 시 잔존 SM 변경 정리.
-        if (anySmState || !cfgEnabled) {
-            head.pivotZ = 0f;
-            body.pivotZ = 0f;
-            body.yaw    = 0f;
-            head.roll   = 0f;
-            // 🔴 (2026-04-27): 낙하 body.yaw 처리와 동일 패턴 — vanilla animateArms 가 swing 시
-            //   leftArm.pivotZ = -sin(body.yaw)*5, leftArm.pivotX = cos(body.yaw)*5,
-            //   rightArm.pivotZ = sin(body.yaw)*5, rightArm.pivotX = -cos(body.yaw)*5 로
-            //   매 프레임 변동 → 비-preferred arm "어깨 앞뒤 움찔움찔" (사용자 보고 비행).
-            //   사용자 요청: "낙하 body.yaw cancel 방법 (reset 인프라) 을 비행 leftArm 에도 적용".
-            //   reset 인프라에서 양 arm.pivot 을 vanilla setAngles Step 4 기본값으로 강제 →
-            //   모든 SM 상태에 일관 적용. preferred arm 의 swing 효과 (매 프레임 변동) 도
-            //   cancel 되지만, body.yaw=0 후의 swing pivot 변동은 매우 작음 (cos(0)=1, sin(0)=0
-            //   에 가까운 값) → preferred arm visual 영향 미미.
-            leftArm.pivotX  =  5f;
-            leftArm.pivotZ  =  0f;
-            rightArm.pivotX = -5f;
-            rightArm.pivotZ =  0f;
-        }
+        // 🔴 (Phase 2 multi BUG-8) anySmState/cfgEnabled 가드 제거 — 매 frame 무조건 reset.
+        //   원인: PlayerEntityModel single instance — A 의 SM 분기에서 변경된 ModelPart field 가
+        //         B 의 setAngles 진입 시 잔존 → 사용자 보고 "a 가 엎드릴 때 b 도 같은 자세".
+        //         가드 (anySmState || !cfgEnabled) 가 self only 검증 → multi 환경 leak.
+        //   해결: 가드 제거. SM 분기 진입 안 한 player 의 setAngles 도 매번 reset → leak 차단.
+        //         vanilla standing 자세에서도 head.pivotZ=0/body.pivotZ=0/body.yaw=0/head.roll=0 default 유지 →
+        //         vanilla 영향 없음. arm.pivot 기본값 ±5/0 도 vanilla setAngles Step 4 의 default.
+        head.pivotZ = 0f;
+        body.pivotZ = 0f;
+        body.yaw    = 0f;
+        head.roll   = 0f;
+        leftArm.pivotX  =  5f;
+        leftArm.pivotZ  =  0f;
+        rightArm.pivotX = -5f;
+        rightArm.pivotZ =  0f;
+        // 🔴 (Phase 2 multi BUG-8 추가) sm_animateCrawling 의 set field 추가 reset:
+        //   sm_animateCrawling L1051-1052/L1062-1063/L1068-1073 가 leg.roll/arm.roll/scales 변경 →
+        //   vanilla setAngles 매 호출 시 reset 안 함 → 다른 player render 시 잔존 → 자세 leak.
+        //   매 frame default (0/1.0) 강제 → SM 분기 진입 시 sm_animateXxx 이 다시 set → 정상 흐름.
+        //   ※ arm.yaw 는 vanilla animateArms swing 시 set 하므로 reset 안 함 (= swing 효과 보존).
+        //   ※ self 도 reset 적용 — 다른 player 의 SM 자세 영향이 self render 에 leak 차단.
+        rightLeg.roll = 0f;
+        leftLeg.roll  = 0f;
+        rightArm.roll = 0f;
+        leftArm.roll  = 0f;
+        setLegScales(rightLeg, leftLeg, 1f, 1f);
+        setArmScales(rightArm, leftArm, 1f, 1f);
 
         // ── cloak.pitch 처리 (cfgEnabled 분기) — disabled 시 0 reset 작동 보장 ──
         // BUG-7 (세션 36): cfgEnabled 무관 매 호출 적용. cfgEnabled true → SIXTYFOURTH /
@@ -324,10 +388,20 @@ public abstract class MixinPlayerEntityModelClient {
         //   reset 인프라 + cloak.pitch 는 위에서 이미 처리되었으므로 잔존 정리는 보장.
         if (!cfgEnabled) return;
 
+        // 🔴 (Phase 2 multi BUG-13) 1인칭 손 render 시 SM 분기 skip — reset chunk 는 위에서 이미 적용.
+        //   다른 player setAngles 결과 (= ModelPart arm.roll/scales/leg.roll 등) 잔존이 본인 1인칭 손에 leak →
+        //   reset chunk 만 적용하고 SM 분기 진입 안 함 → ModelPart default → 본인 1인칭 손 정상.
+        if (SmartMovingRenderContext.firstPersonArmRender) return;
+
         // ── [12-7] smallOverGroundHeight 계산 ─────────────────────────────────
         // 원본: SmartMovingRender.rotatePlayer() → moving.getOverGroundHeight(5D)
         // isCrawlClimbing/isHeadJumping 상태에서만 발 아래 지면까지의 거리를 계산한다.
         if (sm.isCrawlClimbing || sm.isHeadJumping) {
+            // 🔴 (Phase 2 multi BUG-6) ClientPlayerEntity 가드 제거 — 모든 player 자체 계산.
+            //   computeSmallOverGroundHeight = entity 위치 + world block scan → server-sync entity.y +
+            //   client-side world 로 remote 도 정확 계산 가능.
+            //   기존: self only → remote 의 smallOverGroundHeight=0 → height=0.25 → bodyAngleX 큰 값 →
+            //         isCrawlClimbing 자세 시각상 잘못 (사용자 보고 "엎드려서 앞으로 가는 애니메이션만").
             sm.smallOverGroundHeight = computeSmallOverGroundHeight(player, player.getWorld());
         }
 
@@ -378,15 +452,10 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isHeadJumping) {
             sm_animateHeadJumping(sm);
         } else {
-            // isFalling: 낙하 중. 원본 `SmartMovingSelf.doFallingAnimation` (L3278-3282):
-            //   `!sp.onGround && sp.fallDistance > _fallAnimationDistanceMinimum.value` (기본 3F).
-            // isClimbing/isCrawlClimbing/isCeilingClimbing/isTouchingWater 가드는
-            //   if-else 우선순위가 이미 처리하지만 안전상 명시 유지.
-            boolean isFalling = !player.isOnGround()
-                    && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
-                    && !sm.isClimbing && !sm.isCrawlClimbing && !sm.isCeilingClimbing
-                    && !player.isTouchingWater();
-            if (isFalling) {
+            // 🔴 (Phase 2 multi BUG-1) fallDistance 직접 검사 → sm.doFallingAnimation (server-relay sync).
+            //   vanilla 1.21.1 server 가 remote 의 fallDistance 를 미동기 → 사용자 보고 "낙하 애니 안 보임".
+            //   doFallingAnimation 정의 자체가 isFalling 식 등가로 확장됨 (sendStatePacket 참조).
+            if (sm.doFallingAnimation) {
                 sm_animateFalling(sm, player);
             }
             // 🔴 (2026-04-28) isStandard 분기 swing 식 덮어쓰기 제거.
@@ -438,7 +507,7 @@ public abstract class MixinPlayerEntityModelClient {
      *   명시적 할당하므로 TAIL inject 에서 덮어쓰기 안전 (다음 프레임 자동 reset).
      *   원본 SR 어깨 노드(pivotY=2) 부재로 1.21.1 arm pivotY 기본=2 → -2 차감 = 0 (어깨 절대 위치 0 등가).
      */
-    private void sm_animateRopeSliding(float animationProgress, ClientPlayerEntity player) {
+    private void sm_animateRopeSliding(float animationProgress, net.minecraft.client.network.AbstractClientPlayerEntity player) {
         float time = animationProgress * 0.15f;
 
         // 머리 X/Z
@@ -690,10 +759,10 @@ public abstract class MixinPlayerEntityModelClient {
             //   legAngleX = π/4 = 큰 앞쪽 회전 → leg vertex 박스 침투.
             //   fix: legAngleX/legAngleZ 도 별도 fade 적용 (= 각각 prev=0 시작 → target lerp).
             //   setupTransforms 가 먼저 호출 → bodyAngleX_faded store 됨. 여기서 read.
-            bodyAngleX = SmartMovingClientState.smCrawlClimbBodyAngleXFaded;
+            bodyAngleX = sm.smCrawlClimbBodyAngleXFaded;
             // legAngleX/legAngleZ target = 위 if/else if/else 분기 결과. fade 0 시작 → target 점진.
-            legAngleX = SmartMovingClientState.applyCrawlClimbLegAngleXFade(legAngleX, animationProgress);
-            legAngleZ = SmartMovingClientState.applyCrawlClimbLegAngleZFade(legAngleZ, animationProgress);
+            legAngleX = sm.applyCrawlClimbLegAngleXFade(legAngleX, animationProgress);
+            legAngleZ = sm.applyCrawlClimbLegAngleZFade(legAngleZ, animationProgress);
             // 옵션 D 정확 1:1 매핑 (원본 isCrawlClimb 분기 L265-L276):
             //   L265 bipedTorso.X = bodyAngleX → setupTransforms 의 root R_x (별도 inject).
             //   L267-L268 bipedShoulder.X = -bodyAngleX → arm.pitch += -bodyAngleX (shoulder cancel).
@@ -980,6 +1049,22 @@ public abstract class MixinPlayerEntityModelClient {
         setArmScales(rightArm, leftArm,
                 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor,
                 1f + (MathHelper.cos(distance - QUARTER) - 1f) * 0.15f * walkFactor);
+
+        // 🔴 (Phase 2 multi BUG-12) vanilla setAngles 의 sneak 분기 set field cancel.
+        //   진입 edge frame 에 server-sync pose 가 CROUCHING 잔존 (= 직전 sneak 키 누름) +
+        //   sm.isCrawling=true (= SM packet 도착) 인 경우 vanilla setAngles 가 sneak 분기 진입 →
+        //   body.pivotY=3.2/head.pivotY=4.2/leg.pivotZ=4/arm.pivotY=5.2/leg.pivotY=12.2 set.
+        //   sm_animateCrawling 가 회전만 set → vanilla sneak pivotY 잔존 → 자세 부분별 어긋남.
+        //   해결: sneak 분기 set field 를 standing default 값 으로 강제 cancel.
+        //   self 측은 pose=SWIMMING 즉시 → vanilla sneak 분기 미진입 → 영향 없음.
+        body.pivotY = 0f;
+        head.pivotY = 0f;
+        rightArm.pivotY = 2f;
+        leftArm.pivotY = 2f;
+        rightLeg.pivotY = 12f;
+        leftLeg.pivotY = 12f;
+        rightLeg.pivotZ = 0f;
+        leftLeg.pivotZ = 0f;
     }
 
     /**
@@ -1096,7 +1181,7 @@ public abstract class MixinPlayerEntityModelClient {
      * 원본: bipedHead.X = -bipedOuter.X / 2 = -θ/2 → world-space head X = θ/2
      * 1.21.1 등가: head.pitch = -θ/2 (전역 θ 상쇄 후 최종 θ/2)
      */
-    private void sm_animateFlying(SmartMovingClientState sm, ClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateFlying(SmartMovingClientState sm, net.minecraft.client.network.AbstractClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
         // 🔴 (세션 65g): preferred arm 만 vanilla swing 처리. 다른 모델 (몸/다리/다른 팔/head)
         //   은 sm 비행 자세 그대로 유지.
         //   사용자 요구: "오른팔 (휘두르는 팔만 그런거야). 모든 에니메이션을 갑자기 초기화하지
@@ -1274,7 +1359,7 @@ public abstract class MixinPlayerEntityModelClient {
      *   - preferred arm 의 setAnglesXZY skip → vanilla swing pitch/yaw/roll 그대로 보존.
      *   - falling 은 setupTransforms X 회전 없음 → preCancelParentX* 불필요.
      */
-    private void sm_animateFalling(SmartMovingClientState sm, ClientPlayerEntity player) {
+    private void sm_animateFalling(SmartMovingClientState sm, net.minecraft.client.network.AbstractClientPlayerEntity player) {
         float partialTicks = net.minecraft.client.MinecraftClient.getInstance()
                 .getRenderTickCounter().getTickDelta(false);
         float totalDistance = sm.stats.getTotalDistance(partialTicks);
@@ -1393,7 +1478,7 @@ public abstract class MixinPlayerEntityModelClient {
      *         첫 고체 블록의 top surface Y를 구하고, playerY와의 차를 반환한다.
      * 반환값 범위: 0.0F (지면 위) ~ 5.0F (5블록 아래까지 고체 없음).
      */
-    private static float computeSmallOverGroundHeight(ClientPlayerEntity player, World world) {
+    private static float computeSmallOverGroundHeight(net.minecraft.client.network.AbstractClientPlayerEntity player, World world) {
         // 🔴 사용자 보고 fix (2026-05-04 — "다리가 처음부터 모임"):
         //   원본 SmartMovingBase.getOverGroundHeight: bb.minY - getMaxPlayerSolidBetween(minY-5, minY, 0).
         //   getMaxPlayerSolidBetween = 박스 horizontal area (= 0.6 x 0.6) 안 max solid Y.

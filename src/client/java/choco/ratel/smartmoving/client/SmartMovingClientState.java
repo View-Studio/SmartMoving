@@ -785,9 +785,12 @@ public final class SmartMovingClientState {
      *   headYaw_raw absolute). 여기서는 setupTransforms bodyYaw 인자만 fade 적용.
      * MixinPlayerEntityRenderer.sm_modifyBodyYaw 가 fade 계산 + 갱신.
      */
-    public static float smCachedAnimationProgress = 0f;
-    public static float smStandardBodyYawPrev = Float.NaN;
-    public static float smStandardFadeTimePrev = Float.NaN;
+    // 🔴 (Phase 2 fix-3-1) static → instance: player 별 fade prev 분리.
+    //   원본 1.7.10 single player 환경에서는 static 으로 충분했으나, multiplayer 시
+    //   두 player 동시 SM 자세 시 마지막 entity 값으로 mixed → fade jitter (BUG-C 보조).
+    public float smCachedAnimationProgress = 0f;
+    public float smStandardBodyYawPrev = Float.NaN;
+    public float smStandardFadeTimePrev = Float.NaN;
 
     /**
      * 🔴 (2026-05-03) isCrawl 전용 flag — body fade lag 활성화 + head 보정 skip.
@@ -798,24 +801,34 @@ public final class SmartMovingClientState {
      * sm_modifyNetHeadYaw 의 head 보정 (netHeadYaw + bodyYaw_diff) 은 isCrawl 에서 max 깨짐 →
      * smCrawlMode=true 시 보정 skip.
      */
-    public static boolean smCrawlMode = false;
+    public boolean smCrawlMode = false;
 
     /**
      * 🔴 (2026-05-04) crawl-climbing 의 bodyAngleX fade lerp 보간용 prev field.
      *   원본 ModelRotationRenderer.GetIntermediateAngle 식 (= prev + (target - prev) * deltaT * 0.2F)
      *   적용. height 변화 (= smallOverGroundHeight 매 tick 갱신) 의 시각 부드러움 추가.
      */
-    public static float smCrawlClimbBodyAngleXFaded = Float.NaN;
-    public static float smCrawlClimbFadeTimePrev = Float.NaN;
+    public float smCrawlClimbBodyAngleXFaded = Float.NaN;
+    public float smCrawlClimbFadeTimePrev = Float.NaN;
 
     // 🔴 (2026-05-04) 사용자 보고 fix — "다리가 살짝 땅으로 잠김":
     //   bodyAngleX 만 fade 시 legAngleX = QUARTER - bodyAngleX 식 → bodyAngleX=0 시작 시
     //   legAngleX = π/4 = 큰 앞쪽 회전 → leg vertex 박스 침투.
     //   fix: legAngleX/legAngleZ 도 별도 fade 적용 → prev=0 시작 → 점진적 target 도달.
-    public static float smCrawlClimbLegAngleXFaded = Float.NaN;
-    public static float smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
-    public static float smCrawlClimbLegAngleZFaded = Float.NaN;
-    public static float smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
+    public float smCrawlClimbLegAngleXFaded = Float.NaN;
+    public float smCrawlClimbLegAngleXFadeTimePrev = Float.NaN;
+    public float smCrawlClimbLegAngleZFaded = Float.NaN;
+    public float smCrawlClimbLegAngleZFadeTimePrev = Float.NaN;
+
+    /**
+     * 🔴 (Phase 2 multi BUG-11) remote 측 비행 종료 edge 감지용. self 측은 자체 처리 (standUp setPos), remote 만.
+     *   비행 종료 시 self standUp setPos(y+1) → server broadcast → remote 측 entity.y server-sync.
+     *   단 server-relay SM packet (= sm.isFlying=false) 와 vanilla EntityPositionS2CPacket timing 차이로
+     *   sm.isFlying=false sync 후 entity.y server-sync 까지 lag → 그 사이 lerp 진행 → 모델 땅 아래.
+     *   해결: 비행 종료 후 N tick 동안 매 tick 큰 dy 감지 → lastRenderY/prevY 즉시 동기화.
+     */
+    public boolean smPrevWasFlyingForLerpFix = false;
+    public int smFlyingExitYSyncTicks = 0;
 
     /**
      * crawl-climbing 의 bodyAngleX fade lerp helper.
@@ -824,7 +837,7 @@ public final class SmartMovingClientState {
     /** isCrawling setupTransforms 의 부모 R_x 회전값 (= π/2 - π/16). isCrawlClimbing fade 시작값. */
     public static final float CRAWL_TILT_ANGLE = (float) (Math.PI / 2 - Math.PI / 16);
 
-    public static float applyCrawlClimbFade(float target, float curTime) {
+    public float applyCrawlClimbFade(float target, float curTime) {
         float prev = smCrawlClimbBodyAngleXFaded;
         float prevTime = smCrawlClimbFadeTimePrev;
         // 🔴 fade 보간 (2026-05-04 — 사용자 보고 fix "다리 땅 침투"):
@@ -849,7 +862,7 @@ public final class SmartMovingClientState {
         return faded;
     }
 
-    public static float applyCrawlClimbLegAngleXFade(float target, float curTime) {
+    public float applyCrawlClimbLegAngleXFade(float target, float curTime) {
         float prev = smCrawlClimbLegAngleXFaded;
         float prevTime = smCrawlClimbLegAngleXFadeTimePrev;
         if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
@@ -868,7 +881,7 @@ public final class SmartMovingClientState {
         return faded;
     }
 
-    public static float applyCrawlClimbLegAngleZFade(float target, float curTime) {
+    public float applyCrawlClimbLegAngleZFade(float target, float curTime) {
         float prev = smCrawlClimbLegAngleZFaded;
         float prevTime = smCrawlClimbLegAngleZFadeTimePrev;
         if (Float.isNaN(prev) || Float.isNaN(prevTime)) {
@@ -890,12 +903,21 @@ public final class SmartMovingClientState {
      * sm_captureBodyYaw 가 비행/SM force 분기 활성 시 true 로 set.
      * MixinPlayerEntityModelClient.sm_setAngles 가 body.yaw fade adjustment skip 위해 사용.
      */
-    public static boolean smBodyYawActive_publicShared = false;
+    public boolean smBodyYawActive_publicShared = false;
+    /**
+     * 🔴 (Phase 2 fix-3-1) 기존 MixinPlayerEntityRenderer 의 mixin static 2 개
+     *   (smBodyYawActive, smBodyYawOverride) 를 player 별 instance 로 이동.
+     *   sm_captureBodyYaw 가 set, sm_modifyBodyYaw (ModifyArg) 가 read.
+     */
+    public boolean smBodyYawActive = false;
+    public float smBodyYawOverride = 0f;
+    /** BUG-27/32: 비행 시 추가 Y 회전 (horizontalAngle - lerpedYaw, 라디안). 0 = 추가 회전 없음. */
+    public float smFlyingExtraYaw = 0f;
     /**
      * 🔴 (2026-04-27) 낙하/기본 상태 fade lag 활성 플래그.
      * sm_captureBodyYaw 가 set, sm_setupTransforms TAIL 가 fade 적용 가드용.
      */
-    public static boolean smStandardFadeActive = false;
+    public boolean smStandardFadeActive = false;
     /**
      * 🔴 (2026-04-27) 낙하 시 비행 패턴(머리/몸 같이 fade lag) 활성 플래그.
      * smStandardFadeActive=true 의 sub-mode — 활성 시:
@@ -903,21 +925,21 @@ public final class SmartMovingClientState {
      *   - sm_modifyNetHeadYaw 가 head 보정 skip (vanilla netHeadYaw 그대로 → fade matrix 영향 받음).
      * false (기본 상태) 시: 머리는 vanilla 동작 유지 (sm_modifyNetHeadYaw 가 보정 적용).
      */
-    public static boolean smFallingFadeMode = false;
+    public boolean smFallingFadeMode = false;
     /**
      * 🔴 (2026-04-27) sm_setupTransforms TAIL 가 set, sm_modifyNetHeadYaw 가 head 보정에 사용.
      */
-    public static float smCachedYawLerpedRad = 0f;
+    public float smCachedYawLerpedRad = 0f;
     /**
      * 🔴 (2026-04-27) sm_modifyBodyYaw 의 input (vanilla 1 frame lerped bodyYaw, degrees).
      * sm_modifyNetHeadYaw 의 head 보정식에 사용.
      */
-    public static float smCachedBodyYawNaturalDeg = 0f;
+    public float smCachedBodyYawNaturalDeg = 0f;
     /**
      * 🔴 (2026-04-27) sm_modifyBodyYaw 의 output (fade lerp 적용 후 lagged bodyYaw, degrees).
      * sm_modifyNetHeadYaw 의 head 보정식에 사용 (lagged - natural 차이로 head world yaw 보정).
      */
-    public static float smCachedBodyYawLaggedDeg = 0f;
+    public float smCachedBodyYawLaggedDeg = 0f;
 
     /**
      * 원본 ModelRotationRenderer.GetIntermediateAngle (L347-365) 1:1 매핑 (degrees 단위).
@@ -929,7 +951,7 @@ public final class SmartMovingClientState {
      *           머리는 vanilla 그대로 (사용자 "원본도 머리는 vanilla").
      *           setupTransforms bodyYaw 인자 그대로 → head/arm/leg 부모 변환 영향 없음.
      */
-    public static float applyFadeAngleDegrees(float target) {
+    public float applyFadeAngleDegrees(float target) {
         float curTime = smCachedAnimationProgress;
         float prev = smStandardBodyYawPrev;
         float prevTime = smStandardFadeTimePrev;
@@ -1027,9 +1049,27 @@ public final class SmartMovingClientState {
 
     // ── 인스턴스 관리 ─────────────────────────────────────────────────
 
+    /**
+     * 🔴 (Phase 2 fix-3-1) 현재 render 중인 player cursor.
+     *   ModifyArg 등 entity 인자 없는 mixin point 에서 player 별 instance 접근 위해 사용.
+     *   MixinLivingEntityRenderer.render HEAD 에서 set, TAIL 에서 clear. render 직렬 처리이므로
+     *   매 시점에 current render entity 한 명만 가리킴.
+     */
+    public static net.minecraft.client.network.AbstractClientPlayerEntity currentRenderTarget;
+
+    /** currentRenderTarget 의 SmartMovingClientState instance. null 일 시 null 반환. */
+    public static SmartMovingClientState currentRenderTargetSm() {
+        return currentRenderTarget == null ? null : get(currentRenderTarget);
+    }
+
     private static final Map<UUID, SmartMovingClientState> INSTANCES = new HashMap<>();
 
     public static SmartMovingClientState get(ClientPlayerEntity player) {
+        return INSTANCES.computeIfAbsent(player.getUuid(), id -> new SmartMovingClientState());
+    }
+
+    /** 🔴 Phase 1-A: 다른 player render 시 SM state 조회 — local + remote 모두 처리. */
+    public static SmartMovingClientState get(net.minecraft.client.network.AbstractClientPlayerEntity player) {
         return INSTANCES.computeIfAbsent(player.getUuid(), id -> new SmartMovingClientState());
     }
 
@@ -1084,6 +1124,11 @@ public final class SmartMovingClientState {
         isFast            = ((bits >> 30) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
         isRopeSliding     = ((bits >> 32) & 1) != 0;
+        // 🔴 (Phase 2 multi BUG-7) bit 34 isClimbCrawling 갱신 추가.
+        //   server-side 가 bit 34 broadcast — self 측 박스 +1m offset 동기화용 (메모리
+        //   project_isclimbcrawling_complete.md). remote 측 client-side 도 isClimbCrawling 종료
+        //   edge 감지 위해 갱신 필수 — sm_handleRemoteIccCrawlExitYSync inject 가 검사.
+        isClimbCrawling   = ((bits >> 34) & 1) != 0;
     }
 
     // ── 4-2: tickEssential() ─────────────────────────────────────────
@@ -2849,7 +2894,7 @@ public final class SmartMovingClientState {
      *
      * B-42a (세션 117) — Phase 6 시작 원자.
      */
-    public static double getMaxPlayerSolidBetween(ClientPlayerEntity player,
+    public static double getMaxPlayerSolidBetween(net.minecraft.client.network.AbstractClientPlayerEntity player,
                                                    double yMin, double yMax,
                                                    double horizontalTolerance) {
         Box pb = player.getBoundingBox();
@@ -3815,8 +3860,16 @@ public final class SmartMovingClientState {
         //   = 우리 1.21.1 매핑: tickEssential L835+ 에 `isJumping = false` 추가 (이미 적용),
         //     SmartMovingJumper.tryJump L316 `sm.isJumping = true` (이미 적용).
         //   sendStatePacket 에서는 매핑 안 함 — 현재 값 그대로 전송.
-        doFallingAnimation = !player.isOnGround() && player.getVelocity().y < -0.1D
-                              && !isClimbing && !isSwimming_sm && !isDiving;
+        // 🔴 (Phase 2 multi BUG-1) doFallingAnimation 정의 확장:
+        //   기존: velocity.y < -0.1 만 검사 → SM 분기 진입 조건과 다름.
+        //   변경: sm_animateFalling 진입 조건 (= isFallingForReset) 과 동일 식 포함.
+        //         local 에서 매 tick 계산 + packet 으로 remote sync → remote 의 sm.doFallingAnimation 도
+        //         정확한 진입 조건 표현 (vanilla fallDistance 가 remote 미동기여서 자체 검사 불가).
+        doFallingAnimation = !player.isOnGround()
+                              && player.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
+                              && !isClimbing && !isCrawlClimbing && !isCeilingClimbing
+                              && !isSwimming_sm && !isDiving
+                              && !player.isTouchingWater();
         // B-10d (세션 71): isLevitating 강제 false 제거. 원본 L505 `isLevitating = diving &&
         //   !diveUp && !diveDown && moveStrafe==0 && moveForward==0` (수중 정적 자세) 는
         //   updateSwimState (세션 71) 에서 이미 갱신됨. 로프 블록은 1.21.1 미구현이나 원본
@@ -3852,10 +3905,13 @@ public final class SmartMovingClientState {
         s.isClimbCrawling      = isClimbCrawling;
 
         long bits = SmartMovingState.encode(s);
-        if (bits != lastSentBits) {
-            ClientPlayNetworking.send(new SmartMovingNetwork.StatePayload(player.getId(), bits));
-            lastSentBits = bits;
-        }
+        // 🔴 (Phase 1-B fix-1) dirty bit 검사 제거 — 매 tick 무조건 송신.
+        //   기존: `if (bits != lastSentBits)` 만족 시만 송신. 안정 상태 (= 같은 SM state 유지)
+        //         에서 송신 stop → late join player 가 latest state 영영 못 받음 (BUG-A/B).
+        //   변경: 매 tick 송신 (12 byte/tick × player 수 ≈ 1KB/s 미만 — 부하 무시 가능).
+        //         late join 자동 해결.
+        ClientPlayNetworking.send(new SmartMovingNetwork.StatePayload(player.getId(), bits));
+        lastSentBits = bits;
     }
 
     // ── 4-3: isConnectedToRemoteServer() ─────────────────────────────

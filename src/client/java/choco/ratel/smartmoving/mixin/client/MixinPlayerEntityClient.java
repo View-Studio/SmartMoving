@@ -56,12 +56,17 @@ public abstract class MixinPlayerEntityClient {
      */
     @Inject(method = "getBaseDimensions", at = @At("HEAD"), cancellable = true)
     private void sm_getBaseDimensions_client(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // 🔴 (Phase 2 multi BUG-12/14) ClientPlayerEntity 가드 → AbstractClientPlayerEntity.
+        //   기존: self only → remote 측 dim 매핑이 vanilla pose 만 의존 → packet timing 차이로
+        //         sm.isCrawling=true + pose=STANDING 잔존 frame 발생 → STANDING dim 매핑 → 우리
+        //         sm_setupTransforms R_x 회전 적용 → 1.8 height 모델이 회전 → 이상한 자세 (BUG-12).
+        //   변경: 모든 player. dim 결정이 sm.* 비트 의존 → packet A (sm relay) 도착 즉시 dim 갱신.
+        if (!((Object) this instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
         // BUG-20 (세션 36): SM disabled 시 vanilla dimensions 그대로 사용.
-        //   기존: sm.* 필드 (sm.isFlying/isLevitating 등) 조건만 검사 → sm.* 갱신 timing
-        //   차이로 disabled 진입 첫 프레임에 잔존 true 시 비행 진입 0.6×0.8 bbox 강제 →
-        //   vanilla 비행 motion 영향 (사용자 보고: 비행 진입 뚜둑).
-        if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 (Phase 2 fix-3-2) cfg.enabled → isSmRenderEnabled (BUG-CONFIG-2 일관성).
+        //   self → Config.enabled / remote → 항상 true. self disabled 시 자기 dim vanilla,
+        //   remote 의 dim 은 그 player 의 SM state 따라 결정.
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
         // 🔴 BUG-29 진짜 원인 정정 (Flying Phase / 세션 45): 비행/Levitate 분기 제거.
@@ -268,4 +273,97 @@ public abstract class MixinPlayerEntityClient {
         self.setVelocity(x, y, z);
     }
 
+    /**
+     * 🔴 (2026-05-05 Phase 1-A) 다른 player 도 매 tick stats 갱신 — 비행 자세 등의
+     *   walkFactor/standFactor/totalDistance 식 source.
+     *   자기 자신 (= ClientPlayerEntity) 은 MixinEntityClient.sm_afterMove_client 에서 갱신.
+     *   다른 player (= AbstractClientPlayerEntity, ClientPlayerEntity 아님) 만 여기 처리.
+     *   PlayerEntity.tickMovement TAIL — 모든 player tick 적용. instanceof 분기로 remote only.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void sm_tickStatsForRemote(CallbackInfo ci) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        Object self = (Object) this;
+        // local (= ClientPlayerEntity) 은 MixinEntityClient 에서 이미 처리.
+        if (self instanceof ClientPlayerEntity) return;
+        // remote 만 처리 — AbstractClientPlayerEntity (= 다른 player on client side).
+        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(remote);
+        // 🔴 (Phase 1-B fix-2) stats source: getVelocity() → position delta.
+        //   원본 SmartStatistics.calculateAllStats: `diffX = sp.posX - sp.prevPosX` (= delta).
+        //   기존 매핑은 server-sync velocity 가정했으나 vanilla 1.21.1 server 가
+        //   다른 player 의 velocity field 를 sync 안 함 → 항상 (0,0,0) → stats 입력 0
+        //   → 다른 player 팔다리 swing 안 흔들림 (BUG-D).
+        //   fix: 원본대로 prev/cur position delta. interpolation 진동은 stats 자체 EMA 가 평균화.
+        double dx = remote.getX() - remote.prevX;
+        double dy = remote.getY() - remote.prevY;
+        double dz = remote.getZ() - remote.prevZ;
+        sm.stats.calculate(0, 0, 0,
+                           dx, dy, dz,
+                           remote.getYaw());
+    }
+
+    /**
+     * 🔴 (Phase 2 multi BUG-10) sm_correctOnUpdate 의 remote 버전 — 이동 방향 bodyYaw 보정.
+     *   self (ClientPlayerEntity) 는 MixinClientPlayerEntity.sm_correctOnUpdate 가 처리.
+     *   remote 도 동일 식 적용 → wasd 누름 시 "몸통 이동 방향 치우침" 동작 일관.
+     *   원본 SmartMovingBase.correctOnUpdate(isSmall) 동일 식. 0.02~0.05 m/tick 느린 이동 보정.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void sm_correctOnUpdateRemote(CallbackInfo ci) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        Object self = (Object) this;
+        if (self instanceof ClientPlayerEntity) return;  // self 는 MixinClientPlayerEntity 가 처리.
+        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(remote);
+
+        boolean isSmall = sm.isSwimming_sm || sm.isDiving || sm.isDipping || sm.isCrawling;
+        if (!isSmall) return;
+
+        double d  = remote.getX() - remote.prevX;
+        double d1 = remote.getZ() - remote.prevZ;
+        float f = (float) Math.sqrt(d * d + d1 * d1);
+        if (f <= 0.02F || f >= 0.05F) return;
+
+        float f1 = (float)(Math.atan2(d1, d) * 180.0 / Math.PI) - 90F;
+        if (remote.handSwingProgress > 0.0F) f1 = remote.getYaw();
+
+        float f4 = f1 - remote.bodyYaw;
+        for (; f4 < -180F; f4 += 360F) {}
+        for (; f4 >= 180F;  f4 -= 360F) {}
+        float x = remote.bodyYaw + f4 * 0.3F;
+
+        float f5 = remote.getYaw() - x;
+        for (; f5 < -180F; f5 += 360F) {}
+        for (; f5 >= 180F;  f5 -= 360F) {}
+        if (f5 < -75F) f5 = -75F;
+        if (f5 >= 75F)  f5 = 75F;
+
+        remote.setBodyYaw(remote.getYaw() - f5);
+        if (f5 * f5 > 2500F) remote.setBodyYaw(remote.bodyYaw + f5 * 0.2F);
+
+        for (; remote.bodyYaw - remote.prevBodyYaw < -180F; remote.prevBodyYaw -= 360F) {}
+        for (; remote.bodyYaw - remote.prevBodyYaw >= 180F; remote.prevBodyYaw += 360F) {}
+    }
+
+    /**
+     * 🔴 (Phase 2 multi BUG-11 v3) remote 측 비행 종료 — entity.y +1.0 직접 set.
+     *   사용자 평가: 묻히지 않음 + 살짝 플리킹 (= 가장 안정적 동작). 시각 한계 수용.
+     */
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void sm_handleRemoteFlyingExitYSync(CallbackInfo ci) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        Object self = (Object) this;
+        if (self instanceof ClientPlayerEntity) return;
+        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(remote);
+
+        if (sm.smPrevWasFlyingForLerpFix && !sm.isFlying) {
+            double newY = remote.getY() + 1.0;
+            remote.setPosition(remote.getX(), newY, remote.getZ());
+            remote.lastRenderY = newY;
+            remote.prevY = newY;
+        }
+        sm.smPrevWasFlyingForLerpFix = sm.isFlying;
+    }
 }

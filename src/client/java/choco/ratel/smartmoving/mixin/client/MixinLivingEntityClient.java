@@ -656,9 +656,13 @@ public abstract class MixinLivingEntityClient {
      */
     @Inject(method = "isInSwimmingPose", at = @At("HEAD"), cancellable = true)
     private void sm_isInSwimmingPose_client(CallbackInfoReturnable<Boolean> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        // 🔴 (Phase 2 multi BUG-2/2.5) ClientPlayerEntity 가드 → AbstractClientPlayerEntity.
+        //   기존: self only → remote 는 vanilla swimming pose 적용 → 90도 꺾임 + orphan SWIMMING.
+        //   변경: 모든 player 처리. sm 인스턴스 = entity uuid 기반.
+        if (!((Object) this instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
         // BUG-23 (세션 36): SM disabled 시 vanilla isInSwimmingPose 그대로 — sm.* 잔존 차단.
-        if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 (Phase 2 fix-3-2) cfg.enabled → isSmRenderEnabled 로 self-only 화 (BUG-CONFIG-2 일관).
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         // [6-2][8-3] 크롤링/수영/잠수/크롤클라이밍 중 setupTransforms Branch 2 진입 차단.
         // isCrawling/isCrawlClimbing: SWIMMING 포즈 사용하되 vanilla -90° 자동 회전 방지
@@ -694,8 +698,9 @@ public abstract class MixinLivingEntityClient {
      */
     @Inject(method = "getLeaningPitch", at = @At("HEAD"), cancellable = true)
     private void sm_getLeaningPitch(float tickDelta, CallbackInfoReturnable<Float> cir) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        if (!SmartMovingConfig.Config.enabled) return;
+        // 🔴 (Phase 2 multi BUG-2/2.5) ClientPlayerEntity 가드 → AbstractClientPlayerEntity.
+        if (!((Object) this instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.isCrawling || sm.isCrawlClimbing || sm.isSwimming_sm || sm.isDiving
                 || sm.isHeadJumping || sm.isSliding) {
@@ -709,4 +714,5 @@ public abstract class MixinLivingEntityClient {
             cir.setReturnValue(0F);
         }
     }
+
 }
