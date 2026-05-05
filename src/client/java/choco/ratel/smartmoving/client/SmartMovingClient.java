@@ -16,6 +16,13 @@ import net.minecraft.text.Text;
 public class SmartMovingClient implements ClientModInitializer {
 
     /**
+     * 🔴 (Phase 2 multi BUG-7 fix 디테일 조절용) remote ICC EXIT 시 entity.y up offset.
+     *   원리상 +1.0m (= ICC dim offset) 가 정확하지만 시각 자연스러움 위해 사용자 미세 조정.
+     *   사용처: registerClientReceivers 의 packet 처리 lambda 안 setPos +offset.
+     */
+    public static final double ICC_EXIT_REMOTE_Y_OFFSET = 1.0;
+
+    /**
      * 🔴 (2026-05-05 사용자 보고 — "a 콘피그 off 시 a 측에서 모두 vanilla 보임"):
      *   render-path 의 `Config.enabled` 검사가 자기 client cfg → a disabled 시 자기 측에서
      *   모든 player render 의 SM 분기 차단 → 모두 vanilla. remote 측은 자기 cfg=true 라 정상.
@@ -85,7 +92,7 @@ public class SmartMovingClient implements ClientModInitializer {
                     if (wasIcc && !target.isClimbCrawling
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
-                        double newY = remote.getY() + 1.0;
+                        double newY = remote.getY() + ICC_EXIT_REMOTE_Y_OFFSET;
                         remote.setPosition(remote.getX(), newY, remote.getZ());
                         choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
                                 (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
