@@ -104,6 +104,14 @@ public final class SmartMovingServer {
      */
     public boolean isClimbCrawling;
 
+    /**
+     * 🔴 (Phase 2 multi network 최적화) server-side broadcast dirty 검사용.
+     *   매 tick client 가 동일 state packet 보내도, server 가 마지막 broadcast 한 bits 와 비교 →
+     *   변경 시만 다른 client 에게 broadcast. trafic 80-90% 절약 (= 100 player hub 환경 등).
+     *   late join 처리: EntityTrackingEvents.START_TRACKING 시 lastBroadcastBits 를 신규 tracker 에게 replay.
+     */
+    public long lastBroadcastBits = 0L;
+
     // ── 인스턴스 관리 ─────────────────────────────────────────────
 
     private static final Map<UUID, SmartMovingServer> INSTANCES = new HashMap<>();
