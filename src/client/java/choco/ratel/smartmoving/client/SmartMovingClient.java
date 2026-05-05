@@ -67,12 +67,30 @@ public class SmartMovingClient implements ClientModInitializer {
                     Entity entity = world.getEntityById(payload.entityId());
                     if (entity == null) return;
                     SmartMovingClientState target = SmartMovingClientState.get(entity.getUuid());
+                    // 🔴 (Phase 2 multi BUG-7) remote ICC EXIT 시 박스/모델 1칸 down jump 차단.
+                    //   원인: packet 처리 (= ICC=false 적용 + dim 변경) 시점과 PlayerEntity.tick HEAD
+                    //         사이 1 tick lag → ICC dim offset (+1m bb) 사라진 후 entity.y 그대로 →
+                    //         같은 tick 의 render frames 에서 bb=[entity.y..entity.y+0.8] (= 1m 아래) 보임.
+                    //   해결: packet 처리 lambda 안에서 enter-edge 검출 + setPos +1m + lerp cancel
+                    //         즉시 적용 → ICC=false 와 동시에 entity.y +1m → bb 일관성 유지.
+                    //   self (= ClientPlayerEntity) 는 자체 fix (= 메모리 *project_isclimbcrawling_complete*).
+                    boolean wasIcc = target.isClimbCrawling;
                     target.processStatePacket(payload.state());
                     // 🔴 (Phase 2 multi BUG-12/14) packet 도착 시 dim 즉시 갱신 → vanilla pose sync 대기
                     //   없이 sm.* 비트 따라 dim 결정. boolean OR 가드 제거 — 여러 비트 동시 변경 시
                     //   감지 누락 회피. dim 동일 시 vanilla 자체 영향 미미.
                     if (entity instanceof net.minecraft.entity.LivingEntity living) {
                         living.calculateDimensions();
+                    }
+                    if (wasIcc && !target.isClimbCrawling
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        double newY = remote.getY() + 1.0;
+                        remote.setPosition(remote.getX(), newY, remote.getZ());
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
+                        acc.sm_setServerY(newY);
+                        acc.sm_setBodyTrackingIncrements(0);
                     }
                 });
             });

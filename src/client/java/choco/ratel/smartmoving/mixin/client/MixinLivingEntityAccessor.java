@@ -16,6 +16,7 @@ public interface MixinLivingEntityAccessor {
     @Accessor("serverX") double sm_getServerX();
     @Accessor("serverY") double sm_getServerY();
     @Accessor("serverZ") double sm_getServerZ();
+    @Accessor("serverY") void sm_setServerY(double value);
     @Accessor("bodyTrackingIncrements") int sm_getBodyTrackingIncrements();
     @Accessor("bodyTrackingIncrements") void sm_setBodyTrackingIncrements(int value);
 }
