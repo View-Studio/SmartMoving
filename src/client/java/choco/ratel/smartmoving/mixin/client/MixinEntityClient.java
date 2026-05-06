@@ -189,4 +189,112 @@ public abstract class MixinEntityClient {
         }
     }
 
+    // ─── 🔴 [TEMP DBG-7] 광범위 진단 dump ─────────────────────────────────────
+
+    @Unique
+    private static String sm_dbgLabel(net.minecraft.entity.Entity self) {
+        if (self instanceof ClientPlayerEntity) return "[A]";
+        if (self instanceof net.minecraft.client.network.AbstractClientPlayerEntity) return "[B]";
+        return "[?]";
+    }
+
+    @Unique
+    private static boolean sm_dbgActive(net.minecraft.entity.Entity self) {
+        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity p)) return false;
+        SmartMovingClientState sm = SmartMovingClientState.get(p);
+        return sm.isClimbCrawling || sm.smIccDbgTicks > 0;
+    }
+
+    @Inject(method = "move", at = @At("HEAD"))
+    private void sm_dbg7_moveHead(MovementType type, Vec3d vec, CallbackInfo ci) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [move HEAD] name={} type={} vec=({}, {}, {}) y_before={}",
+                sm_dbgLabel(self), self.getName().getString(), type,
+                String.format("%.4f", vec.x), String.format("%.4f", vec.y), String.format("%.4f", vec.z),
+                String.format("%.3f", self.getY())
+        );
+    }
+
+    @Inject(method = "move", at = @At("TAIL"))
+    private void sm_dbg7_moveTail(MovementType type, Vec3d vec, CallbackInfo ci) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [move TAIL] name={} type={} y_after={}",
+                sm_dbgLabel(self), self.getName().getString(), type,
+                String.format("%.3f", self.getY())
+        );
+    }
+
+    @Inject(method = "adjustMovementForCollisions(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;",
+            at = @At("HEAD"))
+    private void sm_dbg7_amfcHead(Vec3d motion, CallbackInfoReturnable<Vec3d> cir) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [AMFC HEAD] name={} input=({}, {}, {}) bb=[{}..{}, {}..{}, {}..{}]",
+                sm_dbgLabel(self), self.getName().getString(),
+                String.format("%.4f", motion.x), String.format("%.4f", motion.y), String.format("%.4f", motion.z),
+                String.format("%.3f", self.getBoundingBox().minX),
+                String.format("%.3f", self.getBoundingBox().maxX),
+                String.format("%.3f", self.getBoundingBox().minY),
+                String.format("%.3f", self.getBoundingBox().maxY),
+                String.format("%.3f", self.getBoundingBox().minZ),
+                String.format("%.3f", self.getBoundingBox().maxZ)
+        );
+    }
+
+    @Inject(method = "adjustMovementForCollisions(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;",
+            at = @At("RETURN"))
+    private void sm_dbg7_amfcReturn(Vec3d motion, CallbackInfoReturnable<Vec3d> cir) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        Vec3d output = cir.getReturnValue();
+        boolean truncated = (Math.abs(motion.x - output.x) > 1e-4)
+                || (Math.abs(motion.y - output.y) > 1e-4)
+                || (Math.abs(motion.z - output.z) > 1e-4);
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [AMFC RET] name={} output=({}, {}, {}) truncated={}",
+                sm_dbgLabel(self), self.getName().getString(),
+                String.format("%.4f", output.x), String.format("%.4f", output.y), String.format("%.4f", output.z),
+                truncated
+        );
+    }
+
+    @Inject(method = "setPosition(DDD)V", at = @At("HEAD"))
+    private void sm_dbg7_setPos(double x, double y, double z, CallbackInfo ci) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        if (Math.abs(y - self.getY()) < 0.01) return;
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 2; i < Math.min(stack.length, 7); i++) {
+            String cls = stack[i].getClassName();
+            int dot = cls.lastIndexOf('.');
+            sb.append(cls.substring(dot + 1)).append(".").append(stack[i].getMethodName());
+            if (i < Math.min(stack.length, 7) - 1) sb.append(" ← ");
+        }
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [setPos HEAD] name={} y_before={} y_new={} dy={} caller=[{}]",
+                sm_dbgLabel(self), self.getName().getString(),
+                String.format("%.3f", self.getY()),
+                String.format("%.3f", y),
+                String.format("%.3f", y - self.getY()),
+                sb.toString()
+        );
+    }
+
+    @Inject(method = "lerpPosAndRotation", at = @At("TAIL"))
+    private void sm_dbg7_lerpPosTail(int step, double x, double y, double z, double yaw, double pitch, CallbackInfo ci) {
+        net.minecraft.entity.Entity self = (net.minecraft.entity.Entity)(Object) this;
+        if (!sm_dbgActive(self)) return;
+        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                "{} [lerpPos TAIL] name={} step={} target=({}, {}, {}) entity.y={}",
+                sm_dbgLabel(self), self.getName().getString(), step,
+                String.format("%.3f", x), String.format("%.3f", y), String.format("%.3f", z),
+                String.format("%.3f", self.getY())
+        );
+    }
 }

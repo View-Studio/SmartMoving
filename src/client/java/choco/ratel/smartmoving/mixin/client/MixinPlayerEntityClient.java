@@ -354,7 +354,34 @@ public abstract class MixinPlayerEntityClient {
     private void sm_handleRemoteFlyingExitYSync(CallbackInfo ci) {
         if (!SmartMovingConfig.Config.enabled) return;
         Object self = (Object) this;
-        if (self instanceof ClientPlayerEntity) return;
+
+        // 🔴 [TEMP DBG-7] A 측 (= self ClientPlayerEntity) 매 tick dump.
+        if (self instanceof ClientPlayerEntity selfPlayer) {
+            SmartMovingClientState selfSm = SmartMovingClientState.get(selfPlayer);
+            if (selfSm.isClimbCrawling) selfSm.smIccDbgTicks = 30;
+            if (selfSm.smIccDbgTicks > 0) {
+                net.minecraft.util.math.Box bb = selfPlayer.getBoundingBox();
+                org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                        "[A-TICK] t={} name={} icc={} crawl={} climb={} pose={} | x={} y={} z={} | prevX={} prevZ={} | yaw={} bodyYaw={} headYaw={} | bb=[{}..{}, {}..{}, {}..{}]",
+                        selfSm.smIccDbgTicks, selfPlayer.getName().getString(),
+                        selfSm.isClimbCrawling, selfSm.isCrawling, selfSm.isClimbing,
+                        selfPlayer.getPose(),
+                        String.format("%.3f", selfPlayer.getX()),
+                        String.format("%.3f", selfPlayer.getY()),
+                        String.format("%.3f", selfPlayer.getZ()),
+                        String.format("%.3f", selfPlayer.prevX),
+                        String.format("%.3f", selfPlayer.prevZ),
+                        String.format("%.2f", selfPlayer.getYaw()),
+                        String.format("%.2f", selfPlayer.getBodyYaw()),
+                        String.format("%.2f", selfPlayer.getHeadYaw()),
+                        String.format("%.3f", bb.minX), String.format("%.3f", bb.maxX),
+                        String.format("%.3f", bb.minY), String.format("%.3f", bb.maxY),
+                        String.format("%.3f", bb.minZ), String.format("%.3f", bb.maxZ)
+                );
+                selfSm.smIccDbgTicks--;
+            }
+            return;
+        }
         if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(remote);
 
@@ -365,5 +392,60 @@ public abstract class MixinPlayerEntityClient {
             remote.prevY = newY;
         }
         sm.smPrevWasFlyingForLerpFix = sm.isFlying;
+
+        // BUG-7 fix v25.6 — ICC EXIT 후 server svY broadcast watchfix.
+        //   svY > ourSetY = ladder 1차 broadcast (= setPos +1m only, gravity 전) → svY reset (Y 정지).
+        //   svY < ourSetY = 진짜 위 칸 바닥 도달 (= self setPos+1m+gravity 후 broadcast) → 즉시 setPos.
+        //   v25.6.6: ladder + 그랩 모두 svY <= ourSetY 검사로 진짜 위 칸 바닥 detect.
+        //   - ladder (= offset 0.84): ourSetY=77.006, svY=77.190 reset → svY=77.000 setPos.
+        //   - 그랩 (= offset 1.0): ourSetY=73.154, svY=73.000 즉시 setPos.
+        if (sm.smIccExitWatchTicks > 0) {
+            sm.smIccExitWatchTicks--;
+            choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
+                    (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
+            double svY = acc.sm_getServerY();
+            if (svY != sm.smIccExitOurSetY) {
+                // v25.7.9 — ladder + 그랩 모두 threshold 적용 (= 미세 svY gap 진동 차단).
+                //   threshold 값은 ladder/그랩 별도 (= state 의 smIccExitYThresh, packet handler 에서
+                //   isLadderType 따라 결정). self side 매핑 본질적 차이로 미세 조정 가능하게.
+                if (svY < sm.smIccExitOurSetY - sm.smIccExitYThresh) {
+                    // 진짜 위 칸 바닥 도달 (= +1m offset 풀린 시점) → 즉시 setPos + 종료.
+                    remote.setPosition(remote.getX(), svY, remote.getZ());
+                    acc.sm_setBodyTrackingIncrements(0);
+                    sm.smIccExitWatchTicks = 0;
+                    return;
+                }
+                // svY > ourSetY (= 1차 broadcast) 또는 미세 svY < ourSetY (= self gravity gap) →
+                // svY 를 ourSetY 로 reset (= Y lerp dy=0, X/Z lerp 그대로 → dip 차단).
+                acc.sm_setServerY(sm.smIccExitOurSetY);
+            }
+        }
+
+        // 🔴 [TEMP DBG-7] B 측 (= remote) 매 tick dump.
+        if (sm.isClimbCrawling) sm.smIccDbgTicks = 30;
+        if (sm.smIccDbgTicks > 0) {
+            choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
+                    (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
+            net.minecraft.util.math.Box bb = remote.getBoundingBox();
+            org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
+                    "[B-TICK] t={} name={} icc={} crawl={} climb={} pose={} | x={} y={} z={} | yaw={} bodyYaw={} headYaw={} | svX={} svY={} svZ={} bti={} | bb=[X{}..{} Z{}..{}]",
+                    sm.smIccDbgTicks, remote.getName().getString(),
+                    sm.isClimbCrawling, sm.isCrawling, sm.isClimbing,
+                    remote.getPose(),
+                    String.format("%.3f", remote.getX()),
+                    String.format("%.3f", remote.getY()),
+                    String.format("%.3f", remote.getZ()),
+                    String.format("%.2f", remote.getYaw()),
+                    String.format("%.2f", remote.getBodyYaw()),
+                    String.format("%.2f", remote.getHeadYaw()),
+                    String.format("%.3f", acc.sm_getServerX()),
+                    String.format("%.3f", acc.sm_getServerY()),
+                    String.format("%.3f", acc.sm_getServerZ()),
+                    acc.sm_getBodyTrackingIncrements(),
+                    String.format("%.3f", bb.minX), String.format("%.3f", bb.maxX),
+                    String.format("%.3f", bb.minZ), String.format("%.3f", bb.maxZ)
+            );
+            sm.smIccDbgTicks--;
+        }
     }
 }
