@@ -66,6 +66,9 @@ public abstract class MixinPlayerEntity {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔴 v26.12 — v26.5 가드 폐기 (client/server 양쪽 동기화).
+        //   STANDING dim fall through BUG root. Fix 7 의 의도 (= smSmall 에 isCrawlClimbing 추가)
+        //   1:1 복원. 사용자 보고 "STANDING → 엎드림" transition 차단.
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
                        || sm.isHeadJumping || sm.isSliding
                        || sm.isSwimming || sm.isDiving;
@@ -117,46 +120,6 @@ public abstract class MixinPlayerEntity {
      *
      * 클라/서버 POSE 동일 sync → datatracker 진동 0.
      */
-    /** 🔴 [TEMP DBG-7] server tick HEAD/TAIL 매 tick dump. */
-    @Inject(method = "tick", at = @At("HEAD"))
-    private void sm_dbg7_serverTickHead(CallbackInfo ci) {
-        if (!((Object) this instanceof ServerPlayerEntity player)) return;
-        SmartMovingServer sm = SmartMovingServer.get(player);
-        if (sm.isClimbCrawling) sm.smIccDbgTicks = 30;
-        if (sm.smIccDbgTicks > 0) {
-            org.slf4j.LoggerFactory.getLogger("SM-DBG7-S").info(
-                    "[S-TICK HEAD] t={} name={} icc={} crawl={} climb={} | x={} y={} z={} | yaw={} bodyYaw={} | bb=[X{}..{} Z{}..{}]",
-                    sm.smIccDbgTicks, player.getName().getString(),
-                    sm.isClimbCrawling, sm.isCrawling, sm.isClimbing,
-                    String.format("%.3f", player.getX()),
-                    String.format("%.3f", player.getY()),
-                    String.format("%.3f", player.getZ()),
-                    String.format("%.2f", player.getYaw()),
-                    String.format("%.2f", player.getBodyYaw()),
-                    String.format("%.3f", player.getBoundingBox().minX),
-                    String.format("%.3f", player.getBoundingBox().maxX),
-                    String.format("%.3f", player.getBoundingBox().minZ),
-                    String.format("%.3f", player.getBoundingBox().maxZ)
-            );
-        }
-    }
-
-    @Inject(method = "tick", at = @At("TAIL"))
-    private void sm_dbg7_serverTickTail(CallbackInfo ci) {
-        if (!((Object) this instanceof ServerPlayerEntity player)) return;
-        SmartMovingServer sm = SmartMovingServer.get(player);
-        if (sm.smIccDbgTicks > 0) {
-            org.slf4j.LoggerFactory.getLogger("SM-DBG7-S").info(
-                    "[S-TICK TAIL] name={} | x={} y={} z={}",
-                    player.getName().getString(),
-                    String.format("%.3f", player.getX()),
-                    String.format("%.3f", player.getY()),
-                    String.format("%.3f", player.getZ())
-            );
-            sm.smIccDbgTicks--;
-        }
-    }
-
     @Inject(method = "updatePose", at = @At("HEAD"), cancellable = true)
     private void sm_updatePose_server(CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;

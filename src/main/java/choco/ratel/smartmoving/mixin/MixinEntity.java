@@ -138,5 +138,8 @@ public abstract class MixinEntity {
 
         Box original = cir.getReturnValue();
         cir.setReturnValue(original.offset(0.0, 1.0, 0.0));
+        // 🔴 v26.6 — remote 측 timer override 는 client-side mixin 에서 추가 적용 (분리 사유:
+        //   main mixin set 은 server 빌드 시 client class 참조 불가).
+        //   client-side `MixinEntityClient.sm_iccTimerOffsetBb` 가 같은 method 에 RETURN inject.
     }
 }

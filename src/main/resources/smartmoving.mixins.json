@@ -7,7 +7,6 @@
     "MixinEntity",
     "MixinLivingEntity",
     "MixinPlayerEntity",
-    "server.MixinServerEntityDbg",
     "server.MixinServerPlayNetworkHandler",
     "server.MixinServerPlayerEntity",
     "server.MixinServerPlayerInteractionManager"

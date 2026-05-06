@@ -51,25 +51,6 @@ public abstract class MixinServerPlayNetworkHandler {
         if (player == null) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
         sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing;
-        // 🔴 [TEMP DBG-7] packet 받은 client.x/y/z vs server.x/y/z dump.
-        if (sm.isClimbCrawling || sm.smIccDbgTicks > 0) {
-            double pktX = packet.getX(player.getX());
-            double pktY = packet.getY(player.getY());
-            double pktZ = packet.getZ(player.getZ());
-            org.slf4j.LoggerFactory.getLogger("SM-DBG7-S").info(
-                    "[S-onPlayerMove] name={} | packet=({}, {}, {}) server=({}, {}, {}) | d=({}, {}, {})",
-                    player.getName().getString(),
-                    String.format("%.3f", pktX),
-                    String.format("%.3f", pktY),
-                    String.format("%.3f", pktZ),
-                    String.format("%.3f", player.getX()),
-                    String.format("%.3f", player.getY()),
-                    String.format("%.3f", player.getZ()),
-                    String.format("%.4f", pktX - player.getX()),
-                    String.format("%.4f", pktY - player.getY()),
-                    String.format("%.4f", pktZ - player.getZ())
-            );
-        }
     }
 
     /**

@@ -16,33 +16,6 @@ import net.minecraft.text.Text;
 public class SmartMovingClient implements ClientModInitializer {
 
     /**
-     * 🔴 (Phase 2 multi BUG-7 fix) remote ICC EXIT 시 entity.y up offset.
-     *   ICC dim offset (= bb +1m, MixinEntity.sm_offsetBoundingBoxForFlying) 와 일치 →
-     *   bb 일관성 유지. 그랩 climbing (= 일반 블록) ICC EXIT 시 사용.
-     */
-    public static final double ICC_EXIT_REMOTE_Y_OFFSET = 1.0;
-
-    /**
-     * 🔴 (Phase 2 multi BUG-7 fix) remote ICC EXIT 사다리류 (= ladder/vine/scaffolding) 전용 offset.
-     *   사용자 보고 사다리에서 +1.0m fix 시 살짝 진동 → server-side 가 setPos +1m + gravity 후
-     *   broadcast 까지 2 단계 (= +1m → 위 칸 바닥). client v25.3 fix 가 +1.0m 즉시 → 0.16m 너무 위 →
-     *   vanilla lerp -0.16m down 추적 (= 5 tick = 250ms) 진동 인지.
-     *   사다리류는 server.y diff 가 정확 +0.84m 정도 (= setPos +1m - gravity 0.16m).
-     *   사용처: entity.isClimbing()=true (= ladder/vine/scaffolding) 시 적용.
-     */
-    public static final double ICC_EXIT_LADDER_Y_OFFSET = 0.84;
-
-    /**
-     * 🔴 v25.7.9 — watchfix Y threshold (= 진짜 풀림 detect 임계).
-     *   svY < ourSetY - thresh = 진짜 위 칸 바닥 도달 (= +1m offset 풀려 빈 공간) → 즉시 setPos.
-     *   svY < ourSetY 미세 차이 (= self gravity 결과 와 offset 차이, ladder 0.016m, 그랩 0.08m
-     *   등) 는 thresh 안에 흡수 → ourSetY reset 만 → vanilla broadcast lerp 자연 흡수 (= dip 차단).
-     *   ladder/그랩 별도 상수 (= self side 매핑 본질적 차이로 미세 조정 가능하게).
-     */
-    public static final double ICC_EXIT_LADDER_Y_THRESH = 0.5;
-    public static final double ICC_EXIT_GRAB_Y_THRESH = 0.5;
-
-    /**
      * 🔴 (2026-05-05 사용자 보고 — "a 콘피그 off 시 a 측에서 모두 vanilla 보임"):
      *   render-path 의 `Config.enabled` 검사가 자기 client cfg → a disabled 시 자기 측에서
      *   모든 player render 의 SM 분기 차단 → 모두 vanilla. remote 측은 자기 cfg=true 라 정상.
@@ -109,81 +82,53 @@ public class SmartMovingClient implements ClientModInitializer {
                     if (entity instanceof net.minecraft.entity.LivingEntity living) {
                         living.calculateDimensions();
                     }
+                    // 🔴 (Phase 2 BUG-7) self side ICC ENTER 매핑 1:1 복제.
+                    //   self side ICC 진입 (SmartMovingClientState L2367-L2423):
+                    //     heightOffset = -1F + calculateDimensions + move(0, 0.05, 0) + entity.y 복원
+                    //     + horizontalCollision 복원 + Camera 보정.
+                    //   사용자 보고 "remote 진입 시점 x,z 뒤로 땡김 + y 내려감": move(0, 0.05, 0) +
+                    //   entity.y 복원 + horizontalCollision 복원 매핑이 누락. self side 의 vanilla
+                    //   collision 결과 cancel 메커니즘 (메모리 코멘트 = "ICC 진입/해제 매 tick 진동
+                    //   시 entity.y +0.05m 누적 → 카메라 움찔움찔 fix") 그대로 적용.
+                    //   heightOffset/Camera 는 self 식/1인칭 전용이라 remote 안 필요.
+                    if (!wasIcc && target.isClimbCrawling
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteEnter
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        boolean wasColH = remoteEnter.horizontalCollision;
+                        double iccEnterYBefore = remoteEnter.getY();
+                        remoteEnter.move(net.minecraft.entity.MovementType.SELF,
+                                new net.minecraft.util.math.Vec3d(0, 0.05, 0));
+                        if (remoteEnter.getY() != iccEnterYBefore) {
+                            remoteEnter.setPosition(remoteEnter.getX(), iccEnterYBefore, remoteEnter.getZ());
+                        }
+                        remoteEnter.horizontalCollision = wasColH;
+                    }
+
                     if (wasIcc && !target.isClimbCrawling
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
-                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor acc =
-                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor) remote;
-                        // 🔴 [TEMP DBG-7] fix 발동 직전 dump.
-                        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
-                                "[B-FIX BEFORE] name={} | x={} y={} z={} | bodyYaw={} | svX={} svY={} svZ={} bti={} | bbY=[{}..{}] bbZ=[{}..{}]",
-                                remote.getName().getString(),
-                                String.format("%.4f", remote.getX()),
-                                String.format("%.4f", remote.getY()),
-                                String.format("%.4f", remote.getZ()),
-                                String.format("%.2f", remote.getBodyYaw()),
-                                String.format("%.4f", acc.sm_getServerX()),
-                                String.format("%.4f", acc.sm_getServerY()),
-                                String.format("%.4f", acc.sm_getServerZ()),
-                                acc.sm_getBodyTrackingIncrements(),
-                                String.format("%.3f", remote.getBoundingBox().minY),
-                                String.format("%.3f", remote.getBoundingBox().maxY),
-                                String.format("%.3f", remote.getBoundingBox().minZ),
-                                String.format("%.3f", remote.getBoundingBox().maxZ)
-                        );
-                        // 사다리류 (= ladder/vine/scaffolding) detect → 작은 offset.
-                        // 그랩류 (= 일반 블록 climbing) 는 ICC dim offset (= +1m) 그대로.
-                        boolean isLadderType = remote.isClimbing();
-                        double offset = isLadderType ? ICC_EXIT_LADDER_Y_OFFSET : ICC_EXIT_REMOTE_Y_OFFSET;
-                        double newY = remote.getY() + offset;
-                        remote.setPosition(remote.getX(), newY, remote.getZ());
-                        // 🔴 v25.7.10 — render lerp prevY 동기화 (= 1 frame jump 차단).
-                        //   사용자 보고 "ladder 덜컹": packet lambda 가 entity.y +0.84m setPos. 그러나
-                        //   lastRenderY/prevY 는 ICC 마지막 값 (= 76.156) 그대로 → render = lerp(prevY,
-                        //   y, pt) 가 partialTicks 0.18 안 +0.355m jump → 4 frame 매끄러운 +0.55m lerp →
-                        //   "1회 충격 + 진행" = 덜컹. 동기화 시 render lerp dy=0 → 1 frame instant
-                        //   teleport + 즉시 안정. ladder + 그랩 모두 적용 (= +0.84/+1.0 둘 다 같은 메커
-                        //   니즘). Y 만 동기화 (= X/Z lerp 자유 진행).
-                        remote.lastRenderY = newY;
-                        remote.prevY = newY;
-                        acc.sm_setServerY(newY);
-                        // 🔴 v25.7.9 — ladder + 그랩 모두 X/Z 자유 lerp + watchfix threshold 적용.
-                        //   v25.6 의 bti=0 부작용 (= "초반 뒤로 땡김"): broadcast 미도달 동안 X/Z lerp
-                        //   차단 → 3 tick 정지 → 누적 lag → 다음 broadcast 도달 시 큰 catch-up.
-                        //   ladder/그랩 별도 변수 (= self side 매핑 본질적 차이로 미세 조정 가능).
-                        //   둘 다 setBti(0) skip + threshold 흡수 → vanilla setBti(3) + svY reset 으로
-                        //   Y bobbing 만 차단, X/Z 자유 lerp.
-                        // v25.6 watchfix — server-side 2 단계 broadcast 의 1차 ignore + 2차 즉시 setPos.
-                        target.smIccExitWatchTicks = 10;
-                        target.smIccExitLastSvY = newY;
-                        target.smIccExitOurSetY = newY;
-                        target.smIccExitBroadcastCount = 0;
-                        target.smIccExitFirstBroadcastSvY = 0.0;
-                        target.smIccExitIsLadder = isLadderType;
-                        target.smIccExitYThresh = isLadderType ? ICC_EXIT_LADDER_Y_THRESH : ICC_EXIT_GRAB_Y_THRESH;
-
-                        // v25.7 옵션 1 (revert) — bodyYaw force flip 시도. body vs head yaw mismatch
-                        //   → 목 꺾임 BUG + body 가 vanilla turnHead lerp 으로 1 tick 후 server yaw 로
-                        //   회복 → 사용자 시각 효과 미미. 다른 방향 검토 필요.
-                        // 🔴 [TEMP DBG-7] fix 발동 직후 dump.
-                        org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
-                                "[B-FIX AFTER] name={} ladder={} offset={} | x={} y={} z={} | bodyYaw={} | svX={} svY={} svZ={} bti={} | bbY=[{}..{}] bbZ=[{}..{}]",
-                                remote.getName().getString(),
-                                isLadderType,
-                                String.format("%.3f", offset),
-                                String.format("%.4f", remote.getX()),
-                                String.format("%.4f", remote.getY()),
-                                String.format("%.4f", remote.getZ()),
-                                String.format("%.2f", remote.getBodyYaw()),
-                                String.format("%.4f", acc.sm_getServerX()),
-                                String.format("%.4f", acc.sm_getServerY()),
-                                String.format("%.4f", acc.sm_getServerZ()),
-                                acc.sm_getBodyTrackingIncrements(),
-                                String.format("%.3f", remote.getBoundingBox().minY),
-                                String.format("%.3f", remote.getBoundingBox().maxY),
-                                String.format("%.3f", remote.getBoundingBox().minZ),
-                                String.format("%.3f", remote.getBoundingBox().maxZ)
-                        );
+                        // 🔴 (Phase 2 BUG-7 fix 정착) self side ICC EXIT 매핑 1:1 복제 (cd25cfc 패턴).
+                        //   self side: setPosition(x, y+1, z) + lastRenderY/prevY +=1 + calculateDimensions
+                        //              + bottom snap (사다리/덩굴 케이스 미적용).
+                        //   isCrawling 가드 = self 가드 (mustCrawl||sneakPressedRaw||crawlToggled+gap<1)
+                        //                     통과 결과 직접 검사.
+                        //   calculateDimensions 는 packet handler 위 (L109-L111) 에서 이미 호출됨.
+                        if (target.isCrawling) {
+                            double newY = remote.getY() + 1.0;
+                            remote.setPosition(remote.getX(), newY, remote.getZ());
+                            remote.lastRenderY = newY;
+                            remote.prevY = newY;
+                            // 일반 블록 케이스만 bottom snap. 사다리/덩굴 케이스 미적용 (ladder maxY+1 위 유지).
+                            if (!remote.isClimbing()) {
+                                double minY = remote.getBoundingBox().minY;
+                                double gap = minY - choco.ratel.smartmoving.client.SmartMovingClientState
+                                        .getMaxPlayerSolidBetween(remote, minY - 1.0, minY, 0);
+                                if (gap >= 0.0 && gap < 1.0) {
+                                    remote.move(net.minecraft.entity.MovementType.SELF,
+                                            new net.minecraft.util.math.Vec3d(0, -gap, 0));
+                                }
+                            }
+                        }
                     }
                 });
             });

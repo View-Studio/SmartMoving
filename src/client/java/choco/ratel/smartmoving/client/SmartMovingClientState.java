@@ -830,41 +830,6 @@ public final class SmartMovingClientState {
     public boolean smPrevWasFlyingForLerpFix = false;
     public int smFlyingExitYSyncTicks = 0;
 
-    /** 🔴 [TEMP DBG-7] 진단용 — ICC 활성 + EXIT 후 30 tick dump 카운터. */
-    public int smIccDbgTicks = 0;
-
-    /**
-     * BUG-7 fix v25.6 — ladder류 ICC EXIT 시 server svY 2단계 broadcast watchfix.
-     *   server-side 가 ICC EXIT broadcast 2 단계: 1차 (= setPos +1m only, svY=위 칸 +0.19m),
-     *   2차 (= gravity 적용, svY=위 칸 바닥 정확). v25.5 의 0.84 offset 은 1차/2차 모두 lerp →
-     *   양방향 bobbing. watchfix = 1차 ignore + 2차 svY 도착 시 entity.y=svY 즉시 set + bti=0.
-     */
-    public int smIccExitWatchTicks = 0;
-    public double smIccExitLastSvY = 0.0;
-    public int smIccExitBroadcastCount = 0;
-    /**
-     * v25.6.3 — 우리 fix 가 set 한 newY 저장. watchfix 가 매 tick svY=ourSetY 로 reset →
-     * Y lerp dy=0 (= Y motion 차단). bti 그대로 → X/Z lerp 정상 (= 사용자 이동 정상).
-     */
-    public double smIccExitOurSetY = 0.0;
-    /**
-     * v25.6.4 — 1차 broadcast svY 저장. 2차 broadcast 검사 = svY 가 1차 svY 와 다른 값일 때.
-     * server-side 가 같은 svY 를 매 tick 반복 broadcast → 우리 svY reset 후 다음 tick vanilla 가
-     * 다시 setServerY(같은 svY) → 단순 count 만 검사 시 잘못 2차 detect (= setPos 잘못된 위치).
-     * 0.0 = 미설정 (= 1차 도달 안 함).
-     */
-    public double smIccExitFirstBroadcastSvY = 0.0;
-    /**
-     * v25.7.7 — ICC EXIT 시 ladder 분기 여부. ladder 만 미세 svY gap (= 0.016m) 진동 차단 위해
-     * watchfix svY < ourSetY 분기에 큰 dy threshold (= -0.5m) 적용. 그랩은 영향 없음 (= false).
-     */
-    public boolean smIccExitIsLadder = false;
-    /**
-     * v25.7.9 — watchfix Y threshold. ladder/그랩 별도 값 (= ICC_EXIT_LADDER_Y_THRESH /
-     * ICC_EXIT_GRAB_Y_THRESH). svY < ourSetY - thresh 만 진짜 풀림으로 setPos.
-     */
-    public double smIccExitYThresh = 0.0;
-
 
     /**
      * crawl-climbing 의 bodyAngleX fade lerp helper.

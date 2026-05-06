@@ -105,34 +105,6 @@ public class MixinPlayerEntityRenderer {
         // 🔴 (Phase 2 fix-3-1) flag reset 도 player 별 instance — multiplayer 시 두 player 분리.
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
-        // 🔴 [TEMP DBG-7] render frame 단위 model lerp 위치 + bb dump.
-        if (sm.smIccDbgTicks > 0) {
-            double renderX = net.minecraft.util.math.MathHelper.lerp(
-                    (double) tickDelta, player.lastRenderX, player.getX());
-            double renderY = net.minecraft.util.math.MathHelper.lerp(
-                    (double) tickDelta, player.lastRenderY, player.getY());
-            double renderZ = net.minecraft.util.math.MathHelper.lerp(
-                    (double) tickDelta, player.lastRenderZ, player.getZ());
-            float lerpedBodyYaw = player.prevBodyYaw + (player.getBodyYaw() - player.prevBodyYaw) * tickDelta;
-            net.minecraft.util.math.Box bb = player.getBoundingBox();
-            String label = (player instanceof net.minecraft.client.network.ClientPlayerEntity) ? "[A-RENDER]" : "[B-RENDER]";
-            org.slf4j.LoggerFactory.getLogger("SM-DBG7-C").info(
-                    "{} t={} pt={} name={} | render=({}, {}, {}) | y={} lrY={} prevY={} | bodyYaw={} | bb=[X{}..{} Z{}..{}] | icc={} crawl={} climb={} pose={}",
-                    label, sm.smIccDbgTicks, String.format("%.3f", tickDelta),
-                    player.getName().getString(),
-                    String.format("%.4f", renderX),
-                    String.format("%.4f", renderY),
-                    String.format("%.4f", renderZ),
-                    String.format("%.4f", player.getY()),
-                    String.format("%.4f", player.lastRenderY),
-                    String.format("%.4f", player.prevY),
-                    String.format("%.2f", lerpedBodyYaw),
-                    String.format("%.3f", bb.minX), String.format("%.3f", bb.maxX),
-                    String.format("%.3f", bb.minZ), String.format("%.3f", bb.maxZ),
-                    sm.isClimbCrawling, sm.isCrawling, sm.isClimbing, player.getPose()
-            );
-        }
-
         sm.smBodyYawActive = false;
         sm.smFlyingExtraYaw = 0f;
         sm.smStandardFadeActive = false;  // 낙하/기본 상태 fade flag reset.

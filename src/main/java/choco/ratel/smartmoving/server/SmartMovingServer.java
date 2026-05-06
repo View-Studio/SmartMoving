@@ -104,9 +104,6 @@ public final class SmartMovingServer {
      */
     public boolean isClimbCrawling;
 
-    /** 🔴 [TEMP DBG-7] 진단용 — ICC 활성 + EXIT 후 30 tick dump 카운터. */
-    public int smIccDbgTicks = 0;
-
     /**
      * 🔴 (Phase 2 multi network 최적화) server-side broadcast dirty 검사용.
      *   매 tick client 가 동일 state packet 보내도, server 가 마지막 broadcast 한 bits 와 비교 →
@@ -173,12 +170,6 @@ public final class SmartMovingServer {
         // ── X/Z 땡김 fix: 클라/서버 박스 동기화 (bit 34, bit 22 는 angleJumpType 사용) ──
         boolean newClimbCrawling = ((bits >> 34) & 1) != 0;
         if (newClimbCrawling != isClimbCrawling) {
-            // 🔴 [TEMP DBG-7] bit 34 변경 시점 dump.
-            org.slf4j.LoggerFactory.getLogger("SM-DBG7-S").info(
-                    "[S-bit34] name={} prev={} new={} y={}",
-                    player.getName().getString(), isClimbCrawling, newClimbCrawling,
-                    String.format("%.3f", player.getY())
-            );
             isClimbCrawling = newClimbCrawling;
             player.calculateDimensions();
         }
