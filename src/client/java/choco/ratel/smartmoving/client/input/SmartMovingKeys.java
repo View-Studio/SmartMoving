@@ -27,7 +27,7 @@ public class SmartMovingKeys {
         grab = KeyBindingHelper.registerKeyBinding(new KeyBinding(
             "key.smartmoving.grab",
             InputUtil.Type.KEYSYM,
-            GLFW.GLFW_KEY_LEFT_CONTROL,
+            GLFW.GLFW_KEY_R,
             CATEGORY_GAMEPLAY
         ));
         configToggle = KeyBindingHelper.registerKeyBinding(new KeyBinding(
