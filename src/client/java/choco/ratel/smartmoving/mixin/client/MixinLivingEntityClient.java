@@ -318,18 +318,13 @@ public abstract class MixinLivingEntityClient {
             float jumpMovementFactor = 0.02F;
             climbRawSpeed = jumpMovementFactor / (player.isSprinting() && !player.getAbilities().flying ? 1.3F : 1F);
         }
-        // 🔴 jumpControlFactor / headJumpControlFactor (원본 L703-706 1:1):
-        //   if (isHeadJumping) speedFactor *= headJumpControlFactor;
-        //   else if (Config.enabled && !onGround && !capabilities.flying && !isFlying)
-        //       speedFactor *= jumpControlFactor;
-        //   기본값: jumpControlFactor=1F (defaults(1F)), headJumpControlFactor=0.2F.
-        if (sm.isHeadJumping) {
-            climbSpeedFactor *= cfg2.headJumpControlFactor;
-        } else if (!player.isOnGround()
-                && !player.getAbilities().flying
-                && !sm.isFlying) {
-            climbSpeedFactor *= cfg2.jumpControlFactor;
-        }
+        // Phase F 1:1 정정: jumpControlFactor / headJumpControlFactor 적용 분기 제거.
+        //   원본 SmartMovingSelf L688-L719 흐름은 if/else 체인:
+        //     if (isClimbing && climbingUpIsBlockedBy*) { /* climb 처리, factor 미적용 */ }
+        //     else if (!isSliding) { /* land 처리, factor 적용 (L703-L706) */ }
+        //   즉 등반 분기에서는 jumpControlFactor / headJumpControlFactor 미적용.
+        //   이 climbMotion 위치에 적용은 원본 위반. wouldWantClimb 식 (`!isHeadJumping` 가드)
+        //   로 헤드점프 중 등반 진입 차단되어 dead code 였으나 1:1 정합 명시.
         // runFactor (isRunning && !isFast).
         if (cfg2.run && SmartMovingMover.isRunning(player, sm, cfg2) && !sm.isFast) {
             climbSpeedFactor *= cfg2.runFactor;

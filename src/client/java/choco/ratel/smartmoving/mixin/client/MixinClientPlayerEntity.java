@@ -117,10 +117,28 @@ public abstract class MixinClientPlayerEntity {
     @Inject(method = "tickNewAi", at = @At("TAIL"))
     private void sm_jumpingFilter_tickNewAi(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
-        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingConfig cfg = SmartMovingConfig.Config;
+        if (!cfg.enabled) return;
         SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isCrawling || sm.isSliding || sm.isHeadJumping
-                || sm.jumpCharge > 0 || sm.blockJumpTillButtonRelease) {
+
+        // Phase E BUG-3 1:1 정정: 원본 L2367-L2370 setIsJumpingField 5-AND 식의 부정 (= setJumping(false) 조건).
+        //   원본 식 (양수): movementInput.jump && !isCrawling && !isSliding
+        //                && !(headJumpEnabled && grab && sprint)
+        //                && !(jumpChargeEnabled && wouldIsSneaking && onGround && isStanding)
+        //                && !blockJumpTillButtonRelease
+        //   부정 (= jumping false 강제): isCrawling || isSliding
+        //                || (headJumpEnabled && grab && sprint)         ★ 차징 시작 가능 시점부터 차단
+        //                || (jumpChargeEnabled && wouldIsSneaking && onGround && isStanding)  ★ 동일
+        //                || blockJumpTillButtonRelease
+        //   기존 단순화 (isHeadJumping / jumpCharge>0) 는 "이미 발사/차징 중" 상태만 가드 → 시작 frame
+        //   에 vanilla 점프 발사 잠재 가능. 1:1 복원.
+        boolean shouldBlock =
+                sm.isCrawling
+             || sm.isSliding
+             || (cfg.headJump && SmartMovingKeys.grab.isPressed() && player.isSprinting())
+             || (cfg.jumpCharge && sm.wouldIsSneaking && player.isOnGround() && sm.isStanding)
+             || sm.blockJumpTillButtonRelease;
+        if (shouldBlock) {
             ((net.minecraft.entity.LivingEntity)(Object)this).setJumping(false);
         }
     }

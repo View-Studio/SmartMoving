@@ -6,6 +6,7 @@ import choco.ratel.smartmoving.climbing.HandsClimbing;
 import choco.ratel.smartmoving.climbing.Orientation;
 import choco.ratel.smartmoving.client.input.SmartMovingKeys;
 import choco.ratel.smartmoving.config.SmartMovingConfig;
+import net.minecraft.stat.Stats;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import choco.ratel.smartmoving.climbing.CeilingClimbBlocks;
@@ -1038,38 +1039,47 @@ public final class SmartMovingClimber {
      * continueWallJumping = !isHeadJumping — 뒤로 점프 후 연속 벽 점프 허용.
      */
     private static void handleClimbBackJump(ClientPlayerEntity player, SmartMovingClientState sm) {
-        if (!sm.isClimbHolding || !sm.jumpPending) return;
+        // Phase H BUG-4 1:1 정정: 원본 L1060 `jumpButton.StartPressed` (점프 키 rising-edge).
+        //   기존 sm.jumpPending 은 sm_jump 인터셉트 시 set 되는 매 점프 시도 플래그 — 의미 다름.
+        //   1.21.1 측 sm.jumpKeyStartPressed (L1176 set: curJumpPressed && !prevJumpKeyPressed) 가 정확 매핑.
+        if (!sm.isClimbHolding || !sm.jumpKeyStartPressed) return;
 
         SmartMovingConfig cfg = SmartMovingConfig.Config;
         boolean grabPressed = SmartMovingKeys.grab.isPressed();
-        // climbJumpBackHead=false: !grab → headJump, grab → backUp
+
+        // Phase H BUG-2 1:1 정정: 원본 L1062 `handsOnly = feetClimbing != FeetClimbing.None`.
+        //   ★ 변수명 함정 (원본 그대로 보존): handsOnly==true 면 feet 도 등반 중 → 일반 ClimbBackHead/Up.
+        //                                       handsOnly==false 면 feet 안 등반 → ClimbBackHead/UpHandsOnly.
+        boolean handsOnly = sm.actualFeetClimbType != FeetClimbing.NONE.ordinal();
+
+        // Phase H BUG-1 1:1 정정: 원본 L1064-L1066 3중 ternary type 결정.
+        //   기존: 모든 분기 inline 동일 식 (vanilla 0.42 + 0.3 push). type 별 vertical/horizontal
+        //         factor 적용 누락 (climbBackUp/HeadJumpVerticalFactor 등). tryJump 호출로 정정.
         boolean useHead = cfg.climbJumpBackHead ? grabPressed : !grabPressed;
-
-        float jumpAngle = player.getYaw() + 180F;
-        double jumpAngleRad = Math.toRadians(jumpAngle);
-
-        // 수직 속도: 표준 점프 높이
-        double verticalMotion = 0.41999998688697815D;
-
-        // 수평 속도: 정면 반대 방향으로 0.3D push
-        double motionX = -Math.sin(jumpAngleRad) * 0.3D;
-        double motionZ =  Math.cos(jumpAngleRad) * 0.3D;
-
-        player.setVelocity(motionX, verticalMotion, motionZ);
-        player.setYaw(jumpAngle);
-        player.bodyYaw = jumpAngle;
-
+        int type;
         if (useHead) {
-            sm.isHeadJumping = true;
-            sm.heightOffset  = -1F;
-            SmartMovingJumper.setPoseSmall(player);
+            type = handsOnly ? SmartMovingJumper.CLIMB_BACK_HEAD
+                             : SmartMovingJumper.CLIMB_BACK_HEAD_HANDS_ONLY;
+        } else {
+            type = handsOnly ? SmartMovingJumper.CLIMB_BACK
+                             : SmartMovingJumper.CLIMB_BACK_HANDS_ONLY;
         }
 
-        // 뒤로 점프 후 연속 벽 점프 허용 (원본: continueWallJumping = !isHeadJumping)
-        sm.continueWallJumping = !sm.isHeadJumping;
-        sm.isClimbing          = false;
-        sm.blockJumpTillButtonRelease = true;
-        sm.jumpPending         = false;
+        float jumpAngle = player.getYaw() + 180F;
+
+        // Phase H BUG-3 1:1 정정: 원본 L1069 `if (tryJump(type, null, null, jumpAngle))` + 후처리.
+        //   tryJump 가 D-15 head 분기 시 isHeadJumping/setPoseSmall/heightOffset 처리 + D-11 angle
+        //   분기 시 motion 계산 (factor + getJumpMoving). 호출 측 inline motion 식 모두 제거.
+        if (SmartMovingJumper.tryJump(player, sm, type, null, null, jumpAngle)) {
+            sm.continueWallJumping = !sm.isHeadJumping;     // 원본 L1071
+            sm.isClimbing = false;                            // 원본 L1072
+            player.setYaw(jumpAngle);                         // 원본 L1073
+            player.bodyYaw = jumpAngle;                       // 1.21.1 추가 — 회전 동기화 (Phase G 패턴)
+            // 원본 L1074 onStartClimbBackJump():
+            //   - prev rotateAngleY += isHeadJumping ? Half : Quarter  ← 보류 (애니메이션 사이클 / 사용자 원본 확인 대기)
+            //   - isClimbBackJumping = true  (SmartMoving.java L147)
+            sm.isClimbBackJumping = true;
+        }
     }
 
     /**
@@ -1078,10 +1088,16 @@ public final class SmartMovingClimber {
      * fallDistance > startDistance 시 초과분 * factor 데미지 적용.
      */
     private static void handleCrash(ClientPlayerEntity player, float startDistance, float factor) {
-        if (player.fallDistance > startDistance) {
-            float damage = (player.fallDistance - startDistance) * factor;
+        // Phase E BUG-2 1:1 정정 (handleCrash 두 번째 복사본 — free climb 용)
+        if (player.fallDistance >= 2.0F) {
+            player.increaseStat(Stats.FALL_ONE_CM, (int) Math.round(player.fallDistance * 100D));
+        }
+        if (player.fallDistance >= startDistance) {
+            float damage = (float) Math.ceil((player.fallDistance - startDistance) * factor);
             player.damage(player.getDamageSources().fall(), damage);
         }
+        // Phase E BUG-1 1:1 정정: 원본 L2242 fallDistance reset
+        player.fallDistance = 0F;
     }
 
     // ── 7-3: handleCeilingClimbing ───────────────────────────────────────

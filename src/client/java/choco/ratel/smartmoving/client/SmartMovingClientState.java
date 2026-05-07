@@ -7,6 +7,7 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.network.SmartMovingNetwork;
 import choco.ratel.smartmoving.network.SmartMovingState;
 import choco.ratel.smartmoving.stat.SmartStatistics;
+import net.minecraft.stat.Stats;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -111,6 +112,12 @@ public final class SmartMovingClientState {
     public static final float SWIM_CRAWL_WATER_MEDIUM_BORDER = 0.6F;
     /** 원본 SwimCrawlWaterBottomBorder = 0.55F. B-36 (c) dipping → 얕은 물 crawl 전환 임계. */
     public static final float SWIM_CRAWL_WATER_BOTTOM_BORDER = 0.55F;
+    /**
+     * 원본 SmartMovingContext L51 SlideToHeadJumpingFallDistance = 0.05F.
+     * 슬라이딩 중 낙하거리 임계값 — 초과 시 isSliding=false + isHeadJumping=true + isAerodynamic=true.
+     * (헤드점프 Phase A-4 — 원본 SmartMovingSelf L2546)
+     */
+    public static final float SLIDE_TO_HEADJUMPING_FALL_DISTANCE = 0.05F;
 
     /** 히트박스 오프셋 (헤드점프 시 -1F) */
     public float heightOffset;
@@ -2045,8 +2052,8 @@ public final class SmartMovingClientState {
             }
 
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
-            // 슬라이딩 중 낙하거리가 0.05F 초과 → 헤드점프 + 공기역학 모드 전환
-            if (isSliding && player.fallDistance > 0.05F) {
+            // 슬라이딩 중 낙하거리가 SlideToHeadJumpingFallDistance(0.05F) 초과 → 헤드점프 + 공기역학 모드 전환
+            if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE) {
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
@@ -3618,10 +3625,19 @@ public final class SmartMovingClientState {
      * B-24 (세션 53).
      */
     public static void handleCrash(ClientPlayerEntity player, float startDistance, float factor) {
-        if (player.fallDistance > startDistance) {
-            float damage = (player.fallDistance - startDistance) * factor;
-            player.damage(player.getDamageSources().fall(), damage);
+        // Phase E BUG-2 1:1 정정: 원본 L2234 `>= 2.0F` Stats 갱신 (정수 cm 거리)
+        if (player.fallDistance >= 2.0F) {
+            player.increaseStat(Stats.FALL_ONE_CM, (int) Math.round(player.fallDistance * 100D));
         }
+        // Phase E BUG-2 1:1 정정: 원본 L2237 `>= startDistance` (>= 가 아닌 > 였음 — 경계값 1 tick 차이 fix)
+        if (player.fallDistance >= startDistance) {
+            // Phase E 1:1 정정: 원본 L2239 `(int)Math.ceil((fallDistance-startDistance)*factor)` 정수 데미지
+            float damage = (float) Math.ceil((player.fallDistance - startDistance) * factor);
+            player.damage(player.getDamageSources().fall(), damage);
+            // 원본 L2240 `distanceClimbedModified = nextClimbDistance` (step sound 강제) — 별도 시스템 deferred
+        }
+        // Phase E BUG-1 1:1 정정: 원본 L2242 `sp.fallDistance = 0F` 함수 끝 무조건 reset 누락 fix
+        player.fallDistance = 0F;
     }
 
     /**

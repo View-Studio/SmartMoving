@@ -317,15 +317,16 @@ public final class SmartMovingJumper {
             // onLivingJump() — vanilla PlayerEntity 자동 점프 이벤트 처리
         }
 
-        // === D-18 (1.21.1 동작 유지) — 호출 측 상태 클리어를 내부 처리 ===
-        //   원본은 호출 측 (handleJumping 등) 에서 jumpCharge=0 등 처리. 1.21.1 은 모든 호출처
-        //   (handleJumping 4곳 + handleWallJumping + ClientState 2곳) 가 결과적으로 같은 후처리
-        //   필요하므로 내부 통합. SlideDown / Creative flying 호출 시 차징 진행 중일 가능성 0
-        //   이므로 부작용 없음.
-        sm.jumpCharge = 0F;
-        sm.headJumpCharge = 0F;
-        sm.blockJumpTillButtonRelease = true;
-        sm.jumpPending = false;
+        // === D-18 제거 (Phase C 1:1 정정) — 호출 측 분리 처리로 원본 1:1 복원 ===
+        //   기존: tryJump 끝에 jumpCharge=0 / headJumpCharge=0 / blockJumpTillButtonRelease=true /
+        //         jumpPending=false 통합 set. 원본은 호출 측 (handleJumping 차지/헤드 release
+        //         분기) 에서 분리 처리 — 다른 호출처 (wall/climb/angle/slide/water/CreativeFlying)
+        //         에서는 set 안 함.
+        //   부작용 (제거 전): blockJumpTillButtonRelease=true 가 모든 tryJump 후 set →
+        //         wall/climb back/angle jump 후 점프 키 hold 중 일반 점프 가드 fail → 차이.
+        //   복원 후: 원본 동작 정확히 일치. handleJumping 차지/헤드 분기 호출 측 reset 은
+        //         이미 정상 매핑됨 (L413-L416 / L463-L468 / L419-L423 / L469-L473).
+        //         jumpPending=false 는 handleJumping 시작 (L367) 에서 매 tick reset.
 
         // === D-17 (원본 L2135) — return enabled ===
         return enabled;
@@ -358,9 +359,11 @@ public final class SmartMovingJumper {
         //   vanilla jump() 가로챔 + SM 점프도 작동 안 함 → 점프 자체 작동 안 함 (사용자 보고).
         //   해결: cfg.enabled false 시 즉시 return → vanilla 점프 그대로.
         if (!cfg.enabled) return;
-        MinecraftClient mc = MinecraftClient.getInstance();
 
-        boolean jumpKeyPressed  = mc.options.jumpKey.isPressed();
+        // B-7 (Phase B 1:1 정정): 원본 esp.movementInput.jump 매핑 — raw KeyBinding 대신
+        //   player.input.jumping 사용. `feedback_movementInput_vs_isSneaking` 패턴 적용
+        //   (vanilla 측 가공 후 값 — 비행/sleeping 등 시나리오 정합).
+        boolean jumpKeyPressed  = player.input.jumping;
         boolean grabKeyPressed  = SmartMovingKeys.grab.isPressed();
 
         // 1. jumpPending 클리어 (원본 L1844 — 메서드 시작) ★ B-3 정정
@@ -433,33 +436,30 @@ public final class SmartMovingJumper {
         //     else  if (headJumpCharge > 0 && sp.onGround) tryJump(HeadUp); headJumpCharge = 0;
         //   else  if (headJumpCharge > 0) blockJumpTillButtonRelease = true; headJumpCharge = 0;
         //
-        // B-Slide-HeadJump-fix (2026-05-04): `!sm.isSliding` 가드 추가 — 크롤과 동일 패턴.
-        //   원본 코드 fact 분석: `!isCrawling` 만 명시 가드. 슬라이딩 중 헤드점프 차단은
-        //   vanilla `setSprinting(false)` 자동 호출 (forward<0.8F 시) 의존 — 사용자가
-        //   forward+sprint+grab+sneak 슬라이딩 후 forward hold 유지 시 vanilla 자동 종료
-        //   미발화 → sp.isSprinting()=true 잔존 → isRunning()=true → headJumpCharging
-        //   활성 → 점프키 떼면 tryJump(HeadUp) 발화. 사용자 보고 BUG (changelog L656
-        //   `disabled jumping while sliding` 의도와 모순).
-        //   fix: `!sm.isSliding` 명시 가드 추가. 원본 1:1 위반이지만 사용자 의도 매치 +
-        //   1.21.1 vanilla sprint 자동 종료 동작 차이 회피. SlideToHeadJumping 자동 전환
-        //   (SmartMovingClientState L1982-L1986) 은 별경로 (tryJump 호출 X, 직접 set) 라
-        //   이 가드 영향 받지 않음 — 슬라이딩 → 낙하 → 자동 헤드점프 전환 정상 작동.
-        //   `MixinClientPlayerEntity.sm_jumpingFilter_tickNewAi` (L117-L126) 는 이미
-        //   `sm.isSliding` 가드 포함 — vanilla 점프 차단은 정상. 본 추가는 SM 헤드점프
-        //   차징 차단 보완.
-        boolean isGroundSprinting = (sm.isFast || player.isSprinting())
-                && player.isOnGround() && !sm.isSliding && !sm.isCrawling;
-        boolean isRunning = player.isSprinting() && !sm.isFast
-                && (player.isOnGround() || sm.isFlying);
+        // B-2 / B-3 (Phase B 1:1 정정): isGroundSprinting/isRunning 로컬 재정의 제거.
+        //   기존: 로컬 변수로 잘못된 식 재정의 (isGroundSprinting 은 원본
+        //         isStandupSprintingOrRunning 식 + isRunning 은 vanilla() 대신 isFlying 잘못 사용).
+        //   원본은 isGroundSprinting **필드** (L2679 set: canHorizontallySprint
+        //   && (onGround||isLevitating) && !swimming && !diving && !climbing) +
+        //   isRunning() **메서드** (L3239: isSprinting && !isFast && (onGround||vanilla())).
+        //   1.21.1 측 sm.isGroundSprinting / sm.isRunning(player) 매핑 이미 존재 — 직접 사용.
+        //
+        // B-Slide-HeadJump-fix (2026-05-04): `!sm.isSliding` 가드 유지 — 사용자 보고 BUG fix.
+        //   원본은 `!isCrawling` 만 명시 가드. 1.21.1 vanilla sprint 자동 종료 동작 차이로
+        //   슬라이딩 후 forward hold 시 isRunning 잔존 → 헤드점프 차징 활성 BUG 발생.
+        //   본 가드는 의도적 원본 1:1 위반.
         boolean isHeadJumpCharging = false;
         if (cfg.headJump) {
             isHeadJumpCharging = grabKeyPressed
-                    && (isGroundSprinting || sm.isSprintJump || (isRunning && player.isOnGround()))
+                    && (sm.isGroundSprinting || sm.isSprintJump
+                        || (sm.isRunning(player) && player.isOnGround()))
                     && !sm.isCrawling
                     && !sm.isSliding;
             if (isHeadJumpCharging) {
                 if (jumpKeyPressed) {
-                    sm.headJumpCharge = Math.min(sm.headJumpCharge + 1F, cfg.headJumpChargeMaximum);
+                    // B-3 (Phase B 1:1 정정): 원본 L1886 `headJumpCharge++` — clamp 없음.
+                    //   getHeadJumpFactor 안에서만 clamp. set 단계 Math.min 제거.
+                    sm.headJumpCharge++;
                 } else {
                     if (sm.headJumpCharge > 0 && player.isOnGround()) {
                         tryJump(player, sm, HEAD_UP, null, null, null);
@@ -613,21 +613,20 @@ public final class SmartMovingJumper {
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // 원본 L1450: 최우선 조건 — wantWallJumping=false 이면 즉시 return.
+        // 원본 L1948: 최우선 조건 — wantWallJumping=false 이면 즉시 return.
         if (!sm.wantWallJumping) return;
 
+        // calculateSeparateCollisionAngle 의 fallback 용 movementAngle (vel 기반).
+        // 원본은 horizontalCollisionAngle 필드를 별도 계산해 NaN 시 함수 시작에서 return.
+        // 1.21.1 매핑은 calculateSeparateCollisionAngle 안에서 NaN fallback 처리하므로
+        // 여기 fallback movementAngle 만 vel 기반 유지.
         Vec3d vel = player.getVelocity();
+        float fallbackAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
+        if (fallbackAngle < 0) fallbackAngle += 360F;
+        float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, fallbackAngle);
 
-        // 이동 방향 각도 (atan2 기반, 0=북, 시계 방향)
-        float movementAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
-        if (movementAngle < 0) movementAngle += 360F;
-
-        // C-38: calculateSeparateCollisions() — 4방향 AABB 충돌 감지
-        float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, movementAngle);
-
-        // grab=true → WallHead/WallHeadSlide, grab=false → WallUp/WallUpSlide
-        // wasCollidedHorizontally: 이전 틱부터 벽에 닿아있던 경우 Slide 타입 (수직 속도 미적용)
-        // 원본: isWallJumpEnabled() = _wallUpJump.value (grab=false), _wallHeadJump.value (grab=true)
+        // 원본 L1952-L1963: grab=true → WallHead/WallHeadSlide, grab=false → WallUp/WallUpSlide.
+        // wasCollidedHorizontally: 이전 틱부터 벽에 닿아있던 경우 Slide 타입 (수직 속도 미적용).
         boolean grabPressed = SmartMovingKeys.grab.isPressed();
         int jumpType;
         if (grabPressed) {
@@ -640,42 +639,46 @@ public final class SmartMovingJumper {
             jumpType = sm.wasCollidedHorizontally ? WALL_UP_SLIDE : WALL_UP;
         }
 
-        // 원본: wasCollidedHorizontally=false → 반사 각도; true → 벽 법선 각도 그대로
+        // 원본 L1965-L1975: wasCollidedHorizontally=false → 반사 각도; true → 벽 법선 각도 그대로.
+        // Phase G 차이 1 1:1 정정: movementAngle 을 jumpMotion 기반으로 (원본 L1968 — 점프 시점
+        //   motion 보존). 기존 vel 기반은 같은 tick 내 motion 변동 영향.
         float jumpAngle;
         if (!sm.wasCollidedHorizontally) {
-            if (vel.horizontalLength() < 0.01D) return;  // 이동 속도 없으면 반사 각도 계산 불가
+            float movementAngle = (float) Math.toDegrees(Math.atan2(-sm.jumpMotionX, sm.jumpMotionZ));
+            if (movementAngle < 0) movementAngle += 360F;
+            // 원본 L1969-L1970 NaN 가드 (jumpMotion 둘 다 0 시 atan2(0,0)=0 → NaN 안 발생하나 1:1)
+            if (Float.isNaN(movementAngle)) return;
             jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
-            while (jumpAngle > 360F) jumpAngle -= 360F;
-            // 원본: tolerance != 0 && abs(aligned) < tolerance 일 때만 90° 스냅
-            if (cfg.wallUpJumpOrthogonalTolerance != 0F) {
-                float aligned = jumpAngle;
-                while (aligned > 45F) aligned -= 90F;
-                if (Math.abs(aligned) < cfg.wallUpJumpOrthogonalTolerance)
-                    jumpAngle = Math.round(jumpAngle / 90F) * 90F;
-            }
         } else {
             jumpAngle = horizontalCollisionAngle;
-            while (jumpAngle > 360F) jumpAngle -= 360F;
         }
 
-        sm.isWallJumping = true;
+        // Phase G BUG-1 1:1 정정: while>360 + orthogonalTolerance 분기 외부 적용 (원본 L1977-L1988).
+        //   기존: !wasCollidedHorizontally 분기 안에만 적용 → wasCollidedHorizontally=true (Slide 타입)
+        //         시 90° 정렬 미적용 → 점프 각도 부정확. 원본은 둘 다 적용.
+        while (jumpAngle > 360F) jumpAngle -= 360F;
+        if (cfg.wallUpJumpOrthogonalTolerance != 0F) {
+            float aligned = jumpAngle;
+            while (aligned > 45F) aligned -= 90F;
+            if (Math.abs(aligned) < cfg.wallUpJumpOrthogonalTolerance)
+                jumpAngle = Math.round(jumpAngle / 90F) * 90F;
+        }
 
-        // Phase D 새 시그니처 (세션 19): tryJump 가 angle 파라미터로 D-11 분기 처리.
-        //   기존 setVelocity + horizontalCollision/fallDistance 리셋은 tryJump 호출 후
-        //   원본 SmartMovingSelf L2068+ 동등하게 처리됨. 사전 setVelocity/리셋 코드 제거.
-        player.horizontalCollision = false;
-        player.fallDistance = 0F;
-
-        sm.isWallJumping = true;
-
-        // 원본: tryJump(jumpType, null, null, jumpAngle) — angle != null 경로 (D-11)
-        //   D-11 의 getJumpMoving 가 wallUp/HeadJumpHorizontalFactor (0.15F) 를 reset=true 로
-        //   적용하여 수평 속도 재방향 설정. 기존 인라인 호출 대체.
-        tryJump(player, sm, jumpType, null, null, jumpAngle);
-        player.setYaw(jumpAngle);
-        player.bodyYaw = jumpAngle;
-        // 원본: continueWallJumping = !isHeadJumping (tryJump 성공 후 — WallHead 시 false)
-        sm.continueWallJumping = !sm.isHeadJumping;
+        // Phase G 차이 2/3 1:1 정정: tryJump 결과 if 분기 + 후처리는 성공 시에만 (원본 L1990-L1996).
+        //   기존: tryJump 결과 무시 + isWallJumping 이중 set + tryJump 호출 전 후처리.
+        if (tryJump(player, sm, jumpType, null, null, jumpAngle)) {
+            // 원본 L1992: continueWallJumping = !isHeadJumping (WallHead 시 false)
+            sm.continueWallJumping = !sm.isHeadJumping;
+            // 원본 L1993: sp.isCollidedHorizontally = false
+            player.horizontalCollision = false;
+            // 원본 L1994: sp.rotationYaw = jumpAngle
+            player.setYaw(jumpAngle);
+            player.bodyYaw = jumpAngle;       // (Phase G 차이 4 보류 — 회전 동기화 의도 유지)
+            // 원본 L1995 onStartWallJump(jumpAngle) inline:
+            //   - prev rotateAngleY = angle / RadiantToAngle  (Phase G 차이 5 보류 — 애니메이션 사이클)
+            sm.isWallJumping = true;          // 원본 onStartWallJump (SmartMoving.java L154)
+            player.fallDistance = 0F;          // 원본 onStartWallJump (SmartMoving.java L155)
+        }
     }
 
     /**

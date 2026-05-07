@@ -226,10 +226,13 @@ public final class SmartMovingMover {
             horizontalDamping = HORIZONTAL_AIR_DAMPING;
         }
 
-        // 원본 landMotion L703-707: jump control factor.
+        // 원본 landMotion L703-706: jump control factor.
+        // Phase F 1:1 정정: 원본 L705 `Config.enabled && ...` 가드 명시 추가 (cosmetic — 함수 시작
+        //   `if (!cfg.enabled) return false` 로 이미 함수 단위 가드, 동작 동일).
         if (sm.isHeadJumping) {
             speedFactor *= cfg.headJumpControlFactor;
-        } else if (!player.isOnGround() && !player.getAbilities().flying && !sm.isFlying) {
+        } else if (cfg.enabled && !player.isOnGround()
+                && !player.getAbilities().flying && !sm.isFlying) {
             speedFactor *= cfg.jumpControlFactor;
         }
 
