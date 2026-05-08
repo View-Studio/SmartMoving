@@ -36,4 +36,5 @@ public abstract class MixinClientPlayNetworkHandler {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         sm.multiPlayerInitialized = 5;
     }
+
 }

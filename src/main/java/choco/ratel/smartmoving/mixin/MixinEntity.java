@@ -145,4 +145,5 @@ public abstract class MixinEntity {
         //   main mixin set 은 server 빌드 시 client class 참조 불가).
         //   client-side `MixinEntityClient.sm_iccTimerOffsetBb` 가 같은 method 에 RETURN inject.
     }
+
 }

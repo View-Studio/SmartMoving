@@ -165,8 +165,26 @@ public final class SmartMovingServer {
         isDiving       = ((bits >>  9) & 1) != 0;
         isSwimming     = ((bits >> 11) & 1) != 0;
         isLevitating   = ((bits >> 19) & 1) != 0;
-        isHeadJumping  = ((bits >> 20) & 1) != 0;
-        isSliding      = ((bits >> 21) & 1) != 0;
+        // 🔴 fix #42 (2026-05-09, 사용자 보고 "콜리전 1칸 위 고정"):
+        //   isHeadJumping/isSliding change detection + calculateDimensions() 호출 추가.
+        //   Why: 단순 디코딩만 했을 때 서버 측 dim cache (= STANDING 1.8) 잔존 → mixin offset
+        //     (= height<1 && eyeHeight>1) 미적용 → 서버 박스 (entity.y, entity.y+1.8) →
+        //     ground 안 박힘 인식 → server position correction packet 송신 → 클라 위치 reset
+        //     → entity 정지 + 무한 reconcile.
+        //   해결: ICC (bit 34) 와 동일 패턴 — change detection + calculateDimensions() 호출 →
+        //     dim 즉시 갱신 → mixin offset 즉시 활성 → 서버 박스 = 클라 박스 동일 위치 →
+        //     server reconcile 발생 X.
+        //   메모리 feedback_server_reconcile_box_sync + project_isclimbcrawling_complete 패턴.
+        boolean newHeadJumping = ((bits >> 20) & 1) != 0;
+        if (newHeadJumping != isHeadJumping) {
+            isHeadJumping = newHeadJumping;
+            player.calculateDimensions();
+        }
+        boolean newSliding = ((bits >> 21) & 1) != 0;
+        if (newSliding != isSliding) {
+            isSliding = newSliding;
+            player.calculateDimensions();
+        }
         // ── X/Z 땡김 fix: 클라/서버 박스 동기화 (bit 34, bit 22 는 angleJumpType 사용) ──
         boolean newClimbCrawling = ((bits >> 34) & 1) != 0;
         if (newClimbCrawling != isClimbCrawling) {
