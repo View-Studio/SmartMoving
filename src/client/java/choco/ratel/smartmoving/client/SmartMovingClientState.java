@@ -177,6 +177,26 @@ public final class SmartMovingClientState {
     public boolean wasFlying;
 
     /**
+     * 🔴 fix #19 (2026-05-08): 헤드점프 종료 → 슬라이딩 진입 매핑.
+     *   handleCrash 분기 진입 시 1 tick 만 true.
+     *   standupIfPossible 의 setPos(y+1) 분기 가드에 사용 → 헤드점프 종료 직후 1 tick 만
+     *   setPos 호출 (비행/Levitate 종료와 동일 효과). 다음 tick reset 으로 무한 setPos 차단
+     *   (이전 fix #16 무한 루프 BUG 회피).
+     *   다음 tick 의 L1854 tryLanding 분기 standupIfPossible 호출 시 미매치 → setPos X →
+     *   vanilla 자동 처리.
+     */
+    public boolean justEndedHeadJump;
+
+    /**
+     * 🔴 fix #21 (2026-05-08): SlideToHeadJumping 자동 전환 cooldown.
+     *   슬라이딩 → 절벽 → 자동 전환 → 헤드점프 종료 → setPos(y+1) → 사용자 환경 (다층 절벽)
+     *   에서 박스 ground+1m 공중 → 다음 tick fallDistance 누적 → 자동 전환 재발 → 무한 루프.
+     *   첫 자동 전환은 OK (사용자 의도). 종료 후 N tick 동안 자동 전환 차단.
+     *   handleCrash 분기에서 set (5 tick). tickEssential 시작 시 카운터 감소.
+     */
+    public int slideToHeadCooldown;
+
+    /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
      * 원본: flying = sp.capabilities.isFlying
      * C-15: tickEssential()에서 매 틱 계산.
@@ -1152,6 +1172,12 @@ public final class SmartMovingClientState {
         //   원본: tryJump 시 true (L2132), updateEntityActionState 시작 시 false reset.
         //   tryJump 안에서만 true → 한 틱만 유지 (다음 틱 시작 시 reset).
         isJumping = false;
+        // 🔴 fix #19 (2026-05-08): justEndedHeadJump 1-tick 플래그 reset.
+        //   handleCrash 분기 진입 시 set, 다음 tick 시작 시 reset → setPos(y+1) 1 tick 한정.
+        this.justEndedHeadJump = false;
+        // 🔴 fix #21 (2026-05-08): slideToHeadCooldown 카운터 감소.
+        //   handleCrash 분기 set 후 N tick 동안 자동 전환 차단.
+        if (this.slideToHeadCooldown > 0) this.slideToHeadCooldown--;
 
         // H-15 (세션 22): 2상태 토글 강제 복원. 원본 `initializeForGameIfNeccessary` 가
         // setKeys({"e","m","h"}) 로 configKeys 를 덮어써 configToggle 이 4상태 순환하는
@@ -2018,6 +2044,22 @@ public final class SmartMovingClientState {
                 isSliding = true;                                        // 원본 L2558
                 isHeadJumping = false;                                   // 원본 L2559
                 isAerodynamic = false;                                   // 원본 L2560
+                // 🔴 fix #29 (2026-05-08, 사용자 보고 "슬라이딩 중 떨어질 때 덜컹"):
+                //   진입 시점 cameraY=1.62 (= 직전 standing 잔존) vs 새 dim eye=0.62 →
+                //   vanilla updateEyeHeight 0.5 step lerp 으로 N tick 추격 → 카메라 시점 ~1m
+                //   천천히 하강 (~350ms over 7 tick) → 사용자 인지 "덜컹".
+                //   원본 1.7.10 은 보간 X → 진입 시 시점 -1m 즉시 변화. 매핑 일치 위해
+                //   비행 fix B / ICC fix A / 헤드점프 fix #28 와 동일 패턴 — cameraY 즉시 강제.
+                //   move(0,-1,0) 가 ground 충돌 막힘으로 entity.y 변화 X (평지) → lastRenderY/
+                //   prevY 동기화 불필요. cameraY 강제만으로 충분.
+                player.calculateDimensions();
+                net.minecraft.client.render.Camera _cam =
+                        net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                if (_cam != null) {
+                    float _eye = player.getStandingEyeHeight();
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam).sm_setCameraY(_eye);
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam).sm_setLastCameraY(_eye);
+                }
             }
 
             // B-23 (세션 46): isHeadJumping 매 틱 재평가 5-AND 해제 공식 (원본 L2524-L2530)
@@ -2047,13 +2089,32 @@ public final class SmartMovingClientState {
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
+                // 🔴 fix #19 (2026-05-08): 헤드점프 종료 직후 1-tick 플래그 set.
+                //   standupIfPossible 의 setPos(y+1) 분기 가드 — 비행/Levitate 종료와 동일
+                //   매핑 적용 (= 박스 박힘 보정). 다음 tick reset → 무한 setPos 호출 차단.
+                this.justEndedHeadJump = true;
+                // 🔴 fix #21 (2026-05-08): SlideToHead 자동 전환 cooldown set.
+                //   사용자 환경 (다층 절벽) 에서 setPos(y+1) → 박스 공중 → fallDistance 누적
+                //   → 자동 전환 재발 무한 루프 차단. 5 tick 동안 자동 전환 X.
+                //   첫 자동 전환 (= 슬라이딩 → 절벽 시나리오) 은 cooldown=0 라 통과.
+                this.slideToHeadCooldown = 5;
                 // B-N-standup 연결: restoreFromFlying 전환 시 가능하면 즉시 서기 시도.
                 standupIfPossible(player, false, true);
             }
 
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
             // 슬라이딩 중 낙하거리가 SlideToHeadJumpingFallDistance(0.05F) 초과 → 헤드점프 + 공기역학 모드 전환
-            if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE) {
+            // 🔴 fix #17 (2026-05-08): `!wasHeadJumping` 가드 추가.
+            //   헤드점프 종료 직후 (wasHeadJumping=true) standupIfPossible setPos(y+1) → entity.y +1m
+            //   → 박스 ground+1m 공중 → vanilla travel gravity → 박스 발 ground 도달 → fallDistance
+            //   누적 → 본 자동 전환 매치 → isHeadJumping=true 재진입 → 5-AND 종료 → 무한 루프 BUG.
+            //   비행 종료는 entity.y = Y_floor - 1 (vanilla 1칸 공간 push down) 라 setPos(y+1) →
+            //   ground 위 정상. 헤드점프는 entity.y -1m 처리 X 라 자동 전환 발동.
+            //   해결: `!wasHeadJumping` 가드 — 헤드점프 종료 직후 1 tick 자동 전환 차단.
+            //   BUG 1 시나리오 (슬라이딩 → 절벽 → 헤드점프 자동 전환) 는 wasHeadJumping=false 라 통과.
+            if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE
+                    && !wasHeadJumping
+                    && this.slideToHeadCooldown == 0) {
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
@@ -3572,7 +3633,15 @@ public final class SmartMovingClientState {
             //   기존 가드 `wasSmallBox && isCrawling` → false → setPos(y+1) 미적용 →
             //   entity.y 비행 박스 위치 (Y_floor-1) + small box 0.8 적용 → 박스 = (Y_floor-1, Y_floor-0.2)
             //   = 디딤발 안 박힘. fix: isSliding 케이스 도 가드 통과.
-            if (wasSmallBox && (this.isCrawling || this.isSliding)) {
+            // 🔴 fix #22 (2026-05-08, 사용자 보고 "착지해서 슬라이딩 진입 시 살짝 끊김"):
+            //   비행 종료 시 entity.y = Y_floor - 1 (vanilla 1칸 공간 push down) 라 setPos(y+1)
+            //   가 ground 정상 보정. 헤드점프 종료 시 entity.y = ground (vanilla move 박스 발
+            //   ground 도달 시 갱신) 라 setPos(y+1) → ground+1m 공중 → 1 tick 떨어짐 시각 끊김.
+            //   해결: setPos(y+1) 가드를 `wasFlying || wasLevitating` 만 (= justEndedHeadJump 제거).
+            //   justEndedHeadJump 시는 별도 분기 — dim 갱신 + vy/fallDistance reset 만.
+            //   박스 ground 안 박힘 시 메서드 끝의 안전망이 push up (이미 매핑됨).
+            if (wasSmallBox && (this.isCrawling || this.isSliding)
+                    && (wasFlying || wasLevitating)) {
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                 player.lastRenderY += 1.0;
@@ -3584,7 +3653,47 @@ public final class SmartMovingClientState {
                     ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
                     ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
                 }
-                this.mustCrawl = true;
+                // mustCrawl=true 는 isCrawling 시만 — isSliding 시 강제 시 isCrawling 동시 발동 BUG.
+                if (this.isCrawling) {
+                    this.mustCrawl = true;
+                }
+            }
+            // 🔴 fix #25 복원 (fix #26 revert 후): push up + Camera baseline 동기화.
+            //   사용자 보고 잔존 덜컹은 vanilla 매핑 한계 (= baseTick prevY 갱신 race) — 별도
+            //   사이클로 deferred. 회귀 (= 박스 박힘) 우선 fix.
+            if (this.justEndedHeadJump && wasSmallBox && (this.isCrawling || this.isSliding)) {
+                player.calculateDimensions();
+                net.minecraft.util.math.Box bbAfter = player.getBoundingBox();
+                // 🔴 fix #30 (2026-05-08, 사용자 보고 "슬라이딩→헤드점프→슬라이딩 뚝 끊김"):
+                //   fix #28 의 hardcoded +1.0 가정 = 헤드점프 진행 중 dim eye=1.62 (mixin 매치) →
+                //   entity.y = ground_top - 1. 그러나 슬라이딩→헤드점프 시나리오는 fix #29 의
+                //   calculateDimensions 부작용으로 dim eye=0.62 잔존 (= mixin 미매치) → 헤드점프
+                //   진행 중 박스 발 = entity.y → 종료 시 entity.y = ground_top.
+                //   fix #28 의 hardcoded +1.0 강제 시 박스 1m 공중 부양 → 다음 tick vanilla move
+                //   가 떨어뜨림 → frame lerp -0.6m 시점 점프 → 사용자 인지 "뚝 끊김".
+                //   해결: 박스 박힘 (bb.minY < solidUnder) 시만 push. yMax=bb.minY+1.5 (= clamp
+                //   회피, feedback_solid_under_ymax_clamp 패턴). push 양은 hardcoded +1.0 유지
+                //   (= 박힘 시 mixin 매치 박스 발 ground_top 보장으로 정확).
+                //   박힘 X 시: push 안 함, cameraY/vy/fallDistance 만 강제.
+                double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.5, bbAfter.minY + 1.5, 0);
+                boolean stuck = bbAfter.minY < solidUnder - 1.0E-5;
+                if (stuck) {
+                    double pushY = 1.0;
+                    player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
+                    player.lastRenderY += pushY;
+                    player.prevY += pushY;
+                }
+                // cameraY 강제는 stuck 무관 — 진입 시점 시점 안정 위해 항상 강제.
+                net.minecraft.client.render.Camera cam =
+                        net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                if (cam != null) {
+                    float eye = player.getStandingEyeHeight();
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                }
+                net.minecraft.util.math.Vec3d _v = player.getVelocity();
+                player.setVelocity(_v.x, 0.0, _v.z);
+                player.fallDistance = 0F;
             }
         }
 

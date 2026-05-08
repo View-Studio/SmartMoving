@@ -21,6 +21,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
  *
  * 해결: ICC toCrawling 직후 cameraY/lastCameraY 를 standingEyeHeight (= 0.62) 로 강제
  * → 다음 frame update 부터 보간 baseline 일치 → 점프 차단.
+ *
+ * 🔴 interface 형태 유지 — Mixin class 는 직접 cast 불가 (IllegalClassLoadError).
+ *   @Inject 는 별도 MixinCameraDebug abstract class 에서 처리.
  */
 @Mixin(Camera.class)
 @Environment(EnvType.CLIENT)

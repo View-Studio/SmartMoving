@@ -146,7 +146,17 @@ public abstract class MixinLivingEntityClient {
         }
 
         // [10-4] 헤드점프 착지 감지 — 포즈 복원
-        if (player.isOnGround() && sm.isHeadJumping) {
+        // 🔴 BUG fix (2026-05-08, 헤드점프 인게임 검증 1차):
+        //   handleJumping (L98) 의 tryJump head 분기 발사 → 같은 tick 같은 함수 안의 본 가드
+        //   `onGround && isHeadJumping` 즉시 매치 → resetHeightOffset → isHeadJumping=false +
+        //   STANDING 복원 → 헤드점프 1 tick 도 못 살고 풀림 (사용자 보고 BUG: "잠깐 엎드렸다
+        //   바로 일어남"). vanilla travel 본체가 아직 적용 전이라 onGround=true 잔존 race.
+        //   fix: `&& sm.wasHeadJumping` — 직전 tick 에 이미 isHeadJumping=true 였을 때만 reset.
+        //   발사 tick 에는 wasHeadJumping=false 라 차단. 헤드점프 진행 중 onGround 도달 시
+        //   tickEssential 의 5-AND 재평가 + handleCrash + standupIfPossible 흐름이 처리 (B-24/B-N).
+        //   체크리스트 Phase I 별도 발견 (resetHeightOffset 5-AND 흐름과 중복) 일관 — L149 자체
+        //   제거는 dead code 분석 후 별도 사이클로 deferred.
+        if (player.isOnGround() && sm.isHeadJumping && sm.wasHeadJumping) {
             SmartMovingJumper.resetHeightOffset(player, sm);
         }
 

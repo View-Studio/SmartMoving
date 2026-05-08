@@ -87,6 +87,21 @@ public final class SmartMovingSlider {
         player.setVelocity(newVx, newVy, newVz);
         player.move(MovementType.SELF, player.getVelocity());
 
+        // 🔴 BUG fix (2026-05-08, 사용자 보고 "슬라이딩 → 절벽 → 자동 헤드점프 전환 안 됨"):
+        //   sm_travel_client 의 ci.cancel() 으로 vanilla LivingEntity.travel 본체 skip →
+        //   본체 안의 fallDistance 갱신 식 (`if onGround → fallDistance=0; else if vy<0 →
+        //   fallDistance -= vy`) 도 skip. 슬라이딩 중 절벽 떨어짐 → fallDistance=0 유지 →
+        //   SlideToHeadJumping 임계 (0.05F) 도달 X → 자동 전환 X.
+        //   원본 1.7.10 흐름: SM superMoveEntityWithHeading 가 vanilla moveEntity 호출 →
+        //   moveEntity 안에서 fallDistance 자동 갱신. 1.21.1 vanilla travel cancel 이라
+        //   직접 매핑 필요.
+        //   해결: vanilla 1.21.1 LivingEntity.travel 의 fallDistance 갱신 식 1:1 매핑.
+        if (player.isOnGround()) {
+            player.fallDistance = 0.0F;
+        } else if (player.getVelocity().y < 0.0) {
+            player.fallDistance -= (float) player.getVelocity().y;
+        }
+
         // [9-5] 슬라이딩 파티클
         spawnSlidingParticle(player, sm, new Vec3d(newVx, 0, newVz));
 

@@ -253,7 +253,8 @@ public final class SmartMovingJumper {
                     double normalAngle = Math.atan(verticalMotion / horizontalMotion);
                     double totalMotion = Math.sqrt(verticalMotion * verticalMotion
                                                    + horizontalMotion * horizontalMotion);
-                    double newAngle = cfg.getHeadJumpFactor(sm.headJumpCharge) * normalAngle;
+                    double factor = cfg.getHeadJumpFactor(sm.headJumpCharge);
+                    double newAngle = factor * normalAngle;
                     double newVerticalMotion = totalMotion * Math.sin(newAngle);
                     double newHorizontalMotion = totalMotion * Math.cos(newAngle);
                     if (maxHorizontalMotion != null)
@@ -308,6 +309,23 @@ public final class SmartMovingJumper {
                 sm.isHeadJumping = true;
                 setPoseSmall(player);
                 sm.heightOffset = -1F;
+                // 🔴 fix (2026-05-08, 사용자 보고 "진입 시 카메라 확 올라감 + 착지 튕김"):
+                //   이전 매핑: setPos(y+1m) + calculateDimensions() → player.y +1m 즉시 점프 +
+                //     박스 갱신. 결과:
+                //     (a) 진입 카메라 = vanilla getCameraPosVec lerp(prevY=old, y=old+1) 가 1 tick
+                //         동안 +1m 보간 → "확 올라감" 시각 (1인칭/3인칭 모두).
+                //     (b) 종료 시 player.y 가 +1m 잔존 → STANDING POSE 복원 시 박스 발 +1m 떠 있음
+                //         → vanilla collision 으로 1m 떨어짐 → 박스 갑자기 커짐 + 튕김.
+                //   원본 동작: setHeightOffset(-1F) 가 boundingBox.minY +=1m + height -=1m,
+                //     posY 변경 X. 카메라 = posY + 1.62F (STANDING eyeHeight) = 변화 X. vy 만큼만
+                //     부드럽게. 종료 resetHeightOffset 도 boundingBox 만 변경, posY 변경 X →
+                //     박스 자연 복원.
+                //   진짜 매핑: player.y 변화 X + dim eyeHeight=1.62F (STANDING 동일) 처리.
+                //     박스 콜리전 발 위치는 STANDING 와 동일 (1m 차이 — 원본과 콜리전 차이는 추후
+                //     calculateBoundingBox 가로채기로 별도 fix 필요 시).
+                //   eyeHeight 1.62F 처리는 MixinPlayerEntityClient.sm_getBaseDimensions_client 에서
+                //     isHeadJumping 별도 분기.
+                // setPos / calculateDimensions 제거 — player.y 변화 X + 카메라 = player.y + 1.62F.
             }
 
             // === D-16 (원본 L2131-L2134) — setVelocity + isJumping ===

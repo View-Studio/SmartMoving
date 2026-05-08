@@ -133,8 +133,40 @@ public abstract class MixinPlayerEntityClient {
         //   dim 진입 → bb 0.8h. 사용자 인지 "STANDING → 엎드림" transition.
         //   해결: v26.5 가드 폐기. 메모리 *project_isCrawlClimbing_complete* Fix 7 의 의도
         //   (= smSmall 에 isCrawlClimbing 추가 → 항상 0.8/0.62 보장) 1:1 복원.
+        // 🔴 isHeadJumping 별도 분기 (2026-05-08, 다단계 fix 후 정착):
+        //   원본 setHeightOffset(-1F) = boundingBox.minY +=1m + height -=1m + **posY 변경 X**.
+        //   카메라 = posY + 1.62F (STANDING eyeHeight). 진입 시 카메라 변화 X (스무스).
+        //
+        //   1차 시도: dim (0.6, 0.8, 1.62F) → MixinEntity.sm_offsetBoundingBoxForFlying 의
+        //     가드 (height<1 && eyeHeight>1) 매치 → 박스 +1m offset 자동 적용 → 박스 발 =
+        //     player.y +1m → onGround 검사 잘못 → 무한 루프 BUG (사용자 보고 "공중 1칸 hover" +
+        //     "착지 후 슬라이딩 안 됨").
+        //
+        //   2차 fix (현재): dim (0.6, **1.8**, 1.62F) — height STANDING 동일.
+        //     - offset 가드 미매치 (height>=1 → early return) → 박스 +1m offset 안 됨.
+        //     - 박스 = (player.y, player.y+1.8) = STANDING 박스 동일.
+        //     - 카메라 = player.y + 1.62F = STANDING 카메라 동일 (진입/종료 시각 변화 X).
+        //     - POSE = SLIDING (자세 모델만 납작), dim height=1.8 (박스만 STANDING).
+        //     - toSlidingOrCrawling 정상 작동 → 헤드점프 → grab+sneak hold → 슬라이딩 OK.
+        //
+        //   주의: 박스 발 = player.y (STANDING 동일) — 원본 박스 발 +1m 효과 없음.
+        //         좁은 공간 통과 시나리오는 추후 별도 fix 필요 시.
+        if (sm.isHeadJumping) {
+            // 🔴 fix #26 revert (사용자 보고 "땅에 박혀서 안 나옴"):
+            //   `isHeadJumping || justEndedHeadJump` 분기가 dim eye=1.62 강제했지만 cached bb 갱신
+            //   안 됨 → toSlidingOrCrawling 의 gap=1.0 산출 (mixin 매치 cached bb 의 minY=ground+1)
+            //   → player.move(-1, 0) → 박스 -1m → cycle. revert.
+            // 🔴 fix #13 (2026-05-08, 사용자 보고 "콜리전 STANDING 그대로"):
+            //   fix #12 (height 1.8) 는 mixin offset 가드 미매치 효과로 무한 루프 차단했지만
+            //   박스 콜리전 = STANDING (1.8) 라 사용자 의도 (헤드점프 작은 박스) 어긋남.
+            //   진짜 fix: dim 을 작은 박스 (0.8) + eyeHeight 1.62 로 되돌리고, MixinEntity 의
+            //   offset 가드에 POSE=SLIDING 제외 추가 → mixin offset 차단 → 무한 루프 X +
+            //   박스 작아짐 + 카메라 STANDING.
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isHeadJumping || sm.isSliding
+                       || sm.isSliding
                        || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));

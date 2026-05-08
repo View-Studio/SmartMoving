@@ -135,6 +135,9 @@ public abstract class MixinEntity {
         EntityDimensions dim = this.dimensions;
         if (dim.height() >= 1.0F) return;       // STANDING / 일반 height
         if (dim.eyeHeight() <= 1.0F) return;    // CROUCHING/SWIMMING/SLIDING (eyeHeight 작음)
+        // 🔴 사용자 지시 (2026-05-08): POSE=SLIDING 가드 제거 → 헤드점프도 mixin offset 적용.
+        //   박스 = (player.y+1, player.y+1.8) — 박스 발 +1m, 머리 STANDING ("아래가 짧아짐").
+        //   슬라이딩 진입 BUG 는 사용자 힌트 후 추가 fix 예정.
 
         Box original = cir.getReturnValue();
         cir.setReturnValue(original.offset(0.0, 1.0, 0.0));

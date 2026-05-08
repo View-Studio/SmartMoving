@@ -66,11 +66,21 @@ public abstract class MixinPlayerEntity {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔴 isHeadJumping 별도 분기 (2026-05-08, 다단계 fix 후 정착) — 클라 측과 1:1 대칭:
+        //   1차 dim (0.6, 0.8, 1.62F) → MixinEntity offset 가드 매치 → 박스 +1m → 무한 루프 BUG.
+        //   2차 dim (0.6, **1.8**, 1.62F) → height STANDING → offset 가드 미매치 → 박스 STANDING.
+        //   클라 (MixinPlayerEntityClient) 와 동일 매핑 — server reconcile 차단.
+        if (sm.isHeadJumping) {
+            // 🔴 fix #13 (2026-05-08): 클라 측과 동일 매핑 — dim 0.6×0.8 + eyeHeight 1.62F.
+            //   MixinEntity.sm_offsetBoundingBoxForFlying 의 POSE=SLIDING 가드로 mixin offset 차단.
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         // 🔴 v26.12 — v26.5 가드 폐기 (client/server 양쪽 동기화).
         //   STANDING dim fall through BUG root. Fix 7 의 의도 (= smSmall 에 isCrawlClimbing 추가)
         //   1:1 복원. 사용자 보고 "STANDING → 엎드림" transition 차단.
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isHeadJumping || sm.isSliding
+                       || sm.isSliding
                        || sm.isSwimming || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));

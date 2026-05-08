@@ -93,18 +93,16 @@ public abstract class MixinEntityClient {
             sm.distanceClimbedModified += movement.length() * (sm.isClimbing ? 1.2 : 0.9);
         }
 
-        // 헤드점프 heightOffset 위치 보정 (C-20)
-        // 원본: afterMoveEntity() — setPosition(x, y - heightOffset, z)
-        // heightOffset = -1F 시: y - (-1F) = y + 1F → 플레이어를 1블록 위로 보정
-        // 🔴 BUG-28/29 동일 패턴 (사다리 등반 grab+sneak 보고): isClimbCrawling/isCrawling/
-        //   isSliding 등 진입 엣지의 player.move() 호출 시 이 TAIL inject 발동 → setPos
-        //   y+1 강제 → "플레이어가 위로 쑥 올라감" (사용자 보고).
-        //   원본 setHeightOffset(-1F) 는 박스만 변경, player 위치 변경 X. setPos 보정은 head
-        //   jump 전용 (C-20 의도). 다른 자세는 sm_getBaseDimensions_client 의 dimensions 변경
-        //   만으로 박스 처리 (1.21.1 vanilla 자동 갱신). isHeadJumping 만 가드.
-        if (sm.heightOffset != 0F && sm.isHeadJumping) {
-            player.setPos(player.getX(), player.getY() - sm.heightOffset, player.getZ());
-        }
+        // 🔴 fix #14 revert (2026-05-08): mixin offset + sm_afterMove setPos 보정 매핑 시도 →
+        //   vanilla `Entity.move` 의 collision 처리 (박스 발 = player.y +1m 기준 충돌 검사 →
+        //   ground 도달 시 player.y = bb.minY - 1m = ground -1m → push out → 진동) 와 호환 X.
+        //   원본 1:1 매핑 (박스 발 +1m + posY 변화 X) 를 1.21.1 매핑하려면 calculateBoundingBox
+        //   가로채기 + setPos/prevY/lastRenderY/Camera baseline 동기화 등 복합 매핑 필요 — 별도
+        //   사이클. 현재 setPos 보정은 비활성 + MixinEntity 의 POSE=SLIDING 가드로 mixin offset
+        //   차단 → 박스 발 = player.y (STANDING 동일), 박스 머리 = player.y +0.8 (1m 낮음 = 위 작아짐).
+        // if (sm.heightOffset != 0F && sm.isHeadJumping) {
+        //     player.setPos(player.getX(), player.getY() + sm.heightOffset, player.getZ());
+        // }
 
         // 수영 소리 누적 (8-6)
         // isSwimming_sm: SM 수면 수영 상태 (vanilla isSwimming()과 구별하기 위해 필드명 구분)
