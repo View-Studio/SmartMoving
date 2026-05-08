@@ -45,6 +45,19 @@ public final class SmartMovingClientState {
 
     /** 헤드점프 차지 누적 */
     public float headJumpCharge;
+    // [HEADBROAD-DBG] 헤드점프 발사 시점 위치 — 착지 시 거리 측정용.
+    public double dbgHeadJumpStartX;
+    public double dbgHeadJumpStartZ;
+    public double dbgHeadJumpStartY;
+    public float  dbgHeadJumpStartYaw;
+    public float  dbgHeadJumpStartPitch;
+    public long   dbgHeadJumpStartTick;
+    public double dbgHeadJumpMaxY;
+    public boolean dbgHeadJumpWasFox;       // = HEAD_UP 발사 후 SLIDE_DOWN tryJump 진입 여부.
+    public double dbgHeadJumpAccumAddH;     // = 매 tick handleLand applyLandMoveFlying motion ADD horizontal 누적.
+    public int    dbgHeadJumpAddCount;      // = ADD 횟수.
+    public boolean dbgHeadJumpWPressed;     // = 발사 시점 W key.
+    public boolean dbgHeadJumpSPressed;     // = 발사 시점 S key.
 
     /** 버튼 릴리즈까지 점프 차단 */
     public boolean blockJumpTillButtonRelease;
@@ -2102,6 +2115,8 @@ public final class SmartMovingClientState {
                 SmartMovingJumper.tryJump(player, this, SmartMovingJumper.SLIDE_DOWN,
                                            false, wasRunning, null);
                 this.isFast = _savedIsFast;
+                // [HEADBROAD-DBG] 여우무빙 검증 — 자체 슬라이딩 분기 진입 = SLIDE_DOWN tryJump 호출 = 여우무빙.
+                this.dbgHeadJumpWasFox = true;
                 isSliding = true;                                        // 원본 L2558
                 // 🔴 fix #40 (2026-05-08): case B 시 isHeadJumping=true 잔존 → dim eye=1.62
                 //   유지 → 박스 +1m up 잔존 (정상). isHeadJumping=false 강제 시 다음 tick dim eye=
@@ -2151,6 +2166,23 @@ public final class SmartMovingClientState {
             // - lavaMovement: 라바 접촉 시 해제
             boolean _preIsHeadJumping = isHeadJumping;
             wasHeadJumping = isHeadJumping;
+            // 🔴 fix #47 (2026-05-09, 사용자 보고 "원본은 점프강화 fox 시 착지까지 쭉, 우리는 끊김"):
+            //   원본 SS-SlideStop (L2553-L2561) 무조건 isHeadJumping=false 강제 → 다음 tick 의
+            //   wasHeadJumping=false → SlideToHeadJumping 자동 전환 매치 (= isAerodynamic=true) →
+            //   0.999 damping → "착지까지 쭉".
+            //   우리 fix #40 case B (= sneak 1 tick 늦음) 시 isHeadJumping=true 잔존 → 매 tick
+            //   wasHeadJumping=true 갱신 → SlideToHeadJumping 영원히 차단 → isAerodynamic=false
+            //   → 매 tick handleSliding 0.954 damping → ~30 tick 후 motion 0.1 → "끊김".
+            //   해결: fox movement 진행 중 (isHeadJumping=true && isSliding=true) wasHeadJumping=false
+            //     강제 → 자동 전환 가드 통과 → fallDistance>0.05 도달 시 자동 전환 발동 → isSliding=false,
+            //     isHeadJumping=true, isAerodynamic=true → handleLand fix #46 0.999 damping → 길게 유지.
+            //   부작용 검증: handleCrash(L2184)는 isHeadJumping=false 조건 → 매치 X (영향 없음).
+            //     resetHeightOffset(Mixin L159)는 onGround 조건 → fox 진행 중 onGround=false → 매치 X.
+            //     wouldWantSliding(L3635)/Jumper L123 의 wasHeadJumping 항은 grab.isPressed() 와 OR
+            //     라 fox 진행 중 grab 누름 → 영향 없음. dump (L1225) 만 영향 (cosmetic).
+            if (isHeadJumping && isSliding) {
+                wasHeadJumping = false;
+            }
             isHeadJumping = isHeadJumping
                     && !player.isOnGround()
                     && !(isSwimming_sm || isDiving)
@@ -2167,6 +2199,33 @@ public final class SmartMovingClientState {
             //   false, true)` 호출 연결. 원본은 updateEntityActionState 내부에서 별도 위치
             //   호출이나 1.21.1 단일 위치 + 근사 이식이라 여기서 직접 호출.
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
+                // [HEADBROAD-DBG-HJ-LAND] 헤드점프 착지 시점 dump — 거리/방향/시간/높이/W ADD 비교.
+                long _hjLandTick = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
+                double _dx = player.getX() - dbgHeadJumpStartX;
+                double _dz = player.getZ() - dbgHeadJumpStartZ;
+                double _hDist = Math.sqrt(_dx * _dx + _dz * _dz);
+                double _landDeg = (_dx == 0 && _dz == 0) ? 0
+                        : Math.toDegrees(Math.atan2(-_dx, _dz));
+                double _yawDiff = dbgHeadJumpStartYaw - _landDeg;
+                while (_yawDiff > 180) _yawDiff -= 360;
+                while (_yawDiff < -180) _yawDiff += 360;
+                long _duration = _hjLandTick - dbgHeadJumpStartTick;
+                double _maxHeight = dbgHeadJumpMaxY - dbgHeadJumpStartY;
+                double _avgAddH = dbgHeadJumpAddCount > 0 ? dbgHeadJumpAccumAddH / dbgHeadJumpAddCount : 0;
+                System.out.println("[HEADBROAD-DBG-HJ-LAND]"
+                        + " fox=" + dbgHeadJumpWasFox
+                        + " W=" + dbgHeadJumpWPressed
+                        + " S=" + dbgHeadJumpSPressed
+                        + " hDist=" + String.format("%.4f", _hDist)
+                        + " duration=" + _duration + "tk"
+                        + " maxH=" + String.format("%.3f", _maxHeight)
+                        + " accumAddH=" + String.format("%.4f", dbgHeadJumpAccumAddH)
+                        + " avgAddH=" + String.format("%.5f", _avgAddH)
+                        + " addCnt=" + dbgHeadJumpAddCount
+                        + " startPitch=" + String.format("%.1f", dbgHeadJumpStartPitch)
+                        + " yaw-landDeg=" + String.format("%.1f", _yawDiff)
+                        + " landPos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
+                        + ")");
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
                 // 🔴 fix #19 (2026-05-08): 헤드점프 종료 직후 1-tick 플래그 set.
@@ -2218,6 +2277,20 @@ public final class SmartMovingClientState {
                 if (!sneakPressedRaw
                         || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
                     isSliding   = false;
+                    // 🔴 fix #48 (2026-05-09, 사용자 보고 "원본은 키 떼도 쭉, 우리는 키 떼면 끊김"):
+                    //   원본 SlideToHeadJumping 자동 전환 (L2546) 은 ~10 tick (vy<0 + fallDistance>0.05) 후
+                    //   발동 → isAerodynamic=true. 사용자 SHIFT 누름 timing 자연스럽게 0.5s 이상이라
+                    //   원본은 자동 전환 *후* SHIFT 뗌 → isAerodynamic=true 잔존 → 0.999 damping → 길게.
+                    //   사용자 빨리 (< 10 tick) SHIFT 떼는 시나리오에선 원본도 끊김 발생. 우리 case B
+                    //   fox movement (= isHeadJumping=true 잔존) 시 사용자 보고 "키 떼면 끊김" = 빨리 떼는
+                    //   case 다발 (= 사용자 인지 차이).
+                    //   해결: SHIFT 뗌 시점 (= SS-SlideStop 종료 매치) 에 case B fox movement 진행 중이면
+                    //     자동 전환 효과 (isAerodynamic=true) 직접 발동 → 사용자 SHIFT timing 무관 길게.
+                    //     조건: isHeadJumping=true (= case B fox movement) && !onGround (= air) &&
+                    //           !wasHeadJumping (= 자동 전환 첫 발동 시점, fix #17 가드 1:1).
+                    if (isHeadJumping && !player.isOnGround() && !wasHeadJumping) {
+                        isAerodynamic = true;
+                    }
                     // 🔴 fix #41 (2026-05-08, 여우무빙 fix): toCrawling() 호출에 !isHeadJumping 가드.
                     //   Why: 자체 슬라이딩 + 헤드점프 중첩 (= 여우무빙) 종료 시 toCrawling() →
                     //     isCrawling=true (1 tick) → 다음 tick wasCrawling=true + isCrawling 재계산 false

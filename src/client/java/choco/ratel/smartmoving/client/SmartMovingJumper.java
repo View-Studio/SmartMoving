@@ -516,11 +516,28 @@ public final class SmartMovingJumper {
                         net.minecraft.util.math.Vec3d _preHj = player.getVelocity();
                         double _preHjAngle = (_preHj.x == 0 && _preHj.z == 0) ? 0
                                 : Math.toDegrees(Math.atan2(-_preHj.x, _preHj.z));
+                        // 발사 시점 위치 + yaw + pitch + 사용자 입력 + 누적 ADD 초기화.
+                        sm.dbgHeadJumpStartX = player.getX();
+                        sm.dbgHeadJumpStartZ = player.getZ();
+                        sm.dbgHeadJumpStartY = player.getY();
+                        sm.dbgHeadJumpStartYaw = player.getYaw();
+                        sm.dbgHeadJumpStartPitch = player.getPitch();
+                        sm.dbgHeadJumpStartTick = _hjTick;
+                        sm.dbgHeadJumpMaxY = player.getY();
+                        sm.dbgHeadJumpWasFox = false;
+                        sm.dbgHeadJumpAccumAddH = 0.0;
+                        sm.dbgHeadJumpAddCount = 0;
+                        sm.dbgHeadJumpWPressed = player.input.movementForward > 0F;
+                        sm.dbgHeadJumpSPressed = player.input.movementForward < 0F;
                         System.out.println("[HEADBROAD-DBG-HJ-FIRE] tick=" + _hjTick
                                 + " charge=" + sm.headJumpCharge
                                 + " preMotion=" + _preHj
                                 + " preDeg=" + String.format("%.1f", _preHjAngle)
                                 + " yaw=" + String.format("%.1f", player.getYaw())
+                                + " pitch=" + String.format("%.1f", player.getPitch())
+                                + " W=" + sm.dbgHeadJumpWPressed
+                                + " S=" + sm.dbgHeadJumpSPressed
+                                + " strafe=" + player.input.movementSideways
                                 + " pos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
                                 + ") isFast=" + sm.isFast);
                         tryJump(player, sm, HEAD_UP, null, null, null);

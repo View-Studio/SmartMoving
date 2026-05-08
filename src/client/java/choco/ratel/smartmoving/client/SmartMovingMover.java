@@ -90,8 +90,23 @@ public final class SmartMovingMover {
      */
     public static float getPotionSpeedFactor(ClientPlayerEntity player) {
         if (!SmartMovingConfig.Config.enabled) return 1F;
-        float landMovementFactor = (float) player.getAttributeValue(EntityAttributes.GENERIC_MOVEMENT_SPEED);
-        return landMovementFactor * 10F / (player.isSprinting() ? 1.3F : 1F);
+        // 🔴 fix #44 (2026-05-09, 사용자 보고 "여우무빙 거리 부족 + Jump Boost 시 극명"):
+        //   vanilla 1.21.1 의 ADD_MULTIPLIED_TOTAL operation 은 모든 modifier value 를 합산 후
+        //   1번만 곱. vanilla 1.7.10 의 MULTIPLY_TOTAL (op2) 은 각 modifier 별로 누적 곱.
+        //   → Sprint + Speed LV5 시 1.7.10 = 0.1×1.3×2.0=0.26, 1.21.1 attribute = 0.1×(1+0.3+1.0)=0.23.
+        //   → 11.5% 적음 → maxHorizontalMotion 작아짐 → 거리 짧음 (= 사용자 인지 "극명").
+        //   해결: vanilla attribute 식 우회 + 1.7.10 식 직접 계산 (= base × sprint × speed × slow).
+        //   docs/research_fox_movement_distance.md §12 정독.
+        float base = 0.1F;
+        float sprintMul = player.isSprinting() ? 1.3F : 1F;
+        net.minecraft.entity.effect.StatusEffectInstance speed =
+                player.getStatusEffect(net.minecraft.entity.effect.StatusEffects.SPEED);
+        net.minecraft.entity.effect.StatusEffectInstance slow  =
+                player.getStatusEffect(net.minecraft.entity.effect.StatusEffects.SLOWNESS);
+        float speedMul = (speed != null) ? 1F + (speed.getAmplifier() + 1) * 0.2F : 1F;
+        float slowMul  = (slow  != null) ? 1F + (slow.getAmplifier()  + 1) * (-0.15F) : 1F;
+        float landMovementFactor = base * sprintMul * speedMul * slowMul;
+        return landMovementFactor * 10F / sprintMul;
     }
 
     /**
@@ -160,8 +175,9 @@ public final class SmartMovingMover {
     }
 
     // ── 상수 (원본 SmartMovingContext.java) ───────────────────────────────
-    private static final float HORIZONTAL_GROUND_DAMPING = 0.546F;
-    private static final float HORIZONTAL_AIR_DAMPING    = 0.91F;
+    private static final float HORIZONTAL_GROUND_DAMPING       = 0.546F;
+    private static final float HORIZONTAL_AIR_DAMPING          = 0.91F;
+    private static final float HORIZONTAL_AIRODYNAMIC_DAMPING  = 0.999F;
 
     // ── isRunning (원본 SmartMovingSelf.isRunning) ────────────────────────
     /**
@@ -222,6 +238,16 @@ public final class SmartMovingMover {
             if (jumpKeyPressed && sm.isFast) {
                 speedFactor *= cfg.sprintJumpVerticalFactor;
             }
+        } else if (sm.isAerodynamic) {
+            // 🔴 fix #46 (2026-05-09, 사용자 보고 "원본은 점프강화 fox 시 착지까지 쭉, 우리는 끊김"):
+            //   원본 SmartMovingSelf.landMotion L752-753:
+            //     else if (isAerodynamic) horizontalDamping = HorizontalAirodynamicDamping;  // 0.999F
+            //     else                    horizontalDamping = HorizontalAirDamping;          // 0.91F
+            //   우리 매핑은 air 분기 항상 0.91 → fox movement 자동 전환 (SlideToHeadJumping) 발동
+            //   직후 isAerodynamic=true 이지만 우리 매핑 0.91 그대로 → 매 tick × 0.91 → ~24 tick (1.2s)
+            //   에 motion 거의 0 → 사용자 인지 "어디 부딪히지도 않았는데 끊김".
+            //   원본 0.999F → 매 tick 99.9% 유지 → 거의 감속 X → "착지할 때까지 쭉".
+            horizontalDamping = HORIZONTAL_AIRODYNAMIC_DAMPING;
         } else {
             horizontalDamping = HORIZONTAL_AIR_DAMPING;
         }
@@ -242,8 +268,14 @@ public final class SmartMovingMover {
         if (player.isOnGround()) {
             rawSpeed = 0.1F * f3;
         } else {
-            float jumpMovementFactor = 0.02F;
-            rawSpeed = jumpMovementFactor / (player.isSprinting() && !player.getAbilities().flying ? 1.3F : 1F);
+            // 🔴 fix #45 (2026-05-09, 사용자 보고 "기본 여우무빙도 달라" / "신속 sprint 속도도 달라"):
+            //   원본 SmartMovingSelf L709: rawSpeed = jumpMovementFactor / (sprint ? 1.3 : 1).
+            //   vanilla 1.7.10 EntityPlayer.onLivingUpdate 가 sprint 시 jumpMovementFactor 를
+            //   0.02 + 0.02×0.3 = 0.026 으로 설정 → SM 이 1.3 으로 나눠 정상화 → 결과 항상 0.02.
+            //   vanilla 1.21.1 에는 jumpMovementFactor field 자체가 없어 우리는 0.02 hardcoded 후
+            //   sprint 시 1.3 으로 또 나눠 0.01538 (= 23% 적음) → air 가속 부족 → headjump/fox 거리 짧음.
+            //   해결: 1.7.10 결과식과 동일하게 항상 0.02. sprint 보너스는 SM 자체 sprintFactor 로 대체.
+            rawSpeed = 0.02F;
         }
 
         // 원본 landMotion L712-713: isRunning && !isFast 시 runFactor 곱.
@@ -259,7 +291,29 @@ public final class SmartMovingMover {
         }
 
         // 원본 L718: moveFlying(strafe, forward, rawSpeed * speedFactor) — motion 에 ADD.
+        // [HEADBROAD-DBG] 헤드점프 진행 중 motion ADD 누적 추적.
+        Vec3d _preAddVel = sm.isHeadJumping ? player.getVelocity() : null;
+        // 🔴 (2026-05-09) 신속+sprint 속도 측정 dump — 사용자 보고 "원본과 다름" 진단용.
+        //   ground onGround=true && sprint=true && SPEED potion 활성 시 매 10 tick.
+        //   measure: rawSpeed/speedFactor/moveFlying speed/preMotion/postMotion/horizontalDamping.
+        //   원본 1.7.10 SM 활성 ground sprint+speed1 W 누름 = motion ADD 0.1764, terminal 0.388.
+        boolean _sprintSpeedDbg = player.isOnGround() && player.isSprinting()
+                && player.getStatusEffect(net.minecraft.entity.effect.StatusEffects.SPEED) != null
+                && !sm.isHeadJumping && !sm.isSliding && !sm.isCrawling;
+        Vec3d _preSprintVel = _sprintSpeedDbg ? player.getVelocity() : null;
+        float _preSprintSpeedFactor = _sprintSpeedDbg ? speedFactor : 0F;
+        float _preSprintRawSpeed = _sprintSpeedDbg ? rawSpeed : 0F;
         applyLandMoveFlying(player, moveStrafing, moveForward, rawSpeed * speedFactor);
+        if (sm.isHeadJumping && _preAddVel != null) {
+            Vec3d _postAddVel = player.getVelocity();
+            double _addX = _postAddVel.x - _preAddVel.x;
+            double _addZ = _postAddVel.z - _preAddVel.z;
+            double _addH = Math.sqrt(_addX * _addX + _addZ * _addZ);
+            sm.dbgHeadJumpAccumAddH += _addH;
+            sm.dbgHeadJumpAddCount++;
+            // maxY 추적.
+            if (player.getY() > sm.dbgHeadJumpMaxY) sm.dbgHeadJumpMaxY = player.getY();
+        }
 
         // 원본 L655: vanilla move() — 위치 갱신.
         player.move(MovementType.SELF, player.getVelocity());
@@ -277,36 +331,77 @@ public final class SmartMovingMover {
 
         player.setVelocity(newX, newY, newZ);
 
+        // 🔴 (2026-05-09) sprint+speed dump 출력. 매 10 tick 만 (= log spam 차단).
+        if (_sprintSpeedDbg && _preSprintVel != null) {
+            long _tick = player.getWorld().getTime();
+            if (_tick % 10 == 0) {
+                Vec3d _postAddVel = player.getVelocity();   // = setLandMotions 후 (= terminal cycle).
+                double _addX = _postAddVel.x - _preSprintVel.x;
+                double _addZ = _postAddVel.z - _preSprintVel.z;
+                double _preH = Math.sqrt(_preSprintVel.x * _preSprintVel.x + _preSprintVel.z * _preSprintVel.z);
+                double _postH = Math.sqrt(_postAddVel.x * _postAddVel.x + _postAddVel.z * _postAddVel.z);
+                net.minecraft.entity.effect.StatusEffectInstance _spd = player.getStatusEffect(
+                        net.minecraft.entity.effect.StatusEffects.SPEED);
+                int _amp = _spd != null ? _spd.getAmplifier() : -1;
+                System.out.println("[SPRINT-SPEED-DBG] tick=" + _tick
+                        + " speedAmp=" + _amp
+                        + " isFast=" + sm.isFast
+                        + " moveFwd=" + String.format("%.4f", moveForward)
+                        + " moveStr=" + String.format("%.4f", moveStrafing)
+                        + " rawSpeed=" + String.format("%.6f", _preSprintRawSpeed)
+                        + " speedFactor=" + String.format("%.4f", _preSprintSpeedFactor)
+                        + " moveFlySpd=" + String.format("%.6f", _preSprintRawSpeed * _preSprintSpeedFactor)
+                        + " hDamping=" + String.format("%.4f", horizontalDamping)
+                        + " preH=" + String.format("%.5f", _preH)
+                        + " postH=" + String.format("%.5f", _postH)
+                        + " ADD=(" + String.format("%.5f", _addX) + "," + String.format("%.5f", _addZ) + ")"
+                        + " getMS=" + String.format("%.5f", player.getMovementSpeed())
+                        + " potionFactor=" + String.format("%.4f", getPotionSpeedFactor(player)));
+            }
+        }
+
         return true;
     }
 
     /**
-     * 원본 `SmartMovingBase.moveFlying` (L55-93) — yaw 기반 horizontal 분해 + ADD.
-     * Land 시 treeDimensional=false → vertical 처리 없음.
+     * 🔴 fix #49 (2026-05-09, 사용자 보고 "신속 sprint 속도 원본과 달라"):
+     *   원본 SmartMovingSelf.landMotion L718 `sp.moveFlying(strafe, forward, rawSpeed*speedFactor)`
+     *   는 **3-인자 vanilla EntityLivingBase.moveFlying** 호출. `SmartMovingBase.moveFlying`
+     *   5-인자 버전 (= sqrt(sqrt) 정규화) 와 다름.
+     *
+     *   vanilla 1.7.10 EntityLivingBase.moveFlying 식 (= land 분기 1:1):
+     *     f3 = strafe² + forward²;
+     *     if (f3 >= 0.0001F) {
+     *         f3 = sqrt(f3); if (f3 < 1.0F) f3 = 1.0F;
+     *         f3 = speed / f3;
+     *         strafe *= f3; forward *= f3;
+     *         sin = sin(yaw); cos = cos(yaw);
+     *         motionX += strafe*cos - forward*sin;
+     *         motionZ += forward*cos + strafe*sin;
+     *     }
+     *
+     *   기존 우리 매핑은 `total2 = sqrt(sqrt(diffX²+diffZ²))` 추가 정규화 → W만 누름 시
+     *   motion ADD = `speed × 0.98 / sqrt(0.98) ≈ speed × 0.99` (= 1% 더 큼). 매 tick 누적
+     *   → 사용자 보고 "신속 sprint 속도 다름". Fix #49 = 단순 ADD 로 정정.
      */
     private static void applyLandMoveFlying(ClientPlayerEntity player,
                                              float moveStrafing, float moveForward, float speed) {
-        float total = MathHelper.sqrt(moveStrafing * moveStrafing + moveForward * moveForward);
-        if (total < 0.01F) return;
-        if (total < 1.0F) total = 1.0F;
-
-        float strafeFactor = moveStrafing / total;
-        float forwardFactor = moveForward / total;
+        float f3 = moveStrafing * moveStrafing + moveForward * moveForward;
+        if (f3 < 0.0001F) return;
+        f3 = MathHelper.sqrt(f3);
+        if (f3 < 1.0F) f3 = 1.0F;
+        f3 = speed / f3;
+        moveStrafing *= f3;
+        moveForward  *= f3;
 
         float yawRad = player.getYaw() * (float) Math.PI / 180F;
         float sin = MathHelper.sin(yawRad);
         float cos = MathHelper.cos(yawRad);
 
-        float diffX = strafeFactor * cos - forwardFactor * sin;
-        float diffZ = forwardFactor * cos + strafeFactor * sin;
-
-        // 원본 L85: total = sqrt(sqrt(diffX^2 + diffZ^2) + diffY^2). diffY=0 (land).
-        float horizontal2 = diffX * diffX + diffZ * diffZ;
-        float total2 = MathHelper.sqrt(MathHelper.sqrt(horizontal2));
-        if (total2 < 0.01F) return;
-
-        float factor = speed / total2;
         Vec3d vel = player.getVelocity();
-        player.setVelocity(vel.x + diffX * factor, vel.y, vel.z + diffZ * factor);
+        player.setVelocity(
+                vel.x + moveStrafing * cos - moveForward * sin,
+                vel.y,
+                vel.z + moveForward * cos + moveStrafing * sin);
     }
 }
