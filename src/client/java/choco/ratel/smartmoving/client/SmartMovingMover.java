@@ -266,7 +266,27 @@ public final class SmartMovingMover {
         float f3 = 0.1627714F / (horizontalDamping * horizontalDamping * horizontalDamping);
         float rawSpeed;
         if (player.isOnGround()) {
-            rawSpeed = 0.1F * f3;
+            // 🔴 fix #50 (2026-05-10, 사용자 100m 정확 측정 + 1.12.2 SMReboot 코드 line-by-line 비교):
+            //   sm_original 1.7.10 SmartMovingSelf L709: rawSpeed = 0.1F × f3 (base hardcode).
+            //   1.12.2 SMReboot SMSelf.java L682:        rawSpeed = getLandMovementFactor() × f3.
+            //   = vanilla bl() = attribute getValue() = SPEED multiplier 반영된 값.
+            //
+            //   사용자 측정 환경 검증:
+            //   - vanilla SPEED LV3 sprint+W: 1.7.10=11.06s / 1.21.1=11.11s (= vanilla 식 일치).
+            //   - SM SPEED LV3 sprint+W:      1.7.10/1.12.2=5.96s / 1.21.1 우리=9.70s.
+            //   - 1.12.2 SMReboot 식 적용 시: rawSpeed=0.208×1.0/1.3=0.16, speedFactor=2.4,
+            //     ADD=0.376, preMove=0.829, 100m=6.03s ↔ 측정 5.96s 일치 (오차 ±0.07s).
+            //
+            //   sm_original 의 0.1F hardcode 식 = 잘못된 reference (= 다른 release/fork 기반).
+            //   사용자 1.7.10/1.12.2 측정 환경 = 1.12.2 SMReboot 식 = SPEED multiplier 가
+            //   rawSpeed 와 speedFactor (getPotionSpeedFactor) 양쪽 반영 (= double-apply 의도).
+            //
+            //   변경: 0.1F → player.getMovementSpeed() (= vanilla 1.21.1 attribute = 0.208).
+            rawSpeed = player.getMovementSpeed() * f3;
+            // 🔴 fix #50: 1.12.2 SMReboot L683 sprint 약분 추가 (ground 분기만).
+            //   원본: float rawSpeed = sp.isSprinting() ? f4 / 1.3F : f4;
+            //   air 분기는 fix #45 의 0.02F hardcode 유지 (= 1.7.10 vanilla sprint 결과식 1:1).
+            if (player.isSprinting()) rawSpeed /= 1.3F;
         } else {
             // 🔴 fix #45 (2026-05-09, 사용자 보고 "기본 여우무빙도 달라" / "신속 sprint 속도도 달라"):
             //   원본 SmartMovingSelf L709: rawSpeed = jumpMovementFactor / (sprint ? 1.3 : 1).
@@ -304,6 +324,11 @@ public final class SmartMovingMover {
         float _preSprintSpeedFactor = _sprintSpeedDbg ? speedFactor : 0F;
         float _preSprintRawSpeed = _sprintSpeedDbg ? rawSpeed : 0F;
         applyLandMoveFlying(player, moveStrafing, moveForward, rawSpeed * speedFactor);
+        // 🔴 (2026-05-09) ADD 적용 후 vel 캡처 — move() 직전 = damping 전 motion (= 실제 이동량 추정).
+        Vec3d _postAddVelSprint = _sprintSpeedDbg ? player.getVelocity() : null;
+        // 🔴 (2026-05-09) move() 호출 직전 위치 캡처 — 실제 이동량 측정용.
+        double _preMoveX = _sprintSpeedDbg ? player.getX() : 0D;
+        double _preMoveZ = _sprintSpeedDbg ? player.getZ() : 0D;
         if (sm.isHeadJumping && _preAddVel != null) {
             Vec3d _postAddVel = player.getVelocity();
             double _addX = _postAddVel.x - _preAddVel.x;
@@ -343,6 +368,19 @@ public final class SmartMovingMover {
                 net.minecraft.entity.effect.StatusEffectInstance _spd = player.getStatusEffect(
                         net.minecraft.entity.effect.StatusEffects.SPEED);
                 int _amp = _spd != null ? _spd.getAmplifier() : -1;
+                // 🔴 (2026-05-09) preMoveH = ADD 후 move() 직전 motion (= damping 전, 실제 이동량 추정).
+                double _preMoveH = _postAddVelSprint != null
+                        ? Math.sqrt(_postAddVelSprint.x * _postAddVelSprint.x + _postAddVelSprint.z * _postAddVelSprint.z)
+                        : 0D;
+                // 🔴 (2026-05-09) tickDeltaH = 매 tick 실제 위치 이동량 (getX() - prevX).
+                //   prevX/Z 는 vanilla baseTick() 시작 시점에 getX()/Z() 로 set → 이번 tick 안의 모든 위치 변화량.
+                double _tickDeltaX = player.getX() - player.prevX;
+                double _tickDeltaZ = player.getZ() - player.prevZ;
+                double _tickDeltaH = Math.sqrt(_tickDeltaX * _tickDeltaX + _tickDeltaZ * _tickDeltaZ);
+                // 🔴 (2026-05-09) moveDeltaH = 이번 move() 호출 1회로 인한 위치 변화량 (= ADD 적용 후 motion 의 실효).
+                double _moveDeltaX = player.getX() - _preMoveX;
+                double _moveDeltaZ = player.getZ() - _preMoveZ;
+                double _moveDeltaH = Math.sqrt(_moveDeltaX * _moveDeltaX + _moveDeltaZ * _moveDeltaZ);
                 System.out.println("[SPRINT-SPEED-DBG] tick=" + _tick
                         + " speedAmp=" + _amp
                         + " isFast=" + sm.isFast
@@ -353,7 +391,10 @@ public final class SmartMovingMover {
                         + " moveFlySpd=" + String.format("%.6f", _preSprintRawSpeed * _preSprintSpeedFactor)
                         + " hDamping=" + String.format("%.4f", horizontalDamping)
                         + " preH=" + String.format("%.5f", _preH)
+                        + " preMoveH=" + String.format("%.5f", _preMoveH)
                         + " postH=" + String.format("%.5f", _postH)
+                        + " moveDeltaH=" + String.format("%.5f", _moveDeltaH)
+                        + " tickDeltaH=" + String.format("%.5f", _tickDeltaH)
                         + " ADD=(" + String.format("%.5f", _addX) + "," + String.format("%.5f", _addZ) + ")"
                         + " getMS=" + String.format("%.5f", player.getMovementSpeed())
                         + " potionFactor=" + String.format("%.4f", getPotionSpeedFactor(player)));
