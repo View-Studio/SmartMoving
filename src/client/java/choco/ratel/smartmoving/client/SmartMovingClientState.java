@@ -1870,14 +1870,17 @@ public final class SmartMovingClientState {
                 player.calculateDimensions();
             }
             if ((!isFlying && wasFlying) || (!isLevitating && wasLevitating)) {
-                // 🔴 root cause fix (디버그 로그 분석 결과):
-                //   비행 진입 엣지 직후 자동 착지 시도 (tryLanding=true && groundClose=false) 가
-                //   resetHeightOffset → heightOffset=0 reset 함. 그 후 비행 중 매 tick
-                //   standupIfPossible 호출되지만 가드 (heightOffset >= 0) 미통과 → 즉시 return.
-                //   비행 종료 엣지 시점에도 heightOffset=0 → standupIfPossible 가드 미통과 →
-                //   standUp 미호출 → entity.y +=1 보정 안 됨 → 가라앉음 + isCrawling 트리거.
-                //   해결: 비행 종료 엣지에서 heightOffset=-1F 강제 재설정 → standupIfPossible
-                //   가드 통과 → 정상 standUp 호출.
+                // 🔴 (2026-05-10) HJ-1BLOCK-DBG-FLY-END — 비행 종료 엣지 진입 시점 추적.
+                {
+                    net.minecraft.util.math.Box _bbF = player.getBoundingBox();
+                    System.out.println("[HJ-1BLOCK-DBG-FLY-END]"
+                            + " entityY=" + String.format("%.4f", player.getY())
+                            + " bbMinY=" + String.format("%.4f", _bbF.minY)
+                            + " onG=" + player.isOnGround()
+                            + " wasFly=" + wasFlying
+                            + " wasLev=" + wasLevitating
+                            + " hO_pre=" + this.heightOffset);
+                }
                 this.heightOffset = -1F;
             }
 
@@ -1905,8 +1908,36 @@ public final class SmartMovingClientState {
                         && !cfg0.flyCloseToGround
                         && _horizontalSpeedSquare < 0.003D
                         && player.getVelocity().y > -0.03D;
+                // 🔴 (2026-05-10) HJ-1BLOCK-DBG-STANDUP-CALL — standupIfPossible 호출 가드 추적.
+                if (this.wasFlying || this.wasLevitating) {
+                    System.out.println("[HJ-1BLOCK-DBG-STANDUP-CALL]"
+                            + " entityY=" + String.format("%.4f", player.getY())
+                            + " bbMinY=" + String.format("%.4f", player.getBoundingBox().minY)
+                            + " hO=" + this.heightOffset
+                            + " restoreFly=" + this.restoreFromFlying
+                            + " tryLanding=" + tryLanding
+                            + " willCall=" + (this.restoreFromFlying || tryLanding)
+                            + " onG=" + player.isOnGround()
+                            + " isFly=" + isFlying
+                            + " wasFly=" + this.wasFlying);
+                }
                 if (restoreFromFlying || tryLanding) {
+                    if (this.wasFlying || this.wasLevitating) {
+                        System.out.println("[HJ-1BLOCK-DBG-CALL-PRE]"
+                                + " entityY=" + String.format("%.4f", player.getY())
+                                + " hO=" + this.heightOffset
+                                + " restoreFly=" + restoreFromFlying
+                                + " tryLanding=" + tryLanding);
+                    }
                     standupIfPossible(player, tryLanding, restoreFromFlying);
+                    if (this.wasFlying || this.wasLevitating) {
+                        System.out.println("[HJ-1BLOCK-DBG-CALL-POST]"
+                                + " entityY=" + String.format("%.4f", player.getY())
+                                + " bbMinY=" + String.format("%.4f", player.getBoundingBox().minY)
+                                + " hO=" + this.heightOffset
+                                + " isCrl=" + this.isCrawling
+                                + " isSld=" + this.isSliding);
+                    }
                     // 🔴 (사용자 보고 — 비행 → 엎드리기 박스 0.6 BUG / 2026-04-30):
                     //   `restoreFromFlying = true` 는 비행/헤드점프 종료 엣지 (L1573/L1577/L1804)
                     //   에서 set 되는데 어디서도 클리어 안 됨 → stale 잔존 → 매 틱 standupIfPossible
@@ -2243,6 +2274,21 @@ public final class SmartMovingClientState {
                         + " yaw-landDeg=" + String.format("%.1f", _yawDiff)
                         + " landPos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
                         + ")");
+                // 🔴 (2026-05-10) HJ-1BLOCK-DBG — 헤드점프 종료 직후 5-AND 매치 시점 박스/dim/POSE.
+                //   사용자 보고 "헤드점프 → 1칸 공간 진입 시 위로 점프" BUG 진단.
+                {
+                    net.minecraft.util.math.Box _bbHJEnd = player.getBoundingBox();
+                    System.out.println("[HJ-1BLOCK-DBG-5AND-MATCH]"
+                            + " entityY=" + String.format("%.4f", player.getY())
+                            + " bbMinY=" + String.format("%.4f", _bbHJEnd.minY)
+                            + " bbMaxY=" + String.format("%.4f", _bbHJEnd.maxY)
+                            + " dimH=" + String.format("%.4f", player.getDimensions(player.getPose()).height())
+                            + " dimEye=" + String.format("%.4f", player.getDimensions(player.getPose()).eyeHeight())
+                            + " pose=" + player.getPose()
+                            + " hO=" + this.heightOffset
+                            + " onG=" + player.isOnGround()
+                            + " fall=" + String.format("%.4f", player.fallDistance));
+                }
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
                 // 🔴 fix #19 (2026-05-08): 헤드점프 종료 직후 1-tick 플래그 set.
@@ -2268,9 +2314,41 @@ public final class SmartMovingClientState {
             //   ground 위 정상. 헤드점프는 entity.y -1m 처리 X 라 자동 전환 발동.
             //   해결: `!wasHeadJumping` 가드 — 헤드점프 종료 직후 1 tick 자동 전환 차단.
             //   BUG 1 시나리오 (슬라이딩 → 절벽 → 헤드점프 자동 전환) 는 wasHeadJumping=false 라 통과.
+            // 🔴 fix #66 v2 (2026-05-10, dump 분석 — 사용자 보고 "헤드점프 자세 1 tick + 모델 안 보임 cycle"):
+            //   기존 가드: isSliding && fall>0.05 && !wasHJ && cooldown=0.
+            //   BUG: isSliding 진행 중 fall reset race 로 fall=1.0 누적 (handleSliding 의 fall reset
+            //   미발동 또는 vanilla travel cancel 후 fall 잔존). cooldown=5 → 0 도달 시 매치 →
+            //   isHeadJumping=true 변경 → fox movement cycle.
+            //   원본 1.7.10 도 vy 가드 없으나 fall reset 정상 → ground 위 isSliding 시 fall=0 → 매치 X.
+            //   우리 매핑: fall=1.0 잔존 → 매치 → cycle.
+            //
+            //   해결: fall reset 강제 (isSliding && onGround 시 fall=0).
+            //   fox movement 진입 시: onGround=false (= vy=+0.42 점프 motion) → fall reset 안 함 →
+            //     fall>0.05 잔존 → AUTO 매치 정상 (= isHeadJumping=true 변경, fox movement 작동).
+            //   시나리오 B (정상 슬라이딩): onGround=true → fall=0 reset → cooldown=0 도달 시 fall=0 →
+            //     AUTO 매치 X → cycle 차단.
+            //
+            //   v1 시도 vy<-0.1 가드: fox movement 진입 시 vy=+0.42 → 가드 X → AUTO 매치 X →
+            //     isHeadJumping=true 변경 안 됨 → fox movement 작동 안 함. 사용자 보고 "여우무빙 망가짐". revert.
+            // 🔴 fix #67 (2026-05-10): atSolidTop 가드 추가 — box 발 = ground top 동등 (touching) 시도 fall reset.
+            if (isSliding && player.fallDistance > 0F) {
+                net.minecraft.util.math.Box _bbF67 = player.getBoundingBox();
+                double _solidTopF67 = getMaxPlayerSolidBetween(player, _bbF67.minY - 1.0, _bbF67.minY, 0);
+                boolean _atSolidTopF67 = Math.abs(_bbF67.minY - _solidTopF67) < 1.0E-3;
+                if (player.isOnGround() || _atSolidTopF67) {
+                    player.fallDistance = 0F;
+                }
+            }
             if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE
                     && !wasHeadJumping
                     && this.slideToHeadCooldown == 0) {
+                System.out.println("[HJ-1BLOCK-DBG-AUTO-SLIDETOHJ]"
+                        + " entityY=" + String.format("%.4f", player.getY())
+                        + " bbMinY=" + String.format("%.4f", player.getBoundingBox().minY)
+                        + " onG=" + player.isOnGround()
+                        + " fall=" + String.format("%.4f", player.fallDistance)
+                        + " vy=" + String.format("%.4f", player.getVelocity().y)
+                        + " cooldown=" + this.slideToHeadCooldown);
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
@@ -2288,11 +2366,34 @@ public final class SmartMovingClientState {
             // 위치: SlideToHeadJumping (위) 와 큰 낙하 → crawl (아래) 사이. 원본 L2563 자리 1:1.
             // ※ 이전 매핑: SmartMovingSlider.handleSliding 안에 horizontalSpeed (linear) 단위 + sneak
             //   누락 + toCrawling() 미호출 의 부분 매핑 → 원본 1:1 로 정정.
+            // 🔴 (2026-05-10) HJ-1BLOCK-DBG-PRE-SS — L2306 직전 isSliding/isCrawling 검사.
+            if (this.justEndedHeadJump) {
+                System.out.println("[HJ-1BLOCK-DBG-PRE-SS]"
+                        + " isSlide=" + isSliding
+                        + " isCrawl=" + isCrawling
+                        + " isHJ=" + isHeadJumping
+                        + " hO=" + this.heightOffset
+                        + " entityY=" + String.format("%.4f", player.getY()));
+            }
             if (isSliding) {
                 Vec3d _vel2563 = player.getVelocity();
                 double horizontalSpeedSquare = _vel2563.x * _vel2563.x + _vel2563.z * _vel2563.z;
                 if (!sneakPressedRaw
                         || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
+                    // 🔴 (2026-05-10) HJ-1BLOCK-DBG-SS-MATCH — SS-SlideStop 매치 시점.
+                    {
+                        net.minecraft.util.math.Box _bbSS = player.getBoundingBox();
+                        System.out.println("[HJ-1BLOCK-DBG-SS-MATCH]"
+                                + " entityY=" + String.format("%.4f", player.getY())
+                                + " bbMinY=" + String.format("%.4f", _bbSS.minY)
+                                + " sneakRaw=" + sneakPressedRaw
+                                + " hSpd2=" + String.format("%.5f", horizontalSpeedSquare)
+                                + " threshold=" + String.format("%.5f", cfg0.slidingSpeedStopFactor * 0.01)
+                                + " isHJ=" + isHeadJumping
+                                + " hO=" + this.heightOffset
+                                + " pose=" + player.getPose()
+                                + " dimEye=" + String.format("%.4f", player.getDimensions(player.getPose()).eyeHeight()));
+                    }
                     isSliding   = false;
                     // 🔴 fix #48 (2026-05-09, 사용자 보고 "원본은 키 떼도 쭉, 우리는 키 떼면 끊김"):
                     //   원본 SlideToHeadJumping 자동 전환 (L2546) 은 ~10 tick (vy<0 + fallDistance>0.05) 후
@@ -2333,9 +2434,35 @@ public final class SmartMovingClientState {
                     //   해결: 종료 시 entity.y +1m push (= 1.7.10/1.12.2 resetHeightOffset 등가).
                     //   case B fox (isHeadJumping=true) 는 fix #58 헤드점프 종료 push 처리.
                     if (!isHeadJumping && this.heightOffset == -1F) {
-                        player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
-                        player.lastRenderY += 1.0;
-                        player.prevY += 1.0;
+                        // 🔴 fix #70 (2026-05-10, dump 분석 — 사용자 보고 "슬라이딩→엎드리기 전환 시 땅에 박힘"):
+                        //   기존 fix #69 식: predictedMinY < solidBelow (= 박힘 검사). touching 시 false.
+                        //   BUG: isSliding 시 box.minY = entity.y+1m (= mixin offset 활성).
+                        //     POSE 변경 (SLIDING→SWIMMING) 시 mixin offset 차단 → box.minY = entity.y.
+                        //     **box.minY 1m 하강 → 사용자 시각 *땅에 박힘***.
+                        //   fix #69 가 *현재 ground 위 정확 (touching)* 시 push X 였지만, 사실은
+                        //     POSE 변경 시 box 1m drop 발생 → push 필수.
+                        //
+                        //   해결: predictive *1m drop* 검사 — currentBoxMinY 와 predictedMinY 차이.
+                        //     drop > 0.5m 시 push +1m (= isSliding box → isCrawling box 변화 차단).
+                        //
+                        //   비행 → 1칸 공간 진입 시나리오 (= entity.y=ground, currentBox=ground+1m):
+                        //     drop = ground+1m - ground = 1m → push +1m.
+                        //     그러나 push 후 entity.y=ground+1m → box=ground+1m+1m=ground+2m? 아님.
+                        //     mixin offset 차단 시 box=entity.y=ground+1m. ✓ 변화 X.
+                        double _currentBoxMinY70 = player.getBoundingBox().minY;
+                        double _predictedMinY70 = player.getY();
+                        double _drop70 = _currentBoxMinY70 - _predictedMinY70;
+                        boolean _willDrop70 = _drop70 > 0.5;
+                        System.out.println("[HJ-1BLOCK-DBG-FIX70]"
+                                + " entityY=" + String.format("%.4f", _predictedMinY70)
+                                + " currentBoxMinY=" + String.format("%.4f", _currentBoxMinY70)
+                                + " drop=" + String.format("%.4f", _drop70)
+                                + " willPush=" + _willDrop70);
+                        if (_willDrop70) {
+                            player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                            player.lastRenderY += 1.0;
+                            player.prevY += 1.0;
+                        }
                         this.heightOffset = 0F;
                         player.calculateDimensions();
                         // 🔴 fix #64 (2026-05-10, dump 분석 — 사용자 보고 "전환 사이 카메라 올라갔다가 내려옴"):
@@ -3028,6 +3155,22 @@ public final class SmartMovingClientState {
             // 모든 이동 상태(isSlow/isFast/isClimbing/etc) 결정 후 이 시점에서 실행.
             // cfg.enabled 블록 안 — 비활성 상태에선 호출 안 됨.
             handleExhaustion(player);
+        }
+        // 🔴 (2026-05-10) HJ-1BLOCK-DBG-TICK-END — sm_tickEssential 끝 시점 sm 상태 dump.
+        if (this.justEndedHeadJump || isHeadJumping || isSliding) {
+            net.minecraft.util.math.Box _bbE = player.getBoundingBox();
+            System.out.println("[HJ-1BLOCK-DBG-TICK-END]"
+                    + " entityY=" + String.format("%.4f", player.getY())
+                    + " bbMinY=" + String.format("%.4f", _bbE.minY)
+                    + " isHJ=" + isHeadJumping
+                    + " wasHJ=" + wasHeadJumping
+                    + " isSld=" + isSliding
+                    + " isCrl=" + isCrawling
+                    + " hO=" + this.heightOffset
+                    + " justEndHJ=" + this.justEndedHeadJump
+                    + " cooldown=" + this.slideToHeadCooldown
+                    + " pose=" + player.getPose()
+                    + " dimEye=" + String.format("%.4f", player.getDimensions(player.getPose()).eyeHeight()));
         }
     }
 
@@ -3790,12 +3933,42 @@ public final class SmartMovingClientState {
      *   패턴은 MixinClientPlayerEntity L53 에서 이미 사용 중 (착지 후 flying 복원).
      */
     public void standupIfPossible(ClientPlayerEntity player, boolean tryLanding, boolean restoreFromFlying) {
+        // 🔴 (2026-05-10) HJ-1BLOCK-DBG — standupIfPossible 진입 시점 *무조건 dump* (= 호출 검증).
+        if (this.wasFlying || this.wasLevitating || this.justEndedHeadJump) {
+            System.out.println("[HJ-1BLOCK-DBG-STANDUP-METHOD-IN]"
+                    + " entityY=" + String.format("%.4f", player.getY())
+                    + " hO=" + this.heightOffset
+                    + " hOGuard=" + (this.heightOffset >= 0)
+                    + " tryLanding=" + tryLanding
+                    + " restoreFly=" + restoreFromFlying
+                    + " wasFly=" + this.wasFlying
+                    + " wasLev=" + this.wasLevitating);
+        }
+        boolean _hj1bDbg = this.justEndedHeadJump || wasFlying || wasLevitating;
+        if (_hj1bDbg) {
+            net.minecraft.util.math.Box _bb0 = player.getBoundingBox();
+            System.out.println("[HJ-1BLOCK-DBG-STANDUP-ENTER]"
+                    + " entityY=" + String.format("%.4f", player.getY())
+                    + " bbMinY=" + String.format("%.4f", _bb0.minY)
+                    + " bbMaxY=" + String.format("%.4f", _bb0.maxY)
+                    + " hO=" + this.heightOffset
+                    + " tryLanding=" + tryLanding
+                    + " restoreFly=" + restoreFromFlying
+                    + " pose=" + player.getPose());
+        }
         if (this.heightOffset >= 0) return;
 
         double gapUnderneight = getGapUnderneight(player);
         boolean groundClose = gapUnderneight < 1D;
         double gapOverneight = groundClose ? getGapOverneight(player) : -1D;
         boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
+        if (_hj1bDbg) {
+            System.out.println("[HJ-1BLOCK-DBG-STANDUP-GAPS]"
+                    + " gapUnder=" + String.format("%.4f", gapUnderneight)
+                    + " groundClose=" + groundClose
+                    + " gapOver=" + String.format("%.4f", gapOverneight)
+                    + " standUpPossible=" + standUpPossible);
+        }
 
         if (tryLanding && groundClose && standUpPossible) {
             this.isFlying = false;
@@ -3818,6 +3991,18 @@ public final class SmartMovingClientState {
         boolean sneakPressed = net.minecraft.client.MinecraftClient.getInstance()
                 .options.sneakKey.isPressed();
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
+        // 🔴 (2026-05-10) HJ-1BLOCK-DBG-SNEAK-CMP — standupIfPossible 안 sneakPressed
+        //   vs L1331 sneakPressedRaw 동시 비교.
+        if (this.justEndedHeadJump || this.wasFlying || this.wasLevitating) {
+            System.out.println("[HJ-1BLOCK-DBG-SNEAK-CMP]"
+                    + " sneakPressed(L3833)=" + sneakPressed
+                    + " grabPressed(L3835)=" + grabPressed
+                    + " standUpPossible=" + standUpPossible
+                    + " gapUnder=" + String.format("%.4f", gapUnderneight)
+                    + " gapOver=" + String.format("%.4f", gapOverneight)
+                    + " wasFly=" + this.wasFlying
+                    + " wasLev=" + this.wasLevitating);
+        }
 
         if (!groundClose && !sneakPressed) {
             resetHeightOffset();
@@ -3874,7 +4059,26 @@ public final class SmartMovingClientState {
             //   해결: mustCrawl=true 강제 set → 같은 tick L1683 isCrawling 재계산 시
             //   `canCrawl && (false || true)` = true 유지. 다음 tick 부터는 박스 위치 검사로 자연 유지.
             boolean wasSmallBox = (this.heightOffset == -1F);
+            if (_hj1bDbg) {
+                System.out.println("[HJ-1BLOCK-DBG-BRANCH] branch=ELSE-toSlidingOrCrawling"
+                        + " sneak=" + sneakPressed + " grab=" + grabPressed
+                        + " wasSmallBox=" + wasSmallBox
+                        + " wasFly=" + wasFlying + " wasLev=" + wasLevitating
+                        + " justEndHJ=" + this.justEndedHeadJump);
+            }
             toSlidingOrCrawling(player, gapUnderneight);
+            if (_hj1bDbg) {
+                net.minecraft.util.math.Box _bbTSC = player.getBoundingBox();
+                System.out.println("[HJ-1BLOCK-DBG-AFTER-TOSLIDE]"
+                        + " entityY=" + String.format("%.4f", player.getY())
+                        + " bbMinY=" + String.format("%.4f", _bbTSC.minY)
+                        + " bbMaxY=" + String.format("%.4f", _bbTSC.maxY)
+                        + " dimH=" + String.format("%.4f", player.getDimensions(player.getPose()).height())
+                        + " dimEye=" + String.format("%.4f", player.getDimensions(player.getPose()).eyeHeight())
+                        + " pose=" + player.getPose()
+                        + " isSlide=" + isSliding
+                        + " isCrawl=" + isCrawling);
+            }
             // 🔴 사용자 보고 fix (2026-05-04 — "비행 중 1칸 공간 + shift+grab 동시 → 땅속"):
             //   toSlidingOrCrawling 가 grab pressed 시 isSliding=true 설정 (= isCrawling=false).
             //   기존 가드 `wasSmallBox && isCrawling` → false → setPos(y+1) 미적용 →
@@ -3887,7 +4091,15 @@ public final class SmartMovingClientState {
             //   해결: setPos(y+1) 가드를 `wasFlying || wasLevitating` 만 (= justEndedHeadJump 제거).
             //   justEndedHeadJump 시는 별도 분기 — dim 갱신 + vy/fallDistance reset 만.
             //   박스 ground 안 박힘 시 메서드 끝의 안전망이 push up (이미 매핑됨).
-            if (wasSmallBox && (this.isCrawling || this.isSliding)
+            // 🔴 fix #68 (2026-05-10, dump 분석 — 사용자 보고 "비행 + grab+sneak 슬라이딩 시 헤드점프 잠깐"):
+            //   기존 가드: wasSmallBox && (isCrawling || isSliding) && (wasFly || wasLev).
+            //   BUG: isSliding 진입 시 dim eyeHeight=1.62 (fix #59) → mixin offset 활성 →
+            //     박스 = (entity.y+1, entity.y+1.8) 이미 정상 (1칸 공간 fit). push +1m 무용 + 천장
+            //     위로 박스 부유 → gravity 매 tick fall 누적 → AUTO-SLIDETOHJ 매치 → isHJ=true 1 tick
+            //     (= 사용자 *헤드점프 잠깐* 보고).
+            //   해결: isSliding 분기 제거. isCrawling 만 push (= dim eye=0.62 → mixin offset 차단 →
+            //     박스 발 = entity.y = ground - 1m 박힘 → push 필수).
+            if (wasSmallBox && this.isCrawling
                     && (wasFlying || wasLevitating)) {
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
@@ -3900,10 +4112,7 @@ public final class SmartMovingClientState {
                     ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
                     ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
                 }
-                // mustCrawl=true 는 isCrawling 시만 — isSliding 시 강제 시 isCrawling 동시 발동 BUG.
-                if (this.isCrawling) {
-                    this.mustCrawl = true;
-                }
+                this.mustCrawl = true;
             }
             // 🔴 fix #25 복원 (fix #26 revert 후): push up + Camera baseline 동기화.
             //   사용자 보고 잔존 덜컹은 vanilla 매핑 한계 (= baseTick prevY 갱신 race) — 별도
@@ -3911,6 +4120,16 @@ public final class SmartMovingClientState {
             if (this.justEndedHeadJump && wasSmallBox && (this.isCrawling || this.isSliding)) {
                 player.calculateDimensions();
                 net.minecraft.util.math.Box bbAfter = player.getBoundingBox();
+                if (_hj1bDbg) {
+                    System.out.println("[HJ-1BLOCK-DBG-FIX25-ENTER]"
+                            + " entityY=" + String.format("%.4f", player.getY())
+                            + " bbMinY=" + String.format("%.4f", bbAfter.minY)
+                            + " bbMaxY=" + String.format("%.4f", bbAfter.maxY)
+                            + " dimH=" + String.format("%.4f", player.getDimensions(player.getPose()).height())
+                            + " pose=" + player.getPose()
+                            + " isSlide=" + isSliding
+                            + " isCrawl=" + isCrawling);
+                }
                 // 🔴 fix #30 (2026-05-08, 사용자 보고 "슬라이딩→헤드점프→슬라이딩 뚝 끊김"):
                 //   fix #28 의 hardcoded +1.0 가정 = 헤드점프 진행 중 dim eye=1.62 (mixin 매치) →
                 //   entity.y = ground_top - 1. 그러나 슬라이딩→헤드점프 시나리오는 fix #29 의
@@ -3923,7 +4142,24 @@ public final class SmartMovingClientState {
                 //   (= 박힘 시 mixin 매치 박스 발 ground_top 보장으로 정확).
                 //   박힘 X 시: push 안 함, cameraY/vy/fallDistance 만 강제.
                 double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.5, bbAfter.minY + 1.5, 0);
-                boolean stuck = bbAfter.minY < solidUnder - 1.0E-5;
+                // 🔴 fix #65 (2026-05-10, 사용자 보고 "헤드점프 → 1칸 공간 진입 시 위로 순간 이동"):
+                //   dump 분석 결과: mixin offset 활성 (= height<1 + (eye>1 || POSE==SLIDING)) 시
+                //   박스 발 = entity.y+1m = ground (정상). 그러나 yMax=bbMin+1.5 가 1칸 공간 천장
+                //   블록 top 매치 → solidUnder=bbMin+1.5 (clamp) → stuck=true 잘못 → push +1m.
+                //   해결: mixin offset 활성 시 박스 정상 → push 가드 (MixinEntity 의 활성 식 1:1).
+                net.minecraft.entity.EntityDimensions _dim25 = player.getDimensions(player.getPose());
+                boolean isMixinOffsetActive = _dim25.height() < 1.0F
+                        && (_dim25.eyeHeight() > 1.0F
+                            || player.getPose() == net.minecraft.entity.EntityPose.SLIDING);
+                boolean stuck = !isMixinOffsetActive && bbAfter.minY < solidUnder - 1.0E-5;
+                if (_hj1bDbg) {
+                    System.out.println("[HJ-1BLOCK-DBG-FIX25-PUSH]"
+                            + " bbMinY=" + String.format("%.4f", bbAfter.minY)
+                            + " solidUnder=" + String.format("%.4f", solidUnder)
+                            + " mixinActive=" + isMixinOffsetActive
+                            + " stuck=" + stuck
+                            + " pushY=" + (stuck ? "1.0" : "0"));
+                }
                 if (stuck) {
                     double pushY = 1.0;
                     player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
@@ -3975,12 +4211,51 @@ public final class SmartMovingClientState {
         //   추가: setPosition 후 lastRenderY/prevY 동기화 (= feedback_pushup_lastRenderY_prevY_sync).
         Box bbAfter = player.getBoundingBox();
         double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.0, bbAfter.minY + 1.5, 0);
-        boolean stuckSafetyNet = bbAfter.minY < solidUnder - 1.0E-5;
+        // 🔴 fix #65 (2026-05-10): fix #25 와 동일 가드. mixin offset 활성 시 안전망 push X.
+        //   dump 분석: 1칸 공간 진입 시 mixin offset 활성 (= dimEye=1.62) → 박스 발 = ground 정상.
+        //   yMax=bbMin+1.5 가 천장 블록 매치 → solidUnder=bbMin+1.5 (clamp) → 잘못 push +1.5m.
+        //   해결: mixin offset 활성 시 push skip. fix #57 진짜 시나리오 (= POSE=STANDING + 박스
+        //   발 ground-1) 는 dimEye=1.62 (= STANDING dim) 라 mixin 가드 매치 → height 1.8 ≥ 1
+        //   라 mixin offset 차단. 그러나 dim eye 자체는 1.62. 즉 *pose=STANDING + dimH>=1.0F*
+        //   가 진짜 mixin offset 차단 시나리오. dimEye 단독 검사 X — height 검사 추가.
+        boolean isMixinOffsetActive_safety = player.getDimensions(player.getPose()).height() < 1.0F
+                && (player.getDimensions(player.getPose()).eyeHeight() > 1.0F
+                    || player.getPose() == net.minecraft.entity.EntityPose.SLIDING);
+        // 🔴 fix #71 (2026-05-10, dump 분석 — 사용자 보고 "비행 → 1칸 공간 → 엎드리기 안됨"):
+        //   기존 가드: bbMin < solidUnder → push (= 박힘 차단).
+        //   BUG: 비행 → 1칸 공간 진입 시 fix #68 push +1m 후 entity.y=ground+1m (= 정상).
+        //     안전망 yMax=bbMin+1.5 가 천장 위 블록 top 검사 매치 (clamp) → solidUnder=bbMin+1.5 →
+        //     stuck=true → pushY=1.5m → standing 공간으로 이동 → 엎드리기 안됨.
+        //   해결: pushY > 1.0m 시 차단 (= clamp 매치 무관 push 발동). 진짜 박힘 시나리오 push 양 ≤ 1m.
+        double _potentialPushY71 = solidUnder - bbAfter.minY;
+        boolean stuckSafetyNet = !isMixinOffsetActive_safety
+                && bbAfter.minY < solidUnder - 1.0E-5
+                && _potentialPushY71 <= 1.0;
+        if (_hj1bDbg) {
+            System.out.println("[HJ-1BLOCK-DBG-SAFETYNET]"
+                    + " entityY=" + String.format("%.4f", player.getY())
+                    + " bbMinY=" + String.format("%.4f", bbAfter.minY)
+                    + " bbMaxY=" + String.format("%.4f", bbAfter.maxY)
+                    + " solidUnder=" + String.format("%.4f", solidUnder)
+                    + " yMaxArg=" + String.format("%.4f", bbAfter.minY + 1.5)
+                    + " mixinActive=" + isMixinOffsetActive_safety
+                    + " stuck=" + stuckSafetyNet
+                    + " pushY=" + (stuckSafetyNet ? String.format("%.4f", solidUnder - bbAfter.minY) : "0")
+                    + " pose=" + player.getPose()
+                    + " dimH=" + String.format("%.4f", player.getDimensions(player.getPose()).height()));
+        }
         if (stuckSafetyNet) {
             double pushY = solidUnder - bbAfter.minY;
             player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
             player.lastRenderY += pushY;
             player.prevY += pushY;
+            if (_hj1bDbg) {
+                net.minecraft.util.math.Box _bbPushed = player.getBoundingBox();
+                System.out.println("[HJ-1BLOCK-DBG-SAFETYNET-PUSHED]"
+                        + " entityY=" + String.format("%.4f", player.getY())
+                        + " bbMinY=" + String.format("%.4f", _bbPushed.minY)
+                        + " bbMaxY=" + String.format("%.4f", _bbPushed.maxY));
+            }
         }
     }
 
@@ -4024,6 +4299,16 @@ public final class SmartMovingClientState {
      */
     public boolean toCrawling() {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
+        // 🔴 (2026-05-10) HJ-1BLOCK-DBG-TO-CRAWLING — toCrawling 호출 지점 추적.
+        if (this.justEndedHeadJump) {
+            Throwable _t = new Throwable();
+            StackTraceElement[] _stack = _t.getStackTrace();
+            String _caller = _stack.length > 1 ? _stack[1].toString() : "?";
+            System.out.println("[HJ-1BLOCK-DBG-TO-CRAWLING] caller=" + _caller
+                    + " isSlide=" + isSliding
+                    + " isHJ=" + isHeadJumping
+                    + " hO=" + this.heightOffset);
+        }
         isCrawling = true;
         // B-45b (세션 45): Config 헬퍼 치환.
         if (cfg.isCrawlToggleEnabled()) crawlToggled = true;

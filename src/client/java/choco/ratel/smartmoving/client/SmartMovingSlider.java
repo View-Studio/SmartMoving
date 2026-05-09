@@ -95,7 +95,14 @@ public final class SmartMovingSlider {
         //   moveEntity 안에서 fallDistance 자동 갱신. 1.21.1 vanilla travel cancel 이라
         //   직접 매핑 필요.
         //   해결: vanilla 1.21.1 LivingEntity.travel 의 fallDistance 갱신 식 1:1 매핑.
-        if (player.isOnGround()) {
+        // 🔴 fix #67 (2026-05-10, dump 분석 — root cause 확정):
+        //   isSliding 진행 중 box 발 = ground top 정확 동등 시 vanilla *touching* 으로 onGround=false.
+        //   기존 식: onGround false → else if (vy<0) → fall += -vy 누적 → cycle BUG.
+        //   해결: box.minY ≈ solid top (epsilon 1e-3 매치) 시도 fall=0 reset (= touching=ground 간주).
+        net.minecraft.util.math.Box _bbS67 = player.getBoundingBox();
+        double _solidTopS67 = SmartMovingClientState.getMaxPlayerSolidBetween(player, _bbS67.minY - 1.0, _bbS67.minY, 0);
+        boolean _atSolidTop = Math.abs(_bbS67.minY - _solidTopS67) < 1.0E-3;
+        if (player.isOnGround() || _atSolidTop) {
             player.fallDistance = 0.0F;
         } else if (player.getVelocity().y < 0.0) {
             player.fallDistance -= (float) player.getVelocity().y;
