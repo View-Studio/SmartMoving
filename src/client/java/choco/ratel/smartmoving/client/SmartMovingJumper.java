@@ -335,17 +335,6 @@ public final class SmartMovingJumper {
 
             // === D-15 (원본 L2126-L2130) — head → isHeadJumping + setPoseSmall + heightOffset ===
             if (head) {
-                // 🔴 (2026-05-10) HJ-1BLOCK-DBG-D15-FIRE — D-15 head fire 시점 추적.
-                Throwable _t15 = new Throwable();
-                StackTraceElement[] _stack15 = _t15.getStackTrace();
-                String _caller15 = _stack15.length > 1 ? _stack15[1].toString() : "?";
-                System.out.println("[HJ-1BLOCK-DBG-D15-FIRE] caller=" + _caller15
-                        + " entityY=" + String.format("%.4f", player.getY())
-                        + " onG=" + player.isOnGround()
-                        + " preIsHJ=" + sm.isHeadJumping
-                        + " preIsSld=" + sm.isSliding
-                        + " preIsCrl=" + sm.isCrawling
-                        + " hO=" + sm.heightOffset);
                 sm.isHeadJumping = true;
                 setPoseSmall(player);
                 sm.heightOffset = -1F;

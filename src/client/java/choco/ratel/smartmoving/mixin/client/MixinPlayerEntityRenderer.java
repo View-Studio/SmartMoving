@@ -61,36 +61,6 @@ public class MixinPlayerEntityRenderer {
         //   변경: 모든 player 처리. 기존 remote +0.125 (= 지면 뚫림 방지) 는 별도 case.
         SmartMovingClientState sm = SmartMovingClientState.get(entity);
 
-        // 🔴 (2026-05-10) HJ-1BLOCK-CAM-DBG — 헤드점프/슬라이딩/크롤링 진행 중 카메라 추적.
-        //   사용자 보고 "헤드점프 후 1칸 공간 진입 시 끊기는 느낌" 진단용. 매 30 frame 출력.
-        if ((sm.isHeadJumping || sm.isSliding || sm.isCrawling) && (entity.age % 15) == 0) {
-            net.minecraft.util.math.Box _bb = entity.getBoundingBox();
-            float _stdEye = entity.getStandingEyeHeight();
-            net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
-            net.minecraft.client.render.Camera _cam = (_mc != null && _mc.gameRenderer != null) ? _mc.gameRenderer.getCamera() : null;
-            net.minecraft.util.math.Vec3d _camPos = (_cam != null) ? _cam.getPos() : net.minecraft.util.math.Vec3d.ZERO;
-            float _camYField = (_cam != null) ? ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam).sm_getCameraY() : 0F;
-            float _lastCamYField = (_cam != null) ? ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam).sm_getLastCameraY() : 0F;
-            float _dimEye = entity.getDimensions(entity.getPose()).eyeHeight();
-            String _state = sm.isHeadJumping ? "HJ" : (sm.isSliding ? "SL" : "CR");
-            System.out.println("[HJ-1BLOCK-CAM-DBG]"
-                    + " state=" + _state
-                    + " age=" + entity.age
-                    + " entityY=" + String.format("%.4f", entity.getY())
-                    + " prevY=" + String.format("%.4f", entity.prevY)
-                    + " lastRenderY=" + String.format("%.4f", entity.lastRenderY)
-                    + " bbMinY=" + String.format("%.4f", _bb.minY)
-                    + " bbMaxY=" + String.format("%.4f", _bb.maxY)
-                    + " dimEye=" + String.format("%.4f", _dimEye)
-                    + " stdEye=" + String.format("%.4f", _stdEye)
-                    + " camY=" + String.format("%.4f", _camPos.y)
-                    + " camYField=" + String.format("%.4f", _camYField)
-                    + " lastCamYField=" + String.format("%.4f", _lastCamYField)
-                    + " hO=" + sm.heightOffset
-                    + " pose=" + entity.getPose()
-                    + " tD=" + String.format("%.3f", tickDelta));
-        }
-
         // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
         if (sm.isHeadJumping && sm.heightOffset != 0f) {
             cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
