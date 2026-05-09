@@ -304,11 +304,22 @@ public final class SmartMovingMover {
             speedFactor *= cfg.runFactor;
         }
 
-        // 원본 landMotion L714-716: 공중 시 potionFactor 정상화.
-        if (!player.isOnGround()) {
-            float potionFactor = getPotionSpeedFactor(player);
-            if (potionFactor > 0F) speedFactor /= potionFactor;
-        }
+        // 🔴 fix #51 (2026-05-10, 사용자 1.7.10/1.12.2 SmartMoving 측정 + 코드 line-by-line 비교):
+        //   1.7.10 sm_original SmartMovingSelf.landMotion L714-716:
+        //     if (!sp.onGround) speedFactor /= getPotionSpeedFactor();
+        //   1.12.2 SMReboot SMSelf.landMotion: 이 식 자체가 없음.
+        //   사용자 측정 환경 = 1.7.10 + 1.12.2 Forge SmartMoving = 1.12.2 SMReboot 식.
+        //   → 분기 제거. (= 우리 매핑이 따르던 1.7.10 sm_original 가 잘못된 reference).
+        //
+        //   영향: 헤드점프/여우무빙 air 진행 시 SPEED multiplier 가 air 가속에 반영.
+        //   - SPEED LV3 (= 1.6 multiplier): air ADD 1.62배 증가.
+        //   - SPEED LV5 (= 2.0 multiplier): air ADD 2.0배 증가.
+        //   - SPEED LV10 (= 3.0 multiplier): air ADD 3.0배 증가.
+        //   fix #50 (ground rawSpeed) 와 의도 1:1: SPEED multiplier 가 ground/air 양쪽
+        //   에 반영되는 1.12.2 SMReboot 식 1:1 매핑.
+        //
+        //   사용자 보고 "Jump Boost (= SPEED) 계열 시 거리 극명한 차이" + "여우무빙
+        //   거리 1.7.10/1.12.2 더 멀리" 보고와 정확 일치.
 
         // 원본 L718: moveFlying(strafe, forward, rawSpeed * speedFactor) — motion 에 ADD.
         // [HEADBROAD-DBG] 헤드점프 진행 중 motion ADD 누적 추적.
