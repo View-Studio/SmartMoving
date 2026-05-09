@@ -78,9 +78,15 @@ public class MixinPlayerEntityRenderer {
             return;
         }
         if (sm.isSliding) {
-            // 🔴 (Phase 2 multi BUG-9 디테일 조정) 슬라이딩 모델 떠보임 — 0.06 → 0.19 (사용자 보고 기반 미세 조정 정착).
-            //   엎드리기 (-1.0 - scale*0.06) 와 다른 계수. multiplayer server reconcile 영향 추정.
-            cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.19D, 0D));
+            // 🔴 fix #61 v3 (2026-05-10):
+            //   isSliding 진입 시 entity.y -= 1m (= move(0,-1,0) 효과, 원본 1.7.10 1:1).
+            //   mixin offset 가드 매치 → 박스 발 = entity.y + 1m = ground (정상).
+            //   vanilla render 식 = 모델 origin = entity.y + offsetY. offsetY=0 시 모델 발
+            //   = 박스 발 (= STANDING 시 entity.y=ground 와 동일 동작).
+            //   isCrawling 분기 -1.06m 은 isCrawling 진입 시 entity.y unchange (= move 안 호출,
+            //   원본 1:1) 라서 추가 -1m 보정 필요. isSliding 은 entity.y 이미 -1m push 됨 →
+            //   추가 보정 X.
+            cir.setReturnValue(Vec3d.ZERO);
             return;
         }
 

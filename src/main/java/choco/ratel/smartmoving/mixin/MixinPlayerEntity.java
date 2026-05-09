@@ -76,11 +76,23 @@ public abstract class MixinPlayerEntity {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔴 fix #59 (2026-05-10, dump 분석 결과 — 사용자 보고 "여우무빙 시 EYEHEIGHT 가 콜리전
+        //   아래에 설정"):
+        //   isSliding 시 fix #56 의 POSE.SLIDING 가드로 mixin offset 활성 → 박스 +1m up
+        //   (= bb.minY = entity.y + 1m). 그러나 dim eyeHeight=0.62 잔존 → 카메라 = entity.y +
+        //   0.62 → 박스 (entity.y+1, entity.y+1.8) 아래 0.38m.
+        //   1.7.10/1.12.2 의 setHeightOffset(-1) 효과 = boundingBox +1m up + height 0.8 +
+        //   eyeHeight 변경 X (= STANDING 1.62 잔존, position 변경 X 매핑).
+        //   해결: isSliding 시 eyeHeight=1.62 (= STANDING) → 카메라 = entity.y + 1.62 →
+        //   박스 안 (= entity.y+1 ~ entity.y+1.8 안에 entity.y+1.62) 정상.
+        if (sm.isSliding) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         // 🔴 v26.12 — v26.5 가드 폐기 (client/server 양쪽 동기화).
         //   STANDING dim fall through BUG root. Fix 7 의 의도 (= smSmall 에 isCrawlClimbing 추가)
         //   1:1 복원. 사용자 보고 "STANDING → 엎드림" transition 차단.
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isSliding
                        || sm.isSwimming || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));

@@ -165,8 +165,17 @@ public abstract class MixinPlayerEntityClient {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔴 fix #59 (2026-05-10, dump 분석 — 사용자 보고 "여우무빙 시 EYEHEIGHT 콜리전 아래"):
+        //   isSliding 시 fix #56 의 POSE.SLIDING 가드로 mixin offset 활성 → 박스 +1m up.
+        //   그러나 dim eyeHeight=0.62 잔존 → 카메라 = entity.y + 0.62 → 박스 아래 0.38m.
+        //   1.7.10/1.12.2 의 setHeightOffset(-1) = boundingBox +1m up + position 변경 X.
+        //   카메라 정상 위치 = entity.y + 1.62 (= STANDING eyeHeight, 박스 안 정렬).
+        //   해결: isSliding 시 dim eyeHeight=1.62 → mixin offset (+1m) 와 정렬.
+        if (sm.isSliding) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isSliding
                        || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));

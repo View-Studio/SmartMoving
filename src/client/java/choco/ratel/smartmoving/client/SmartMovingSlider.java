@@ -52,7 +52,6 @@ public final class SmartMovingSlider {
         }
 
         Vec3d vel = player.getVelocity();
-
         // 발 아래 블록 slipperiness
         BlockState below = player.getWorld().getBlockState(player.getSteppingPos());
         float slip = below.getBlock().getSlipperiness();

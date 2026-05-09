@@ -4,6 +4,7 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import choco.ratel.smartmoving.server.SmartMovingServer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityDimensions;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.MovementType;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -134,10 +135,21 @@ public abstract class MixinEntity {
 
         EntityDimensions dim = this.dimensions;
         if (dim.height() >= 1.0F) return;       // STANDING / 일반 height
-        if (dim.eyeHeight() <= 1.0F) return;    // CROUCHING/SWIMMING/SLIDING (eyeHeight 작음)
-        // 🔴 사용자 지시 (2026-05-08): POSE=SLIDING 가드 제거 → 헤드점프도 mixin offset 적용.
-        //   박스 = (player.y+1, player.y+1.8) — 박스 발 +1m, 머리 STANDING ("아래가 짧아짐").
-        //   슬라이딩 진입 BUG 는 사용자 힌트 후 추가 fix 예정.
+        // 🔴 fix #56 (2026-05-10, 사용자 보고 "fix #53 후 박스 낮음 + 벽박힘 + 진입 어려움"):
+        //   기존 가드 `eye <= 1.0F` 만 = isHeadJumping (eye=1.62) 시점만 mixin offset 활성.
+        //   fix #53 (= 1.12.2 1:1) 진입 시 isHeadJumping=false + isSliding=true 강제 → dim eye=0.62
+        //   → mixin offset 차단 → 박스 발 = entity.y = 원래 ground - 1m → 박힘.
+        //
+        //   1.7.10/1.12.2 의 `setHeightOffset(-1)` 식 = boundingBox.minY += 1m **직접 변경**
+        //   (POSE 무관, isSliding/isHeadJumping 시 양쪽 적용). vanilla 1.21.1 매핑에서는 mixin
+        //   offset 으로 등가 처리하는데 가드가 `eye>1` 만 검사 → isSliding 시 미적용 BUG.
+        //
+        //   해결: POSE.SLIDING 시도 mixin offset 활성. POSE.SLIDING 분기:
+        //     - sm_updatePose 식: isHeadJumping || isSliding || isFlying || isLevitating → SLIDING.
+        //   → 모든 SLIDING POSE 에서 박스 +1m up. 1.7.10/1.12.2 setHeightOffset 효과 1:1.
+        //   부작용: 일반 슬라이딩 시도 박스 +1m up — 1.12.2 동등 동작 (= 부작용 X).
+        EntityPose pose = ((Entity) (Object) this).getPose();
+        if (dim.eyeHeight() <= 1.0F && pose != EntityPose.SLIDING) return;
 
         Box original = cir.getReturnValue();
         cir.setReturnValue(original.offset(0.0, 1.0, 0.0));

@@ -2087,48 +2087,65 @@ public final class SmartMovingClientState {
                     && (wasGroundSprinting
                             || (wasRunning && !isRunning(player) && player.isOnGround()))
                     && !isCrawling
-                    // 🔴 fix #40 (2026-05-08, dump 분석 후): fix #39 revert.
-                    //   사용자 SHIFT 누름 timing 항상 1 tick 늦게 잡힘 (= input poll race) → case A
-                    //   매치 0%, case B 만 발생. fix #39 (`!isHeadJumping`) 차단 시 "거의 발동 안 함".
-                    //   해결: 가드 제거 + case B 시 isHeadJumping=false 강제 제거 (= 박스 -1m down 차단).
                     && sneakKeyStartPressed
                     && !isDipping) {
-                // 🔴 fix #40 (2026-05-08): case B 시 setHeightOffset(-1) skip (= 이미 -1F 잔존).
-                //   case A 시는 setHeightOffset(-1) 적용. move(0,-1,0) 도 case A 만 (= 박스 발 새로 시작).
-                if (!isHeadJumping) {
-                    heightOffset = -1F;                                     // 원본 L2555
-                    player.move(MovementType.SELF, new Vec3d(0, -1D, 0));   // 원본 L2556
-                }
-                // 🔴 fix #33 (2026-05-08): SLIDE_DOWN tryJump 호출 — 자체 슬라이딩 진입.
-                // 🔴 fix #33 (2026-05-08, 사용자 시나리오 timing race 후속):
-                //   isFast 갱신 (L1772) 도 자체 슬라이딩 분기 (L2030) 보다 먼저 → 평가 시점 isFast=
-                //   false (= 현재 tick onGround=false). 원본은 isFast 갱신 (L2688) 가 자체 슬라이딩
-                //   (L2553) 보다 후 → 평가 시점 isFast=true (= 직전 tick 잔존).
-                //   결과: tryJump 의 speed=Walking (= isFast=false, hJF=√2≈1.414) → motion boost 작음.
-                //   원본은 speed=Sprinting (= isFast=true, hJF=√5≈2.236) → motion boost 큼.
-                //   해결: wasGroundSprinting=true (= 직전 tick sprint 활성 추정) 시 isFast 임시 true 강제.
+                // 🔴 fix #53 (2026-05-10, 사용자 보고 "여우무빙 거리 짧음 + 변동 + Jump Boost 시 극명"):
+                //   = fix #40 reverse — 1.12.2 SMReboot SMSelf.java L2303-L2312 1:1 복원.
+                //
+                //   원인 분석:
+                //     fix #40 = case B 분기 (isHeadJumping=true 잔존) 진입 시 setHeightOffset/move
+                //     skip + isHeadJumping=true 잔존. 의도: dim eye=1.62 유지 → 박스 +1m up 정상.
+                //     사용자 case A 시도 (jump+sneak 같은 tick) 시도 우리 매핑 = case B 분기 작동
+                //     (= 진입 직전 isHeadJumping=true → !isHeadJumping=false → fix #40 skip 분기).
+                //     → 박스 +1m 공중 부양 (mixin offset isHeadJumping 우선) → vy 자유 낙하 누적
+                //     → fallDistance > 0.05 빨리 매치 → SS-B25 자동 전환 빨리 → sliding 단계 짧음.
+                //     1.12.2 case A = 박스 ground 위 (= setHeightOffset + move) + isHeadJumping=false
+                //     강제 → vy=0 (ground reset) → fallDistance=0 → SS-B25 매치 X → 사용자 SHIFT
+                //     까지 sliding 길게 진행.
+                //
+                //   해결: 1.12.2 1:1 식 복원 (setHeightOffset + move + isHeadJumping=false 강제).
+                //
+                //   부작용 위험: fix #40 의 history "박스 -1m down jump → ground 박힘" 재발 가능.
+                //   재발 시 mixin offset 식 변경 (= isHeadJumping && isSliding 시 SLIDING dim 우선)
+                //   별도 fix 진행. fix #29 + fix #38 의 calculateDimensions + cameraY 강제 식은
+                //   유지 (= 박스 dim 갱신 시 시각 안정).
+                // 🔴 fix #60 (2026-05-10, dump 분석 결과 — 사용자 보고 "슬라이딩 진입 직후 콜리전
+                //   처음 조금 위 + 땅으로 들어가버림"):
+                //
+                //   원인: 1.12.2 의 setHeightOffset(-1) 은 boundingBox.minY 직접 += 1m. 우리 매핑
+                //   은 vanilla 1.21.1 의 boundingBox 자동 식 + mixin offset 으로 등가 처리.
+                //   mixin offset 활성 조건 = dim.height<1 && (dim.eye>1 || POSE.SLIDING).
+                //
+                //   기존 순서 BUG:
+                //     1. heightOffset=-1F. (= 단지 필드 set, 박스 영향 X)
+                //     2. player.move(0,-1,0).  ← 이 시점 dim 캐시 = STANDING (1.8). mixin offset
+                //                                  차단. 박스 발 = entity.y. vanilla collision →
+                //                                  ground 위 시도 -1m → push back → entity.y 변경 X.
+                //     3. isSliding=true + isHeadJumping=false 강제.
+                //     4. fix #29 calculateDimensions.  ← 이제 dim 갱신 → isSliding=true → fix #59
+                //                                          → eye=1.62 → mixin offset 활성 →
+                //                                          bbMinY = entity.y + 1m.
+                //   결과: entity.y = ground (변경 X). 박스 발 = ground + 1m 공중. vy 자유 낙하 →
+                //   fallDistance 누적 → SS-B25 자동 전환 → isSliding 1 tick 만에 isHeadJumping.
+                //
+                //   해결: SM state 와 calculateDimensions 를 move 전에 — mixin offset 활성 상태
+                //   에서 move 호출 → 박스 발 = entity.y + 1m = ground. move(-1) 시도 → 새 박스 발
+                //   = (entity.y-1)+1 = entity.y = ground (정렬). collision X. entity.y -= 1 적용.
+                //   결과: entity.y = ground - 1m. 박스 발 = ground. 정상.
+                //   1.12.2 의 boundingBox 직접 변경 효과 1:1 매핑.
+                heightOffset = -1F;
+                isSliding = true;                                        // 원본 L2558 — move 전에 set.
+                isHeadJumping = false;                                   // 원본 L2559 (fix #53).
+                isAerodynamic = false;                                   // 원본 L2560.
+                player.calculateDimensions();                            // dim 갱신 → mixin offset 활성.
+                player.move(MovementType.SELF, new Vec3d(0, -1D, 0));    // 원본 L2556 — entity.y -1m + 박스 발 ground.
+                // 🔴 fix #33 (2026-05-08) 유지: wasGroundSprinting=true 시 isFast 임시 true 강제.
                 boolean _savedIsFast = this.isFast;
                 if (wasGroundSprinting) this.isFast = true;
-                // Phase D 새 시그니처 (포커스 #2.5 세션 19): trySlideDownJump 제거,
-                //   tryJump(SlideDown, false, wasRunning, null) 직접 호출 — 원본 L2557 1:1.
-                //   E-1 통합 완료 — 별도 trySlideDownJump 헬퍼 불필요.
                 SmartMovingJumper.tryJump(player, this, SmartMovingJumper.SLIDE_DOWN,
-                                           false, wasRunning, null);
+                                           false, wasRunning, null);   // 원본 L2557.
                 this.isFast = _savedIsFast;
-                // [HEADBROAD-DBG] 여우무빙 검증 — 자체 슬라이딩 분기 진입 = SLIDE_DOWN tryJump 호출 = 여우무빙.
                 this.dbgHeadJumpWasFox = true;
-                isSliding = true;                                        // 원본 L2558
-                // 🔴 fix #40 (2026-05-08): case B 시 isHeadJumping=true 잔존 → dim eye=1.62
-                //   유지 → 박스 +1m up 잔존 (정상). isHeadJumping=false 강제 시 다음 tick dim eye=
-                //   0.62 변화 → 박스 -1m down jump → ground 박힘. 원본 1:1 위반이지만 사용자 시나리오
-                //   (= 헤드점프 발사 후 1 tick 의 SHIFT 누름) 정합 위해 보정.
-                if (!isHeadJumping) {
-                    // case A 시 (= 같은 tick): isHeadJumping=false 강제 (원본 L2559 1:1).
-                    isHeadJumping = false;                                   // 원본 L2559
-                    isAerodynamic = false;                                   // 원본 L2560
-                }
-                // case B 시: isHeadJumping=true 잔존 + isSliding=true 동시 set.
-                //   dim 매핑 isHeadJumping 우선순위 → eye=1.62 → 박스 +1m up 정상.
                 // 🔴 fix #29 (2026-05-08, 사용자 보고 "슬라이딩 중 떨어질 때 덜컹"):
                 //   진입 시점 cameraY=1.62 (= 직전 standing 잔존) vs 새 dim eye=0.62 →
                 //   vanilla updateEyeHeight 0.5 step lerp 으로 N tick 추격 → 카메라 시점 ~1m
@@ -2304,6 +2321,41 @@ public final class SmartMovingClientState {
                     //     standupIfPossible 가드 통과 → standUp 매치 → 정상 push up + dim 갱신.
                     if (!isHeadJumping) {
                         wasCrawling = toCrawling();
+                    }
+                    // 🔴 fix #62 v2 (2026-05-10, dump 분석 — server 박스 정상 확인 후):
+                    //   server reconcile 가능성 X (= fix #63 으로 server/client 박스 동등 검증).
+                    //   진짜 BUG = SS-SlideStop 종료 직후 *다음 tick* 박스 박힘:
+                    //     - dump 시점 (종료 직후): entityY=-61, bbMinY=-60 (= POSE=SLIDING 잔존,
+                    //       mixin offset 활성). 박스 정상.
+                    //     - 다음 tick: vanilla updatePose → POSE=STANDING → calculateDimensions →
+                    //       mixin offset 가드 height>=1 매치 → 차단 → bbMinY = entity.y = -61 →
+                    //       박스 ground 안 1m 박힘.
+                    //   해결: 종료 시 entity.y +1m push (= 1.7.10/1.12.2 resetHeightOffset 등가).
+                    //   case B fox (isHeadJumping=true) 는 fix #58 헤드점프 종료 push 처리.
+                    if (!isHeadJumping && this.heightOffset == -1F) {
+                        player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                        player.lastRenderY += 1.0;
+                        player.prevY += 1.0;
+                        this.heightOffset = 0F;
+                        player.calculateDimensions();
+                        // 🔴 fix #64 (2026-05-10, dump 분석 — 사용자 보고 "전환 사이 카메라 올라갔다가 내려옴"):
+                        //   entity.y push +1m 은 즉시. Camera.cameraY field 는 0.5 step lerp 추격
+                        //   (= 5 frame 수렴) → 비대칭 spike.
+                        //   transition spike: -59.38 → -58.38 (+1m 점프 up) → -58.88 → -59.13 →
+                        //     -59.26 → -59.32 → -59.38 (안정). = "올라갔다가 내려옴" 정확.
+                        //   해결: 종료 시 cameraY/lastCameraY = isCrawling eyeHeight (0.62) 강제 set
+                        //     → cameraY 즉시 0.62 → camera 절대 위치 = entity.y(-60) + 0.62 = -59.38
+                        //     (안정 위치 직진).
+                        //   ICC 진입 fix / restoreFromFlying fix 와 동일 패턴 (= 메모리
+                        //   feedback_standingEyeHeight_cached.md 참조).
+                        net.minecraft.client.MinecraftClient _mc64 = net.minecraft.client.MinecraftClient.getInstance();
+                        net.minecraft.client.render.Camera _cam64 = (_mc64 != null && _mc64.gameRenderer != null)
+                                ? _mc64.gameRenderer.getCamera() : null;
+                        if (_cam64 != null) {
+                            float _crawlEye = player.getDimensions(net.minecraft.entity.EntityPose.SWIMMING).eyeHeight();
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam64).sm_setCameraY(_crawlEye);
+                            ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) _cam64).sm_setLastCameraY(_crawlEye);
+                        }
                     }
                 }
             }
@@ -3771,6 +3823,21 @@ public final class SmartMovingClientState {
             resetHeightOffset();
         } else if (standUpPossible && !(sneakPressed && grabPressed)) {
             standUp(player, gapUnderneight);
+            // 🔴 fix #58 (2026-05-10, dump 분석 결과 — root cause 확정):
+            //   진입 직전 sm_updatePose 결과 POSE=SLIDING (= isHeadJumping=true 시점). 5-AND
+            //   식 직후 isHeadJumping=false 가 됐는데 POSE 는 *다음 vanilla updatePose 호출까지*
+            //   잔존. mixin sm_getBaseDimensions L106 가드 (`pose==SLIDING` 보강) → dim
+            //   (0.6, 0.8, 0.62). mixin offset 가드 (fix #56) `POSE.SLIDING` 매치 → 활성.
+            //   bb.minY = entity.y + 1m. standUp push +1m 후 entity.y = ground 인데 박스 발 =
+            //   ground + 1m → 박스 1칸 공중 부양 (사용자 시각 "1칸 박힘").
+            //   dump 검증: [POST-STANDUP] entityY=-60, bbMinY=-59, pose=SLIDING, isHJ=false.
+            //   해결: standUp 호출 후 SM state 모두 false 시 POSE=STANDING 강제 + dim 갱신 →
+            //   mixin offset 차단 (height 1.8 ≥ 1) → 박스 발 = entity.y = ground 정상.
+            if (!isHeadJumping && !isSliding && !isCrawling && !isCrawlClimbing
+                    && !isSwimming_sm && !isDiving && !isFlying && !isLevitating) {
+                player.setPose(net.minecraft.entity.EntityPose.STANDING);
+                player.calculateDimensions();
+            }
         } else {
             // 🔴 비행 박스 → small 박스 전환 entity.y +1 보정 (사용자 보고 fix —
             //   비행 → 1칸 공간 → 비행 풀림 → 엎드리기 안 됨, 블록 아래 파고들기):
@@ -3892,14 +3959,28 @@ public final class SmartMovingClientState {
         //   차이로 미세 epsilon 박힘 등) 대비. 박스 발 아래 1m 범위 솔리드 max 검사 → 박스
         //   발보다 위 솔리드 발견 시 entity.y push up.
         //
-        //   getMaxPlayerSolidBetween 의 yMax clamping (`Math.min(result, yMax)`) 회피 위해
-        //   yMax 를 bb.minY + 0.5 (박스 발 위 0.5m) 로 설정 — 박스 발이 솔리드 안 박힌 경우
-        //   solidMax > bb.minY 가능.
+        // 🔴 fix #57 (2026-05-10, 사용자 보고 "fix #56 후 정상 헤드점프 + 여우무빙 헤드점프 착지
+        //   시 땅에 1칸 아래 박힘"):
+        //   원인: 헤드점프 진행 중 mixin offset 활성 (= POSE.SLIDING 매치) → 박스 발 = entity.y+1m.
+        //   vanilla collision 결과 entity.y = ground_top - 1m. 종료 시 isHeadJumping=false →
+        //   POSE=STANDING → mixin offset 차단 → 박스 발 = entity.y = ground - 1m → 박힘.
+        //   (가드 #2 = justEndedHeadJump && wasSmallBox && (isCrawling||isSliding) 가 정상 헤드
+        //   점프 시 isCrawling=false+isSliding=false 라 매치 X → L3891 안전망만 발동.)
+        //
+        //   기존 yMax = bb.minY + 0.5 = (ground-1) + 0.5 = ground - 0.5. ground_top (=ground) >
+        //   yMax → getMaxPlayerSolidBetween 의 yMax clamp (Math.min(result, yMax)) 발동 →
+        //   solidUnder ≈ bb.minY → bb.minY < solidUnder-1e-5 매치 X → push 안 함 → 박힘 잔존.
+        //   fix #30 (L3851) 와 동일 패턴 — yMax 를 +1.5 로 늘려 clamp 회피.
+        //
+        //   추가: setPosition 후 lastRenderY/prevY 동기화 (= feedback_pushup_lastRenderY_prevY_sync).
         Box bbAfter = player.getBoundingBox();
-        double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.0, bbAfter.minY + 0.5, 0);
-        if (bbAfter.minY < solidUnder - 1.0E-5) {
+        double solidUnder = getMaxPlayerSolidBetween(player, bbAfter.minY - 1.0, bbAfter.minY + 1.5, 0);
+        boolean stuckSafetyNet = bbAfter.minY < solidUnder - 1.0E-5;
+        if (stuckSafetyNet) {
             double pushY = solidUnder - bbAfter.minY;
             player.setPosition(player.getX(), player.getY() + pushY, player.getZ());
+            player.lastRenderY += pushY;
+            player.prevY += pushY;
         }
     }
 
