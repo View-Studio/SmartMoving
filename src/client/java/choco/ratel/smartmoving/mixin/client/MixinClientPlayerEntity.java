@@ -91,6 +91,18 @@ public abstract class MixinClientPlayerEntity {
         SmartMovingClientState sm = SmartMovingClientState.get(player);
         if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
         SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        // 🔴 fix #75 (BUG #2): weeping/twisting vines 위 + sneak 시 vanilla 위임.
+        //   상세는 MixinEntityClient.sm_isSneaking 주석 참조.
+        net.minecraft.block.Block _blockAtPos = player.getWorld()
+                .getBlockState(player.getBlockPos()).getBlock();
+        if (_blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+            return;  // override skip → vanilla isSneaking 그대로
+        }
+
         boolean result = (sm.isSlow && player.isOnGround())
                 || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
                 || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);

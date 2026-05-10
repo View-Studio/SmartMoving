@@ -107,6 +107,27 @@ public abstract class MixinEntityClient {
 
         if (sm.forceIsSneaking != null) { cir.setReturnValue(sm.forceIsSneaking); return; }
 
+        // 🔴 fix #75 (BUG #2, 2026-05-10, 사용자 보고 "weeping/twisting vines + sneak 진동"):
+        //   진동 사이클: pose toggle (STANDING ↔ CROUCHING) → 박스 height 토글 (1.8 ↔ 1.5)
+        //     → vanilla move/collision 결과 onGround 토글 → 우리 sm_isSneaking 의
+        //     `(isSlow && onGround)` 분기 결과 토글 → vanilla updatePose 가 isSneaking 따라
+        //     pose 토글 → 무한 사이클.
+        //   원본 SmartMovingSelf.isSneaking 식 자체는 1:1 매핑이지만 1.21.1 vanilla 의 박스
+        //   height 변경 → onGround 토글 quirk + weeping/twisting vines 의 isHoldingOntoLadder
+        //   특수 처리 결합으로 1.21.1 만 발생. 1.7.10 vanilla 에는 weeping/twisting vines 없음.
+        //
+        //   메모리 project_vine_animation_complete.md 의 의도 = "weeping/twisting vines 는
+        //   vanilla 동작 그대로". sm_isSneaking 도 해당 시나리오에서 vanilla 위임 → vanilla 의
+        //   안정된 SNEAKING flag (input.sneaking 그대로) 사용 → pose 안정 → 진동 X.
+        net.minecraft.block.Block _blockAtPos = player.getWorld()
+                .getBlockState(player.getBlockPos()).getBlock();
+        if (_blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                || _blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+            return;  // override skip → vanilla isSneaking 그대로
+        }
+
         boolean result = (sm.isSlow && player.isOnGround())
                 || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
                 || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);

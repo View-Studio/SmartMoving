@@ -1221,6 +1221,7 @@ public final class SmartMovingClientState {
         sneakKeyStopPressed  = !curSneakPressed && prevSneakKeyPressed;
         prevSneakKeyPressed = curSneakPressed;
 
+
         // [HEADBROAD-DBG-IN] tick 시작 시 키/상태/위치 핵심 dump (= 헤드점프 진행 중 + 사용자 입력 시).
         if (isHeadJumping || wasHeadJumping || isSliding
                 || curJumpPressed || sneakKeyStartPressed
