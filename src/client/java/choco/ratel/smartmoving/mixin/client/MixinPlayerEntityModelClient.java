@@ -696,18 +696,31 @@ public abstract class MixinPlayerEntityModelClient {
         //   GL11.glRotatef(NaN) = drivers 보통 무회전 (identity) → leg.pitch=0 시각 효과 ("다리 1자").
         //   1.21.1 JOML Quaternionf(NaN) = matrix NaN → vertex 깨짐. NaN 가드로 0 fallback —
         //   원본 1.7.10 OpenGL drivers 의 무회전 동작과 시각 일치 (사용자 보고 "처음 시작 시 다리 1자").
+        //
+        // 🔴 fix #76 (BUG #2.5, 2026-05-10, 사용자 보고 "weeping/twisting vines + sneak 시 다리 사라짐"):
+        //   verticalSpeed 가 정확히 0 이 아닌 **매우 작은 양수** (float underflow 수준) 시 식 결과:
+        //     0.3f / tiny_positive = +Infinity (float overflow, NaN 아님)
+        //     cos * +Infinity * tiny_positive = ±Infinity (Infinity × positive = Infinity 유지)
+        //     + offset = ±Infinity
+        //   기존 Float.isNaN 가드는 Infinity 를 잡지 못함 → leg.pitch=±Infinity → 다리 transform 망가짐.
+        //   해결: `!Float.isFinite(...)` 로 가드 강화 — NaN + ±Infinity 모두 0 fallback (= 원본
+        //   "다리 1자" 의도 1:1).
+        //   dump 검증 ([BUG2.5-DBG]): tick 168786 부터 rL.pitch=-Infinity / lL.pitch=Infinity 발생.
+        //   사용자 시나리오 = weeping/twisting vines + sneak (정지 상태). 우리 sm_isSneaking fix #75
+        //   후 sm.stats.currentVerticalSpeed 가 작은 underflow 양수로 갱신되는 것이 직접 원인.
         if (!sm.isFeetVineClimbing) {
             rightLeg.pitch = MathHelper.cos(totalVerticalDistance * feetFrequenceUpFactor)        * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
             leftLeg.pitch  = MathHelper.cos(totalVerticalDistance * feetFrequenceUpFactor + HALF) * feetDistanceUpFactor * verticalSpeed + feetDistanceUpOffset;
-            if (Float.isNaN(rightLeg.pitch)) rightLeg.pitch = 0f;
-            if (Float.isNaN(leftLeg.pitch))  leftLeg.pitch  = 0f;
+            if (!Float.isFinite(rightLeg.pitch)) rightLeg.pitch = 0f;
+            if (!Float.isFinite(leftLeg.pitch))  leftLeg.pitch  = 0f;
         }
 
         // 원본 L223-L224: 다리 Z(roll) — 무조건 식 적용.
         rightLeg.roll = -(MathHelper.cos(totalHorizontalDistance * feetFrequenceSideFactor) - 1.0f)          * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
         leftLeg.roll  = -(MathHelper.cos(totalHorizontalDistance * feetFrequenceSideFactor + QUARTER) + 1.0f) * horizontalSpeed * feetDistanceSideFactor + feetDistanceSideOffset;
-        if (Float.isNaN(rightLeg.roll)) rightLeg.roll = 0f;
-        if (Float.isNaN(leftLeg.roll))  leftLeg.roll  = 0f;
+        // fix #76 일관성: roll 도 isFinite 가드.
+        if (!Float.isFinite(rightLeg.roll)) rightLeg.roll = 0f;
+        if (!Float.isFinite(leftLeg.roll))  leftLeg.roll  = 0f;
 
         // vine 전용 — 원본 L228-L239.
         // B-5 / §16-12: 원본 L228/L232 cos 입력은 totalDistance (3D 누적). 이전 limbSwing
