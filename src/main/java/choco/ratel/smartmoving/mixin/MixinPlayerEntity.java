@@ -207,7 +207,30 @@ public abstract class MixinPlayerEntity {
                 && self.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                 && !self.isTouchingWater()
                 && !self.getAbilities().flying;
-        return !isFalling && original;
+        if (isFalling) return false;
+
+        // 🔴 fix #77 (BUG #2.6, 2026-05-10, 사용자 보고 "weeping/twisting vines + sneak 시 박스 작아짐"):
+        //   일반 사다리/덩굴 + sneak: sm_resetSneakInClimb 가드 (`sm.isClimbing` 등) 매치 →
+        //     setPose(STANDING) 강제 → 박스 1.8m 유지. 매달림 = SM 자체 motion 처리.
+        //   weeping/twisting vines (vanilla bypass = sm.isClimbing=false): sm_resetSneakInClimb 미트리거
+        //     → fix #75 후 vanilla isSneaking()=true → vanilla updatePose → CROUCHING → 박스 1.5m.
+        //
+        //   해결: vanilla updatePose 안 isSneaking() 호출만 redirect → false 반환 → CROUCHING 분기
+        //     skip → STANDING fallthrough. isHoldingOntoLadder() = isSneaking() 호출은 redirect 영향
+        //     X (이건 vanilla 의 다른 메서드 안에서 호출) → 매달림 유지 (= 기능 보존).
+        //   메모리 project_vine_animation_complete.md 의 "weeping/twisting vines = 사다리 자세
+        //     + vanilla 매달림 motion" 의도와 정합.
+        //   이 redirect 는 PlayerEntity (main mixin) 라 client + server 양측 자동 적용.
+        net.minecraft.block.Block blockAtPos = self.getWorld()
+                .getBlockState(self.getBlockPos()).getBlock();
+        if (blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                || blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+            return false;
+        }
+
+        return original;
     }
 
     /**

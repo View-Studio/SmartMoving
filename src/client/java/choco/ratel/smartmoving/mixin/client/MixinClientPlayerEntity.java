@@ -335,6 +335,29 @@ public abstract class MixinClientPlayerEntity {
                 && self.fallDistance > SmartMovingConfig.Config.fallAnimationDistanceMinimum
                 && !self.isTouchingWater()
                 && !self.getAbilities().flying;
-        return !isFalling && original;
+        if (isFalling) return false;
+
+        // 🔴 fix #78 (BUG #2.6, 2026-05-11, 사용자 보고 "weeping/twisting vines + sneak 시 모델 살짝 아래"):
+        //   ClientPlayerEntity 의 자체 inSneakingPose 필드는 entity.pose 무관하게 별도 식으로 결정:
+        //     inSneakingPose = !flying && !swimming && !hasVehicle && canChangeIntoPose(CROUCHING)
+        //                      && (isSneaking() || (!isSleeping() && !canChangeIntoPose(STANDING)));
+        //   fix #77 은 PlayerEntity.updatePose 의 isSneaking() 만 redirect (= entity.pose=STANDING).
+        //   하지만 여기 ClientPlayerEntity.tickMovement 의 isSneaking() 호출은 별도 → fix #75 후
+        //   vanilla 위임 → true → inSneakingPose=true → PlayerEntityRenderer.getPositionOffset
+        //   `Y = -2/16 = -0.125` offset 적용 → 모델 살짝 아래.
+        //
+        //   해결: 같은 redirect 에 weeping/twisting vines 가드 추가 → 해당 isSneaking() 호출만 false
+        //   반환 → inSneakingPose=false → 모델 정상 위치.
+        //   다른 isSneaking() 호출 (isHoldingOntoLadder 등) 영향 X → 매달림 유지 (= 기능 보존).
+        net.minecraft.block.Block blockAtPos = self.getWorld()
+                .getBlockState(self.getBlockPos()).getBlock();
+        if (blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES
+                || blockAtPos == net.minecraft.block.Blocks.WEEPING_VINES_PLANT
+                || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES
+                || blockAtPos == net.minecraft.block.Blocks.TWISTING_VINES_PLANT) {
+            return false;
+        }
+
+        return original;
     }
 }
