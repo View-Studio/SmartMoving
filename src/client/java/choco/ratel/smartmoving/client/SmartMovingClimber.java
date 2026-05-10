@@ -608,6 +608,50 @@ public final class SmartMovingClimber {
             // 원본 L960-L961: 8방향 합산 결과 → ClientState 필드 2 대입
             sm.hasClimbGap = outHandsGap.canStand || outFeetGap.canStand;
             sm.hasClimbCrawlGap = outHandsGap.mustCrawl || outFeetGap.mustCrawl;
+            // 🔴 fix #79 (BUG #4, 2026-05-11, 사용자 보고 "ladder/vine grab 진입 범위 = 자동 진입 범위"):
+            //   자동 진입 (isFacedToLadder/Vine) = `getOnLadderOrVine(faceOnly=true)` = 사용자 위치 자체만.
+            //     (인접 검사는 vanilla 동작 1:1 위해 비활성, L297-305 메모.)
+            //   grab 진입 = handleClimbing 8방향 seekClimbGap → hasHalfHold/hasBottomHold 안
+            //     remoteLadderClimbing/baseVineClimbing/remoteVineClimbing → **인접 1칸 ladder/vine 매치**.
+            //   → grab 진입 범위 = 자동 진입 범위 + 인접 1칸 (사용자 보고 "1칸 더 앞").
+            //
+            //   사용자 의도: ladder/vine 에 대한 grab 진입 범위 = 자동 진입 범위와 일치.
+            //   (일반 솔리드 = 반블록/계단/wall 등 grab climbing 은 별개, 8방향 인접 매치 유지.)
+            //
+            //   해결: 8방향 결과 중 grip 매치된 block 이 ladder/vine + facedLadder/Vine=false 시
+            //     → 결과 무효화 (handsClimbing/feetClimbing/Gap/vine flag reset).
+            //     → 일반 솔리드 매치 (block 이 ladder/vine 아님) 는 그대로 = 회귀 X.
+            //
+            //   dump 검증 ([BUG4-DBG]): BUG 시나리오 (Phase C/D, px=73 pz=-29/-28) 에서
+            //     `facedLadder=false facedVine=false hEdge/fEdge=ladder/vine` 직접 확인.
+            boolean _facedLadderOrVine = isFacedToLadder(player, sm.isClimbCrawling)
+                                       || isFacedToSolidVine(player, sm.isClimbCrawling);
+            if (!_facedLadderOrVine) {
+                boolean _handsLV = handsGap[0].state != null
+                        && (handsGap[0].state.getBlock() instanceof LadderBlock
+                         || handsGap[0].state.getBlock() instanceof VineBlock);
+                boolean _feetLV = feetGap[0].state != null
+                        && (feetGap[0].state.getBlock() instanceof LadderBlock
+                         || feetGap[0].state.getBlock() instanceof VineBlock);
+                if (_handsLV) {
+                    handsClimbing = HandsClimbing.NONE;
+                    handsGap[0] = new ClimbGap();
+                    sm.isHandsVineClimbing = false;
+                }
+                if (_feetLV) {
+                    feetClimbing = FeetClimbing.NONE;
+                    feetGap[0] = new ClimbGap();
+                    sm.isFeetVineClimbing = false;
+                }
+                // hasClimbGap / hasNeighborClimbing / hasNeighborClimbGap 도 재계산 (위 reset 반영).
+                if (_handsLV || _feetLV) {
+                    sm.isNeighborClimbing = handsClimbing.isRelevant() || feetClimbing.isRelevant();
+                    sm.hasClimbGap = handsGap[0].canStand || feetGap[0].canStand;
+                    sm.hasClimbCrawlGap = handsGap[0].mustCrawl || feetGap[0].mustCrawl;
+                    sm.hasNeighborClimbGap = sm.hasClimbGap;
+                    sm.hasNeighborClimbCrawlGap = sm.hasClimbCrawlGap;
+                }
+            }
         }
 
         // **포커스 #3 B-7 (세션 6)**: 원본 L963-L976 누락 2 분기 이식 (★ #3 감사 발견).
