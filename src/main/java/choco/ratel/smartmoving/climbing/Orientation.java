@@ -2052,7 +2052,23 @@ public class Orientation {
         if (state == null) return false;
 
         BlockPos pos = new BlockPos(i, local_offset + j_offset, k);
-        boolean solid = isSolid(state, world, pos);
+        // 🔴 fix #74 (BUG #1, 2026-05-10): "공중에 떠있는 top slab grip 인식 X" 직접 fix.
+        //   기존 isSolid(state, world, pos) → state.isFullCube(world, pos) = "1×1×1 풀큐브 검사".
+        //   slab (0.5×1×1) / stair / wall / fence 등 부분 솔리드 = isFullCube=false → 누락.
+        //   원본 1.7.10 isSolid(material) = "Material.isSolid() && blocksMovement()" — 즉
+        //   "공간을 solid 로 채움 + 이동 막음" 검사. 부분 솔리드 모두 매치.
+        //
+        //   1.21.1 정확 등가 = collision shape 비어있지 않음 (= 어떤 충돌 박스든 존재).
+        //   slab/stair/wall/fence/iron_bars 등 모두 collision shape 있음 → 매치.
+        //   air/water/lava/grass(부유) 등 collision shape 없음 → 매치 X.
+        //
+        //   isSolid 헬퍼 자체는 그대로 유지 (isFullEmpty / isRemoteSolid 등 다른 호출 위치
+        //   회귀 차단). 본 메서드만 collision shape 직접 검사로 별도 매핑.
+        //
+        //   영향 위치 (호출 2곳):
+        //   - L2030 isUpperHalfFrontAnySolid → hasBottomHold L2651 분기 메인 → BUG fix
+        //   - L2667 hasBottomHold (8) stair compact 분기 → 더 매치됨 (= grip 추가, 회귀 X)
+        boolean solid = !state.getCollisionShape(world, pos).isEmpty();
 
         if (solid) {
             Block block = state.getBlock();
