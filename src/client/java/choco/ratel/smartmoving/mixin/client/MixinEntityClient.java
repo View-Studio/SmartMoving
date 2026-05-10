@@ -7,8 +7,6 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MovementType;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,51 +27,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinEntityClient {
 
     /**
-     * 5-8: beforeMove에서 STEP_HEIGHT=0으로 설정했을 때 원래 값을 저장한다.
-     * -1.0 = 미설정.
-     */
-    @Unique
-    private double sm_savedStepHeight_client = -1.0;
-
-    /**
-     * 5-8 (클라이언트) before: 크롤링/천장 클라이밍 중 STEP_HEIGHT=0 억제.
-     * 원본 ySize=0 에 해당.
-     */
-    @Inject(method = "move", at = @At("HEAD"))
-    private void sm_beforeMove_client(MovementType type, Vec3d movement, CallbackInfo ci) {
-        if (!((Object) this instanceof ClientPlayerEntity player)) return;
-        // BUG-24 (세션 36): SM disabled 시 STEP_HEIGHT 변경 안 함 → vanilla 정상.
-        if (!SmartMovingConfig.Config.enabled) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(player);
-        if (sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing) {
-            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
-            if (attr != null) {
-                sm_savedStepHeight_client = attr.getBaseValue();
-                attr.setBaseValue(0.0);
-            }
-        }
-    }
-
-    /**
      * 5-8 (클라이언트) after:
-     *   - STEP_HEIGHT 복원
      *   - 클라이밍 이동 거리 누적 (피로도 계산용)
      *   - 수영 소리 누적 (8-6)
      *
      * 원본: afterMoveEntity() — distanceSwom 누적, SwimSoundDistance 초과 시 소리 재생.
      * SwimSoundDistance = 1/0.7F ≈ 1.4286F (swim_dive.md 기록값).
      * 소리: volume=0.05F, pitch=1.0F ± rand*0.4F.
+     *
+     * 🔴 fix #73 2단계 (2026-05-10): STEP_HEIGHT=0 억제 / 복원 로직 일괄 제거.
+     *   상세는 MixinEntity.sm_afterMove 주석 참조.
      */
     @Inject(method = "move", at = @At("TAIL"))
     private void sm_afterMove_client(MovementType type, Vec3d movement, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
-
-        // STEP_HEIGHT 복원 (cfg.enabled 무관 — 이전 SM enabled 시 저장된 값 복원 보장)
-        if (sm_savedStepHeight_client >= 0) {
-            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
-            if (attr != null) attr.setBaseValue(sm_savedStepHeight_client);
-            sm_savedStepHeight_client = -1.0;
-        }
 
         // BUG-24 (세션 36): SM disabled 시 SmartStatistics 갱신 + heightOffset 보정 + climb 거리
         //   누적 + swim 소리 모두 skip → vanilla 정상. 잔존 sm.heightOffset 으로 인한 player.setPos

@@ -408,13 +408,26 @@ motionZ += -flowVec.zCoord * 0.014D;
 - 수영 소리: `SwimSoundDistance` 누적, `SwimSoundDistance > 1.0D` 시 소리 재생
 
 ### 1.21.1 대응
-- `ySize` 개념 없음 (1.21.1은 Entity step height 속성으로 대체)
+- `ySize` 개념 없음 (1.21.1 vanilla 가 step up 후 rendering 보간을 자체 처리)
 - `calculateSeparateCollisions()` → `Entity.move()` 와 `VoxelShapes.calculateMaxOffset()` 기반으로 재구현
 - `heightOffset` 처리: 1.21.1 `Entity.setPosition()` 또는 `Entity.setPos()` 로 위치 직접 조정
 
-### 동작 차이
-- `ySize` (1.7.10의 계단 오르기 높이): 1.21.1의 `stepHeight` 속성으로 대체됨 (기본값 0.6)
-- SM의 `ySize = 0F` 비활성화는 1.21.1에서 `STEP_HEIGHT` 속성을 0으로 수정하는 방식으로 재현 가능
+### 동작 차이 — ⚠️ 정정 (fix #73, 2026-05-10)
+
+**기존 매핑 노트 (잘못됨)**:
+> ~~`ySize` (1.7.10의 계단 오르기 높이): 1.21.1의 `stepHeight` 속성으로 대체됨 (기본값 0.6)~~
+> ~~SM의 `ySize = 0F` 비활성화는 1.21.1에서 `STEP_HEIGHT` 속성을 0으로 수정하는 방식으로 재현 가능~~
+
+**정정**:
+- 1.7.10 vanilla `Entity.ySize` 와 `Entity.stepHeight` 는 **별개 변수**.
+  - `stepHeight` (vanilla player 0.5F): 실제 step up 가능 높이.
+  - `ySize`: step up **후** 박스 위치를 부드럽게 보간하기 위한 rendering offset.
+- `SmartMovingBase.move:685` 의 step 검사식 `(flag || ySize < 0.05F)` 는 "직전 step 보간이 거의 끝나야 새 step 허용" 진동 방지 가드.
+- 원본 `sp.ySize = 0F` 강제 효과는 **이 가드를 즉시 해제 = step up 더 자주 허용** (= step 차단의 정반대).
+- 원본 `SmartMovingBase.move` + `SmartMovingSelf.beforeMoveEntity` 모두 `sp.stepHeight` 자체를 변경 안 함 → vanilla 0.5F 그대로 사용.
+- 1.12.2 SMReboot 도 동일 (`SMBase.java:558` 만 `sp.stepHeight` 읽음, 변경 X).
+
+**1.21.1 매핑 결론**: `ySize` 는 1.21.1 vanilla 가 step up 후 rendering 보간을 자체 처리하므로 등가 매핑 자체가 불필요. `STEP_HEIGHT` 변경은 잘못된 매핑이라 제거.
 
 ### 포팅 주의사항
 - `beforeMoveEntity()` / `afterMoveEntity()` 호출 위치: vanilla `move()` 전후에 Mixin 삽입
@@ -487,7 +500,7 @@ motionZ += -flowVec.zCoord * 0.014D;
 | moveFlying 비표준 공식 | ★★☆☆☆ | 코드 직접 이식 가능, 의도 확인 필요 |
 | reverseHandleMaterialAcceleration | ★★★☆☆ | 1.21.1 FluidState API 재조사 필요 |
 | velocity snap 0.003 | ★★☆☆☆ | 클라이밍 최소 속도값과 비교 — 현재 안전 |
-| beforeMoveEntity/afterMoveEntity | ★★★☆☆ | ySize → stepHeight 전환, heightOffset 처리 |
+| beforeMoveEntity/afterMoveEntity | ★★☆☆☆ | ySize 매핑 불필요 (정정 fix #73), heightOffset 처리만 |
 | 서버 검증 통과 | ★★★★★ | floating kick, moved wrongly 모두 SM이 우회해야 함 |
 | updateLeaningPitch 간섭 | ★★☆☆☆ | SWIMMING 포즈 크롤링이라면 의도적 동작 가능 |
 

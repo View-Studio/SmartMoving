@@ -6,15 +6,12 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.MovementType;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -45,21 +42,6 @@ public abstract class MixinEntity {
     @Shadow private EntityDimensions dimensions;
 
     /**
-     * 5-8: beforeMove에서 STEP_HEIGHT=0으로 설정했을 때 원래 값을 저장한다.
-     * -1.0 = 미설정 (beforeMove에서 STEP_HEIGHT를 변경하지 않았음).
-     */
-    @Unique
-    private double sm_savedStepHeight = -1.0;
-
-    /**
-     * 5-8 before: beforeMoveEntity() 이식 (서버 측).
-     *
-     * SM 크롤링/천장 클라이밍 중 STEP_HEIGHT=0으로 설정.
-     * 원본 ySize=0 (계단 오르기 억제)에 해당.
-     *
-     * 클라이언트 측 STEP_HEIGHT 억제: MixinEntityClient.sm_beforeMove_client()에서 구현됨.
-     */
-    /**
      * 3-4: isSneaking() 오버라이드 — 서버 플레이어 전용.
      * isSneaking()은 Entity에 선언되어 있어 ServerPlayerEntity에서 inject 불가.
      * Entity Mixin에서 instanceof 가드로 서버 플레이어에만 적용한다.
@@ -75,37 +57,25 @@ public abstract class MixinEntity {
         }
     }
 
-    @Inject(method = "move", at = @At("HEAD"))
-    private void sm_beforeMove(MovementType type, Vec3d movement, CallbackInfo ci) {
-        if (!((Object) this instanceof ServerPlayerEntity player)) return;
-        SmartMovingServer sm = SmartMovingServer.get(player);
-        if (sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing) {
-            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
-            if (attr != null) {
-                sm_savedStepHeight = attr.getBaseValue();
-                attr.setBaseValue(0.0);
-            }
-        }
-    }
-
     /**
      * 5-8 after: afterMoveEntity() 이식 (서버 측).
      *
-     * - STEP_HEIGHT 복원 (beforeMove에서 0으로 변경했던 경우)
-     * - 클라이밍 이동 거리 누적 (피로도 계산용)
+     * 클라이밍 이동 거리 누적 (피로도 계산용)
      *   isClimbing: 지면 접촉 중 → 1.2 배율
      *   isCrawlClimbing / isCeilingClimbing: 공중 → 0.9 배율
      *
      * heightOffset 위치 보정: MixinEntityClient.sm_afterMove_client()에서 구현됨.
+     *
+     * 🔴 fix #73 2단계 (2026-05-10): STEP_HEIGHT=0 강제 + 복원 로직 일괄 제거.
+     *   원본 SmartMovingSelf.beforeMoveEntity 의 `ySize=0F` 는 1.21.1 GENERIC_STEP_HEIGHT 와
+     *   다른 변수 (ySize = step up 후 rendering 보간 offset, stepHeight = 실제 step 높이).
+     *   원본 SmartMovingBase.move 는 sp.stepHeight 자체를 변경 안 함 → vanilla 0.5F 그대로 사용.
+     *   1.12.2 SMReboot 도 동일. 매핑 자체가 잘못된 것 → 제거가 1:1 정합.
+     *   1단계 (isCrawling) + 2단계 (isCrawlClimbing/isCeilingClimbing) 모두 인게임 회귀 없음.
      */
     @Inject(method = "move", at = @At("TAIL"))
     private void sm_afterMove(MovementType type, Vec3d movement, CallbackInfo ci) {
         if (!((Object) this instanceof ServerPlayerEntity player)) return;
-        if (sm_savedStepHeight >= 0) {
-            EntityAttributeInstance attr = player.getAttributeInstance(EntityAttributes.GENERIC_STEP_HEIGHT);
-            if (attr != null) attr.setBaseValue(sm_savedStepHeight);
-            sm_savedStepHeight = -1.0;
-        }
         SmartMovingServer sm = SmartMovingServer.get(player);
         if (sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing) {
             sm.distanceClimbedModified += movement.length() * (sm.isClimbing ? 1.2 : 0.9);
