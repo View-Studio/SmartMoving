@@ -45,19 +45,6 @@ public final class SmartMovingClientState {
 
     /** 헤드점프 차지 누적 */
     public float headJumpCharge;
-    // [HEADBROAD-DBG] 헤드점프 발사 시점 위치 — 착지 시 거리 측정용.
-    public double dbgHeadJumpStartX;
-    public double dbgHeadJumpStartZ;
-    public double dbgHeadJumpStartY;
-    public float  dbgHeadJumpStartYaw;
-    public float  dbgHeadJumpStartPitch;
-    public long   dbgHeadJumpStartTick;
-    public double dbgHeadJumpMaxY;
-    public boolean dbgHeadJumpWasFox;       // = HEAD_UP 발사 후 SLIDE_DOWN tryJump 진입 여부.
-    public double dbgHeadJumpAccumAddH;     // = 매 tick handleLand applyLandMoveFlying motion ADD horizontal 누적.
-    public int    dbgHeadJumpAddCount;      // = ADD 횟수.
-    public boolean dbgHeadJumpWPressed;     // = 발사 시점 W key.
-    public boolean dbgHeadJumpSPressed;     // = 발사 시점 S key.
 
     /** 버튼 릴리즈까지 점프 차단 */
     public boolean blockJumpTillButtonRelease;
@@ -1221,22 +1208,6 @@ public final class SmartMovingClientState {
         sneakKeyStopPressed  = !curSneakPressed && prevSneakKeyPressed;
         prevSneakKeyPressed = curSneakPressed;
 
-        // [HEADBROAD-DBG-IN] tick 시작 시 키/상태/위치 핵심 dump (= 헤드점프 진행 중 + 사용자 입력 시).
-        if (isHeadJumping || wasHeadJumping || isSliding
-                || curJumpPressed || sneakKeyStartPressed
-                || (curSneakPressed && SmartMovingKeys.grab.isPressed())) {
-            long _tickId = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-            System.out.println("[HEADBROAD-DBG-IN] tick=" + _tickId
-                    + " jump=" + curJumpPressed + " sneak=" + curSneakPressed
-                    + " grab=" + SmartMovingKeys.grab.isPressed()
-                    + " onG=" + player.isOnGround()
-                    + " isHJ=" + isHeadJumping + " isSld=" + isSliding + " isCrl=" + isCrawling
-                    + " hO=" + heightOffset + " hJC=" + headJumpCharge
-                    + " yaw=" + String.format("%.1f", player.getYaw())
-                    + " pos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
-                    + ") vel=" + player.getVelocity());
-        }
-
         // B-48a (세션 131): sprintKey 엣지 필드 — sneakKey 패턴 그대로 적용.
         // 원본 sprintButton.StartPressed / StopPressed 대응.
         boolean curSprintPressed = opts.sprintKey.isPressed();
@@ -2137,7 +2108,6 @@ public final class SmartMovingClientState {
                 SmartMovingJumper.tryJump(player, this, SmartMovingJumper.SLIDE_DOWN,
                                            false, wasRunning, null);   // 원본 L2557.
                 this.isFast = _savedIsFast;
-                this.dbgHeadJumpWasFox = true;
                 // 🔴 fix #29 (2026-05-08, 사용자 보고 "슬라이딩 중 떨어질 때 덜컹"):
                 //   진입 시점 cameraY=1.62 (= 직전 standing 잔존) vs 새 dim eye=0.62 →
                 //   vanilla updateEyeHeight 0.5 step lerp 으로 N tick 추격 → 카메라 시점 ~1m
@@ -2208,33 +2178,6 @@ public final class SmartMovingClientState {
             //   false, true)` 호출 연결. 원본은 updateEntityActionState 내부에서 별도 위치
             //   호출이나 1.21.1 단일 위치 + 근사 이식이라 여기서 직접 호출.
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
-                // [HEADBROAD-DBG-HJ-LAND] 헤드점프 착지 시점 dump — 거리/방향/시간/높이/W ADD 비교.
-                long _hjLandTick = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-                double _dx = player.getX() - dbgHeadJumpStartX;
-                double _dz = player.getZ() - dbgHeadJumpStartZ;
-                double _hDist = Math.sqrt(_dx * _dx + _dz * _dz);
-                double _landDeg = (_dx == 0 && _dz == 0) ? 0
-                        : Math.toDegrees(Math.atan2(-_dx, _dz));
-                double _yawDiff = dbgHeadJumpStartYaw - _landDeg;
-                while (_yawDiff > 180) _yawDiff -= 360;
-                while (_yawDiff < -180) _yawDiff += 360;
-                long _duration = _hjLandTick - dbgHeadJumpStartTick;
-                double _maxHeight = dbgHeadJumpMaxY - dbgHeadJumpStartY;
-                double _avgAddH = dbgHeadJumpAddCount > 0 ? dbgHeadJumpAccumAddH / dbgHeadJumpAddCount : 0;
-                System.out.println("[HEADBROAD-DBG-HJ-LAND]"
-                        + " fox=" + dbgHeadJumpWasFox
-                        + " W=" + dbgHeadJumpWPressed
-                        + " S=" + dbgHeadJumpSPressed
-                        + " hDist=" + String.format("%.4f", _hDist)
-                        + " duration=" + _duration + "tk"
-                        + " maxH=" + String.format("%.3f", _maxHeight)
-                        + " accumAddH=" + String.format("%.4f", dbgHeadJumpAccumAddH)
-                        + " avgAddH=" + String.format("%.5f", _avgAddH)
-                        + " addCnt=" + dbgHeadJumpAddCount
-                        + " startPitch=" + String.format("%.1f", dbgHeadJumpStartPitch)
-                        + " yaw-landDeg=" + String.format("%.1f", _yawDiff)
-                        + " landPos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
-                        + ")");
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
                 // 🔴 fix #19 (2026-05-08): 헤드점프 종료 직후 1-tick 플래그 set.
@@ -3636,48 +3579,6 @@ public final class SmartMovingClientState {
     public void resetHeightOffset() {
         // 근사 이식 — 원본과 차이: boundingBox.minY/height 조작 생략 (1.21.1 API 제약)
         this.heightOffset = 0F;
-    }
-
-    /**
-     * 🔴 디버그 헬퍼 (사용자 요청): SM 모든 상태 dump.
-     *   호출 위치: standupIfPossible 진입, 비행 진입/종료 엣지.
-     *   콘솔 출력 → 사용자가 복사해서 보고.
-     */
-    private void smDebugDumpState(ClientPlayerEntity player, String tag, String extra) {
-        System.out.println("[SM-FLY-DEBUG] === " + tag + " === " + extra);
-        System.out.println("  entity.y=" + player.getY()
-                + " bb=" + player.getBoundingBox()
-                + " onGround=" + player.isOnGround()
-                + " fallDistance=" + player.fallDistance);
-        System.out.println("  vanilla: abilities.flying=" + player.getAbilities().flying
-                + " isSneaking=" + player.isSneaking()
-                + " isInSneakingPose=" + player.isInSneakingPose()
-                + " pose=" + player.getPose()
-                + " velocity=" + player.getVelocity());
-        System.out.println("  dim.h=" + player.getDimensions(player.getPose()).height()
-                + " dim.eye=" + player.getDimensions(player.getPose()).eyeHeight()
-                + " standingEyeHeight=" + player.getStandingEyeHeight());
-        System.out.println("  SM: heightOffset=" + heightOffset
-                + " isFlying=" + isFlying
-                + " isLevitating=" + isLevitating
-                + " restoreFromFlying=" + restoreFromFlying);
-        System.out.println("  SM small: isCrawling=" + isCrawling
-                + " isClimbCrawling=" + isClimbCrawling
-                + " isHeadJumping=" + isHeadJumping
-                + " isSliding=" + isSliding
-                + " isSwimming_sm=" + isSwimming_sm
-                + " isDiving=" + isDiving
-                + " isDipping=" + isDipping);
-        System.out.println("  SM climb: isClimbing=" + isClimbing
-                + " isClimbJumping=" + isClimbJumping
-                + " isCeilingClimbing=" + isCeilingClimbing);
-        System.out.println("  SM input: isSlow=" + isSlow
-                + " isFast=" + isFast
-                + " isJumping=" + isJumping
-                + " sneakHeldDuringClimb=" + sneakHeldDuringClimb
-                + " grab=" + SmartMovingKeys.grab.isPressed()
-                + " mustCrawl=" + mustCrawl
-                + " wantCrawl=" + wantCrawl);
     }
 
     /**

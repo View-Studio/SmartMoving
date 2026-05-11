@@ -322,34 +322,7 @@ public final class SmartMovingMover {
         //   거리 1.7.10/1.12.2 더 멀리" 보고와 정확 일치.
 
         // 원본 L718: moveFlying(strafe, forward, rawSpeed * speedFactor) — motion 에 ADD.
-        // [HEADBROAD-DBG] 헤드점프 진행 중 motion ADD 누적 추적.
-        Vec3d _preAddVel = sm.isHeadJumping ? player.getVelocity() : null;
-        // 🔴 (2026-05-09) 신속+sprint 속도 측정 dump — 사용자 보고 "원본과 다름" 진단용.
-        //   ground onGround=true && sprint=true && SPEED potion 활성 시 매 10 tick.
-        //   measure: rawSpeed/speedFactor/moveFlying speed/preMotion/postMotion/horizontalDamping.
-        //   원본 1.7.10 SM 활성 ground sprint+speed1 W 누름 = motion ADD 0.1764, terminal 0.388.
-        boolean _sprintSpeedDbg = player.isOnGround() && player.isSprinting()
-                && player.getStatusEffect(net.minecraft.entity.effect.StatusEffects.SPEED) != null
-                && !sm.isHeadJumping && !sm.isSliding && !sm.isCrawling;
-        Vec3d _preSprintVel = _sprintSpeedDbg ? player.getVelocity() : null;
-        float _preSprintSpeedFactor = _sprintSpeedDbg ? speedFactor : 0F;
-        float _preSprintRawSpeed = _sprintSpeedDbg ? rawSpeed : 0F;
         applyLandMoveFlying(player, moveStrafing, moveForward, rawSpeed * speedFactor);
-        // 🔴 (2026-05-09) ADD 적용 후 vel 캡처 — move() 직전 = damping 전 motion (= 실제 이동량 추정).
-        Vec3d _postAddVelSprint = _sprintSpeedDbg ? player.getVelocity() : null;
-        // 🔴 (2026-05-09) move() 호출 직전 위치 캡처 — 실제 이동량 측정용.
-        double _preMoveX = _sprintSpeedDbg ? player.getX() : 0D;
-        double _preMoveZ = _sprintSpeedDbg ? player.getZ() : 0D;
-        if (sm.isHeadJumping && _preAddVel != null) {
-            Vec3d _postAddVel = player.getVelocity();
-            double _addX = _postAddVel.x - _preAddVel.x;
-            double _addZ = _postAddVel.z - _preAddVel.z;
-            double _addH = Math.sqrt(_addX * _addX + _addZ * _addZ);
-            sm.dbgHeadJumpAccumAddH += _addH;
-            sm.dbgHeadJumpAddCount++;
-            // maxY 추적.
-            if (player.getY() > sm.dbgHeadJumpMaxY) sm.dbgHeadJumpMaxY = player.getY();
-        }
 
         // 원본 L655: vanilla move() — 위치 갱신.
         player.move(MovementType.SELF, player.getVelocity());
@@ -366,51 +339,6 @@ public final class SmartMovingMover {
         if (Math.abs(newZ) < 0.003D) newZ = 0.0D;
 
         player.setVelocity(newX, newY, newZ);
-
-        // 🔴 (2026-05-09) sprint+speed dump 출력. 매 10 tick 만 (= log spam 차단).
-        if (_sprintSpeedDbg && _preSprintVel != null) {
-            long _tick = player.getWorld().getTime();
-            if (_tick % 10 == 0) {
-                Vec3d _postAddVel = player.getVelocity();   // = setLandMotions 후 (= terminal cycle).
-                double _addX = _postAddVel.x - _preSprintVel.x;
-                double _addZ = _postAddVel.z - _preSprintVel.z;
-                double _preH = Math.sqrt(_preSprintVel.x * _preSprintVel.x + _preSprintVel.z * _preSprintVel.z);
-                double _postH = Math.sqrt(_postAddVel.x * _postAddVel.x + _postAddVel.z * _postAddVel.z);
-                net.minecraft.entity.effect.StatusEffectInstance _spd = player.getStatusEffect(
-                        net.minecraft.entity.effect.StatusEffects.SPEED);
-                int _amp = _spd != null ? _spd.getAmplifier() : -1;
-                // 🔴 (2026-05-09) preMoveH = ADD 후 move() 직전 motion (= damping 전, 실제 이동량 추정).
-                double _preMoveH = _postAddVelSprint != null
-                        ? Math.sqrt(_postAddVelSprint.x * _postAddVelSprint.x + _postAddVelSprint.z * _postAddVelSprint.z)
-                        : 0D;
-                // 🔴 (2026-05-09) tickDeltaH = 매 tick 실제 위치 이동량 (getX() - prevX).
-                //   prevX/Z 는 vanilla baseTick() 시작 시점에 getX()/Z() 로 set → 이번 tick 안의 모든 위치 변화량.
-                double _tickDeltaX = player.getX() - player.prevX;
-                double _tickDeltaZ = player.getZ() - player.prevZ;
-                double _tickDeltaH = Math.sqrt(_tickDeltaX * _tickDeltaX + _tickDeltaZ * _tickDeltaZ);
-                // 🔴 (2026-05-09) moveDeltaH = 이번 move() 호출 1회로 인한 위치 변화량 (= ADD 적용 후 motion 의 실효).
-                double _moveDeltaX = player.getX() - _preMoveX;
-                double _moveDeltaZ = player.getZ() - _preMoveZ;
-                double _moveDeltaH = Math.sqrt(_moveDeltaX * _moveDeltaX + _moveDeltaZ * _moveDeltaZ);
-                System.out.println("[SPRINT-SPEED-DBG] tick=" + _tick
-                        + " speedAmp=" + _amp
-                        + " isFast=" + sm.isFast
-                        + " moveFwd=" + String.format("%.4f", moveForward)
-                        + " moveStr=" + String.format("%.4f", moveStrafing)
-                        + " rawSpeed=" + String.format("%.6f", _preSprintRawSpeed)
-                        + " speedFactor=" + String.format("%.4f", _preSprintSpeedFactor)
-                        + " moveFlySpd=" + String.format("%.6f", _preSprintRawSpeed * _preSprintSpeedFactor)
-                        + " hDamping=" + String.format("%.4f", horizontalDamping)
-                        + " preH=" + String.format("%.5f", _preH)
-                        + " preMoveH=" + String.format("%.5f", _preMoveH)
-                        + " postH=" + String.format("%.5f", _postH)
-                        + " moveDeltaH=" + String.format("%.5f", _moveDeltaH)
-                        + " tickDeltaH=" + String.format("%.5f", _tickDeltaH)
-                        + " ADD=(" + String.format("%.5f", _addX) + "," + String.format("%.5f", _addZ) + ")"
-                        + " getMS=" + String.format("%.5f", player.getMovementSpeed())
-                        + " potionFactor=" + String.format("%.4f", getPotionSpeedFactor(player)));
-            }
-        }
 
         return true;
     }

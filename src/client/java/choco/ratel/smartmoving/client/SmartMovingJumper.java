@@ -193,26 +193,6 @@ public final class SmartMovingJumper {
         // === D-4 (원본 L2014-L2015) — getJumpSpeed + isJumpingEnabled ===
         int speed = SmartMovingConfig.getJumpSpeed(sm.isStanding, sm.isSlow, isRunning, sm.isFast, angle);
         boolean enabled = cfg.isJumpingEnabled(speed, type);
-        // [HEADBROAD-DBG-T1] tryJump 진입 (HEAD_UP / SLIDE_DOWN 만) — speed/방향/motion 추적.
-        if (type == SmartMovingConfig.JUMP_TYPE_HEAD_UP
-                || type == SmartMovingConfig.JUMP_TYPE_SLIDE_DOWN) {
-            String typeName = (type == SmartMovingConfig.JUMP_TYPE_HEAD_UP) ? "HEAD_UP" : "SLIDE_DOWN";
-            net.minecraft.util.math.Vec3d _vel = player.getVelocity();
-            // 방향 비교 — yaw vs jumpMotion vs velocity 의 deg.
-            //   원본: yaw=0 ↔ -Z 방향. atan2(-jumpMotionX, jumpMotionZ)*180/pi - 180 = yaw 와 비교.
-            double _jumpMotionAngleDeg = Math.toDegrees(Math.atan2(-sm.jumpMotionX, sm.jumpMotionZ));
-            double _velAngleDeg = (_vel.x == 0 && _vel.z == 0) ? 0
-                    : Math.toDegrees(Math.atan2(-_vel.x, _vel.z));
-            System.out.println("[HEADBROAD-DBG-T1] type=" + typeName
-                    + " speed=" + speed + " (Sprint=0/Run=1/Walk=2/Sneak=3/Stand=4)"
-                    + " up=" + up + " head=" + head + " angle=" + angle + " enabled=" + enabled
-                    + " preMotion=" + _vel
-                    + " jumpMotion=(" + sm.jumpMotionX + "," + sm.jumpMotionZ + ")"
-                    + " yaw=" + String.format("%.1f", player.getYaw())
-                    + " jumpMotionDeg=" + String.format("%.1f", _jumpMotionAngleDeg)
-                    + " velDeg=" + String.format("%.1f", _velAngleDeg)
-                    + " isFast=" + sm.isFast + " isRunning=" + isRunning);
-        }
 
         // === enabled 게이트 (원본 L2016 if(enabled)) — F-1 감사 정정 (세션 21) ===
         //   D-5 ~ D-16 모든 점프 처리 블록은 enabled 안쪽. 사용자가 sub-jump 비활성 (예:
@@ -277,15 +257,6 @@ public final class SmartMovingJumper {
                     double newAngle = factor * normalAngle;
                     double newVerticalMotion = totalMotion * Math.sin(newAngle);
                     double newHorizontalMotion = totalMotion * Math.cos(newAngle);
-                    // [HEADBROAD-DBG-J3] head 재계산 — factor / normalAngle / newAngle 분석.
-                    System.out.println("[HEADBROAD-DBG-J3] hJF=" + horizontalJumpFactor + " vJF=" + verticalJumpFactor
-                            + " hM(pre)=" + String.format("%.4f", horizontalMotion)
-                            + " vM(pre)=" + String.format("%.4f", verticalMotion)
-                            + " normalDeg=" + String.format("%.2f", Math.toDegrees(normalAngle))
-                            + " factor=" + factor
-                            + " newDeg=" + String.format("%.2f", Math.toDegrees(newAngle))
-                            + " newH=" + String.format("%.4f", newHorizontalMotion)
-                            + " newV=" + String.format("%.4f", newVerticalMotion));
                     if (maxHorizontalMotion != null)
                         maxHorizontalMotion = maxHorizontalMotion * (newHorizontalMotion / horizontalMotion);
                     verticalMotion = newVerticalMotion;
@@ -511,45 +482,7 @@ public final class SmartMovingJumper {
                     sm.headJumpCharge++;
                 } else {
                     if (sm.headJumpCharge > 0 && player.isOnGround()) {
-                        // [HEADBROAD-DBG-HJ-FIRE] HEAD_UP 발사 시점 dump — 거리/방향 분석용.
-                        long _hjTick = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-                        net.minecraft.util.math.Vec3d _preHj = player.getVelocity();
-                        double _preHjAngle = (_preHj.x == 0 && _preHj.z == 0) ? 0
-                                : Math.toDegrees(Math.atan2(-_preHj.x, _preHj.z));
-                        // 발사 시점 위치 + yaw + pitch + 사용자 입력 + 누적 ADD 초기화.
-                        sm.dbgHeadJumpStartX = player.getX();
-                        sm.dbgHeadJumpStartZ = player.getZ();
-                        sm.dbgHeadJumpStartY = player.getY();
-                        sm.dbgHeadJumpStartYaw = player.getYaw();
-                        sm.dbgHeadJumpStartPitch = player.getPitch();
-                        sm.dbgHeadJumpStartTick = _hjTick;
-                        sm.dbgHeadJumpMaxY = player.getY();
-                        sm.dbgHeadJumpWasFox = false;
-                        sm.dbgHeadJumpAccumAddH = 0.0;
-                        sm.dbgHeadJumpAddCount = 0;
-                        sm.dbgHeadJumpWPressed = player.input.movementForward > 0F;
-                        sm.dbgHeadJumpSPressed = player.input.movementForward < 0F;
-                        System.out.println("[HEADBROAD-DBG-HJ-FIRE] tick=" + _hjTick
-                                + " charge=" + sm.headJumpCharge
-                                + " preMotion=" + _preHj
-                                + " preDeg=" + String.format("%.1f", _preHjAngle)
-                                + " yaw=" + String.format("%.1f", player.getYaw())
-                                + " pitch=" + String.format("%.1f", player.getPitch())
-                                + " W=" + sm.dbgHeadJumpWPressed
-                                + " S=" + sm.dbgHeadJumpSPressed
-                                + " strafe=" + player.input.movementSideways
-                                + " pos=(" + String.format("%.3f,%.3f,%.3f", player.getX(), player.getY(), player.getZ())
-                                + ") isFast=" + sm.isFast);
                         tryJump(player, sm, HEAD_UP, null, null, null);
-                        net.minecraft.util.math.Vec3d _postHj = player.getVelocity();
-                        double _postHjAngle = Math.toDegrees(Math.atan2(-_postHj.x, _postHj.z));
-                        double _postHjHorizontal = Math.sqrt(_postHj.x * _postHj.x + _postHj.z * _postHj.z);
-                        System.out.println("[HEADBROAD-DBG-HJ-POST] tick=" + _hjTick
-                                + " postMotion=" + _postHj
-                                + " postDeg=" + String.format("%.1f", _postHjAngle)
-                                + " postH=" + String.format("%.4f", _postHjHorizontal)
-                                + " yaw=" + String.format("%.1f", player.getYaw())
-                                + " yaw-postDeg=" + String.format("%.1f", player.getYaw() - _postHjAngle));
                     }
                     sm.headJumpCharge = 0;
                 }
