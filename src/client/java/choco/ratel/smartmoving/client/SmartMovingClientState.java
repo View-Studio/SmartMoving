@@ -3800,7 +3800,32 @@ public final class SmartMovingClientState {
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
 
         if (!groundClose && !sneakPressed) {
+            // 🔴 fix #88 (2026-05-12): 헤드점프 종료 직후 블록 모서리 시나리오 잠김 BUG.
+            //   사용자 보고 — 헤드점프 착지 시 블록 모서리 걸치며 → forward → 아래 ground 착지 →
+            //     모델 ground 아래 잠김.
+            //   진단 dump (research_headjump_landing_edge.md):
+            //     모서리 시점 박스 발 = 모서리 top y, 박스 X-Z 영역은 모서리 *외부* → getGapUnderneight
+            //     결과 = 1.0 (= 박스 영역 안 가장 깊은 ground 까지 거리). groundClose=false → standUp
+            //     분기 미매치 → resetHO 분기 매치.
+            //   resetHO 는 heightOffset=0 reset 만. POSE/dim/entity.y 미보정. POSE=SLIDING 잔존 →
+            //     mixin offset 활성 → 박스 발 = entity.y+1 (= 모서리 ground) 정상. 그러나 *모델
+            //     origin = entity.y* (= ground -1m) → 모델 1m 잠김.
+            //   비행 종료 + 공중 + sneak release 시도 동일 분기 매치하지만 그때는 POSE=STANDING
+            //     이라 mixin offset 차단 → 박스/모델 정렬 → 잠김 X.
+            //   해결: standUp 분기와 동일 후처리 (POSE=STANDING 강제 + dim 갱신 + entity.y +1m
+            //     push). 가드 = justEndedHeadJump + heightOffset==-1F + 모든 SM phase 종료 →
+            //     헤드점프 종료 직후 1 tick 안 + 모서리 시나리오 만 매치.
+            boolean _wasSmallBox = (this.heightOffset == -1F);
             resetHeightOffset();
+            if (_wasSmallBox && this.justEndedHeadJump
+                    && !isHeadJumping && !isSliding && !isCrawling && !isCrawlClimbing
+                    && !isSwimming_sm && !isDiving && !isFlying && !isLevitating) {
+                player.setPose(net.minecraft.entity.EntityPose.STANDING);
+                player.calculateDimensions();
+                player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                player.lastRenderY += 1.0;
+                player.prevY += 1.0;
+            }
         } else if (standUpPossible && !(sneakPressed && grabPressed)) {
             standUp(player, gapUnderneight);
             // 🔴 fix #58 (2026-05-10, dump 분석 결과 — root cause 확정):
