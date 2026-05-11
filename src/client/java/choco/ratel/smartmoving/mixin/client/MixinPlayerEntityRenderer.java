@@ -61,9 +61,13 @@ public class MixinPlayerEntityRenderer {
         //   변경: 모든 player 처리. 기존 remote +0.125 (= 지면 뚫림 방지) 는 별도 case.
         SmartMovingClientState sm = SmartMovingClientState.get(entity);
 
-        // 헤드점프: heightOffset Y 오프셋 적용 (우선순위 높음)
+        // 헤드점프: 모델 origin = entity.y. 박스 처리 (mixin offset 활성 + POSE=SLIDING) 로
+        //   box.minY = entity.y +1m. 추가 -1m offset 적용 시 모델 머리가 박스 발 보다 0.5m 아래
+        //   = 박스 밖 아래 (사용자 보고 "1칸 낮음", 2026-05-11).
+        //   isSliding 와 동일 패턴 (= entity.y origin) → 모델 root = entity.y +1.501m = 박스 안.
+        //   feedback_sliding_entity_y_push_offset_zero.md 참조.
         if (sm.isHeadJumping && sm.heightOffset != 0f) {
-            cir.setReturnValue(new Vec3d(0D, sm.heightOffset, 0D));
+            cir.setReturnValue(Vec3d.ZERO);
             return;
         }
 
@@ -698,10 +702,14 @@ public class MixinPlayerEntityRenderer {
             sm.smStandardFadeTimePrev = animationProgress;
         }
 
-        // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (C-42, SmartMovingModel.md 10번 분기)
+        // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (원본 SmartMovingModel L508).
+        // 비행 분기와 동일 패턴: head pivot 기준 회전 (translate ±1.5) + scale(-1,-1,1) 부호 반전 (-theta).
+        //   feedback_rotation_pivot_pattern.md / feedback_render_scale_negation.md.
         if (sm.isHeadJumping) {
             float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(theta));
+            matrices.translate(0f, 1.5f, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
+            matrices.translate(0f, -1.5f, 0f);
             sm.smOuterTiltX = theta;
         }
 

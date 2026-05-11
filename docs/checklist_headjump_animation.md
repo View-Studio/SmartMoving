@@ -122,8 +122,18 @@
 
 ## 4. 작업 순서
 
+### 진행 중 작업
+- [x] **회전 중심점 fix (2026-05-11, 사용자 보고 "모델 전체가 아래로 회전")** — `MixinPlayerEntityRenderer.sm_setupTransforms` L702-706 헤드점프 X 기울기 분기를 비행 분기와 동일 패턴으로 정정.
+  - (a) `translate(0, +1.5, 0)` / `translate(0, -1.5, 0)` head pivot 회전 중심 보정 추가 (`feedback_rotation_pivot_pattern.md`).
+  - (b) 회전 부호 `+theta` → `-theta` (= `scale(-1,-1,1)` 좌표계 보정, `feedback_render_scale_negation.md`).
+  - 원본 비행 (L484-485) 과 헤드점프 (L507-508) 모두 `bipedOuter.rotateAngleX = (Quarter - verticalAngle)` 동일 식 → 우리 매핑도 동일 패턴이어야 1:1.
+- [x] **모델 높이 fix (2026-05-11, 사용자 보고 "모델 1칸 낮음")** — `MixinPlayerEntityRenderer.sm_getPositionOffset` 헤드점프 분기를 `Vec3d.ZERO` 반환으로 변경.
+  - 기존: `new Vec3d(0, heightOffset, 0)` = `(0, -1, 0)` → 박스 발 (= `entity.y +1m`) 보다 모델 머리가 0.5m 아래 = 박스 밖 아래.
+  - 변경 후: 모델 origin = `entity.y` → 모델 root = `entity.y +1.501m` = 박스 안 (= 슬라이딩과 동일 패턴).
+  - `feedback_sliding_entity_y_push_offset_zero.md` 참조 — isSliding (= ZERO) 와 일관성. 박스 처리 (mixin offset / POSE=SLIDING) 는 그대로 둠 (기능 영역 보존).
+
 ### 즉시 작업 (현재 비어있음)
-*없음* — 애니메이션 영역은 이미 완벽 1:1 매핑됨.
+*없음* — 회전 중심점 fix 후 추가 디테일은 인게임 검증 결과 대기.
 
 ### 인게임 검증 (사용자 작업)
 1. 헤드점프 인게임 시각 검증:
