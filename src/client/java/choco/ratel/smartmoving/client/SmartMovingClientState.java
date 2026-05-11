@@ -2277,8 +2277,17 @@ public final class SmartMovingClientState {
             if (isSliding) {
                 Vec3d _vel2563 = player.getVelocity();
                 double horizontalSpeedSquare = _vel2563.x * _vel2563.x + _vel2563.z * _vel2563.z;
+                // 🔴 fix #87 (2026-05-12, BUG = "슬라이딩 phase + 비행 진입 시 cycle"):
+                //   vanilla 1.21.1 ClientPlayerEntity.tickMovement 안 신규 @AUTOLAND 분기
+                //   (`isOnGround() && abilities.flying → flying=false`) 가 슬라이딩 phase 시 매 frame
+                //   매치 → @TOGGLE ↔ @AUTOLAND cycle.
+                //   원본 1.7.10 vanilla 에는 @AUTOLAND 분기 없음 (또는 다른 동작) 이라 BUG 안 됨.
+                //   원본 SmartMovingSelf.wouldWantCrawl (L2419) 의 `!isFlying` 가드 패턴 차용 — 비행
+                //   진입 시 SM phase 자동 종료 → 박스/POSE STANDING 전환 → @AUTOLAND 매치 X → 비행 안정.
+                //   엎드리기는 wouldWantCrawl 가드로 자동 처리 (dump 검증). 슬라이딩 동일 path 보강.
                 if (!sneakPressedRaw
-                        || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
+                        || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01
+                        || isFlying) {
                     isSliding   = false;
                     // 🔴 fix #48 (2026-05-09, 사용자 보고 "원본은 키 떼도 쭉, 우리는 키 떼면 끊김"):
                     //   원본 SlideToHeadJumping 자동 전환 (L2546) 은 ~10 tick (vy<0 + fallDistance>0.05) 후
@@ -2305,7 +2314,14 @@ public final class SmartMovingClientState {
                     //   해결: 헤드점프 진행 중 (= 여우무빙) 시 toCrawling() skip → wasCrawling=false 잔존
                     //     → L2768 B-35 미매치 → heightOffset=-1F 잔존 → 다음 tick handleCrash 시
                     //     standupIfPossible 가드 통과 → standUp 매치 → 정상 push up + dim 갱신.
-                    if (!isHeadJumping) {
+                    // 🔴 fix #87 v2 (2026-05-12, BUG 추적): fix #87 적용 후 slide→fly transition 시
+                    //   *1 frame CRAWL 자세 플리킹*. 원인 = toCrawling() 호출 → isCrawling=T 1 tick →
+                    //   setupTransforms 매 frame 6회 호출 중 isCr=T 시점 매치 = CRAWL 분기 (엎드리기 자세).
+                    //   비행 진입 시 toCrawling 도 skip → isCr=F 유지 → setupTransforms 다음 frame
+                    //   즉시 FLY 분기 → 플리킹 X.
+                    //   wouldWantCrawl 의 `!isFlying` 가드 (원본 L2419) 다음 tick 에 어차피 isCr=F
+                    //   강제하므로 toCrawling 호출 효과 1 tick 후 사라짐 → skip 해도 동일 결과.
+                    if (!isHeadJumping && !isFlying) {
                         wasCrawling = toCrawling();
                     }
                     // 🔴 fix #62 v2 (2026-05-10, dump 분석 — server 박스 정상 확인 후):
