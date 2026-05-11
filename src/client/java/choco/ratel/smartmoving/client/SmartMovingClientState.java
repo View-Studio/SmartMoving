@@ -767,6 +767,12 @@ public final class SmartMovingClientState {
     public float smHeadJumpTiltX_prev = 0f;       // 이전 프레임 헤드점프 X 회전 lerp 결과
     public float smHeadJumpFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 발사 → 자동 cycle 진입 시 시각 수평 강제 플래그.
+    //   자체 슬라이딩 발사 분기 (L2055+) 에서 true set. 헤드점프 종료 시 (isHeadJumping false 전환) reset.
+    //   setupTransforms 헤드점프 분기에서 검사 → thetaTarget=π/2 (= Quarter) 고정 강제.
+    //   원본 isSlide 분기 (= rotateAngleX = Quarter 즉시 적용) 시각 1:1.
+    public boolean wasSelfSlideFire = false;
+
     /**
      * 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 그대로 차용 (head 만 vanilla).
      * 비행과 별개 prev 필드 (서로 다른 시점 활성, 같은 필드 공유 시 분기 전환 시 lerp 부정확).
@@ -2052,6 +2058,26 @@ public final class SmartMovingClientState {
             boolean _slideGate_match = cfg0.slide && cfg0.enabled
                     && _slideGate_grab && _slideGate_sprintOk && !isCrawling
                     && sneakKeyStartPressed && !isDipping;
+            // [SLIDE-GATE-DBG] (2026-05-12) 자체 슬라이딩 발사 분기 조건 추적.
+            //   사용자 진짜 여우무빙 입력 (w+sprint+grab+jump release + sneak) 시 매치 검증.
+            //   가드: grab 누른 동안만 dump (= 짧은 기간, spam 차단).
+            if (_slideGate_grab) {
+                System.out.println("[SLIDE-GATE-DBG] t=" + player.getWorld().getTime()
+                        + " match=" + _slideGate_match
+                        + " slide=" + cfg0.slide + " enab=" + cfg0.enabled
+                        + " grab=" + _slideGate_grab
+                        + " wasGSprint=" + wasGroundSprinting
+                        + " wasRun=" + wasRunning + " isRun=" + isRunning(player)
+                        + " onG=" + player.isOnGround()
+                        + " sprintOk=" + _slideGate_sprintOk
+                        + " isCrawl=" + isCrawling
+                        + " sneakStart=" + sneakKeyStartPressed
+                        + " sneakHeld=" + player.isSneaking()
+                        + " isDip=" + isDipping
+                        + " isHJ=" + isHeadJumping
+                        + " wasHJ=" + wasHeadJumping
+                        + " hjCharge=" + String.format("%.2f", headJumpCharge));
+            }
             if (cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
                     && (wasGroundSprinting
@@ -2115,6 +2141,15 @@ public final class SmartMovingClientState {
                 SmartMovingJumper.tryJump(player, this, SmartMovingJumper.SLIDE_DOWN,
                                            false, wasRunning, null);   // 원본 L2557.
                 this.isFast = _savedIsFast;
+                // 🔴 fix #81 (2026-05-12, 사용자 보고 "여우무빙 진입 시 몸 수평 안 됨"):
+                //   자체 슬라이딩 발사 → 같은 tick L2271 자동 cycle 즉시 매치 → isHeadJumping=true 진입.
+                //   이때 시각상 일반 헤드점프 회전 (= thetaTarget = π/2 - currentVerticalAngle, 점진 lerp)
+                //   적용 → 12 tick 회전 변화. 사용자 보고 BUG.
+                //   원본은 *자체 슬라이딩 발사 시점부터 isSliding 분기 매치* (= bipedOuter.rotateAngleX
+                //   = Quarter 즉시) 시각 → 수평 유지.
+                //   해결 (시각 영역만): wasSelfSlideFire 플래그 set → setupTransforms 헤드점프 분기에서
+                //   thetaTarget=Quarter 고정 강제 → 수평 유지. 기능 영역 (= state/cycle/fall reset) 무영향.
+                this.wasSelfSlideFire = true;
                 // 🔴 fix #29 (2026-05-08, 사용자 보고 "슬라이딩 중 떨어질 때 덜컹"):
                 //   진입 시점 cameraY=1.62 (= 직전 standing 잔존) vs 새 dim eye=0.62 →
                 //   vanilla updateEyeHeight 0.5 step lerp 으로 N tick 추격 → 카메라 시점 ~1m
@@ -2185,6 +2220,9 @@ public final class SmartMovingClientState {
             //   false, true)` 호출 연결. 원본은 updateEntityActionState 내부에서 별도 위치
             //   호출이나 1.21.1 단일 위치 + 근사 이식이라 여기서 직접 호출.
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
+                // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 fire 플래그 reset — 헤드점프 종료 시.
+                //   다음 헤드점프 발사 시 일반 시각 (= thetaTarget 점진 lerp) 유지.
+                this.wasSelfSlideFire = false;
                 handleCrash(player, cfg0.headFallDamageStartDistance, cfg0.headFallDamageFactor);
                 restoreFromFlying = true;
                 // 🔴 fix #19 (2026-05-08): 헤드점프 종료 직후 1-tick 플래그 set.
@@ -2242,12 +2280,29 @@ public final class SmartMovingClientState {
                     player.fallDistance = 0F;
                 }
             }
+            // [SLIDE-TO-HJ-DBG] (2026-05-12) 자동 cycle (Slide→HeadJumping) 매치 검사.
+            //   isSliding 일 때만 dump (= 분기 진입 시).
+            if (isSliding) {
+                boolean _fallMatch = player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE;
+                boolean _allMatch = _fallMatch && !wasHeadJumping && this.slideToHeadCooldown == 0;
+                System.out.println("[SLIDE-TO-HJ-DBG] t=" + player.getWorld().getTime()
+                        + " isSld=" + isSliding
+                        + " fallDist=" + String.format("%.4f", player.fallDistance)
+                        + " threshold=" + String.format("%.4f", SLIDE_TO_HEADJUMPING_FALL_DISTANCE)
+                        + " fallMatch=" + _fallMatch
+                        + " wasHJ=" + wasHeadJumping
+                        + " cooldown=" + this.slideToHeadCooldown
+                        + " allMatch=" + _allMatch);
+            }
             if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE
                     && !wasHeadJumping
                     && this.slideToHeadCooldown == 0) {
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
+                // [SLIDE-TO-HJ-DBG] 매치 결과 dump.
+                System.out.println("[SLIDE-TO-HJ-DBG] t=" + player.getWorld().getTime()
+                        + " MATCHED → isSld=false isHJ=true isAero=true");
             }
 
             // B-Slide-Stop (2026-05-04): 원본 L2563-L2567 sneak 떼기 / 속도² 임계 종료 분기.
@@ -2265,6 +2320,14 @@ public final class SmartMovingClientState {
             if (isSliding) {
                 Vec3d _vel2563 = player.getVelocity();
                 double horizontalSpeedSquare = _vel2563.x * _vel2563.x + _vel2563.z * _vel2563.z;
+                // [SS-STOP-DBG] (2026-05-12) SS-SlideStop 매치 검사 진입 시.
+                System.out.println("[SS-STOP-DBG] t=" + player.getWorld().getTime()
+                        + " isSld=" + isSliding
+                        + " sneakRaw=" + sneakPressedRaw
+                        + " hSpd²=" + String.format("%.5f", horizontalSpeedSquare)
+                        + " stopFactor=" + String.format("%.4f", cfg0.slidingSpeedStopFactor * 0.01)
+                        + " stopBySneak=" + (!sneakPressedRaw)
+                        + " stopBySpeed=" + (horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01));
                 if (!sneakPressedRaw
                         || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
                     isSliding   = false;
