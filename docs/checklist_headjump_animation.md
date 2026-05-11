@@ -60,27 +60,43 @@
 
 ## 2. 잠재 누락 항목 — *수정 보류* (사용자 확인 / 인게임 보고 대기)
 
-### ⚠️ §2-A — `overGroundBlock.getMaterial().isSolid()` 필터 누락 *(수정 보류)*
+### ✅ §2-A — `overGroundBlock.getMaterial().isSolid()` 필터 *(해소, 2026-05-11)*
 
-#### 원본 의도
-원본 `getOverGroundBlockId` = 플레이어 *중심 1-column* (x, z = floor(posX), floor(posZ)) down-scan.
-반면 `smallOverGroundHeight` = `getMaxPlayerSolidBetween` (= 플레이어 horizontal AABB 0.6×0.6 영역) 스캔.
+**진짜 원인 발견 + fix 완결**. 디버그 dump 측정 결과 *에지 케이스* 아닌 *항상 발생하는 큰 차이*.
 
-**에지 케이스**: 플레이어가 블록 경계에 걸친 상태:
-- AABB 한쪽 column 에만 solid → `smallOverGroundHeight < 5F`.
-- 중심 column 자체는 air/leaves/water 등 non-solid → `overGroundBlock.isSolid() = false` → clamp 적용 X.
+#### 원본 정확 동작 (재검토)
+원본 `getOverGroundBlockId` (SmartMovingBase.java L862-882):
+```java
+int y = floor(boundingBox.minY);
+for(; y >= minY; y--) {
+    Block block = world.getBlock(x, y, z);  // 1.7.10 air 도 non-null
+    if(block != null) return block;          // 항상 true → 첫 iteration 즉시 반환
+}
+```
 
-#### 현재 매핑 동작
-`sm.smallOverGroundHeight < 5f` 만 검사 → height 가 < 5 이기만 하면 *항상* clamp 적용 → 에지 케이스에서 *원본과 다른 자세* (팔이 한 박자 일찍 모임).
+→ 박스 발 위치 (`floor(bb.minY)`) 블록 1회 검사 후 반환. **헤드점프 박스 발 = 공중 (mixin offset 활성 → entity.y+1m) → air → isSolid=false → 원본 clamp 미적용**.
 
-#### 왜 수정 보류
-- 정정하려면 `SmartMovingClientState.headJumpOverGroundBlock` 새 필드 + `MixinPlayerEntityModelClient` 의 매 tick inject 에서 `computeOverGroundBlock` 호출 + 갱신.
-- 새 state 필드 + tick 흐름 변경 = *기능 영역 침범*. 사용자 명시 "헤드점프 기능 자체 = 완결, 절대 건드리지 말 것".
-- 시각적 영향은 *작은 에지 케이스* — 머리 위 박스 영역 안에 solid + 중심 column 에 non-solid 만 있는 시나리오. 실제 플레이 빈도 매우 낮음.
+#### 디버그 dump 검증 (2026-05-11)
+- `MixinPlayerEntityModelClient.sm_animateHeadJumping` 임시 dump 추가.
+- 일반 헤드점프 + 여우무빙 시나리오 각 1회 측정.
+- **모든 시점 `origIsSolid=false`, `blockId=air`** 확인.
 
-#### 재검토 조건
-- 사용자가 인게임 테스트에서 *팔이 어색하게 일찍 모인다* 보고 시 재검토.
-- 또는 사용자가 명시적으로 "isSolid 필터 추가해도 된다" 승인 시.
+#### fix 적용
+`sm_animateHeadJumping` armFactorZ clamp 조건에 `isOverGroundBlockSolid(player)` 검사 추가:
+```java
+float armFactorZ = smFactor(angle, QUARTER, -QUARTER);
+if (sm.smallOverGroundHeight < 5f && isOverGroundBlockSolid(player)) {
+    armFactorZ = Math.min(armFactorZ, sm.smallOverGroundHeight / 5f);
+}
+```
+
+`isOverGroundBlockSolid` 헬퍼 신규 추가 — 박스 발 위치 단일 검사, 1.21.1 collision shape 비어있지 않음 = isSolid 등가. `AbstractClientPlayerEntity` (멀티 친화).
+
+#### 결과 — 사용자 검증 "잘된다" (2026-05-11)
+하강 시 armFactorZ ≈ 0.9 도달 (= 팔 9π/8 ≈ 202° 가깝게 모임 = 슈퍼맨 두 손 합치는 자세). 기존 매핑 대비 rArmRoll 차이 최대 약 40°.
+
+#### 관련 메모리
+`feedback_headjump_overground_air_is_solid.md`.
 
 ---
 

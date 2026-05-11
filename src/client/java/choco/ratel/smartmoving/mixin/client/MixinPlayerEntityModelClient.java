@@ -7,14 +7,17 @@ import choco.ratel.smartmoving.config.SmartMovingConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Arm;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
@@ -450,7 +453,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (flyingCreative) {
             sm_animateFlying(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
-            sm_animateHeadJumping(sm);
+            sm_animateHeadJumping(sm, player);
         } else {
             // 🔴 (Phase 2 multi BUG-1) fallDistance 직접 검사 → sm.doFallingAnimation (server-relay sync).
             //   vanilla 1.21.1 server 가 remote 의 fallDistance 를 미동기 → 사용자 보고 "낙하 애니 안 보임".
@@ -1314,7 +1317,7 @@ public abstract class MixinPlayerEntityModelClient {
      * bipedOuter X/Y 기울기는 setupTransforms에서 처리.
      * smallOverGroundHeight로 팔 Z 각도 클램프.
      */
-    private void sm_animateHeadJumping(SmartMovingClientState sm) {
+    private void sm_animateHeadJumping(SmartMovingClientState sm, AbstractClientPlayerEntity player) {
         float angle = sm.stats.currentVerticalAngle;
 
         // bendFactor: Factor(angle, Quarter, 0) ∩ Factor(angle, -Quarter, 0)
@@ -1329,9 +1332,18 @@ public abstract class MixinPlayerEntityModelClient {
         // 원본 head world-X = θ/2 → head.pitch = -θ/2 (C-09-2 등가 증명)
         head.pitch = -(QUARTER - angle) / 2f;
 
-        // 팔 Z: Factor(angle, Quarter, -Quarter). 머리 위 고체 블록이면 smallOverGroundHeight/5로 클램프.
+        // 팔 Z: Factor(angle, Quarter, -Quarter). 원본 SmartMovingModel L520-522:
+        //   armFactorZ = Factor(currentVerticalAngle, Quarter, -Quarter);
+        //   if (overGroundBlock != null && overGroundBlock.getMaterial().isSolid())
+        //       armFactorZ = Math.min(armFactorZ, smallOverGroundHeight / 5F);
+        //
+        // 원본 getOverGroundBlockId 는 박스 발 위치 (= floor(bb.minY)) 의 블록 1회 검사 후
+        //   즉시 반환 (= 1.7.10 air 도 non-null 이라 for 첫 iteration 에서 반환).
+        //   박스 발 = 헤드점프 진행 중 일반적으로 공중 → air block → isSolid=false →
+        //   원본 clamp 미적용 (= armFactorZ = factorZraw 그대로).
+        //   feedback_headjump_overground_air_is_solid.md.
         float armFactorZ = smFactor(angle, QUARTER, -QUARTER);
-        if (sm.smallOverGroundHeight < 5f) {
+        if (sm.smallOverGroundHeight < 5f && isOverGroundBlockSolid(player)) {
             armFactorZ = Math.min(armFactorZ, sm.smallOverGroundHeight / 5f);
         }
         rightArm.roll  =  HALF - SIXTEENTH + armFactorZ * EIGHTH;
@@ -1341,6 +1353,42 @@ public abstract class MixinPlayerEntityModelClient {
         float legFactorZ = smFactor(angle, -QUARTER, QUARTER);
         rightLeg.roll =  SIXTYFOURTH * legFactorZ;
         leftLeg.roll  = -SIXTYFOURTH * legFactorZ;
+    }
+
+    /**
+     * 원본 SmartMovingBase.getOverGroundBlockId(distance).getMaterial().isSolid() 1:1 매핑.
+     *
+     * 원본 식 (L862-882):
+     *   int y = floor(bb.minY);
+     *   for(; y >= minY; y--) {
+     *       Block block = world.getBlock(x, y, z);   // 1.7.10 air 도 non-null
+     *       if(block != null) return block;            // 항상 true → 첫 iteration 즉시 반환
+     *   }
+     *   → 박스 발 위치 (= floor(bb.minY)) 의 블록 1회 검사 후 반환.
+     *
+     * 1.21.1 등가:
+     *   - getBlockState(BlockPos) 항상 BlockState 반환 (null 안 됨).
+     *   - isSolid() 등가 = collision shape 비어있지 않음 (air → false, solid → true).
+     *
+     * 헤드점프 진행 동안 박스 발 = 일반적으로 공중 → air → false → clamp 미적용.
+     *
+     * 멀티 친화: AbstractClientPlayerEntity (self + remote 공통).
+     *   박스 발 위치 self/remote 모두 entity.y + 1m (mixin offset 활성, POSE=SLIDING).
+     *   원본 1.7.10 의 esp==null 보정 (y++) 은 우리 매핑에서 박스 발 위치 동일이라 불필요.
+     */
+    private static boolean isOverGroundBlockSolid(AbstractClientPlayerEntity player) {
+        World world = player.getWorld();
+        if (world == null) return false;
+        Box bb = player.getBoundingBox();
+        int x = MathHelper.floor(player.getX());
+        int z = MathHelper.floor(player.getZ());
+        int y = MathHelper.floor(bb.minY);
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        pos.set(x, y, z);
+        BlockState state = world.getBlockState(pos);
+        // 1.21.1 isSolid 등가 (feedback_isFullCube_partial_solid_pattern.md):
+        //   collision shape 비어있지 않음. air → 비어있음 → false. solid → 비어있지 않음 → true.
+        return !state.getCollisionShape(world, pos).isEmpty();
     }
 
     /**
