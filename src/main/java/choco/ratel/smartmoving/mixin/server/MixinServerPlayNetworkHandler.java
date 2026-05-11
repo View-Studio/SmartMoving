@@ -50,7 +50,14 @@ public abstract class MixinServerPlayNetworkHandler {
     private void sm_onPlayerMove_head(PlayerMoveC2SPacket packet, CallbackInfo ci) {
         if (player == null) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
-        sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing;
+        // 🔴 fix #89 (2026-05-12, BUG = "jump 차징 중 sneak 누름 → 1칸 띄어진 엎드리기"):
+        //   isSliding 누락 시 자체 슬라이딩 발사 frame (= client entity.y -=1m) 의 delta y 가
+        //   vanilla "moved too quickly" 검사 매치 → requestTeleport(=PlayerPositionLookS2CPacket
+        //   송신) 발동 → client entity.y +1m 강제 보정 → 후속 SS-SlideStop + fix #62 v2 push 누적
+        //   → 박스 ground+1m 부유 → 사용자 시각 "1칸 띄어진 엎드리기".
+        //   다른 SM phase 가드 (isClimbing/isCrawling/isCrawlClimbing/isCeilingClimbing) 와 동일 패턴.
+        sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing
+                || sm.isSliding;
     }
 
     /**
