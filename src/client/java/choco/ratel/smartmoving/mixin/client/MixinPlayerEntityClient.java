@@ -209,6 +209,25 @@ public abstract class MixinPlayerEntityClient {
      * SM: flying && !cfg.fly → 0.05F (A-30 확인값).
      * 이 메서드를 0.05F로 제한하면 vanilla travel()의 공중 XZ 가속이 억제된다.
      */
+    /**
+     * 🔴 fix #84 (2026-05-12, fix #83 부작용 차단):
+     *   vanilla PlayerEntity.clipAtLedge() = return isSneaking(). fix #83 의 isSliding 추가로
+     *   슬라이딩 시 isSneaking()=true → clipAtLedge()=true → adjustMovementForSneaking 매치 →
+     *   절벽 너머 step-back → 슬라이딩 → 떨어짐 시나리오 차단 BUG.
+     *   해결: 슬라이딩 시 clipAtLedge() override → false 반환. step-back 차단.
+     *   bobbing/footstep/비행 토글 (= fix #83 효과) 는 isSneaking() 만 사용하므로 영향 X.
+     *   @Mixin(PlayerEntity.class) 대상 — ClientPlayerEntity 가 inherit.
+     */
+    @Inject(method = "clipAtLedge", at = @At("HEAD"), cancellable = true)
+    private void sm_clipAtLedge_slidingException(CallbackInfoReturnable<Boolean> cir) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        if (!((Object) this instanceof ClientPlayerEntity player)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        if (sm.isSliding) {
+            cir.setReturnValue(false);
+        }
+    }
+
     @Inject(method = "getOffGroundSpeed", at = @At("HEAD"), cancellable = true)
     private void sm_getOffGroundSpeed(CallbackInfoReturnable<Float> cir) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;

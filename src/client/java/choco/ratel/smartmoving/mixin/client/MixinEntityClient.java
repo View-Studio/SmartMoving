@@ -128,9 +128,16 @@ public abstract class MixinEntityClient {
             return;  // override skip → vanilla isSneaking 그대로
         }
 
+        // 🔴 fix #83 (2026-05-12, 사용자 보고 "슬라이딩 시 화면 흔들림 + 발소리 + 비행 토글 가능"):
+        //   1.21.1 vanilla bobbing/footstep/jump double-tap 비행 토글이 모두 isSneaking() 기반.
+        //   원본 식 (= isSliding 가드 없음) 그대로 매핑하면 슬라이딩 시 isSneaking()=false →
+        //   일반 walking 처리 → 사용자 보고 BUG.
+        //   1.21.1 매핑에서는 isSliding 시 isSneaking()=true 강제 + clipAtLedge override (fix #84)
+        //   로 step-back 부작용 차단.
         boolean result = (sm.isSlow && player.isOnGround())
                 || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
-                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
+                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing)
+                || sm.isSliding;
         cir.setReturnValue(result);
     }
 

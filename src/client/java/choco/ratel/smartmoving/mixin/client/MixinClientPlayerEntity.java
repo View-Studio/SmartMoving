@@ -103,9 +103,11 @@ public abstract class MixinClientPlayerEntity {
             return;  // override skip → vanilla isSneaking 그대로
         }
 
+        // 🔴 fix #83 (2026-05-12): 슬라이딩 시 isSneaking()=true 강제. 자세한 사유 = MixinEntityClient 동일 inject.
         boolean result = (sm.isSlow && player.isOnGround())
                 || (!cfg.sneak && sm.wouldIsSneaking && sm.jumpCharge > 0)
-                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing);
+                || (!cfg.crawlOverEdge && sm.isCrawling && !sm.isClimbing)
+                || sm.isSliding;
         cir.setReturnValue(result);
     }
 

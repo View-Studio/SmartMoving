@@ -2042,7 +2042,6 @@ public final class SmartMovingClientState {
             //     - 원본은 자체 슬라이딩 평가 시점 직전 값=true → 매치.
             //     - 우리 매핑은 갱신 후 false → 미매치 BUG.
             //   해결: wasGroundSprinting 사용 (= L1758 의 갱신 직전 저장 = 직전 tick 값).
-            boolean _slideGate_grab = SmartMovingKeys.grab.isPressed();
             // 🔴 fix #36 (2026-05-08, "앞에 부딪혀 튕김" BUG): `!isHeadJumping` 가드 추가.
             //   fix #32 의 wasGroundSprinting 가 두 case 매치:
             //     case A (= 같은 tick, isHeadJumping=false): HEAD_UP fire 직전 → 두 점프 누적 (사용자 의도).
@@ -2053,31 +2052,6 @@ public final class SmartMovingClientState {
             //   가 다음 tick (onGround=false) 자동 미매치. 우리 fix #32 의 wasGroundSprinting 는
             //   다음 tick 매치 가능 → 원본 효과 위해 !isHeadJumping 가드 보강 (1.7.10 → 1.21.1
             //   timing 차이 정합).
-            boolean _slideGate_sprintOk = wasGroundSprinting
-                    || (wasRunning && !isRunning(player) && player.isOnGround());
-            boolean _slideGate_match = cfg0.slide && cfg0.enabled
-                    && _slideGate_grab && _slideGate_sprintOk && !isCrawling
-                    && sneakKeyStartPressed && !isDipping;
-            // [SLIDE-GATE-DBG] (2026-05-12) 자체 슬라이딩 발사 분기 조건 추적.
-            //   사용자 진짜 여우무빙 입력 (w+sprint+grab+jump release + sneak) 시 매치 검증.
-            //   가드: grab 누른 동안만 dump (= 짧은 기간, spam 차단).
-            if (_slideGate_grab) {
-                System.out.println("[SLIDE-GATE-DBG] t=" + player.getWorld().getTime()
-                        + " match=" + _slideGate_match
-                        + " slide=" + cfg0.slide + " enab=" + cfg0.enabled
-                        + " grab=" + _slideGate_grab
-                        + " wasGSprint=" + wasGroundSprinting
-                        + " wasRun=" + wasRunning + " isRun=" + isRunning(player)
-                        + " onG=" + player.isOnGround()
-                        + " sprintOk=" + _slideGate_sprintOk
-                        + " isCrawl=" + isCrawling
-                        + " sneakStart=" + sneakKeyStartPressed
-                        + " sneakHeld=" + player.isSneaking()
-                        + " isDip=" + isDipping
-                        + " isHJ=" + isHeadJumping
-                        + " wasHJ=" + wasHeadJumping
-                        + " hjCharge=" + String.format("%.2f", headJumpCharge));
-            }
             if (cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
                     && (wasGroundSprinting
@@ -2280,29 +2254,12 @@ public final class SmartMovingClientState {
                     player.fallDistance = 0F;
                 }
             }
-            // [SLIDE-TO-HJ-DBG] (2026-05-12) 자동 cycle (Slide→HeadJumping) 매치 검사.
-            //   isSliding 일 때만 dump (= 분기 진입 시).
-            if (isSliding) {
-                boolean _fallMatch = player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE;
-                boolean _allMatch = _fallMatch && !wasHeadJumping && this.slideToHeadCooldown == 0;
-                System.out.println("[SLIDE-TO-HJ-DBG] t=" + player.getWorld().getTime()
-                        + " isSld=" + isSliding
-                        + " fallDist=" + String.format("%.4f", player.fallDistance)
-                        + " threshold=" + String.format("%.4f", SLIDE_TO_HEADJUMPING_FALL_DISTANCE)
-                        + " fallMatch=" + _fallMatch
-                        + " wasHJ=" + wasHeadJumping
-                        + " cooldown=" + this.slideToHeadCooldown
-                        + " allMatch=" + _allMatch);
-            }
             if (isSliding && player.fallDistance > SLIDE_TO_HEADJUMPING_FALL_DISTANCE
                     && !wasHeadJumping
                     && this.slideToHeadCooldown == 0) {
                 isSliding = false;
                 isHeadJumping = true;
                 isAerodynamic = true;
-                // [SLIDE-TO-HJ-DBG] 매치 결과 dump.
-                System.out.println("[SLIDE-TO-HJ-DBG] t=" + player.getWorld().getTime()
-                        + " MATCHED → isSld=false isHJ=true isAero=true");
             }
 
             // B-Slide-Stop (2026-05-04): 원본 L2563-L2567 sneak 떼기 / 속도² 임계 종료 분기.
@@ -2320,14 +2277,6 @@ public final class SmartMovingClientState {
             if (isSliding) {
                 Vec3d _vel2563 = player.getVelocity();
                 double horizontalSpeedSquare = _vel2563.x * _vel2563.x + _vel2563.z * _vel2563.z;
-                // [SS-STOP-DBG] (2026-05-12) SS-SlideStop 매치 검사 진입 시.
-                System.out.println("[SS-STOP-DBG] t=" + player.getWorld().getTime()
-                        + " isSld=" + isSliding
-                        + " sneakRaw=" + sneakPressedRaw
-                        + " hSpd²=" + String.format("%.5f", horizontalSpeedSquare)
-                        + " stopFactor=" + String.format("%.4f", cfg0.slidingSpeedStopFactor * 0.01)
-                        + " stopBySneak=" + (!sneakPressedRaw)
-                        + " stopBySpeed=" + (horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01));
                 if (!sneakPressedRaw
                         || horizontalSpeedSquare < cfg0.slidingSpeedStopFactor * 0.01) {
                     isSliding   = false;

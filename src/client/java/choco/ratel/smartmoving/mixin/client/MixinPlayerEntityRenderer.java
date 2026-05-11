@@ -536,10 +536,15 @@ public class MixinPlayerEntityRenderer {
             matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
 
-            // 🔴 (실험) matrices.translate(0, -5/16, 0) 제거 — bipedOuter +5 자식 효과는
-            //   회전 origin pivotY 변경으로 등가 처리됨. 추가 translate 가 body 를 다리쪽으로
-            //   너무 보내는 듯 하여 제거 시도.
-            matrices.translate(0f, -0.4f / 16f, 0f);  // bipedBody.offsetY 만 유지
+            // 🔴 fix #86 v4 (2026-05-12, 사용자 보고 "엎드리기보다 슬라이딩 발쪽 치우침, 머리쪽으로 올려"):
+            //   엎드리기 R_x(-78.75°) vs 슬라이딩 R_x(-90°) 회전 각도 차이 11.25° 로 슬라이딩
+            //   발 vertex 가 더 정면으로 멀리 → 모델 중심이 발쪽으로 치우침.
+            //   사용자 의도: 수평 누운 자세에서 *머리쪽* (= 모델 머리-발 축의 머리 방향) 으로 보정.
+            //   매트릭스 분석: setupTransforms TAIL 의 translate Y → vertex 회전 전 적용 →
+            //     R_x(-π/2) 후 world Z (= 수평 정면-뒤쪽) 영향. dy 양수 방향 (= 덜 음수) 으로
+            //     변경 시 모델이 머리쪽 (정면) 으로 이동.
+            //   값: -3/16 (발쪽 치우침) ↔ -1/16 (머리쪽 과보정) 중간 = -2/16.
+            matrices.translate(0f, -2f / 16f, 0f);  // Y: 슬라이딩 머리쪽 보정 (회전 각도 차이 ⊃ 발쪽 치우침)
 
             // 🔴 여우무빙 (= 슬라이딩 ↔ 헤드점프 직접 cycle, standing 안 거침) 헤드점프 prev
             //   자연 시작점 매핑 (2026-05-11, 사용자 보고 "여우무빙 시 몸 거의 회전 안 함,
@@ -557,12 +562,12 @@ public class MixinPlayerEntityRenderer {
             //     으로 자연 시작 (= 영향 X).
             sm.smHeadJumpTiltX_prev = (float) (Math.PI / 2f);
             sm.smHeadJumpFade_prevTime = animationProgress;
-            // [HJ-SETUP-DBG] (2026-05-11) 슬라이딩 분기 진입 시 dump (prev=π/2 set 확인).
-            long _t_sld = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-            System.out.println("[HJ-SETUP-DBG] t=" + _t_sld + " phase=SLD"
-                    + " isHJ=" + sm.isHeadJumping + " isSld=" + sm.isSliding
-                    + " prevX_set=" + String.format("%.3f", sm.smHeadJumpTiltX_prev)
-                    + " animProg=" + String.format("%.2f", animationProgress));
+            // 🔴 fix #85 (2026-05-12, 사용자 보고 "슬라이딩 후 절벽 떨어짐 자동 cycle 시 여우무빙 시각"):
+            //   슬라이딩 phase 진입 시 wasSelfSlideFire 무조건 false reset. 그 후 자동 cycle 매치 시
+            //   wasSelfSlideFire=false 잔존 → 일반 헤드점프 시각.
+            //   자체 발사 frame: tickEssential 안 L2271 자동 cycle 매치 *후* isSliding=false →
+            //   setupTransforms 호출 시 슬라이딩 분기 매치 X → reset 안 됨 → wasSelfSlideFire=true 유지.
+            sm.wasSelfSlideFire = false;
         }
 
         // 🔴 SM 엎드리기(isCrawling) — Phase 3 자식 효과 매핑 (2026-05-03):
@@ -748,8 +753,6 @@ public class MixinPlayerEntityRenderer {
                 sm.smHeadJumpTiltX_prev = (float) Math.PI / 2f;
                 sm.smHeadJumpFade_prevTime = animationProgress;
             }
-            float _prevX_in = sm.smHeadJumpTiltX_prev;
-            float _prevT_in = sm.smHeadJumpFade_prevTime;
             float thetaLerped = lerpFadeAngle(sm.smHeadJumpTiltX_prev, thetaTarget,
                                                sm.smHeadJumpFade_prevTime, animationProgress);
             matrices.translate(0f, 1.5f, 0f);
@@ -758,16 +761,6 @@ public class MixinPlayerEntityRenderer {
             sm.smHeadJumpTiltX_prev = thetaLerped;
             sm.smHeadJumpFade_prevTime = animationProgress;
             sm.smOuterTiltX = thetaLerped;   // cape 클램프 (B-17) 도 보간된 값 사용
-            // [HJ-SETUP-DBG] (2026-05-11) 헤드점프 분기 진입 시 dump.
-            long _t = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-            System.out.println("[HJ-SETUP-DBG] t=" + _t + " phase=HJ"
-                    + " isHJ=" + sm.isHeadJumping + " isSld=" + sm.isSliding
-                    + " angle=" + String.format("%.3f", sm.stats.currentVerticalAngle)
-                    + " thetaTarget=" + String.format("%.3f", thetaTarget)
-                    + " prevX_in=" + String.format("%.3f", _prevX_in)
-                    + " prevT_in=" + String.format("%.2f", _prevT_in)
-                    + " animProg=" + String.format("%.2f", animationProgress)
-                    + " thetaLerped=" + String.format("%.3f", thetaLerped));
         }
 
         // 🔴 D-4 매트릭스 변환 시도 → 회전 중심 차이로 자세 잘못 (사용자 보고 5회차).
@@ -806,18 +799,9 @@ public class MixinPlayerEntityRenderer {
         //   thetaTarget=π/2 잘못 강제 또는 비행 phase 시각 영향.
         //   해결: 헤드점프/슬라이딩 외 분기 진입 시 (= 비행/standing/낙하 등) 플래그 reset.
         if (!sm.isHeadJumping && !sm.isSliding) {
-            float _prevX_before_reset = sm.smHeadJumpTiltX_prev;
             sm.smHeadJumpTiltX_prev = 0f;
             sm.smHeadJumpFade_prevTime = animationProgress;
             sm.wasSelfSlideFire = false;
-            // [HJ-SETUP-DBG] (2026-05-11) reset 가드 매치 시 dump — 이전 prev 가 0 아니었으면 출력.
-            if (_prevX_before_reset != 0f) {
-                long _t_r = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;
-                System.out.println("[HJ-SETUP-DBG] t=" + _t_r + " phase=RESET"
-                        + " isHJ=" + sm.isHeadJumping + " isSld=" + sm.isSliding
-                        + " prevX_was=" + String.format("%.3f", _prevX_before_reset)
-                        + " animProg=" + String.format("%.2f", animationProgress));
-            }
         }
 
         // 🔴 천장 등반 fade prev 매 frame 갱신 (비행 prev 갱신 패턴과 동일).
