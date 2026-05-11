@@ -705,12 +705,21 @@ public class MixinPlayerEntityRenderer {
         // isHeadJumping body X 기울기: θ = Quarter - currentVerticalAngle (원본 SmartMovingModel L508).
         // 비행 분기와 동일 패턴: head pivot 기준 회전 (translate ±1.5) + scale(-1,-1,1) 부호 반전 (-theta).
         //   feedback_rotation_pivot_pattern.md / feedback_render_scale_negation.md.
+        // 🔴 fade lerp (2026-05-11, 사용자 보고 "하강 시 몸 너무 수직, 원본 더 수평적"):
+        //   원본 SmartMovingModel L507 `bipedOuter.fadeRotateAngleX = true` (= 5-tick lerp) 1:1.
+        //   ModelRotationRenderer.GetIntermediateAngle = prev + (target - prev) * deltaT * 0.2F.
+        //   누락 시 빠른 각도 변화 (10°/tick) → 모델 거의 거꾸로 (164°). fade 적용 시 130°.
+        //   비행 prev 인프라와 분리 (= smHeadJumpTiltX_prev) — 비행 ↔ 헤드점프 전환 시 leak 차단.
         if (sm.isHeadJumping) {
-            float theta = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+            float thetaTarget = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+            float thetaLerped = lerpFadeAngle(sm.smHeadJumpTiltX_prev, thetaTarget,
+                                               sm.smHeadJumpFade_prevTime, animationProgress);
             matrices.translate(0f, 1.5f, 0f);
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-theta));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-thetaLerped));
             matrices.translate(0f, -1.5f, 0f);
-            sm.smOuterTiltX = theta;
+            sm.smHeadJumpTiltX_prev = thetaLerped;
+            sm.smHeadJumpFade_prevTime = animationProgress;
+            sm.smOuterTiltX = thetaLerped;   // cape 클램프 (B-17) 도 보간된 값 사용
         }
 
         // 🔴 D-4 매트릭스 변환 시도 → 회전 중심 차이로 자세 잘못 (사용자 보고 5회차).
@@ -737,6 +746,13 @@ public class MixinPlayerEntityRenderer {
             sm.smOuterTiltX_prev = 0f;
             sm.smOuterExtraYaw_prev = (float) Math.toRadians(sm.smCachedBodyYawLaggedDeg);
             sm.smOuterFade_prevTime = animationProgress;
+        }
+
+        // 🔴 헤드점프 fade prev 매 frame 갱신 (= 비행 prev 갱신 패턴과 동일).
+        //   헤드점프 외 분기에서 prev=0 reset → 다음 헤드점프 진입 시 자연 시작점 (= standing).
+        if (!sm.isHeadJumping) {
+            sm.smHeadJumpTiltX_prev = 0f;
+            sm.smHeadJumpFade_prevTime = animationProgress;
         }
 
         // 🔴 천장 등반 fade prev 매 frame 갱신 (비행 prev 갱신 패턴과 동일).

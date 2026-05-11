@@ -760,6 +760,13 @@ public final class SmartMovingClientState {
     public float smOuterExtraYaw_prev = 0f;    // 이전 프레임 보간 결과 (Y 회전)
     public float smOuterFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔴 헤드점프 전용 fade prev (2026-05-11, 사용자 보고 "하강 시 몸 너무 수직"):
+    //   원본 SmartMovingModel L507 bipedOuter.fadeRotateAngleX = true (X 회전 5-tick lerp).
+    //   비행 fade prev 와 분리 — 비행 ↔ 헤드점프 직접 전환 시 prev 값 leak 차단.
+    //   feedback_headjump_overground_air_is_solid.md 와 같은 시리즈 fix.
+    public float smHeadJumpTiltX_prev = 0f;       // 이전 프레임 헤드점프 X 회전 lerp 결과
+    public float smHeadJumpFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
+
     /**
      * 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 그대로 차용 (head 만 vanilla).
      * 비행과 별개 prev 필드 (서로 다른 시점 활성, 같은 필드 공유 시 분기 전환 시 lerp 부정확).
