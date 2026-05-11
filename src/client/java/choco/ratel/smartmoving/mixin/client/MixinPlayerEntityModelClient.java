@@ -1332,6 +1332,18 @@ public abstract class MixinPlayerEntityModelClient {
         // 원본 head world-X = θ/2 → head.pitch = -θ/2 (C-09-2 등가 증명)
         head.pitch = -(QUARTER - angle) / 2f;
 
+        // 🔴 head.yaw=0 강제 (2026-05-11, 사용자 보고 "헤드점프 시 머리가 마우스 따라 움직임"):
+        //   feedback_smbody_yaw_force_head_yaw_zero.md 패턴 1:1 적용.
+        //   setupTransforms 에서 smBodyYawOverride 가 ModifyArg 인자만 force (entity.bodyYaw
+        //   필드는 자유 값) → vanilla setAngles netHeadYaw = (headYaw - 자유 bodyYaw lerp)
+        //   잔존 → head.yaw 가 마우스 따라 회전.
+        //   원본 1.7.10 은 entity.renderYawOffset 필드 자체 force → netHeadYaw = (마우스 -
+        //   force 된 이동 방향) → 이동 방향 기준 회전 (사용자 시각 "거의 고정").
+        //   head.yaw=0 강제로 vanilla netHeadYaw 효과 cancel → head world yaw = force bodyYaw
+        //   (= 이동 방향) → 마우스 무관 고정. 다른 SM 분기 (sliding/flying/crawling/angleJump)
+        //   와 동일 패턴.
+        head.yaw = 0f;
+
         // 팔 Z: Factor(angle, Quarter, -Quarter). 원본 SmartMovingModel L520-522:
         //   armFactorZ = Factor(currentVerticalAngle, Quarter, -Quarter);
         //   if (overGroundBlock != null && overGroundBlock.getMaterial().isSolid())

@@ -60,6 +60,32 @@
 
 ## 2. 잠재 누락 항목 — *수정 보류* (사용자 확인 / 인게임 보고 대기)
 
+### ✅ §2-C — head.yaw 마우스 따라 회전 *(해소, 2026-05-11)*
+
+#### 사용자 보고
+헤드점프 시 머리가 마우스 움직임에 따라 움직임. 원본은 머리 고정 (이동 방향 기준).
+
+#### 원인
+- 우리 매핑 `sm_animateHeadJumping` 가 `head.pitch` 만 명시 set, **`head.yaw` cancel 누락**.
+- `setupTransforms ModifyArg sm_modifyBodyYaw` 가 setAngles bodyYaw 인자만 force → `entity.bodyYaw` 필드 자유 값 → vanilla netHeadYaw = (headYaw lerp - 자유 bodyYaw lerp) 잔존.
+- 결과: head.yaw = (마우스 yaw - 자유 bodyYaw) → 마우스 따라 큰 회전.
+- 원본 1.7.10 은 `entity.renderYawOffset` 필드 자체 force → netHeadYaw = (마우스 - force 된 이동 방향) → 사용자 시각 "거의 고정".
+
+#### fix
+`sm_animateHeadJumping` 본체에 `head.yaw = 0f` 한 줄 추가:
+```java
+head.pitch = -(QUARTER - angle) / 2f;
+head.yaw = 0f;  // ★ vanilla netHeadYaw cancel
+```
+
+→ head world yaw = setupTransforms 의 force bodyYaw (= 이동 방향) → 마우스 무관 고정.
+
+#### 결과 — 사용자 검증 "잘된다" (2026-05-11)
+다른 SM 분기 (sliding/flying/crawling/angleJump) 와 동일 패턴.
+`feedback_smbody_yaw_force_head_yaw_zero.md` 의 미적용 분기 목록에서 isHeadJumping 해소.
+
+---
+
 ### ✅ §2-A — `overGroundBlock.getMaterial().isSolid()` 필터 *(해소, 2026-05-11)*
 
 **진짜 원인 발견 + fix 완결**. 디버그 dump 측정 결과 *에지 케이스* 아닌 *항상 발생하는 큰 차이*.
