@@ -800,10 +800,16 @@ public class MixinPlayerEntityRenderer {
         //   헤드점프/슬라이딩 외 분기에서 prev=0 reset → 다음 헤드점프 진입 시 자연 시작점
         //   (= standing).
         //   슬라이딩 분기는 위 isSliding 분기에서 prev=Quarter 직접 set (여우무빙 자연 cycle).
+        // 🔴 fix #81 v3 (2026-05-12, 사용자 보고 "슬라이딩→비행 전환 시 애니메이션 뒤틀림"):
+        //   기존 wasSelfSlideFire reset = SmartMovingClientState L2222 의 헤드점프 종료 분기.
+        //   비행 전환 시 onGround=false 라 매치 X → 플래그 잔존 → 다음 헤드점프 발사 시
+        //   thetaTarget=π/2 잘못 강제 또는 비행 phase 시각 영향.
+        //   해결: 헤드점프/슬라이딩 외 분기 진입 시 (= 비행/standing/낙하 등) 플래그 reset.
         if (!sm.isHeadJumping && !sm.isSliding) {
             float _prevX_before_reset = sm.smHeadJumpTiltX_prev;
             sm.smHeadJumpTiltX_prev = 0f;
             sm.smHeadJumpFade_prevTime = animationProgress;
+            sm.wasSelfSlideFire = false;
             // [HJ-SETUP-DBG] (2026-05-11) reset 가드 매치 시 dump — 이전 prev 가 0 아니었으면 출력.
             if (_prevX_before_reset != 0f) {
                 long _t_r = (player.getWorld() != null) ? player.getWorld().getTime() : -1L;

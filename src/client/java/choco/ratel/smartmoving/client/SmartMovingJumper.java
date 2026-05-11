@@ -471,10 +471,17 @@ public final class SmartMovingJumper {
             // 🔴 fix #37 revert (2026-05-08, 사용자 의도 — 두 점프 누적 방향 유지):
             //   사용자 인정: fix #33 시점 (= 가드 제거 + 두 점프 누적) 이 원본과 가장 비슷.
             //   잔존 증상 (튕김/박힘/낮은 점프) 만 별도 fix 방향. 가드 다시 제거.
+            // 🔴 fix #82 (2026-05-12, 사용자 보고 "슬라이딩 중 점프차징되고 모델 거꾸로 + 앞 이동"):
+            //   원본 1.7.10 L1883 + 1.12.2 L1771 = `!isCrawling` 만 가드. `!isSliding` 없음.
+            //   우리 매핑도 원본 1:1 이지만 사용자 인지로는 슬라이딩 중 점프 차징 시각 망가짐
+            //   (= isHeadJumping=true 진입 + 일반 헤드점프 회전 시각 → 머리 땅/발 하늘 거꾸로).
+            //   fix #33 history (= 두 점프 누적 의도) 와 충돌하지만 사용자 명시 요청.
+            //   회귀 우려: 두 점프 누적 시각 차단. 사용자가 *원하지 않는 동작이면* fix revert 필요.
             isHeadJumpCharging = grabKeyPressed
                     && (sm.isGroundSprinting || sm.isSprintJump
                         || (sm.isRunning(player) && player.isOnGround()))
-                    && !sm.isCrawling;
+                    && !sm.isCrawling
+                    && !sm.isSliding;
             if (isHeadJumpCharging) {
                 if (jumpKeyPressed) {
                     // B-3 (Phase B 1:1 정정): 원본 L1886 `headJumpCharge++` — clamp 없음.
