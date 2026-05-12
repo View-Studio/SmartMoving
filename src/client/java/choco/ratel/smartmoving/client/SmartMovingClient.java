@@ -263,20 +263,48 @@ public class SmartMovingClient implements ClientModInitializer {
                         double gap = srvBBMinY - groundY;
                         boolean groundClose = gap < 1.0;
 
-                        // 분기 3 (slide/crawl) 은 self.y 변화 X 라 fix skip → vanilla lerp 자연 처리.
+                        // 분기 결정:
+                        //   - 분기 2 (standing 착지): !crawl && !slide && groundClose → serverY=groundY,
+                        //     bti 보장 (>=3) → vanilla lerp 점진 진행. setPos 안 함 (= visual jump 차단).
+                        //   - 분기 3-A (자연 crawl, BUG E): isCrawling && groundClose → setPos(srvY+1.0)
+                        //     + lerp cancel. self side L3908 push +1m 매핑.
+                        //   - 분기 3-B (sneak+grab slide): isSliding → fix skip (BUG D: self.y 변화 X
+                        //     검증됨, vanilla lerp 자체 처리).
+                        //   - 분기 1 (gap>=1): groundClose=false → fix skip.
                         if (!target.isSliding && !target.isCrawling && groundClose) {
-                            // 분기 2 standUp — newY = groundY (= ground 표면).
+                            // 🔴 BUG E 회귀 fix (2026-05-12): setPos+bti=0 = visual jump root.
+                            //   진입 frame remote.y 가 vanilla lerp 진행 중 (예: 71.254) 일 때
+                            //   setPos(groundY=71.000) + bti=0 = 즉시 0.254m visual jump down.
+                            //   해결: setPos/lastRenderY/prevY 변경 제거. serverY (= lerp target) 만
+                            //   newY 로 set + bti 유지 (0 이면 3 강제) → vanilla lerp 가 점진 진행 →
+                            //   잠수 차단 효과 유지 + visual jump 제거.
                             double newY = groundY;
+                            accF.sm_setServerY(newY);
+                            int curBti = accF.sm_getBodyTrackingIncrements();
+                            if (curBti < 3) {
+                                accF.sm_setBodyTrackingIncrements(3);
+                            }
+                        } else if (target.isCrawling && !target.isSliding && groundClose) {
+                            // 🔴 BUG E fix (2026-05-12): 분기 3-A 자연 crawl push +1m 매핑.
+                            //   self side `SmartMovingClientState.standupIfPossible` L3908 가드 matches:
+                            //     `wasSmallBox && isCrawling && wasFlying` → setPos(y + 1.0).
+                            //   self.y_final = srvY + 1.0. 여기서 srvY 는 server 가 곧 broadcast 할 정확값
+                            //   (= 비행 종료 직전 broadcast). self side 의 c2s packet 이 server 에 도달 +
+                            //   server broadcast → ~1 tick 후 vanilla srvY 갱신 = 71.
+                            //   해결: remote 측에서 *지금 즉시* setPos(srvY+1) + lerp cancel.
+                            //
+                            //   기존 BUG D fix 가 "분기 3 = self.y 변화 X = fix skip" 으로 가정한 오역
+                            //   정정 — sneak+grab slide 케이스 만 self.y 변화 X. 자연 crawl 케이스는 +1m.
+                            double newY = srvY + 1.0;
                             if (newY != remoteFly.getY()) {
                                 remoteFly.setPosition(remoteFly.getX(), newY, remoteFly.getZ());
                                 remoteFly.lastRenderY = newY;
                                 remoteFly.prevY = newY;
                             }
-                            // lerp cancel — vanilla broadcast 도착 전까지 lerp 차단.
                             accF.sm_setServerY(newY);
                             accF.sm_setBodyTrackingIncrements(0);
                         }
-                        // 분기 1 (gap>=1) / 분기 3 (slide/crawl) — fix skip, vanilla 자체 처리.
+                        // 분기 1 (gap>=1) / 분기 3-B (sneak+grab slide) — fix skip, vanilla lerp 자체 처리.
                     }
                 });
             });
