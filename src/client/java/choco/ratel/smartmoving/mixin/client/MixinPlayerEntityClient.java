@@ -416,6 +416,13 @@ public abstract class MixinPlayerEntityClient {
     /**
      * 🔴 (Phase 2 multi BUG-11 v3) remote 측 비행 종료 — entity.y +1.0 직접 set.
      *   사용자 평가: 묻히지 않음 + 살짝 플리킹 (= 가장 안정적 동작). 시각 한계 수용.
+     *
+     * 🔴 (Phase 2 multi BUG-15, 2026-05-13) 가드에 !sm.isSliding 추가.
+     *   원인: 비행 → 슬라이딩 직접 전환 (= 비행 + grab+sneak 착지 시) 또는 비행 모드 종료 후
+     *     슬라이딩 진입 시점에 가드 매치 → setPos +1m 호출 → 우리 slide 진입 fix 의 setPos(y-1)
+     *     무효화 → entity.y 가 +1m 되돌아감 → "공중 1칸 위" BUG.
+     *   stack trace 검증 (log_temp.txt tick 351): 슬라이딩 진입 직후 tick HEAD 에서 호출 확인.
+     *   해결: 슬라이딩 활성 시 비행 종료 push skip → 우리 slide fix 가 entity.y 보정 담당.
      */
     @Inject(method = "tick", at = @At("HEAD"))
     private void sm_handleRemoteFlyingExitYSync(CallbackInfo ci) {
@@ -425,7 +432,7 @@ public abstract class MixinPlayerEntityClient {
         if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(remote);
 
-        if (sm.smPrevWasFlyingForLerpFix && !sm.isFlying) {
+        if (sm.smPrevWasFlyingForLerpFix && !sm.isFlying && !sm.isSliding) {
             double newY = remote.getY() + 1.0;
             remote.setPosition(remote.getX(), newY, remote.getZ());
             remote.lastRenderY = newY;
@@ -433,4 +440,5 @@ public abstract class MixinPlayerEntityClient {
         }
         sm.smPrevWasFlyingForLerpFix = sm.isFlying;
     }
+
 }

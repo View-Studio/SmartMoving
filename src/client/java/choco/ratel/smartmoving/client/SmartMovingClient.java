@@ -75,6 +75,20 @@ public class SmartMovingClient implements ClientModInitializer {
                     //         즉시 적용 → ICC=false 와 동시에 entity.y +1m → bb 일관성 유지.
                     //   self (= ClientPlayerEntity) 는 자체 fix (= 메모리 *project_isclimbcrawling_complete*).
                     boolean wasIcc = target.isClimbCrawling;
+                    // 🔴 (Phase 2 multi BUG-15, 2026-05-13) remote 슬라이딩 진입/종료 매핑.
+                    //   self side fix #60 (= move(0,-1,0)) + fix #62 v2 + fix #70 (= setPos(y+1)
+                    //   predictive drop 검사) 가 remote 측 packet handler 에 누락 → remote 측에서
+                    //   진입 시 1 tick 공중 1칸 위 + 종료 시 1 tick 땅속 1m BUG. BUG-7 ICC EXIT
+                    //   v25.3 대칭 패턴 — packet 처리 lambda 안 즉시 setPos 로 1 tick lag 차단.
+                    //   self (= ClientPlayerEntity) 는 자체 fix.
+                    boolean wasSliding = target.isSliding;
+                    double slideBoxMinYBefore = 0.0;
+                    if (wasSliding
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity rsPre
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        // calc dim *전* — mixin offset 활성 시점 bb. self fix #70 의 _currentBoxMinY70 등가.
+                        slideBoxMinYBefore = rsPre.getBoundingBox().minY;
+                    }
                     target.processStatePacket(payload.state());
                     // 🔴 (Phase 2 multi BUG-12/14) packet 도착 시 dim 즉시 갱신 → vanilla pose sync 대기
                     //   없이 sm.* 비트 따라 dim 결정. boolean OR 가드 제거 — 여러 비트 동시 변경 시
@@ -128,6 +142,61 @@ public class SmartMovingClient implements ClientModInitializer {
                                             new net.minecraft.util.math.Vec3d(0, -gap, 0));
                                 }
                             }
+                        }
+                    }
+
+                    // 🔴 (Phase 2 multi BUG-15, 2026-05-13) remote 슬라이딩 진입 — self fix #60 1:1.
+                    //   self side L2106-L2111: heightOffset=-1 + isSliding=true + calc dim +
+                    //   move(0,-1,0) (= entity.y -1m). dim eye=1.62 활성 + mixin offset bb +1m up →
+                    //   bb 발 = entity.y + 1m = ground.
+                    //   remote 측: SM state packet 도착 → isSliding=true + calc dim 까지 (위 L82-L84)
+                    //     이미 완료. 그러나 self 의 entity.y -1m 가 server broadcast 도착 전 (1 tick lag)
+                    //     → remote.y = old self.y (= self ground) → bb 발 = remote.y + 1m = self ground
+                    //     + 1m = **공중 1칸 위 BUG**.
+                    //   해결: packet 처리 lambda 안 즉시 setPos(y-1) → entity.y -= 1m → bb 발 = (remote.y
+                    //     -1) + 1m = self ground 정합. lastRenderY/prevY 동기화 — vanilla lerp 점프 차단.
+                    //   BUG-7 ICC EXIT v25.3 부호 반전 (+1 → -1) 패턴.
+                    if (!wasSliding && target.isSliding
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteSlideEnter
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accE =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteSlideEnter;
+                        double newY = remoteSlideEnter.getY() - 1.0;
+                        remoteSlideEnter.setPosition(remoteSlideEnter.getX(), newY, remoteSlideEnter.getZ());
+                        remoteSlideEnter.lastRenderY = newY;
+                        remoteSlideEnter.prevY = newY;
+                        // 🔴 lerp cancel — vanilla OtherClientPlayerEntity.lerpPosAndRotation 이
+                        //   srvY (= 직전 broadcast standing y) 로 entity.y 끌고 감 → 우리 setPos 무효화.
+                        //   BUG-7 v25.3 패턴: srvY = newY + bti = 0 → 다음 broadcast 도착 전까지 lerp 차단.
+                        accE.sm_setServerY(newY);
+                        accE.sm_setBodyTrackingIncrements(0);
+                    }
+
+                    // 🔴 (Phase 2 multi BUG-15, 2026-05-13) remote 슬라이딩 종료 — self fix #62 v2 + #70 1:1.
+                    //   self side L2337-L2360: predictive drop 검사 후 setPos(y+1) + lastRenderY/prevY +=1.
+                    //   remote 측: SM state packet 도착 → isSliding=false + calc dim 까지 (위 L82-L84)
+                    //     이미 완료 → mixin offset 차단 → bb 발 = remote.y. self 의 entity.y +1m push 가
+                    //     server broadcast 도착 전 (1 tick lag) → remote.y = old self.y (= self ground - 1m)
+                    //     → bb 발 = self ground - 1m = **땅속 1m BUG**.
+                    //   해결: slideBoxMinYBefore (= calc dim 전, mixin offset 활성 시점 bb) 와 newY (=
+                    //     calc dim 후 entity.y) 차이로 willDrop 검사 → drop > 0.5m 시 setPos(y+1).
+                    //   회귀 차단: 비행 → 슬라이딩 종료 (fix #87) 등 slideBoxMinYBefore ≈ remote.y 케이스
+                    //     (= mixin offset 이미 차단) → willDrop=false → push 안 함.
+                    if (wasSliding && !target.isSliding
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteSlideExit
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accX =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteSlideExit;
+                        double newY = remoteSlideExit.getY();
+                        boolean willDrop = (slideBoxMinYBefore - newY) > 0.5;
+                        if (willDrop) {
+                            newY += 1.0;
+                            remoteSlideExit.setPosition(remoteSlideExit.getX(), newY, remoteSlideExit.getZ());
+                            remoteSlideExit.lastRenderY = newY;
+                            remoteSlideExit.prevY = newY;
+                            // 🔴 lerp cancel — 진입 분기와 동일 패턴 (srvY/bti 동기화 → lerp 차단).
+                            accX.sm_setServerY(newY);
+                            accX.sm_setBodyTrackingIncrements(0);
                         }
                     }
                 });
