@@ -50,19 +50,6 @@ public abstract class MixinServerPlayNetworkHandler {
     private void sm_onPlayerMove_head(PlayerMoveC2SPacket packet, CallbackInfo ci) {
         if (player == null) return;
         SmartMovingServer sm = SmartMovingServer.get(player);
-        // [FLY-DBG-SERVER-MOVE] PlayerMoveC2S 수신 시점 server.y 변화 추적.
-        //   SmartMovingServer 에 isFlying field 없음 → dY > 0.3m 만 출력 (= 큰 위치 변화 추적용).
-        double packetY = packet.getY(player.getY());
-        double oldY = player.getY();
-        double dY = packetY - oldY;
-        if (Math.abs(dY) > 0.3 || sm.isSliding || sm.isCrawling) {
-            System.out.println(String.format(
-                "[FLY-DBG-SERVER-MOVE] tick=%d sender=%s server.y=%.4f packet.y=%.4f dY=%.4f bb.minY=%.4f isSld=%b isCr=%b isCC=%b suppress=%b",
-                player.age, player.getName().getString(),
-                oldY, packetY, dY, player.getBoundingBox().minY,
-                sm.isSliding, sm.isCrawling, sm.isClimbCrawling,
-                (sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing || sm.isSliding)));
-        }
         // 🔴 fix #89 (2026-05-12, BUG = "jump 차징 중 sneak 누름 → 1칸 띄어진 엎드리기"):
         //   isSliding 누락 시 자체 슬라이딩 발사 frame (= client entity.y -=1m) 의 delta y 가
         //   vanilla "moved too quickly" 검사 매치 → requestTeleport(=PlayerPositionLookS2CPacket
@@ -71,18 +58,6 @@ public abstract class MixinServerPlayNetworkHandler {
         //   다른 SM phase 가드 (isClimbing/isCrawling/isCrawlClimbing/isCeilingClimbing) 와 동일 패턴.
         sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isSliding;
-    }
-
-    @Inject(method = "onPlayerMove", at = @At("TAIL"))
-    private void sm_onPlayerMove_tail(PlayerMoveC2SPacket packet, CallbackInfo ci) {
-        if (player == null) return;
-        SmartMovingServer sm = SmartMovingServer.get(player);
-        if (sm.isSliding || sm.isCrawling) {
-            System.out.println(String.format(
-                "[FLY-DBG-SERVER-MOVE-AFTER] tick=%d y=%.4f bb.minY=%.4f isSld=%b isCr=%b",
-                player.age, player.getY(), player.getBoundingBox().minY,
-                sm.isSliding, sm.isCrawling));
-        }
     }
 
     /**

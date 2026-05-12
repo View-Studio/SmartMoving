@@ -3677,21 +3677,10 @@ public final class SmartMovingClientState {
         //   (Math.min(result, yMax) 에서 yMax=bb.minY) 때문에 박스 발이 솔리드 안 살짝 박힌
         //   case 에서 gap=0 잘못 산출 → 보정 부족 → 가라앉음. getGapUnderneight 의 yMax 를
         //   bb.minY+0.5 로 정정해 음수 gap 측정 가능 → 정확한 보정.
-        // [FLY-DBG-SELF-STANDUP-PRE] standUp setPosition 직전.
-        double _dbgYPreSU = player.getY();
-        double _dbgBBPreSU = player.getBoundingBox().minY;
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-STANDUP-PRE] tick=%d y=%.4f bb.minY=%.4f gap=%.4f isFly=%b -> setPos(y + %.4f)",
-            player.age, _dbgYPreSU, _dbgBBPreSU, gapUnderneight, this.isFlying, 1D - gapUnderneight));
         player.setPosition(player.getX(), player.getY() + (1D - gapUnderneight), player.getZ());
         this.isCrawling    = false;
         this.isHeadJumping = false;
         resetHeightOffset();
-        // [FLY-DBG-SELF-STANDUP-POST] standUp + resetHO 후.
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-STANDUP-POST] tick=%d y=%.4f bb.minY=%.4f deltaY=%.4f hO=%.1f",
-            player.age, player.getY(), player.getBoundingBox().minY,
-            player.getY() - _dbgYPreSU, this.heightOffset));
     }
 
     /**
@@ -3707,19 +3696,8 @@ public final class SmartMovingClientState {
      */
     public void toSlidingOrCrawling(ClientPlayerEntity player, double gapUnderneight) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
-        // [FLY-DBG-SELF-TSC-PRE] toSlidingOrCrawling move 직전.
-        double _dbgYPreMove = player.getY();
-        double _dbgBBPreMove = player.getBoundingBox().minY;
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-TSC-PRE] tick=%d y=%.4f bb.minY=%.4f gap=%.4f isFly=%b -> move(0, -%.4f, 0)",
-            player.age, _dbgYPreMove, _dbgBBPreMove, gapUnderneight, this.isFlying, gapUnderneight));
         // 원본 L2224: move(0, -gapUnderneight, 0, true)
         player.move(MovementType.SELF, new Vec3d(0, -gapUnderneight, 0));
-        // [FLY-DBG-SELF-TSC-POST] move 직후.
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-TSC-POST] tick=%d y=%.4f bb.minY=%.4f deltaY=%.4f (= move result)",
-            player.age, player.getY(), player.getBoundingBox().minY,
-            player.getY() - _dbgYPreMove));
         // 원본 L2226-L2229: grabPressed || wasHeadJumping 이면 isSliding, 아니면 toCrawling
         if (cfg.slide && cfg.enabled
                 && (SmartMovingKeys.grab.isPressed() || this.wasHeadJumping)) {
@@ -3804,15 +3782,6 @@ public final class SmartMovingClientState {
         double gapOverneight = groundClose ? getGapOverneight(player) : -1D;
         boolean standUpPossible = gapUnderneight + gapOverneight >= 1D;
 
-        // [FLY-DBG-SELF-STANDUP] self side 진입 시점.
-        if (this.isFlying || tryLanding || restoreFromFlying) {
-            System.out.println(String.format(
-                "[FLY-DBG-SELF-STANDUP] tick=%d y=%.4f bb.minY=%.4f gap=%.4f gapOver=%.4f standUpPossible=%b tryLanding=%b restoreFromFly=%b isFly=%b",
-                player.age, player.getY(), player.getBoundingBox().minY,
-                gapUnderneight, gapOverneight, standUpPossible,
-                tryLanding, restoreFromFlying, this.isFlying));
-        }
-
         if (tryLanding && groundClose && standUpPossible) {
             this.isFlying = false;
             // 포커스 #3 B-3 (세션 4): 원본 L2199 `sp.capabilities.isFlying = false` 매핑.
@@ -3834,20 +3803,6 @@ public final class SmartMovingClientState {
         boolean sneakPressed = net.minecraft.client.MinecraftClient.getInstance()
                 .options.sneakKey.isPressed();
         boolean grabPressed  = SmartMovingKeys.grab.isPressed();
-
-        double _dbgYBefore = player.getY();
-        String _dbgBranch;
-        if (!groundClose && !sneakPressed) {
-            _dbgBranch = "1-resetHO";
-        } else if (standUpPossible && !(sneakPressed && grabPressed)) {
-            _dbgBranch = "2-standUp";
-        } else {
-            _dbgBranch = "3-toSldOrCr";
-        }
-        // [FLY-DBG-SELF-BRANCH] self side 분기 결정.
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-BRANCH] tick=%d branch=%s sneak=%b grab=%b gap=%.4f groundClose=%b",
-            player.age, _dbgBranch, sneakPressed, grabPressed, gapUnderneight, groundClose));
 
         if (!groundClose && !sneakPressed) {
             // 🔴 fix #88 (2026-05-12): 헤드점프 종료 직후 블록 모서리 시나리오 잠김 BUG.
@@ -3964,16 +3919,7 @@ public final class SmartMovingClientState {
                     ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
                 }
                 this.mustCrawl = true;
-                System.out.println(String.format(
-                    "[FLY-DBG-SELF-CRAWLPUSH] tick=%d y=%.4f bb.minY=%.4f (= push +1m wasFly||wasLev case)",
-                    player.age, player.getY(), player.getBoundingBox().minY));
             }
-            // [FLY-DBG-SELF-FINAL] 분기 3 처리 끝 시점 self entity.y.
-            System.out.println(String.format(
-                "[FLY-DBG-SELF-FINAL] tick=%d branch=%s yBefore=%.4f yAfter=%.4f delta=%.4f bb.minY=%.4f isSld=%b isCr=%b",
-                player.age, _dbgBranch, _dbgYBefore, player.getY(),
-                player.getY() - _dbgYBefore, player.getBoundingBox().minY,
-                this.isSliding, this.isCrawling));
             // 🔴 fix #25 복원 (fix #26 revert 후): push up + Camera baseline 동기화.
             //   사용자 보고 잔존 덜컹은 vanilla 매핑 한계 (= baseTick prevY 갱신 race) — 별도
             //   사이클로 deferred. 회귀 (= 박스 박힘) 우선 fix.
@@ -4079,11 +4025,6 @@ public final class SmartMovingClientState {
             player.lastRenderY += pushY;
             player.prevY += pushY;
         }
-        // [FLY-DBG-SELF-METHODEND] standupIfPossible 메서드 종료 시점 — 모든 분기 처리 후 최종.
-        System.out.println(String.format(
-            "[FLY-DBG-SELF-METHODEND] tick=%d y=%.4f bb.minY=%.4f hO=%.1f isSld=%b isCr=%b isFly=%b",
-            player.age, player.getY(), player.getBoundingBox().minY,
-            this.heightOffset, this.isSliding, this.isCrawling, this.isFlying));
     }
 
     /**

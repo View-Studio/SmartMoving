@@ -414,49 +414,5 @@ public abstract class MixinPlayerEntityClient {
     }
 
     // 🔴 (BUG D fix, 2026-05-13) sm_handleRemoteFlyingExitYSync 제거. SmartMovingClient packet
-    //   lambda 안 "비행 종료 분기" 가 대체.
-
-    // [FLY-DBG-REMOTE-TICK] remote 비행 종료 엣지 ±5 tick dump (= 후속 broadcast 도착 추적).
-    @org.spongepowered.asm.mixin.Unique
-    private boolean sm_flyDbgWasFlying;
-    @org.spongepowered.asm.mixin.Unique
-    private int sm_flyDbgEdgeTicksLeft;
-
-    @Inject(method = "tick", at = @At("HEAD"))
-    private void sm_flyTickDumpHead(CallbackInfo ci) {
-        if (!SmartMovingConfig.Config.enabled) return;
-        Object self = (Object) this;
-        if (self instanceof ClientPlayerEntity) return;
-        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(remote);
-        boolean edgeChange = sm.isFlying != sm_flyDbgWasFlying;
-        if (edgeChange) sm_flyDbgEdgeTicksLeft = 10;
-        sm_flyDbgWasFlying = sm.isFlying;
-        if (sm.isFlying || sm_flyDbgEdgeTicksLeft > 0) {
-            MixinLivingEntityAccessor acc = (MixinLivingEntityAccessor)(Object) remote;
-            System.out.println(String.format(
-                "[FLY-DBG-REMOTE-TICK-HEAD] tick=%d y=%.4f bb.minY=%.4f lrY=%.4f prevY=%.4f srvY=%.4f bti=%d isFly=%b isSld=%b isCr=%b",
-                remote.age, remote.getY(), remote.getBoundingBox().minY,
-                remote.lastRenderY, remote.prevY,
-                acc.sm_getServerY(), acc.sm_getBodyTrackingIncrements(),
-                sm.isFlying, sm.isSliding, sm.isCrawling));
-            if (sm_flyDbgEdgeTicksLeft > 0 && !sm.isFlying) sm_flyDbgEdgeTicksLeft--;
-        }
-    }
-
-    @Inject(method = "tick", at = @At("TAIL"))
-    private void sm_flyTickDumpTail(CallbackInfo ci) {
-        if (!SmartMovingConfig.Config.enabled) return;
-        Object self = (Object) this;
-        if (self instanceof ClientPlayerEntity) return;
-        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
-        SmartMovingClientState sm = SmartMovingClientState.get(remote);
-        if (sm.isFlying || sm_flyDbgEdgeTicksLeft > 0) {
-            MixinLivingEntityAccessor acc = (MixinLivingEntityAccessor)(Object) remote;
-            System.out.println(String.format(
-                "[FLY-DBG-REMOTE-TICK-TAIL] tick=%d y=%.4f bb.minY=%.4f srvY=%.4f bti=%d",
-                remote.age, remote.getY(), remote.getBoundingBox().minY,
-                acc.sm_getServerY(), acc.sm_getBodyTrackingIncrements()));
-        }
-    }
+    //   lambda 안 "비행 종료 분기" 가 대체. self side standupIfPossible 의 분기 1/2/3 1:1 매핑.
 }

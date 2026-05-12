@@ -58,37 +58,11 @@ public class SmartMoving implements ModInitializer {
             (payload, context) -> {
                 ServerPlayerEntity sender = context.player();
                 SmartMovingServer sm = SmartMovingServer.get(sender);
-                long state = payload.state();
-                // [FLY-DBG-SERVER-RECV] StatePayload 수신.
-                long bitFlyRecv = (state >> 17) & 1;
-                long bitFlyPrev = (sm.lastBroadcastBits >> 17) & 1;
-                long bitSldRecv = (state >> 21) & 1;
-                long bitCrRecv = (state >> 13) & 1;
-                boolean flyChange = bitFlyRecv != bitFlyPrev;
-                if (flyChange || bitFlyRecv == 1L) {
-                    System.out.println(String.format(
-                        "[FLY-DBG-SERVER-STATE-RECV] tick=%d sender=%s y=%.4f bb.minY=%.4f bitFly=%d prev=%d bitSld=%d bitCr=%d",
-                        sender.age, sender.getName().getString(),
-                        sender.getY(), sender.getBoundingBox().minY,
-                        bitFlyRecv, bitFlyPrev, bitSldRecv, bitCrRecv));
-                }
                 sm.processStatePacket(sender, payload.state());
-                if (flyChange) {
-                    System.out.println(String.format(
-                        "[FLY-DBG-SERVER-STATE-POST] tick=%d y=%.4f bb.minY=%.4f isSld=%b isCr=%b",
-                        sender.age, sender.getY(), sender.getBoundingBox().minY,
-                        sm.isSliding, sm.isCrawling));
-                }
+                long state = payload.state();
                 if (state == sm.lastBroadcastBits) return;  // dirty 검사: 같은 state 면 broadcast skip.
                 sm.lastBroadcastBits = state;
                 context.server().execute(() -> {
-                    // [FLY-DBG-SERVER-BCAST] broadcast 실행 시점 (server tick queue 안).
-                    if (flyChange) {
-                        System.out.println(String.format(
-                            "[FLY-DBG-SERVER-BCAST] tick=%d y=%.4f bb.minY=%.4f trackers=%d",
-                            sender.age, sender.getY(), sender.getBoundingBox().minY,
-                            PlayerLookup.tracking(sender).size()));
-                    }
                     for (ServerPlayerEntity tracker : PlayerLookup.tracking(sender)) {
                         if (tracker != sender) {
                             ServerPlayNetworking.send(tracker, payload);

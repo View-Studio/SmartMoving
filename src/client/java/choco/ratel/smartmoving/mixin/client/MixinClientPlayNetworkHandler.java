@@ -37,47 +37,4 @@ public abstract class MixinClientPlayNetworkHandler {
         sm.multiPlayerInitialized = 5;
     }
 
-    // [FLY-DBG-CLIENT-ENTITY-POS] vanilla EntityPositionS2CPacket 도착 시점 추적.
-    @Inject(method = "onEntityPosition",
-            at = @At("HEAD"))
-    private void sm_dbgEntityPosition(net.minecraft.network.packet.s2c.play.EntityPositionS2CPacket packet,
-                                       CallbackInfo ci) {
-        if (!choco.ratel.smartmoving.config.SmartMovingConfig.Config.enabled) return;
-        net.minecraft.client.MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.world == null) return;
-        net.minecraft.entity.Entity entity = mc.world.getEntityById(packet.getEntityId());
-        if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
-                && !(entity instanceof ClientPlayerEntity)) {
-            SmartMovingClientState sm = SmartMovingClientState.get(remote);
-            if (sm.isFlying || sm.isSliding || sm.isCrawling) {
-                System.out.println(String.format(
-                    "[FLY-DBG-CLIENT-ENTITY-POS] tick=%d entId=%d cur.y=%.4f bb.minY=%.4f isFly=%b isSld=%b isCr=%b",
-                    remote.age, entity.getId(), remote.getY(),
-                    remote.getBoundingBox().minY,
-                    sm.isFlying, sm.isSliding, sm.isCrawling));
-            }
-        }
-    }
-
-    // [FLY-DBG-CLIENT-ENTITY-S2C] vanilla EntityS2CPacket (= small delta) 도착 시점.
-    @Inject(method = "onEntity",
-            at = @At("HEAD"))
-    private void sm_dbgEntityS2C(net.minecraft.network.packet.s2c.play.EntityS2CPacket packet,
-                                  CallbackInfo ci) {
-        if (!choco.ratel.smartmoving.config.SmartMovingConfig.Config.enabled) return;
-        net.minecraft.client.MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.world == null) return;
-        net.minecraft.entity.Entity entity = packet.getEntity(mc.world);
-        if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote
-                && !(entity instanceof ClientPlayerEntity)) {
-            SmartMovingClientState sm = SmartMovingClientState.get(remote);
-            if (sm.isFlying || sm.isSliding || sm.isCrawling) {
-                // packet 이 small delta 송신. accessor 어렵 → 직전 cur.y 와 다음 tick lerp 결과로 추정.
-                System.out.println(String.format(
-                    "[FLY-DBG-CLIENT-ENTITY-S2C] tick=%d entId=%d cur.y=%.4f bb.minY=%.4f isFly=%b isSld=%b",
-                    remote.age, entity.getId(), remote.getY(), remote.getBoundingBox().minY,
-                    sm.isFlying, sm.isSliding));
-            }
-        }
-    }
 }
