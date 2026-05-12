@@ -157,6 +157,15 @@ public abstract class MixinPlayerEntityModelClient {
             float limbSwing, float limbSwingAmount,
             float animationProgress, float headYaw, float headPitch,
             CallbackInfo ci) {
+        // 🔴 (BUG A fix, 2026-05-13) ModelPart override clear — firstPersonArmRender 가드 *전* 위치.
+        //   PlayerEntityModel 은 single instance — 모든 player 공유. sm_animateSliding 이 직전 frame
+        //   remote 의 rightArm/leftArm 에 override quat (= slide 자세 90° 회전) 적용했으면 그 인스턴스에
+        //   잔존. 같은 frame self 1인칭 hand 렌더 시 model.setAngles 호출되지만 firstPersonArmRender
+        //   가드로 return → clear 미실행 → 1인칭 손이 slide 자세로 그려져 *사라진 것처럼 보임*.
+        //   해결: 가드 *전*으로 이동. 1인칭 hand 렌더 시도 매 frame clear → vanilla default 자세 유지.
+        ((SmModelPartOverride)(Object) rightArm).sm_clearOverrideQuat();
+        ((SmModelPartOverride)(Object) leftArm).sm_clearOverrideQuat();
+
         // 🔴 (2026-05-05 Phase 1-A) 다른 player render 시 SM 자세 적용 위해 가드 변경:
         //   AbstractClientPlayerEntity = local + remote player 모두 포함.
         if (!(entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity player)) return;
@@ -165,13 +174,6 @@ public abstract class MixinPlayerEntityModelClient {
         //   사용자 의도: 1인칭 시점의 손은 항상 vanilla 기본 자세 유지.
         //   다른 player 는 firstPersonArmRender 컨텍스트 미진입 → 영향 X (가드 그대로).
         if (SmartMovingRenderContext.firstPersonArmRender) return;
-
-        // 🔴 매 frame ModelPart override 클리어 (2026-05-04 sliding arm fix):
-        //   sm_animateSliding 이 setOverrideQuat 으로 의도 q 직접 적용 → 다음 frame 진입 시
-        //   sliding 종료됐어도 이전 q 잔존 → 잘못 적용 BUG. setAngles HEAD 에서 일괄 clear.
-        //   sliding 분기는 TAIL 에서 다시 set 하므로 영향 없음.
-        ((SmModelPartOverride)(Object) rightArm).sm_clearOverrideQuat();
-        ((SmModelPartOverride)(Object) leftArm).sm_clearOverrideQuat();
 
         // 🔴 (Phase 2 multi BUG-9 회귀 차단) sm_cachePivotDefaultsIfNeeded + sm_restorePivotDefaults 비활성.
         //   원인: 첫 setAngles 시점에 cache 한 default 가 sneak 자세 등 vanilla 변경값일 가능성 →
