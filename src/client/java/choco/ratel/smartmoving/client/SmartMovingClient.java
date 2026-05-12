@@ -132,6 +132,14 @@ public class SmartMovingClient implements ClientModInitializer {
                             remote.setPosition(remote.getX(), newY, remote.getZ());
                             remote.lastRenderY = newY;
                             remote.prevY = newY;
+                            // 🔴 (BUG B fix, 2026-05-13) lerp cancel — BUG-15 동일 패턴.
+                            //   vanilla OtherClientPlayerEntity.lerpPosAndRotation 이 매 tick srvY 로
+                            //   entity.y 끌고 감 → 우리 setPos+1m 무효화 → 점진 -1m down → 사용자 보고
+                            //   "1칸 아래 내려갔다 올라옴" 직접 원인. srvY/bti 동기화로 lerp 차단.
+                            choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accI =
+                                    (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remote;
+                            accI.sm_setServerY(newY);
+                            accI.sm_setBodyTrackingIncrements(0);
                             // 일반 블록 케이스만 bottom snap. 사다리/덩굴 케이스 미적용 (ladder maxY+1 위 유지).
                             if (!remote.isClimbing()) {
                                 double minY = remote.getBoundingBox().minY;
@@ -140,6 +148,9 @@ public class SmartMovingClient implements ClientModInitializer {
                                 if (gap >= 0.0 && gap < 1.0) {
                                     remote.move(net.minecraft.entity.MovementType.SELF,
                                             new net.minecraft.util.math.Vec3d(0, -gap, 0));
+                                    // bottom snap 후 srvY 재동기화 (= move 가 entity.y 변경했으므로).
+                                    accI.sm_setServerY(remote.getY());
+                                    accI.sm_setBodyTrackingIncrements(0);
                                 }
                             }
                         }
