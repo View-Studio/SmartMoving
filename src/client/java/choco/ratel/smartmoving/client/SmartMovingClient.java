@@ -82,12 +82,16 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   v25.3 대칭 패턴 — packet 처리 lambda 안 즉시 setPos 로 1 tick lag 차단.
                     //   self (= ClientPlayerEntity) 는 자체 fix.
                     boolean wasSliding = target.isSliding;
+                    boolean wasFlying = target.isFlying;
                     double slideBoxMinYBefore = 0.0;
-                    if (wasSliding
-                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity rsPre
+                    double flyBoxMinYBefore = 0.0;
+                    if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity rsPre
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
-                        // calc dim *전* — mixin offset 활성 시점 bb. self fix #70 의 _currentBoxMinY70 등가.
-                        slideBoxMinYBefore = rsPre.getBoundingBox().minY;
+                        double bbMinY = rsPre.getBoundingBox().minY;
+                        // calc dim *전* bb (= mixin offset 활성 시점). self fix #70 의 _currentBoxMinY70 등가.
+                        if (wasSliding) slideBoxMinYBefore = bbMinY;
+                        // 🔴 (BUG D fix, 2026-05-13) 비행 종료 직전 bb (= mixin offset 활성 시점) — gap 측정용.
+                        if (wasFlying) flyBoxMinYBefore = bbMinY;
                     }
                     target.processStatePacket(payload.state());
                     // 🔴 (Phase 2 multi BUG-12/14) packet 도착 시 dim 즉시 갱신 → vanilla pose sync 대기
@@ -167,7 +171,11 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   해결: packet 처리 lambda 안 즉시 setPos(y-1) → entity.y -= 1m → bb 발 = (remote.y
                     //     -1) + 1m = self ground 정합. lastRenderY/prevY 동기화 — vanilla lerp 점프 차단.
                     //   BUG-7 ICC EXIT v25.3 부호 반전 (+1 → -1) 패턴.
-                    if (!wasSliding && target.isSliding
+                    // 🔴 (BUG D fix, 2026-05-13) !wasFlying 가드 추가.
+                    //   비행 → slide 직접 전환 시 *비행 종료 분기* 가 self side standupIfPossible 분기 3
+                    //   (= move(0, -gap, 0)) 1:1 매핑으로 처리. 우리 slide 진입 fix 의 fixed -1m push 와
+                    //   gap-변동 식 충돌 방지.
+                    if (!wasSliding && target.isSliding && !wasFlying
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteSlideEnter
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
                         choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accE =
@@ -209,6 +217,82 @@ public class SmartMovingClient implements ClientModInitializer {
                             accX.sm_setServerY(newY);
                             accX.sm_setBodyTrackingIncrements(0);
                         }
+                    }
+
+                    // 🔴 (BUG D fix, 2026-05-13) remote 비행 종료 — self side standupIfPossible 1:1 매핑.
+                    //   self side `standupIfPossible(player, tryLanding=true, restoreFromFlying)` 의
+                    //   3 분기를 *결과 비트* (target.isSliding/isCrawling) + *gap 측정* 으로 추정 + 각
+                    //   분기별 entity.y 변화 식 1:1 적용:
+                    //     - 분기 1 (resetHeightOffset, gap>=1 && !sneak): entity.y 변경 X. lerp cancel 만.
+                    //     - 분기 2 (standUp, gap<1): entity.y += (1 - gap).
+                    //     - 분기 3 (toSlidingOrCrawling, sneak+grab): entity.y -= gap. 결과 isSliding/
+                    //       isCrawling=true → packet 으로 식별.
+                    //
+                    //   메모리 feedback_self_to_server_remote_one_to_one — "self 코드 그대로 1:1 복제".
+                    //   메모리 feedback_packet_lambda_immediate_fix — "packet lambda 안 즉시 fix".
+                    //   기존 sm_handleRemoteFlyingExitYSync (= 매 tick HEAD inject, fixed +1m) 보다
+                    //   정확 — 분기별 정확한 entity.y 변화 식.
+                    //
+                    //   slide 진입 fix 와 충돌 방지: slide 진입 fix 에 !wasFlying 가드 추가 → 비행 →
+                    //   slide 케이스는 *이 분기 (= 분기 3)* 에서 -gap push.
+                    if (wasFlying && !target.isFlying
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteFly
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accF =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteFly;
+                        // 🔴 (BUG D fix v2, 2026-05-13) gap 측정 + newY 식 정정.
+                        //   원래 식 (flyBoxMinYBefore = remote.y_current + 1m 기반 gap) 은 lerp lag 잔존
+                        //   으로 부정확 → 분기 결정 불안정 → 사용자 보고 "스탠딩 가끔 점프" / "비행→슬라이딩
+                        //   모션 점프" 의 root cause.
+                        //   해결: srvY (= 직전 broadcast 의 server.y = self.y 의 정확한 값) 기반 gap 측정.
+                        //         newY 식도 *groundY 직접* 기반 — self.y_final 매핑.
+                        //   self side 식 유도:
+                        //     - 분기 2 standUp: self.y_new = self.y + (1 - gap) = groundY (= ground 표면).
+                        //     - 분기 3 toSldOrCr: self.y_new ≈ groundY - 1 (= mixin offset 활성 bb 발 정합).
+                        //     - 분기 1 resetHO: self.y 변화 X.
+                        double srvY = accF.sm_getServerY();
+                        double srvBBMinY = srvY + 1.0;  // 비행 mixin offset 활성 = bb 발 = self.y + 1.
+                        double groundY = choco.ratel.smartmoving.client.SmartMovingClientState
+                                .getMaxPlayerSolidBetween(remoteFly,
+                                        srvBBMinY - 1.1, srvBBMinY + 0.5, 0);
+                        double gap = srvBBMinY - groundY;
+                        boolean groundClose = gap < 1.0;
+                        double oldY_dbg = remoteFly.getY();
+
+                        double newY;
+                        String branchDbg;
+                        if (target.isSliding || target.isCrawling) {
+                            // 분기 3: self.y_new = groundY - 1 (= mixin offset 활성 bb 발 정합).
+                            newY = groundY - 1.0;
+                            branchDbg = target.isSliding ? "3-slide" : "3-crawl";
+                        } else if (groundClose) {
+                            // 분기 2 standUp: self.y_new = groundY (= ground 표면).
+                            newY = groundY;
+                            branchDbg = "2-standUp";
+                        } else {
+                            // 분기 1 resetHO: self.y 변화 X.
+                            newY = remoteFly.getY();
+                            branchDbg = "1-resetHO";
+                        }
+                        // [FLY-DBG-RECV] 비행 종료 분기 진입 시점.
+                        System.out.println(String.format(
+                            "[FLY-DBG-RECV] tick=%d branch=%s oldY=%.4f srvY=%.4f srvBBMinY=%.4f groundY=%.4f gap=%.4f -> newY=%.4f tgtSld=%b tgtCr=%b bti=%d",
+                            remoteFly.age, branchDbg, oldY_dbg, srvY, srvBBMinY, groundY, gap, newY,
+                            target.isSliding, target.isCrawling, accF.sm_getBodyTrackingIncrements()));
+                        if (newY != remoteFly.getY()) {
+                            remoteFly.setPosition(remoteFly.getX(), newY, remoteFly.getZ());
+                            remoteFly.lastRenderY = newY;
+                            remoteFly.prevY = newY;
+                        }
+                        // lerp cancel 모든 분기 — broadcast 정확값 도착까지 lerp 차단.
+                        accF.sm_setServerY(newY);
+                        accF.sm_setBodyTrackingIncrements(0);
+                        // [FLY-DBG-POST] setPos + lerp cancel 적용 후.
+                        System.out.println(String.format(
+                            "[FLY-DBG-POST] tick=%d y=%.4f bb.minY=%.4f lrY=%.4f prevY=%.4f srvY=%.4f bti=%d",
+                            remoteFly.age, remoteFly.getY(), remoteFly.getBoundingBox().minY,
+                            remoteFly.lastRenderY, remoteFly.prevY,
+                            accF.sm_getServerY(), accF.sm_getBodyTrackingIncrements()));
                     }
                 });
             });
