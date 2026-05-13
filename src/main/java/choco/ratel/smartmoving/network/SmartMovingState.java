@@ -65,6 +65,12 @@ public final class SmartMovingState {
     public boolean isSneakButtonPressed;
     public boolean isClimbCrawling;
 
+    // 🔴 fix #96 (2026-05-13, 사용자 보고 "remote 측 여우무빙 즉시 수평 안 됨"):
+    //   self 측 자체슬라이딩 발사 시 set 되는 시각 flag. remote 측 시각 fix #81/#94/#95 적용
+    //   조건. SmartMovingClientState.tickEssential 는 self only 호출 → remote 측 동기화 누락.
+    //   해결: SmartMovingState bit 35 추가 → server relay → remote 측 packet lambda 안 set.
+    public boolean wasSelfSlideFire;
+
     public static long encode(SmartMovingState s) {
         long bits = 0L;
         bits |= (s.actualFeetClimbType  & 0xF);
@@ -94,6 +100,7 @@ public final class SmartMovingState {
         if (s.isRopeSliding)        bits |= 1L << 32;
         if (s.isSneakButtonPressed) bits |= 1L << 33;
         if (s.isClimbCrawling)      bits |= 1L << 34;
+        if (s.wasSelfSlideFire)     bits |= 1L << 35;  // fix #96
         return bits;
     }
 
@@ -126,6 +133,7 @@ public final class SmartMovingState {
         s.isRopeSliding       = ((bits >> 32) & 1) != 0;
         s.isSneakButtonPressed = ((bits >> 33) & 1) != 0;
         s.isClimbCrawling      = ((bits >> 34) & 1) != 0;
+        s.wasSelfSlideFire     = ((bits >> 35) & 1) != 0;  // fix #96
         return s;
     }
 }

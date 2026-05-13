@@ -1188,6 +1188,11 @@ public final class SmartMovingClientState {
         //   project_isclimbcrawling_complete.md). remote 측 client-side 도 isClimbCrawling 종료
         //   edge 감지 위해 갱신 필수 — sm_handleRemoteIccCrawlExitYSync inject 가 검사.
         isClimbCrawling   = ((bits >> 34) & 1) != 0;
+        // 🔴 fix #96 (2026-05-13): bit 35 wasSelfSlideFire 갱신 — remote 측 여우무빙 시각 fix
+        //   #81/#94/#95 (= X 회전 즉시 π/2 + Y 회전 즉시 이동 방향) 적용 조건 동기화.
+        //   self 측 tickEssential L2144 에서 자체슬라이딩 발사 시 set / 슬라이딩 phase 진입 시 false.
+        //   remote 측은 packet 으로만 갱신 (= tickEssential 호출 안 됨).
+        wasSelfSlideFire  = ((bits >> 35) & 1) != 0;
     }
 
     // ── 4-2: tickEssential() ─────────────────────────────────────────
@@ -4368,6 +4373,7 @@ public final class SmartMovingClientState {
         s.isRopeSliding        = isRopeSliding;
         s.isSneakButtonPressed = player.isSneaking();
         s.isClimbCrawling      = isClimbCrawling;
+        s.wasSelfSlideFire     = wasSelfSlideFire;  // fix #96 (remote 측 시각 fix #81/#94/#95 동기화)
 
         long bits = SmartMovingState.encode(s);
         // 🔴 (Phase 1-B fix-1) dirty bit 검사 제거 — 매 tick 무조건 송신.
