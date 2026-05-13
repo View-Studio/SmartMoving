@@ -107,6 +107,7 @@ public abstract class MixinPlayerEntityClient {
         //   해결: `&& wasClimbCrawling` 가드 추가 → ICC 활성 중 + 해제 엣지 1 tick 만 매치.
         //   isCrawlClimbing 자가유지 중 wasClimbCrawling=false → smSmall 분기로 떨어져 박스 안정.
         if (sm.isClimbCrawling || (sm.isCrawling && sm.isClimbing && sm.wasClimbCrawling)) {
+            sm.lastDimBranchId = 1;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
@@ -115,6 +116,7 @@ public abstract class MixinPlayerEntityClient {
         //   가드 (eyeHeight > 1) 통과 → 박스 +1 적용 → 사용자 시점 보존 매핑 그대로.
         //   ICC 와 다른 매핑 (ICC 는 setPos(y+1) + eyeHeight 0.62 원본 1:1).
         if (sm.isFlying || sm.isLevitating) {
+            sm.lastDimBranchId = 2;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
@@ -162,6 +164,7 @@ public abstract class MixinPlayerEntityClient {
             //   진짜 fix: dim 을 작은 박스 (0.8) + eyeHeight 1.62 로 되돌리고, MixinEntity 의
             //   offset 가드에 POSE=SLIDING 제외 추가 → mixin offset 차단 → 무한 루프 X +
             //   박스 작아짐 + 카메라 STANDING.
+            sm.lastDimBranchId = 3;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
@@ -172,18 +175,21 @@ public abstract class MixinPlayerEntityClient {
         //   카메라 정상 위치 = entity.y + 1.62 (= STANDING eyeHeight, 박스 안 정렬).
         //   해결: isSliding 시 dim eyeHeight=1.62 → mixin offset (+1m) 와 정렬.
         if (sm.isSliding) {
+            sm.lastDimBranchId = 4;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
         boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
                        || sm.isSwimming_sm || sm.isDiving;
         if (smSmall) {
+            sm.lastDimBranchId = 5;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
         }
 
         // SLIDING POSE 가 vanilla 가 아닌 경로로 들어온 경우 (외부 모드 등) 보강 처리
         if (pose == EntityPose.SLIDING) {
+            sm.lastDimBranchId = 6;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
         }
@@ -198,8 +204,11 @@ public abstract class MixinPlayerEntityClient {
         //   해결: pose=SWIMMING + smSmall 미매치 = orphan → STANDING dim 강제 (sync 풀리면
         //         정상 standing). 메모리 feedback_smSmall_dim_omission.md 동일 패턴.
         if (pose == EntityPose.SWIMMING) {
+            sm.lastDimBranchId = 7;
             cir.setReturnValue(EntityDimensions.changing(0.6F, 1.8F).withEyeHeight(1.62F));
+            return;
         }
+        sm.lastDimBranchId = 0;  // 매치 분기 없음 (= vanilla 통과).
     }
 
     /**
@@ -357,6 +366,18 @@ public abstract class MixinPlayerEntityClient {
         if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(remote);
 
+        // 🔵 [TX-MULTI-REMOTE-POSE-TICK] dump — tick TAIL 의 POSE 변화 detection.
+        //   remote 측 vanilla setPose 호출 안 함 (= dataTracker 직접 set). tick TAIL 비교로 변화 식별.
+        net.minecraft.entity.EntityPose _curPoseTick = remote.getPose();
+        if (sm.tranDumpRemainingTicks > 0 && sm.lastSeenPoseTick != _curPoseTick) {
+            System.out.println(String.format(
+                    "[TX-MULTI-REMOTE-POSE-TICK] uuid=%s tick=%d prevPose=%s curPose=%s y=%.3f bbMinY=%.3f",
+                    remote.getUuid(), remote.age,
+                    sm.lastSeenPoseTick, _curPoseTick,
+                    remote.getY(), remote.getBoundingBox().minY));
+        }
+        sm.lastSeenPoseTick = _curPoseTick;
+
         // 🔵 [TX-MULTI-REMOTE-TICK] dump — packet transition 시 window=30 set, 매 tick 출력 + decrement.
         if (sm.tranDumpRemainingTicks > 0) {
             sm.tranDumpRemainingTicks--;
@@ -364,14 +385,16 @@ public abstract class MixinPlayerEntityClient {
                     (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remote;
             net.minecraft.entity.EntityPose _pose = remote.getPose();
             net.minecraft.entity.EntityDimensions _dim = remote.getDimensions(_pose);
+            double _bbMinDelta = remote.getBoundingBox().minY - remote.getY();
             System.out.println(String.format(
-                    "[TX-MULTI-REMOTE-TICK] uuid=%s tick=%d y=%.3f bbMinY=%.3f srvY=%.3f bti=%d lastRY=%.3f prevY=%.3f isHJ=%b isCR=%b isSL=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b",
+                    "[TX-MULTI-REMOTE-TICK] uuid=%s tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f srvY=%.3f bti=%d lastRY=%.3f prevY=%.3f isHJ=%b isCR=%b isSL=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b dimBranch=%d",
                     remote.getUuid(), remote.age, remote.getY(),
-                    remote.getBoundingBox().minY,
+                    remote.getBoundingBox().minY, _bbMinDelta,
                     accDbg.sm_getServerY(), accDbg.sm_getBodyTrackingIncrements(),
                     remote.lastRenderY, remote.prevY,
                     sm.isHeadJumping, sm.isCrawling, sm.isSliding, sm.isClimbCrawling, sm.isFlying,
-                    _pose, _dim.height(), _dim.eyeHeight(), remote.isOnGround()));
+                    _pose, _dim.height(), _dim.eyeHeight(), remote.isOnGround(),
+                    sm.lastDimBranchId));
         }
         // 🔴 (Phase 1-B fix-2) stats source: getVelocity() → position delta.
         //   원본 SmartStatistics.calculateAllStats: `diffX = sp.posX - sp.prevPosX` (= delta).

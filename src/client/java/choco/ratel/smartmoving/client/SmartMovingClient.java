@@ -104,6 +104,64 @@ public class SmartMovingClient implements ClientModInitializer {
                     if (entity instanceof net.minecraft.entity.LivingEntity living) {
                         living.calculateDimensions();
                     }
+                    // 🔴 (slide→crawl 박스 부유 fix, 2026-05-13) remote 측 POSE 즉시 갱신.
+                    //   사용자 보고 BUG: REMOTE 측 slide → crawl 자동 전환 *사이* (~2 tick = 100ms)
+                    //     동안 박스 자체가 ground 위 1m 부유 = "STANDING 콜리전 변환" 시각.
+                    //   root cause (= dump 검증):
+                    //     - SmartMovingState packet 도착 → isCrawling=true 갱신 + calculateDimensions
+                    //       → sm_getBaseDimensions_client smSmall 분기 5 매치 → dim=(0.8, 0.62).
+                    //     - vanilla EntityDataS2CPacket (POSE) broadcast lag ~2 tick → POSE=SLIDING
+                    //       잔존.
+                    //     - MixinEntity.sm_offsetBoundingBoxForFlying 가드 `eye<=1 && pose!=SLIDING`
+                    //       매치 X (= pose==SLIDING 잔존) → mixin offset 활성 → bb=y+1.
+                    //     - → 박스 ground top + 1m 부유 frame ~2 tick. 머리 위치 STANDING 박스 머리
+                    //       (= y+1.8) 와 동일 → 사용자 시각 "STANDING 콜리전 변환".
+                    //   self side: PlayerEntity.tick → updatePose → sm_updatePose_client 동일 tick
+                    //     안 setPose(SWIMMING) 호출 → 다음 render frame bb=y. 부유 frame 거의 X.
+                    //   해결: remote 측 packet lambda 안 setPose 즉시 호출. self side
+                    //     sm_updatePose_client 와 동일 4 분기 매핑.
+                    if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity apPose
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        net.minecraft.entity.EntityPose targetPose = null;
+                        if (target.isCrawling && !target.isClimbing) {
+                            targetPose = net.minecraft.entity.EntityPose.SWIMMING;
+                        } else if (target.isHeadJumping || target.isSliding) {
+                            targetPose = net.minecraft.entity.EntityPose.SLIDING;
+                        } else if (target.isSwimming_sm || target.isDiving) {
+                            targetPose = net.minecraft.entity.EntityPose.SWIMMING;
+                        } else {
+                            // 🔴 (벽 충돌 cycle fix, 2026-05-13) orphan POSE 잔존 frame 의 박스 부유 차단.
+                            //   사용자 보고 BUG: 슬라이딩 중 벽 충돌 시 박스 위로 튀는 frame.
+                            //   root cause (= dump 검증):
+                            //     - self side wouldWantCrawl 식 + isClimbing 가드 매트릭스로 cycle 발생
+                            //       (= slide→crawl→standing→crawl). tick N: isCR=true→false PKT 매치.
+                            //     - remote 측 PKT 처리: target.isCrawling=false 갱신. 우리 4 분기 매트릭스
+                            //       매치 X → setPose 호출 X.
+                            //     - vanilla POSE broadcast lag ~1 tick → POSE=SLIDING 잔존.
+                            //     - mixin offset 가드 `eye<=1 && pose!=SLIDING` 매치 X (= pose==SLIDING)
+                            //       → mixin offset 활성 → bb=y+1 (= 박스 ground 위 1m 부유).
+                            //   해결: 모든 SM phase 미활성 + POSE=SWIMMING/SLIDING 잔존 시 setPose(STANDING)
+                            //     강제. mixin offset 가드 매치 → 차단 → bb=y.
+                            //   회귀 차단:
+                            //     - vanilla 자체 자세 (sleep/elytra/spin_attack 등): isFallFlying / isInSwimmingPose
+                            //       가드. 매치 시 우리 fix skip.
+                            //     - 일반 STANDING: curPose=STANDING → 매치 X (조건 SWIMMING|SLIDING) → skip.
+                            //     - vanilla 자체 수영 (물 안): isInSwimmingPose=true → skip.
+                            net.minecraft.entity.EntityPose curPose = apPose.getPose();
+                            if ((curPose == net.minecraft.entity.EntityPose.SWIMMING
+                                    || curPose == net.minecraft.entity.EntityPose.SLIDING)
+                                    && !apPose.isInSwimmingPose()
+                                    && !apPose.isFallFlying()) {
+                                targetPose = net.minecraft.entity.EntityPose.STANDING;
+                            }
+                        }
+                        if (targetPose != null && apPose.getPose() != targetPose) {
+                            apPose.setPose(targetPose);
+                            if (entity instanceof net.minecraft.entity.LivingEntity living2) {
+                                living2.calculateDimensions();
+                            }
+                        }
+                    }
                     // 🔵 [TX-MULTI-REMOTE-PKT] dump — HJ/slide/crawl/ICC transition 검출 시 1회 출력.
                     boolean _tranAny = (wasHJ != target.isHeadJumping)
                             || (wasSliding != target.isSliding)

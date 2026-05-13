@@ -205,6 +205,25 @@ public final class SmartMovingClientState {
     public int tranDumpRemainingTicks;
 
     /**
+     * 🔵 진단 추적 — getBaseDimensions 분기 매치 식별. 사용자 가설 "STANDING 콜리전 변환" 검증.
+     *   값: 0=매치 없음(vanilla 통과) / 1=ICC || (CR+CL+wasICC) / 2=Fly||Lev / 3=HJ / 4=SL /
+     *        5=smSmall (CR/CC/SW/DV) / 6=POSE.SLIDING fall-through / 7=orphan SWIMMING (STANDING 1.8).
+     */
+    public int lastDimBranchId;
+
+    /** 🔵 mixin offset (calculateBoundingBox) 활성/차단 추적.
+     *   true = bb.minY = y+1 (활성), false = bb.minY = y (차단, height>=1 또는 eye<=1+pose!=SLIDING). */
+    public boolean lastMixinOffsetActive;
+
+    /**
+     * 🔵 진단 — POSE 변화 정확 frame 식별. remote 측은 vanilla setPose 호출 안 함
+     *   (= dataTracker.set 직접). 우리 setPose inject 매치 X. 대신 render thread / tick TAIL 에서
+     *   prev POSE 비교 → 변화 frame detection. STANDING 잔존 frame 가설 검증.
+     */
+    public net.minecraft.entity.EntityPose lastSeenPoseTick;
+    public net.minecraft.entity.EntityPose lastSeenPoseRender;
+
+    /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
      * 원본: flying = sp.capabilities.isFlying
      * C-15: tickEssential()에서 매 틱 계산.
@@ -2205,12 +2224,42 @@ public final class SmartMovingClientState {
                 this.tranDumpRemainingTicks--;
                 net.minecraft.entity.EntityPose _pose = player.getPose();
                 net.minecraft.entity.EntityDimensions _dim = player.getDimensions(_pose);
+                double _bbMinDeltaSelf = player.getBoundingBox().minY - player.getY();
+                // 🔵 cycle trigger 추가 dump — 5 source sneak/grab 비교 (= feedback_movementInput_vs_isSneaking 패턴).
+                net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
+                boolean _sneakKeyRaw = _mc.options.sneakKey.isPressed();
+                boolean _grabKeyHeld = choco.ratel.smartmoving.client.input.SmartMovingKeys.grab.isPressed();
+                // GLFW raw key (= OS 직접). vanilla KeyBinding 잘못 매치 시 GLFW vs KeyBind 비교로 식별.
+                long _winHandle = _mc.getWindow().getHandle();
+                boolean _glfwShift = org.lwjgl.glfw.GLFW.glfwGetKey(_winHandle, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS
+                        || org.lwjgl.glfw.GLFW.glfwGetKey(_winHandle, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+                // Input.sneaking — KeyboardInput.tick 결과 (= MixinKeyboardInput 의 강제 false 영향 받음).
+                boolean _inputSneak = player.input != null && player.input.sneaking;
+                // player.isSneaking() — Entity/ClientPlayer mixin override 결과.
+                boolean _entitySneaking = player.isSneaking();
+                boolean _crawlToggleEn = cfg0.isCrawlToggleEnabled();
+                boolean _freeClimbEn = cfg0.freeClimb && cfg0.enabled;
+                boolean _inputContCrawl = _crawlToggleEn
+                        ? this.crawlToggled
+                        : (_sneakKeyRaw || (!_freeClimbEn && _grabKeyHeld));
                 System.out.println(String.format(
-                        "[TX-MULTI-SELF-TICK] tick=%d y=%.3f bbMinY=%.3f hO=%.2f wasHJ=%b isHJ=%b isCrawl=%b isSlide=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b",
-                        player.age, player.getY(), player.getBoundingBox().minY,
+                        "[TX-MULTI-SELF-TICK] tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f hO=%.2f wasHJ=%b isHJ=%b isCrawl=%b isSlide=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b dimBranch=%d glfwSh=%b sneakKey=%b inSneak=%b entSneak=%b grabKey=%b crawlTog=%b mustCrawl=%b sneakHeldClmb=%b forceSneak=%s isClimbing=%b inputContCrawl=%b ctxContCrawl=%b wouldWantCrawl=%b wantCrawl=%b",
+                        player.age, player.getY(), player.getBoundingBox().minY, _bbMinDeltaSelf,
                         this.heightOffset, this.wasHeadJumping, this.isHeadJumping,
                         this.isCrawling, this.isSliding, this.isClimbCrawling, this.isFlying,
-                        _pose, _dim.height(), _dim.eyeHeight(), player.isOnGround()));
+                        _pose, _dim.height(), _dim.eyeHeight(), player.isOnGround(),
+                        this.lastDimBranchId,
+                        _glfwShift,
+                        _sneakKeyRaw,
+                        _inputSneak,
+                        _entitySneaking,
+                        _grabKeyHeld,
+                        this.crawlToggled, this.mustCrawl,
+                        this.sneakHeldDuringClimb,
+                        String.valueOf(this.forceIsSneaking),
+                        this.isClimbing,
+                        _inputContCrawl, this.contextContinueCrawl,
+                        this.wouldWantCrawl, this.wantCrawl));
             }
 
             // B-24 (세션 53): 원본 L2535-L2540 해제 엣지 후처리.
@@ -2416,12 +2465,15 @@ public final class SmartMovingClientState {
                         // 🔵 [TX-MULTI-SELF-SSSTOP-POST] dump — fix #70 push + calc dim 후.
                         double _scAfterY = player.getY();
                         net.minecraft.entity.EntityDimensions _scDim = player.getDimensions(player.getPose());
+                        double _bbMinDeltaPost = player.getBoundingBox().minY - _scAfterY;
                         System.out.println(String.format(
-                                "[TX-MULTI-SELF-SSSTOP-POST] tick=%d y=%.3f bbMinY=%.3f hO=%.2f dy=%.3f willDrop=%b isCrawl=%b isSlide=%b POSE=%s dimH=%.2f dimEye=%.2f",
-                                player.age, _scAfterY, player.getBoundingBox().minY, this.heightOffset,
+                                "[TX-MULTI-SELF-SSSTOP-POST] tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f hO=%.2f dy=%.3f willDrop=%b isCrawl=%b isSlide=%b POSE=%s dimH=%.2f dimEye=%.2f dimBranch=%d",
+                                player.age, _scAfterY, player.getBoundingBox().minY, _bbMinDeltaPost,
+                                this.heightOffset,
                                 _scAfterY - _scBeforeY, _willDrop70,
                                 this.isCrawling, this.isSliding, player.getPose(),
-                                _scDim.height(), _scDim.eyeHeight()));
+                                _scDim.height(), _scDim.eyeHeight(),
+                                this.lastDimBranchId));
                         // 🔴 fix #64 (2026-05-10, dump 분석 — 사용자 보고 "전환 사이 카메라 올라갔다가 내려옴"):
                         //   entity.y push +1m 은 즉시. Camera.cameraY field 는 0.5 step lerp 추격
                         //   (= 5 frame 수렴) → 비대칭 spike.
