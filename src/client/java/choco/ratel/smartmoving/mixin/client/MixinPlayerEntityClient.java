@@ -408,6 +408,7 @@ public abstract class MixinPlayerEntityClient {
                 sm.smRemoteHJVisualHold = false;
             }
         }
+
     }
 
     /**

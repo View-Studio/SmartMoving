@@ -311,6 +311,36 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   가드 `!target.isSliding && !target.isCrawling`:
                     //     - 자체슬라이딩 자동 전환 (= 여우무빙, 시도 4/5): self.y 변화 X → fix 적용 X 가 정합.
                     //     - 헤드점프 → crawl 전환 등: 별도 fix 분기.
+                    // 🔵 fix #99 (2026-05-14) — HJ→CR 직접 전환 분기.
+                    //   사용자 보고: 헤드점프 + 벽 충돌 + 떨어짐 + GRAB+SNEAK 누름 → 자동 엎드리기
+                    //     전환 시 REMOTE 잠깐 잠긴 visual.
+                    //   진짜 path: HJ:true→false + CR:false→true 동시.
+                    //   = self side `standupIfPossible` → `toSlidingOrCrawling` 의 else 분기 (= grab
+                    //     매치 X) → `toCrawling()` 호출.
+                    //   기존 fix 분기 빈공간: fix #93 (SL 진입) / fix #98 v5 (HJ→standing) / fix #90
+                    //     (SL→CR) 모두 가드 미매치.
+                    //   newY 식 = srvY + 1m (= server side fix #99 v3 push 후 broadcast 위치 정확).
+                    //     groundY 직접 측정 (= fix #92/#93 패턴) 은 진입 frame 박스 dim 변화 (=
+                    //     calculateDimensions 후 isCrawling dim) 로 yMax<ground top → clamp 잘못.
+                    if (wasHJ && !target.isHeadJumping
+                            && !wasSliding && !target.isSliding
+                            && target.isCrawling
+                            && !wasIcc && !target.isClimbCrawling
+                            && !target.isClimbing && !target.isCeilingClimbing
+                            && !target.isSwimming_sm && !target.isDiving
+                            && !target.isFlying && !target.isLevitating
+                            && !target.isAngleJumping() && !target.isRopeSliding
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteHJCr
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accHJCr =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteHJCr;
+                        double newYHJCr = accHJCr.sm_getServerY() + 1.0;
+                        remoteHJCr.setPosition(remoteHJCr.getX(), newYHJCr, remoteHJCr.getZ());
+                        remoteHJCr.lastRenderY = newYHJCr;
+                        remoteHJCr.prevY = newYHJCr;
+                        accHJCr.sm_setServerY(newYHJCr);
+                        accHJCr.sm_setBodyTrackingIncrements(0);
+                    }
                     if (wasHJ && !target.isHeadJumping
                             && !target.isSliding && !target.isCrawling
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteHJ

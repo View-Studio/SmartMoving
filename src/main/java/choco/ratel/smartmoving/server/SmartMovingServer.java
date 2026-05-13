@@ -276,6 +276,24 @@ public final class SmartMovingServer {
             player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
         }
 
+        // 🔵 fix #99 v3 (2026-05-14): HJ → CR 직접 전환 server side mirror.
+        //   사용자 보고: 헤드점프 + 벽 충돌 + GRAB+SNEAK → 자동 엎드리기 시 REMOTE 잠긴 visual.
+        //   진짜 path: HJ:true→false + CR:false→true 동시 (= self side toSlidingOrCrawling 의
+        //     else 분기 → toCrawling). self side `toCrawling` 은 entity.y push X →
+        //     c2s position packet 도 ground-1m 잔존 → server.y 자동 push X → broadcast srvY
+        //     = ground - 1m → REMOTE 잠긴 visual.
+        //   fix: fix #90 (= SL→CR) 패턴 차용 — server side processStatePacket 끝에서 직접
+        //     setPos(y+1) push. server.y 즉시 ground → broadcast srvY=ground →
+        //     [feedback_server_side_state_push_mirror] 패턴.
+        //   client side: fix #99 v4 가 setPos(srvY + 1) 으로 broadcast 도착 후 즉시 정렬.
+        if (_wasHJ_fix98 && !this.isHeadJumping
+                && !_wasSL_fix90 && !this.isSliding
+                && !_wasCR_fix90 && this.isCrawling
+                && !this.isClimbCrawling && !this.isClimbing && !this.isCeilingClimbing
+                && !this.isSwimming && !this.isDiving && !this.isLevitating) {
+            player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+        }
+
         // 🔵 fix #98-v2 (2026-05-14): isHeadJumping=true → false + 다른 SM phase 모두 false 매치 시
         //   self side standUp 분기와 동일 +1m push 적용. self side L3926-L3930 의 standUp 후
         //   "SM state 모두 false 시 POSE=STANDING 강제" 조건과 정확 일치.
