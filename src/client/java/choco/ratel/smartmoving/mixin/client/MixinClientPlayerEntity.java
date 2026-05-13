@@ -298,7 +298,24 @@ public abstract class MixinClientPlayerEntity {
     @Inject(method = "tickMovement", at = @At("TAIL"))
     private void sm_sendStatePacket(CallbackInfo ci) {
         ClientPlayerEntity player = (ClientPlayerEntity)(Object)this;
-        SmartMovingClientState.get(player).sendStatePacket(player);
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        sm.sendStatePacket(player);
+
+        // 🔵 (2026-05-14, Option F fix #97) StatsPayload — self stats angle 매 tick 송신.
+        //   원인: vanilla lerpPosAndRotation 가 REMOTE 의 위치를 5-tick 균등 분할 보간 → REMOTE
+        //     자체 stats.calculate 결과 (= realDxYz atan2) 가 self trajectory 와 다른 흐름 →
+        //     lerpFadeAngle 0.2 peak 추격 시간 부족.
+        //   적용: self 의 sm.stats.currentVerticalAngle/HorizontalAngle 매 tick C2S → server
+        //     릴레이 → REMOTE 가 자체 계산 결과를 packet 값으로 덮어쓰기.
+        //   부하: 매 tick 12 byte (= int + float*2) * tracker 수. ~5 kbps/tracker.
+        if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(
+                choco.ratel.smartmoving.network.SmartMovingNetwork.StatsPayload.ID)) {
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+                new choco.ratel.smartmoving.network.SmartMovingNetwork.StatsPayload(
+                    player.getId(),
+                    sm.stats.currentVerticalAngle,
+                    sm.stats.currentHorizontalAngle));
+        }
     }
 
     /**

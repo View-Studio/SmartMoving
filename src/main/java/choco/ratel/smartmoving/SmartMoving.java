@@ -71,6 +71,22 @@ public class SmartMoving implements ModInitializer {
                 });
             });
 
+        // 🔵 Stats: self → server → REMOTE 매 tick stats angle 동기화 (2026-05-14, Option F).
+        //   dirty 검사 X (= 매 tick angle 변화). PlayerLookup.tracking 으로 tracker 만 broadcast.
+        //   원본 SmartMoving 에 동등 packet 없음 — 1.21.1 vanilla lerpPosAndRotation 의 위치 평탄화
+        //   를 우회하기 위한 우리 매핑 한정 추가.
+        ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.StatsPayload.ID,
+            (payload, context) -> {
+                ServerPlayerEntity sender = context.player();
+                context.server().execute(() -> {
+                    for (ServerPlayerEntity tracker : PlayerLookup.tracking(sender)) {
+                        if (tracker != sender) {
+                            ServerPlayNetworking.send(tracker, payload);
+                        }
+                    }
+                });
+            });
+
         // ConfigInfo: 클라이언트 설정 정보 수신 → SM 버전 저장 (C-16)
         ServerPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.ConfigInfoPayload.ID,
             (payload, context) ->

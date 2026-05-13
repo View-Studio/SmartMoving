@@ -155,6 +155,17 @@ public final class SmartMovingServer {
         //   processStatePacket 시작 시 wasSL/wasCR 저장 — 끝에서 slide→crawl 자동 전환 매치 검사용.
         boolean _wasSL_fix90 = this.isSliding;
         boolean _wasCR_fix90 = this.isCrawling;
+        // 🔵 fix #98-v2 (2026-05-14, BUG 3: REMOTE 콜리전 땅 닿기 전 헤드점프 끝남 + 착지 시 잠김):
+        //   사용자 지시 — server/self/remote 3측 동기화 검증 + 메모리 정독 결과.
+        //   메모리 핵심: feedback_server_side_state_push_mirror — "self side setPos 호출 발견 시
+        //     server side processStatePacket 안 동일 매치 분기에 미러링 호출 추가 의무".
+        //   self side standupIfPossible 의 standUp 분기 (= L3760, gap=0 시 setPos(getY()+1)) +
+        //     toSlidingOrCrawling 분기 + fix #88 resetHO 분기 모두 entity.y +1m push.
+        //   기존 server side: fix #90 (slide→crawl) 만 미러링. isHJ=true→false 미러링 누락 →
+        //     server.y broadcast = self.y c2s 동기화 시점 차이로 lerp 진행 → REMOTE.y < ground
+        //     (= 잠긴 시각) 또는 REMOTE.y > ground (= 공중에서 standing) BUG 발생.
+        //   fix: self side standUp 의 +1m push 가 server side 에도 동일 매핑.
+        boolean _wasHJ_fix98 = this.isHeadJumping;
 
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
@@ -262,6 +273,22 @@ public final class SmartMovingServer {
         //     - 벽 박은 시: setPos(71) 후 박스 위치 = (71, 71.8). self 가 벽 옆 평지 위 → 박스 벽 안
         //       침투 X (= 벽 모서리 위 만 매치). 안전.
         if (_wasSL_fix90 && !this.isSliding && !_wasCR_fix90 && this.isCrawling) {
+            player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+        }
+
+        // 🔵 fix #98-v2 (2026-05-14): isHeadJumping=true → false + 다른 SM phase 모두 false 매치 시
+        //   self side standUp 분기와 동일 +1m push 적용. self side L3926-L3930 의 standUp 후
+        //   "SM state 모두 false 시 POSE=STANDING 강제" 조건과 정확 일치.
+        //   가드 조건 (self side L3926 매치):
+        //     - wasHJ=true → newHJ=false (= 헤드점프 종료 edge).
+        //     - 다른 SM phase 모두 false (= 단순 종료, 자체 슬라이딩/비행 자동 전환 아님).
+        //   회귀 검토:
+        //     - 다른 phase 전환 (= 헤드점프 → 슬라이딩 자동 전환 등): 가드 매치 X → setPos skip.
+        //     - 정상 종료: setPos +1m 만 적용. vanilla 자동 push (= 박스 박힘 조건) 발동 X.
+        if (_wasHJ_fix98 && !this.isHeadJumping
+                && !this.isSliding && !this.isCrawling && !this.isCrawlClimbing
+                && !this.isClimbing && !this.isCeilingClimbing
+                && !this.isSwimming && !this.isDiving && !this.isLevitating) {
             player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
         }
     }

@@ -163,6 +163,34 @@ public final class SmartMovingNetwork {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /**
+     * 🔵 Stats 패킷 (C2S + S2C): self → server → REMOTE 매 tick stats angle 동기화.
+     * 원인: vanilla lerpPosAndRotation 가 REMOTE 의 위치를 5-tick 균등 분할 보간 →
+     *   sm.stats.calculate 의 realDxYz 입력이 평탄화 + spike 패턴 →
+     *   currentVerticalAngle/HorizontalAngle 가 SELF trajectory 와 다른 흐름 →
+     *   lerpFadeAngle 0.2 lerp 가 peak 추격 시간 부족.
+     * fix (2026-05-14, Option F): self 의 stats angle 매 tick packet 송신 →
+     *   REMOTE 가 자체 stats.calculate 결과를 packet 값으로 덮어쓰기 → 100% self 와 동일 trajectory.
+     * 패킷 부하: 매 tick 8 byte * tracker 수 = ~3.2 kbps/tracker (= 부담 적음).
+     * fix #96 wasSelfSlideFire bit 35 패턴 확장.
+     */
+    public record StatsPayload(int entityId, float verticalAngle, float horizontalAngle) implements CustomPayload {
+        public static final Id<StatsPayload> ID = new Id<>(Identifier.of("smartmoving", "stats"));
+        public static final PacketCodec<PacketByteBuf, StatsPayload> CODEC = new PacketCodec<>() {
+            @Override
+            public StatsPayload decode(PacketByteBuf buf) {
+                return new StatsPayload(buf.readInt(), buf.readFloat(), buf.readFloat());
+            }
+            @Override
+            public void encode(PacketByteBuf buf, StatsPayload value) {
+                buf.writeInt(value.entityId());
+                buf.writeFloat(value.verticalAngle());
+                buf.writeFloat(value.horizontalAngle());
+            }
+        };
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     // ── 등록 ──────────────────────────────────────────────────────
 
     /**
@@ -177,12 +205,14 @@ public final class SmartMovingNetwork {
         PayloadTypeRegistry.playC2S().register(SpeedChangePayload.ID,  SpeedChangePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(HungerChangePayload.ID, HungerChangePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(SoundPayload.ID,        SoundPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(StatsPayload.ID,        StatsPayload.CODEC);
 
         // S2C (서버→클라이언트)
         PayloadTypeRegistry.playS2C().register(StatePayload.ID,         StatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ConfigContentPayload.ID, ConfigContentPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ConfigChangePayload.ID,  ConfigChangePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SpeedChangePayload.ID,   SpeedChangePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(StatsPayload.ID,         StatsPayload.CODEC);
     }
 
     private SmartMovingNetwork() {}

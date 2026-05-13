@@ -370,6 +370,44 @@ public abstract class MixinPlayerEntityClient {
         sm.stats.calculate(0, 0, 0,
                            dx, dy, dz,
                            remote.getYaw());
+
+        // 🔵 (2026-05-14, Option F fix #97) StatsPayload 동기화 — self → REMOTE.
+        //   자체 계산 (= 위 stats.calculate) 결과 중 currentVerticalAngle/HorizontalAngle 만
+        //   packet 값으로 덮어쓰기 (= self trajectory 100% 일치).
+        //   원인: vanilla lerpPosAndRotation 5-tick 분할이 REMOTE realDxYz 평탄화 →
+        //     atan2 결과 thetaT 가 self 와 다른 흐름 → fade peak 추격 시간 부족.
+        //   다른 field (currentSpeed/totalHorizontalDistance/EMA 등) 는 자체 계산 유지 — 이동
+        //     관련 swing/walkFactor 등 안전.
+        //   초기값 NaN (= packet 받기 전) 시 자체 계산 사용 → 회귀 차단.
+        //   prevHorizontalAngle 도 함께 set (= 다음 tick atan NaN fallback 시 안정).
+        if (!Float.isNaN(sm.smRemoteStatsVerticalAngle_fromPacket)) {
+            sm.stats.currentVerticalAngle = sm.smRemoteStatsVerticalAngle_fromPacket;
+        }
+        if (!Float.isNaN(sm.smRemoteStatsHorizontalAngle_fromPacket)) {
+            sm.stats.currentHorizontalAngle = sm.smRemoteStatsHorizontalAngle_fromPacket;
+            sm.stats.prevHorizontalAngle = sm.smRemoteStatsHorizontalAngle_fromPacket;
+        }
+
+        // 🔵 (2026-05-14, fix #98 v4) REMOTE 헤드점프 자세 visual hold 위치 기반 해제 (잠긴 cause 정정).
+        //   set 위치: SmartMovingClient.java packet 처리 안 공중 상태 (= prevY > groundY+0.005) 검출.
+        //   해제 조건 v4: REMOTE.y >= smRemoteHJExitGroundY-0.005 (= ground 위 도달 = 회복 완료).
+        //
+        //   v3 (= getY <= groundY+0.005) 잘못: 잠긴 상태 (= REMOTE.y < ground) 도 매치 → 활성 즉시 해제.
+        //     dump 검증 cycle 1-5: prevY > groundY (공중) + getY < groundY (잠긴 lerp 진행 중) →
+        //     hold 활성 + 즉시 해제 → 효과 X.
+        //
+        //   v4 해제 식 분석:
+        //     - server.y trajectory: 잠긴 시점 (71) → push +1m 도달 (72=ground) → 잔존 (= self side standUp 후).
+        //     - REMOTE.y lerp 가 srvY 추격: 처음 잠긴 시도 (71 도달 진행) → srvY 갱신 (72) → 회복 추격 (72).
+        //     - 해제 시점 = REMOTE.y >= groundY-0.005 (= ground 이상) → 회복 완료.
+        //     - 잠긴 진행 중 (= getY < groundY): 해제 안 함 → hold 유지 → 자세 visual 유지.
+        //
+        //   사용자 원칙 "틱기반 답없다" 일치 — 위치 기반만.
+        if (sm.smRemoteHJVisualHold) {
+            if (remote.getY() >= sm.smRemoteHJExitGroundY - 0.005) {
+                sm.smRemoteHJVisualHold = false;
+            }
+        }
     }
 
     /**

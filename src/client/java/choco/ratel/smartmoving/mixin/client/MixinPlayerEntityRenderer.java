@@ -345,7 +345,11 @@ public class MixinPlayerEntityRenderer {
         //   ModelRotationRenderer.fadeIntermediate → 0.2 * deltaTime lerp. 벽 박은 후
         //   vx 반전 시 currentHorizontalAngle 점진 변화 → 모델 자연 회전 추적.
         //   isCeilingClimbing 동일 패턴 (= L250-256) 차용. 외 분기 prev 갱신은 아래 (= 비행 prev 갱신 패턴).
-        if (sm.isHeadJumping || sm.isRopeSliding) {
+        // 🔵 (2026-05-14, fix #98 위치 기반) smRemoteHJVisualHold OR 추가 — REMOTE 공중 자세 hold.
+        //   사용자 보고 3번 BUG (= 콜리전 땅 닿기 전 헤드점프 끝남) fix. SmartMovingClient packet
+        //   처리 안 공중 상태 (= curY > groundY+0.005) 검출 시 hold=true.
+        //   sm_tickStatsForRemote TAIL 의 위치 비교 (= REMOTE.y <= groundY+0.005) 시 hold=false.
+        if (sm.isHeadJumping || sm.isRopeSliding || sm.smRemoteHJVisualHold) {
             float targetYawRad = sm.stats.currentHorizontalAngle;
             // 🔴 fix #94/#95 (2026-05-13, 사용자 보고 "여우무빙 시 원래 몸 방향 → 바라보는 방향 보간"):
             //   fix #94: wasSelfSlideFire 가드 추가. fix #95: 발사 frame 만 snap.
@@ -763,7 +767,8 @@ public class MixinPlayerEntityRenderer {
         //   ModelRotationRenderer.GetIntermediateAngle = prev + (target - prev) * deltaT * 0.2F.
         //   누락 시 빠른 각도 변화 (10°/tick) → 모델 거의 거꾸로 (164°). fade 적용 시 130°.
         //   비행 prev 인프라와 분리 (= smHeadJumpTiltX_prev) — 비행 ↔ 헤드점프 전환 시 leak 차단.
-        if (sm.isHeadJumping) {
+        // 🔵 (2026-05-14, fix #98 위치 기반) smRemoteHJVisualHold OR 추가 — REMOTE 공중 자세 hold.
+        if (sm.isHeadJumping || sm.smRemoteHJVisualHold) {
             // 🔴 fix #81 (2026-05-12, 사용자 보고 "여우무빙 진입 시 몸 수평 안 됨"):
             //   자체 슬라이딩 발사 → 같은 tick L2271 자동 cycle 매치 → isHeadJumping=true 진입 시
             //   thetaTarget = Quarter 고정 강제 → 원본 isSlide 분기 (= rotateAngleX = Quarter)
@@ -823,7 +828,8 @@ public class MixinPlayerEntityRenderer {
         //   비행 전환 시 onGround=false 라 매치 X → 플래그 잔존 → 다음 헤드점프 발사 시
         //   thetaTarget=π/2 잘못 강제 또는 비행 phase 시각 영향.
         //   해결: 헤드점프/슬라이딩 외 분기 진입 시 (= 비행/standing/낙하 등) 플래그 reset.
-        if (!sm.isHeadJumping && !sm.isSliding) {
+        // 🔵 (2026-05-14, fix #98 위치 기반) smRemoteHJVisualHold !hold AND 추가 — hold 중 reset 차단.
+        if (!sm.isHeadJumping && !sm.isSliding && !sm.smRemoteHJVisualHold) {
             sm.smHeadJumpTiltX_prev = 0f;
             sm.smHeadJumpFade_prevTime = animationProgress;
             sm.wasSelfSlideFire = false;
@@ -843,7 +849,8 @@ public class MixinPlayerEntityRenderer {
         //   메모리 feedback_fade_prev_pre_entry_pose.md 참조.
         // 🔴 fix #95 (2026-05-13): smHeadJumpYawSnapDone reset — 외 분기 진입 시 false.
         //   다음 헤드점프 진입 시 (= wasSelfSlideFire 매트릭스 매트릭스) 첫 frame snap 활성.
-        if (!sm.isHeadJumping && !sm.isRopeSliding) {
+        // 🔵 (2026-05-14, fix #98 위치 기반) smRemoteHJVisualHold !hold AND 추가 — hold 중 reset 차단.
+        if (!sm.isHeadJumping && !sm.isRopeSliding && !sm.smRemoteHJVisualHold) {
             sm.smHeadJumpYaw_prev = (float) Math.toRadians(sm.smCachedBodyYawLaggedDeg);
             sm.smHeadJumpYawFade_prevTime = animationProgress;
             sm.smHeadJumpYawSnapDone = false;

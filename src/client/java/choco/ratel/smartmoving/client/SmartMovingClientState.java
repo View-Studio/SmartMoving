@@ -791,6 +791,35 @@ public final class SmartMovingClientState {
     //   원본 isSlide 분기 (= rotateAngleX = Quarter 즉시 적용) 시각 1:1.
     public boolean wasSelfSlideFire = false;
 
+    // 🔵 (2026-05-14, fix #98 위치 기반) REMOTE 측 헤드점프 종료 자세 visual hold flag (위치 기반).
+    //   사용자 보고 (3번 BUG): "리모트 콜리전이 땅에 닿기 전에 헤드점프 끝나버림".
+    //   원인: vanilla lerpPosAndRotation 가 REMOTE.y 를 분할 보간 → SmartMovingState packet 의
+    //     isHJ=false 도착 시점에 REMOTE.y > groundY (= 공중) 상태. 자세 즉시 standing → 공중에
+    //     standing 자세 → 사용자 시각 부자연.
+    //   메모리 패턴 정통 (사용자 지시 — 메모리 정독 후 적용):
+    //     - feedback_remote_phase_fix_ground_basis: ground top 직접 측정 (getMaxPlayerSolidBetween).
+    //     - project_remote_landing_sink_pattern: fix #92 = 잠긴 상태 (= ground 아래) 만 setPos.
+    //     - 공중 상태 (= ground 위) 시 = 자세 visual hold + 위치 자연 lerp.
+    //   fix: packet 처리 시 isHJ=true → false + 공중 상태 (= curY > groundY+0.005) 검출 시
+    //     hold=true + groundY 저장. 자세 visual hold 적용. hold 해제 = 위치 기반 (= 매 tick
+    //     REMOTE.y <= groundY+0.005 도달 시 hold=false). 사용자 원칙 "틱기반 답없다" 일치.
+    //   적용 위치: MixinPlayerEntityRenderer 의 X/Y 회전 분기 가드 OR 추가, reset 가드 !hold AND 추가.
+    //   해제 위치: MixinPlayerEntityClient.sm_tickStatsForRemote TAIL 의 위치 비교.
+    public boolean smRemoteHJVisualHold = false;
+    public double smRemoteHJExitGroundY = 0.0;
+
+    // 🔵 (2026-05-14, Option F fix #97) StatsPayload 동기화 — self → REMOTE.
+    //   self 의 sm.stats.currentVerticalAngle/HorizontalAngle 매 tick packet 으로 송신 → REMOTE 가
+    //     자체 stats.calculate 결과를 덮어쓰기.
+    //   원인: vanilla lerpPosAndRotation 가 REMOTE 의 위치를 5-tick 균등 분할 보간 → realDxYz 가
+    //     첫 4 tick 거의 0 + 마지막 1 tick spike → atan2 결과 thetaT 가 self trajectory 와 다른
+    //     흐름 → lerpFadeAngle 0.2 lerp 가 peak 추격 시간 부족 → REMOTE 헤드점프 마지막 회전 부족.
+    //   초기값 NaN — packet 받기 전 vanilla 자체 계산 사용 (= 회귀 차단).
+    //   set 위치: SmartMovingClient.java StatsPayload receiver (= packet 도착 시).
+    //   적용 위치: MixinPlayerEntityClient.sm_tickStatsForRemote TAIL (= stats.calculate 후).
+    public float smRemoteStatsVerticalAngle_fromPacket = Float.NaN;
+    public float smRemoteStatsHorizontalAngle_fromPacket = Float.NaN;
+
     /**
      * 🔴 (2026-04-27) 낙하/기본 상태 fade lag — 비행 fade 패턴 그대로 차용 (head 만 vanilla).
      * 비행과 별개 prev 필드 (서로 다른 시점 활성, 같은 필드 공유 시 분기 전환 시 lerp 부정확).

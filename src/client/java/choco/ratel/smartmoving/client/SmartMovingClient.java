@@ -329,18 +329,51 @@ public class SmartMovingClient implements ClientModInitializer {
                         //   + 가드 0.005m 완화 → 얕은 잠김 (= 0.010m) 도 setPos 적용.
                         double groundY = choco.ratel.smartmoving.client.SmartMovingClientState
                                 .getMaxPlayerSolidBetween(remoteHJ, bbMin - 1.5, bbMin + 0.5, 0);
-                        double newY = groundY;
-                        double curY = remoteHJ.getY();
-                        if (Math.abs(newY - curY) > 0.005) {
+                        // 🔵 (2026-05-14, fix #98 v3 — prevY 사용): client tick 순서 분석 결과.
+                        //   1) networkHandler.tick → packet callback queue
+                        //   2) world.tick → entity.tick → lerpPosAndRotation (= REMOTE.y 1-step 진행)
+                        //   3) processTasks → packet 처리 (= 본 분기)
+                        //   4) render
+                        //   = packet 처리 시점 remoteHJ.getY() 가 이미 lerp 진행 후 (= ground 도달).
+                        //   → hold 조건 (curY > groundY+0.005) 미매치 → cycle 2-9 fix 효과 X.
+                        //   해결: prevY (= 이전 frame y, lerp 진행 전) 사용. EXIT 직전 frame 의 공중
+                        //     위치 정확 검출. lastRenderY 와 prevY 둘 다 같은 값 (= resetPosition 직후).
+                        double curY = remoteHJ.prevY;
+                        double diff = curY - groundY;  // 양수 = 공중, 음수 = 잠긴
+                        // 🔵 (2026-05-14, fix #98 위치 기반) fix #92 가드 분리 — 잠긴 vs 공중.
+                        //   잠긴 상태 (= curY < groundY - 0.005): 기존 fix #92 — setPos + lerp cancel.
+                        //   공중 상태 (= curY > groundY + 0.005): 사용자 보고 3번 BUG cause. setPos 안 함
+                        //     (= REMOTE.y 가 자체 vanilla lerp 으로 자연 ground 도달). 그 사이 자세 visual
+                        //     hold flag set + groundY 저장. setupTransforms X/Y 회전 분기 가드에 OR 로
+                        //     추가됨 → 자세 유지. sm_tickStatsForRemote TAIL 의 위치 비교 (= REMOTE.y <=
+                        //     groundY+0.005) 시 hold 해제. tick timeout 아님 (= 사용자 원칙 일치).
+                        if (diff < -0.005) {
+                            // 잠긴 상태 — 기존 fix #92.
+                            double newY = groundY;
                             remoteHJ.setPosition(remoteHJ.getX(), newY, remoteHJ.getZ());
                             remoteHJ.lastRenderY = newY;
                             remoteHJ.prevY = newY;
+                            // 🔴 lerp cancel — BUG-7 v25.3 / BUG-15 / BUG B 동일 패턴.
+                            accH.sm_setServerY(newY);
+                            accH.sm_setBodyTrackingIncrements(0);
+                        } else if (diff > 0.005) {
+                            // 🔵 (fix #98 v5) 공중 상태 — setPos(prevY) + 4-동기화 + lerp cancel + hold.
+                            //   dump 검증: srvY=71 (= self.y push 전 잔존) → REMOTE.y lerp 가 잠긴 위치
+                            //     추격 진행 → getY < groundY → 사용자 보고 "착지 시 잠김" cause.
+                            //   해결: setPos(curY=prevY) + lerp cancel 으로 REMOTE.y 가 공중 위치
+                            //     잔존. 다음 broadcast (= server.y=ground 도달) 도착 시 lerp 재개 →
+                            //     REMOTE.y → ground. 자세 hold 동안 잠긴 trajectory 차단.
+                            //   메모리 패턴: feedback_remote_setpos_lerp_cancel 4-동기화.
+                            double newY = curY;  // prevY = 공중 위치 잔존.
+                            remoteHJ.setPosition(remoteHJ.getX(), newY, remoteHJ.getZ());
+                            remoteHJ.lastRenderY = newY;
+                            remoteHJ.prevY = newY;
+                            accH.sm_setServerY(newY);
+                            accH.sm_setBodyTrackingIncrements(0);
+                            // 자세 visual hold flag set.
+                            target.smRemoteHJVisualHold = true;
+                            target.smRemoteHJExitGroundY = groundY;
                         }
-                        // 🔴 lerp cancel — BUG-7 v25.3 / BUG-15 / BUG B 동일 패턴.
-                        //   vanilla OtherClientPlayerEntity.lerpPosAndRotation 이 매 tick srvY 로 끌고 감
-                        //   → 우리 setPos 무효화. srvY=newY + bti=0 으로 다음 broadcast 도착 전까지 차단.
-                        accH.sm_setServerY(newY);
-                        accH.sm_setBodyTrackingIncrements(0);
                     }
 
                     // 🔴 (BUG D fix, 2026-05-13) remote 비행 종료 — self side standupIfPossible 1:1 매핑.
@@ -430,6 +463,42 @@ public class SmartMovingClient implements ClientModInitializer {
                         }
                         // 분기 1 (gap>=1) / 분기 3-B (sneak+grab slide) — fix skip, vanilla lerp 자체 처리.
                     }
+                });
+            });
+
+        // 🔵 Stats: self → server → REMOTE 매 tick stats angle 동기화 (2026-05-14, Option F fix #97).
+        //   원인: vanilla lerpPosAndRotation 가 REMOTE 의 위치를 5-tick 균등 분할 보간 → realDxYz
+        //     평탄화 + spike → atan2 결과 thetaT 가 self trajectory 와 다른 흐름 → lerpFadeAngle
+        //     0.2 lerp 가 peak 추격 시간 부족 → 헤드점프 마지막 머리 회전 부족.
+        //   적용: packet 도착 시 sm.smRemoteStatsVerticalAngle/HorizontalAngle_fromPacket set.
+        //     sm_tickStatsForRemote TAIL 에서 자체 stats.calculate 결과를 packet 값으로 덮어쓰기.
+        ClientPlayNetworking.registerGlobalReceiver(SmartMovingNetwork.StatsPayload.ID,
+            (payload, context) -> {
+                MinecraftClient client = context.client();
+                client.execute(() -> {
+                    ClientWorld world = client.world;
+                    if (world == null) return;
+                    Entity entity = world.getEntityById(payload.entityId());
+                    if (!(entity instanceof AbstractClientPlayerEntity ap)) return;
+                    if (ap == client.player) return;  // 안전 가드 — server 가 self 제외 broadcast.
+                    SmartMovingClientState target = SmartMovingClientState.get(ap);
+                    target.smRemoteStatsVerticalAngle_fromPacket = payload.verticalAngle();
+                    target.smRemoteStatsHorizontalAngle_fromPacket = payload.horizontalAngle();
+                    // 🔵 (2026-05-14 fix #97-v2): packet 도착 시 sm.stats 직접 즉시 set.
+                    //   원인: vanilla MinecraftClient.tick 순서 →
+                    //     1) networkHandler.tick (= packet callback + client.execute queue)
+                    //     2) world.tick → entity.tick → sm_tickStatsForRemote → stats.calculate + 덮어쓰기
+                    //     3) processTasks → client.execute lambda 실행 → fromPacket set
+                    //     4) render → setupTransforms
+                    //   = 진입 tick 에 sm_tickStatsForRemote 시점 fromPacket=NaN → 덮어쓰기 skip →
+                    //     stats.currentVerticalAngle = atan2(realDy=0, ...) = 0 잔존 →
+                    //     setupTransforms 시 target=π/2 (= 90° 즉시 점프) → 사용자 보고 "진입 끊김".
+                    //   fix: packet receive lambda 안 (= processTasks 안) 에서 stats 도 즉시 set.
+                    //     다음 entity.tick 시 sm_tickStatsForRemote 가 stats.calculate (= 0 set) 후
+                    //     덮어쓰기 (= packet 값) → 같은 결과. 진입 frame 만큼 1 tick stale 차단.
+                    target.stats.currentVerticalAngle = payload.verticalAngle();
+                    target.stats.currentHorizontalAngle = payload.horizontalAngle();
+                    target.stats.prevHorizontalAngle = payload.horizontalAngle();
                 });
             });
 
