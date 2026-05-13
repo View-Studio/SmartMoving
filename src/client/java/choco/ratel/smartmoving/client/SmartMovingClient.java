@@ -299,6 +299,26 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   가드 `!target.isSliding && !target.isCrawling`:
                     //     - 자체슬라이딩 자동 전환 (= 여우무빙, 시도 4/5): self.y 변화 X → fix 적용 X 가 정합.
                     //     - 헤드점프 → crawl 전환 등: 별도 fix 분기.
+                    // 🔵 [TX-HJ-LANDING-CLIENT] dump 진단 — 헤드점프 종료 시점 BUG 2 fix 진입 여부.
+                    if (wasHJ && !target.isHeadJumping
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteHJDbg
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        target.hjLandingDumpTicks = 10;  // tick TAIL 매 tick dump window 10 tick set.
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accHDbg =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteHJDbg;
+                        double bbMinDbg = remoteHJDbg.getBoundingBox().minY;
+                        double groundYDbg = choco.ratel.smartmoving.client.SmartMovingClientState
+                                .getMaxPlayerSolidBetween(remoteHJDbg, bbMinDbg - 1.5, bbMinDbg - 0.01, 0);
+                        boolean bug2FixGate = !target.isSliding && !target.isCrawling;
+                        System.out.println(String.format(
+                                "[TX-HJ-LANDING-CLIENT] uuid=%s tick=%d wasHJ=%b newHJ=%b newSL=%b newCR=%b newICC=%b y=%.3f bbMinY=%.3f groundY=%.3f srvY=%.3f bti=%d bug2FixGate=%b",
+                                remoteHJDbg.getUuid(), remoteHJDbg.age,
+                                wasHJ, target.isHeadJumping,
+                                target.isSliding, target.isCrawling, target.isClimbCrawling,
+                                remoteHJDbg.getY(), bbMinDbg, groundYDbg,
+                                accHDbg.sm_getServerY(), accHDbg.sm_getBodyTrackingIncrements(),
+                                bug2FixGate));
+                    }
                     if (wasHJ && !target.isHeadJumping
                             && !target.isSliding && !target.isCrawling
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteHJ
@@ -306,12 +326,21 @@ public class SmartMovingClient implements ClientModInitializer {
                         choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accH =
                                 (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteHJ;
                         double bbMin = remoteHJ.getBoundingBox().minY;
-                        // yMax = bbMin - 0.01 → 천장 매치 차단 (= 헤드점프 천장 1칸 공간 시나리오 안전).
+                        // 🔴 fix #92 (2026-05-13, dump 검증 — 사용자 보고 "가끔 잠깐 잠겼다 회복"):
+                        //   기존 yMax = bbMin - 0.01: 잠긴 상태 (= bbMin < ground top) 진입 시 검색 범위
+                        //   ground top 매치 X → groundY = bbMin - 0.01 (= 잠긴 위치 그대로).
+                        //   가드 |newY - curY| > 0.05 매치 X (얕은 잠김 0.010m) → setPos 적용 X →
+                        //   srvY = 잠긴 위치 + bti=0 lerp cancel → client.y 잠긴 채 유지 → 다음 broadcast
+                        //   (= srvY=ground top) 도착 시 vanilla lerp ~3 tick 회복.
+                        //   fix: yMax = bbMin + 0.5 (= 위쪽 0.5m 확장) → 잠긴 상태도 ground top 매치 →
+                        //   groundY 정확. 천장 (= bbMin+1.0 부근) 매치 X (= 1칸 공간 안전).
+                        //   + 가드 0.005m 완화 → 얕은 잠김 (= 0.010m) 도 setPos 적용.
                         double groundY = choco.ratel.smartmoving.client.SmartMovingClientState
-                                .getMaxPlayerSolidBetween(remoteHJ, bbMin - 1.5, bbMin - 0.01, 0);
+                                .getMaxPlayerSolidBetween(remoteHJ, bbMin - 1.5, bbMin + 0.5, 0);
                         double newY = groundY;
                         double curY = remoteHJ.getY();
-                        if (Math.abs(newY - curY) > 0.05) {
+                        boolean appliedSetPos = Math.abs(newY - curY) > 0.005;
+                        if (appliedSetPos) {
                             remoteHJ.setPosition(remoteHJ.getX(), newY, remoteHJ.getZ());
                             remoteHJ.lastRenderY = newY;
                             remoteHJ.prevY = newY;
@@ -321,6 +350,12 @@ public class SmartMovingClient implements ClientModInitializer {
                         //   → 우리 setPos 무효화. srvY=newY + bti=0 으로 다음 broadcast 도착 전까지 차단.
                         accH.sm_setServerY(newY);
                         accH.sm_setBodyTrackingIncrements(0);
+                        // 🔵 [TX-HJ-LANDING-CLIENT-POST] dump — BUG 2 fix 적용 후.
+                        System.out.println(String.format(
+                                "[TX-HJ-LANDING-CLIENT-POST] uuid=%s tick=%d curY=%.3f newY=%.3f appliedSetPos=%b srvYAfter=%.3f btiAfter=%d",
+                                remoteHJ.getUuid(), remoteHJ.age,
+                                curY, newY, appliedSetPos,
+                                accH.sm_getServerY(), accH.sm_getBodyTrackingIncrements()));
                     }
 
                     // 🔴 (BUG D fix, 2026-05-13) remote 비행 종료 — self side standupIfPossible 1:1 매핑.
