@@ -778,10 +778,6 @@ public final class SmartMovingClientState {
     public float smHeadJumpYaw_prev = 0f;            // 이전 프레임 헤드점프 Y 회전 (라디안) lerp 결과
     public float smHeadJumpYawFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
-    // 🔵 [TX-HJ-LANDING-*] dump — 헤드점프 종료 시점 remote tick trajectory 추적용.
-    //   packet lambda 에서 wasHJ && !isHeadJumping 시 10 set. tick TAIL 매 tick decrement + dump.
-    public int hjLandingDumpTicks = 0;
-
     // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 발사 → 자동 cycle 진입 시 시각 수평 강제 플래그.
     //   자체 슬라이딩 발사 분기 (L2055+) 에서 true set. 헤드점프 종료 시 (isHeadJumping false 전환) reset.
     //   setupTransforms 헤드점프 분기에서 검사 → thetaTarget=π/2 (= Quarter) 고정 강제.

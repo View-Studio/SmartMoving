@@ -155,9 +155,6 @@ public final class SmartMovingServer {
         //   processStatePacket 시작 시 wasSL/wasCR 저장 — 끝에서 slide→crawl 자동 전환 매치 검사용.
         boolean _wasSL_fix90 = this.isSliding;
         boolean _wasCR_fix90 = this.isCrawling;
-        // 🔵 [TX-HJ-LANDING-SERVER] dump 진단 — 헤드점프 종료 시점 fix #90 trigger 추적.
-        boolean _wasHJ_dbg = this.isHeadJumping;
-        double _serverYBefore_dbg = player.getY();
 
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
@@ -264,20 +261,8 @@ public final class SmartMovingServer {
         //       조건이라 발동 X → +1m 만 적용. 회귀 없음.
         //     - 벽 박은 시: setPos(71) 후 박스 위치 = (71, 71.8). self 가 벽 옆 평지 위 → 박스 벽 안
         //       침투 X (= 벽 모서리 위 만 매치). 안전.
-        boolean _fix90Trigger = _wasSL_fix90 && !this.isSliding && !_wasCR_fix90 && this.isCrawling;
-        if (_fix90Trigger) {
+        if (_wasSL_fix90 && !this.isSliding && !_wasCR_fix90 && this.isCrawling) {
             player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
-        }
-        // 🔵 [TX-HJ-LANDING-SERVER] dump — 헤드점프 종료 시점 fix #90 trigger 추적.
-        //   wasHJ=true && !newHJ: 헤드점프 종료. 동시 매치 비트 분석.
-        if (_wasHJ_dbg && !this.isHeadJumping) {
-            System.out.println(String.format(
-                    "[TX-HJ-LANDING-SERVER] uuid=%s tick=%d wasHJ=%b newHJ=%b wasSL=%b newSL=%b wasCR=%b newCR=%b serverYBefore=%.3f serverYAfter=%.3f fix90Trigger=%b",
-                    player.getUuid(), player.age,
-                    _wasHJ_dbg, this.isHeadJumping,
-                    _wasSL_fix90, this.isSliding,
-                    _wasCR_fix90, this.isCrawling,
-                    _serverYBefore_dbg, player.getY(), _fix90Trigger));
         }
     }
 
