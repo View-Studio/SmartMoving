@@ -356,6 +356,23 @@ public abstract class MixinPlayerEntityClient {
         // remote 만 처리 — AbstractClientPlayerEntity (= 다른 player on client side).
         if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity remote)) return;
         SmartMovingClientState sm = SmartMovingClientState.get(remote);
+
+        // 🔵 [TX-MULTI-REMOTE-TICK] dump — packet transition 시 window=30 set, 매 tick 출력 + decrement.
+        if (sm.tranDumpRemainingTicks > 0) {
+            sm.tranDumpRemainingTicks--;
+            choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accDbg =
+                    (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remote;
+            net.minecraft.entity.EntityPose _pose = remote.getPose();
+            net.minecraft.entity.EntityDimensions _dim = remote.getDimensions(_pose);
+            System.out.println(String.format(
+                    "[TX-MULTI-REMOTE-TICK] uuid=%s tick=%d y=%.3f bbMinY=%.3f srvY=%.3f bti=%d lastRY=%.3f prevY=%.3f isHJ=%b isCR=%b isSL=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b",
+                    remote.getUuid(), remote.age, remote.getY(),
+                    remote.getBoundingBox().minY,
+                    accDbg.sm_getServerY(), accDbg.sm_getBodyTrackingIncrements(),
+                    remote.lastRenderY, remote.prevY,
+                    sm.isHeadJumping, sm.isCrawling, sm.isSliding, sm.isClimbCrawling, sm.isFlying,
+                    _pose, _dim.height(), _dim.eyeHeight(), remote.isOnGround()));
+        }
         // 🔴 (Phase 1-B fix-2) stats source: getVelocity() → position delta.
         //   원본 SmartStatistics.calculateAllStats: `diffX = sp.posX - sp.prevPosX` (= delta).
         //   기존 매핑은 server-sync velocity 가정했으나 vanilla 1.21.1 server 가

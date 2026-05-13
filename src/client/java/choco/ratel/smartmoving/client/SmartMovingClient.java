@@ -83,6 +83,10 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   self (= ClientPlayerEntity) 는 자체 fix.
                     boolean wasSliding = target.isSliding;
                     boolean wasFlying = target.isFlying;
+                    // 🔵 [TX-MULTI-REMOTE-PKT] 진단 — packet 처리 전 transition 상태 저장.
+                    boolean wasHJ = target.isHeadJumping;
+                    boolean wasCrawling = target.isCrawling;
+                    boolean wasICC = target.isClimbCrawling;
                     double slideBoxMinYBefore = 0.0;
                     double flyBoxMinYBefore = 0.0;
                     if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity rsPre
@@ -99,6 +103,31 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   감지 누락 회피. dim 동일 시 vanilla 자체 영향 미미.
                     if (entity instanceof net.minecraft.entity.LivingEntity living) {
                         living.calculateDimensions();
+                    }
+                    // 🔵 [TX-MULTI-REMOTE-PKT] dump — HJ/slide/crawl/ICC transition 검출 시 1회 출력.
+                    boolean _tranAny = (wasHJ != target.isHeadJumping)
+                            || (wasSliding != target.isSliding)
+                            || (wasCrawling != target.isCrawling)
+                            || (wasICC != target.isClimbCrawling);
+                    if (_tranAny
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remTran
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accTranDbg =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remTran;
+                        target.tranDumpRemainingTicks = 30;
+                        net.minecraft.entity.EntityPose _pose = remTran.getPose();
+                        net.minecraft.entity.EntityDimensions _dim = remTran.getDimensions(_pose);
+                        System.out.println(String.format(
+                                "[TX-MULTI-REMOTE-PKT] uuid=%s tick=%d wasHJ=%b isHJ=%b wasSL=%b isSL=%b wasCR=%b isCR=%b wasICC=%b isICC=%b y=%.3f bbMinY=%.3f srvY=%.3f bti=%d POSE=%s dimH=%.2f dimEye=%.2f isFly=%b slideBBMinBefore=%.3f",
+                                remTran.getUuid(), remTran.age,
+                                wasHJ, target.isHeadJumping,
+                                wasSliding, target.isSliding,
+                                wasCrawling, target.isCrawling,
+                                wasICC, target.isClimbCrawling,
+                                remTran.getY(), remTran.getBoundingBox().minY,
+                                accTranDbg.sm_getServerY(), accTranDbg.sm_getBodyTrackingIncrements(),
+                                _pose, _dim.height(), _dim.eyeHeight(),
+                                target.isFlying, slideBoxMinYBefore));
                     }
                     // 🔴 (Phase 2 BUG-7) self side ICC ENTER 매핑 1:1 복제.
                     //   self side ICC 진입 (SmartMovingClientState L2367-L2423):
@@ -208,6 +237,15 @@ public class SmartMovingClient implements ClientModInitializer {
                                 (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteSlideExit;
                         double newY = remoteSlideExit.getY();
                         boolean willDrop = (slideBoxMinYBefore - newY) > 0.5;
+                        // 🔵 [TX-MULTI-REMOTE-SLEXIT] dump — willDrop 검사 + setPos 적용 여부.
+                        double _beforeY = remoteSlideExit.getY();
+                        System.out.println(String.format(
+                                "[TX-MULTI-REMOTE-SLEXIT-PRE] uuid=%s tick=%d slideBBMinBefore=%.3f y=%.3f drop=%.3f willDrop=%b isCR=%b srvY=%.3f bti=%d",
+                                remoteSlideExit.getUuid(), remoteSlideExit.age,
+                                slideBoxMinYBefore, _beforeY,
+                                slideBoxMinYBefore - _beforeY, willDrop,
+                                target.isCrawling,
+                                accX.sm_getServerY(), accX.sm_getBodyTrackingIncrements()));
                         if (willDrop) {
                             newY += 1.0;
                             remoteSlideExit.setPosition(remoteSlideExit.getX(), newY, remoteSlideExit.getZ());
@@ -217,6 +255,55 @@ public class SmartMovingClient implements ClientModInitializer {
                             accX.sm_setServerY(newY);
                             accX.sm_setBodyTrackingIncrements(0);
                         }
+                        System.out.println(String.format(
+                                "[TX-MULTI-REMOTE-SLEXIT-POST] uuid=%s tick=%d y=%.3f bbMinY=%.3f srvY=%.3f bti=%d",
+                                remoteSlideExit.getUuid(), remoteSlideExit.age,
+                                remoteSlideExit.getY(), remoteSlideExit.getBoundingBox().minY,
+                                accX.sm_getServerY(), accX.sm_getBodyTrackingIncrements()));
+                    }
+
+                    // 🔴 (BUG 2 fix, 2026-05-13) remote 헤드점프 착지 1칸 down jump 차단.
+                    //   self side L2196 EXIT 분기 (SmartMovingClientState):
+                    //     `wasHJ && !isHJ && onGround` → standupIfPossible(false, true) → entity.y +1m push.
+                    //     검증 (= log_temp.txt 시도 1~3): SELF-EXIT-POST dy=1.000.
+                    //   server side: self c2s SmartMovingState packet 이 c2s position packet 보다 빨리 처리
+                    //     → SERVER-RECV 시 server.y = push 전 (70.000). 다음 server tick 에 71.000 갱신.
+                    //   broadcast: SmartMovingState packet 이 EntityPositionS2CPacket 보다 ~1 server tick
+                    //     빨리 broadcast (= reference_vanilla_server_tick_order, BUG-7/15/D 동일 메커니즘).
+                    //   remote: PKT 도착 시 remote.y = 70.X (= lerp 가 srvY=70 추격 중). bbMin=remote.y+1
+                    //     (mixin offset 활성, MixinEntity.sm_offsetBoundingBoxForFlying 의 SLIDING POSE 가드).
+                    //     box 발은 ground 위 (= 잠수 X). **그러나 모델 origin = entity.y = 70.X = ground
+                    //     아래 0.5~0.8m → 사용자 시각 "1칸 잠수"**. srvY=71 갱신 후 lerp 추격 ~3~15 tick
+                    //     (= 150~750ms) 동안 잔존.
+                    //   해결: BUG-7/15 동일 패턴 — packet lambda 안 즉시 setPos(groundY) + lerp cancel.
+                    //     newY 식 = ground top 직접 측정 (= getMaxPlayerSolidBetween, yMax<bbMin 으로 천장
+                    //     매치 차단). srvY+1 보다 정확 (= srvY 가 진입 frame 에 부정확한 broadcast 값 잔존
+                    //     가능, 시도 3/5 검증).
+                    //   가드 `!target.isSliding && !target.isCrawling`:
+                    //     - 자체슬라이딩 자동 전환 (= 여우무빙, 시도 4/5): self.y 변화 X → fix 적용 X 가 정합.
+                    //     - 헤드점프 → crawl 전환 등: 별도 fix 분기.
+                    if (wasHJ && !target.isHeadJumping
+                            && !target.isSliding && !target.isCrawling
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteHJ
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accH =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteHJ;
+                        double bbMin = remoteHJ.getBoundingBox().minY;
+                        // yMax = bbMin - 0.01 → 천장 매치 차단 (= 헤드점프 천장 1칸 공간 시나리오 안전).
+                        double groundY = choco.ratel.smartmoving.client.SmartMovingClientState
+                                .getMaxPlayerSolidBetween(remoteHJ, bbMin - 1.5, bbMin - 0.01, 0);
+                        double newY = groundY;
+                        double curY = remoteHJ.getY();
+                        if (Math.abs(newY - curY) > 0.05) {
+                            remoteHJ.setPosition(remoteHJ.getX(), newY, remoteHJ.getZ());
+                            remoteHJ.lastRenderY = newY;
+                            remoteHJ.prevY = newY;
+                        }
+                        // 🔴 lerp cancel — BUG-7 v25.3 / BUG-15 / BUG B 동일 패턴.
+                        //   vanilla OtherClientPlayerEntity.lerpPosAndRotation 이 매 tick srvY 로 끌고 감
+                        //   → 우리 setPos 무효화. srvY=newY + bti=0 으로 다음 broadcast 도착 전까지 차단.
+                        accH.sm_setServerY(newY);
+                        accH.sm_setBodyTrackingIncrements(0);
                     }
 
                     // 🔴 (BUG D fix, 2026-05-13) remote 비행 종료 — self side standupIfPossible 1:1 매핑.

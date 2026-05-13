@@ -197,6 +197,14 @@ public final class SmartMovingClientState {
     public int slideToHeadCooldown;
 
     /**
+     * 🔵 진단 dump window — BUG 2 (HJ 종료) + slide→crawl 전환 + 기타 transition 추적용.
+     *   self side: isHJ/isSliding/isCrawling=true 진행 중 + 종료 후 N tick. remote side: SM
+     *   state packet transition 시 set. 매 tick decrement. >0 시 dump 출력.
+     *   prefix [TX-MULTI-*] (= Transition 일반화).
+     */
+    public int tranDumpRemainingTicks;
+
+    /**
      * 비행 중 여부 (vanilla flight 또는 SM fly).
      * 원본: flying = sp.capabilities.isFlying
      * C-15: tickEssential()에서 매 틱 계산.
@@ -2188,12 +2196,41 @@ public final class SmartMovingClientState {
             // 원본 L2532-L2533: !isHeadJumping 시 isAerodynamic 리셋 (재평가 뒤 위치로 이동)
             if (!isHeadJumping) isAerodynamic = false;
 
+            // 🔵 [TX-MULTI-SELF-TICK] dump — HJ/slide/crawl/ICC transition window 매 tick 출력.
+            //   set 가드 확장: isHJ/isSliding/isCrawling/isClimbCrawling 활성 시 window 갱신.
+            if (this.isHeadJumping || this.isSliding || this.isCrawling || this.isClimbCrawling) {
+                this.tranDumpRemainingTicks = 10;
+            }
+            if (this.tranDumpRemainingTicks > 0) {
+                this.tranDumpRemainingTicks--;
+                net.minecraft.entity.EntityPose _pose = player.getPose();
+                net.minecraft.entity.EntityDimensions _dim = player.getDimensions(_pose);
+                System.out.println(String.format(
+                        "[TX-MULTI-SELF-TICK] tick=%d y=%.3f bbMinY=%.3f hO=%.2f wasHJ=%b isHJ=%b isCrawl=%b isSlide=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b",
+                        player.age, player.getY(), player.getBoundingBox().minY,
+                        this.heightOffset, this.wasHeadJumping, this.isHeadJumping,
+                        this.isCrawling, this.isSliding, this.isClimbCrawling, this.isFlying,
+                        _pose, _dim.height(), _dim.eyeHeight(), player.isOnGround()));
+            }
+
             // B-24 (세션 53): 원본 L2535-L2540 해제 엣지 후처리.
             //   wasHeadJumping && !isHeadJumping && onGround → handleCrash + restoreFromFlying=true
             // B-N-standup (세션 115): `restoreFromFlying = true` 직후 `standupIfPossible(player,
             //   false, true)` 호출 연결. 원본은 updateEntityActionState 내부에서 별도 위치
             //   호출이나 1.21.1 단일 위치 + 근사 이식이라 여기서 직접 호출.
             if (wasHeadJumping && !isHeadJumping && player.isOnGround()) {
+                // 🔵 [TX-MULTI-SELF-HJEXIT-PRE] dump.
+                double _hjBeforeY = player.getY();
+                double _hjBeforeBBMin = player.getBoundingBox().minY;
+                float _hjBeforeHO = this.heightOffset;
+                boolean _hjBeforeCrawl = this.isCrawling;
+                boolean _hjBeforeSlide = this.isSliding;
+                net.minecraft.entity.EntityPose _hjBeforePose = player.getPose();
+                System.out.println(String.format(
+                        "[TX-MULTI-SELF-HJEXIT-PRE] tick=%d y=%.3f bbMinY=%.3f hO=%.2f isCrawl=%b isSlide=%b POSE=%s",
+                        player.age, _hjBeforeY, _hjBeforeBBMin, _hjBeforeHO,
+                        _hjBeforeCrawl, _hjBeforeSlide, _hjBeforePose));
+
                 // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 fire 플래그 reset — 헤드점프 종료 시.
                 //   다음 헤드점프 발사 시 일반 시각 (= thetaTarget 점진 lerp) 유지.
                 this.wasSelfSlideFire = false;
@@ -2217,6 +2254,14 @@ public final class SmartMovingClientState {
                 //     → isSliding=true → SS-MATCH → toCrawling + fix #70 push +1m → cycle.
                 //   해결: 5-AND 분기 안 standupIfPossible 호출 후도 clear (= 1-tick 의도 매핑 1:1).
                 this.restoreFromFlying = false;
+
+                // 🔵 [TX-MULTI-SELF-HJEXIT-POST] dump — handleCrash + standupIfPossible 후.
+                double _hjAfterY = player.getY();
+                System.out.println(String.format(
+                        "[TX-MULTI-SELF-HJEXIT-POST] tick=%d y=%.3f bbMinY=%.3f hO=%.2f dy=%.3f isCrawl=%b isSlide=%b POSE=%s justEndedHJ=%b",
+                        player.age, _hjAfterY, player.getBoundingBox().minY, this.heightOffset,
+                        _hjAfterY - _hjBeforeY, this.isCrawling, this.isSliding,
+                        player.getPose(), this.justEndedHeadJump));
             }
 
             // SlideToHeadJumping 전환 (원본: SmartMovingSelf 행 2546~2550)
@@ -2350,6 +2395,14 @@ public final class SmartMovingClientState {
                         //     drop = ground+1m - ground = 1m → push +1m.
                         //     그러나 push 후 entity.y=ground+1m → box=ground+1m+1m=ground+2m? 아님.
                         //     mixin offset 차단 시 box=entity.y=ground+1m. ✓ 변화 X.
+                        // 🔵 [TX-MULTI-SELF-SSSTOP-PRE] dump — fix #70 push 직전.
+                        double _scBeforeY = player.getY();
+                        double _scBeforeBBMin = player.getBoundingBox().minY;
+                        System.out.println(String.format(
+                                "[TX-MULTI-SELF-SSSTOP-PRE] tick=%d y=%.3f bbMinY=%.3f hO=%.2f isCrawl=%b isSlide=%b POSE=%s",
+                                player.age, _scBeforeY, _scBeforeBBMin, this.heightOffset,
+                                this.isCrawling, this.isSliding, player.getPose()));
+
                         double _currentBoxMinY70 = player.getBoundingBox().minY;
                         double _predictedMinY70 = player.getY();
                         boolean _willDrop70 = (_currentBoxMinY70 - _predictedMinY70) > 0.5;
@@ -2360,6 +2413,15 @@ public final class SmartMovingClientState {
                         }
                         this.heightOffset = 0F;
                         player.calculateDimensions();
+                        // 🔵 [TX-MULTI-SELF-SSSTOP-POST] dump — fix #70 push + calc dim 후.
+                        double _scAfterY = player.getY();
+                        net.minecraft.entity.EntityDimensions _scDim = player.getDimensions(player.getPose());
+                        System.out.println(String.format(
+                                "[TX-MULTI-SELF-SSSTOP-POST] tick=%d y=%.3f bbMinY=%.3f hO=%.2f dy=%.3f willDrop=%b isCrawl=%b isSlide=%b POSE=%s dimH=%.2f dimEye=%.2f",
+                                player.age, _scAfterY, player.getBoundingBox().minY, this.heightOffset,
+                                _scAfterY - _scBeforeY, _willDrop70,
+                                this.isCrawling, this.isSliding, player.getPose(),
+                                _scDim.height(), _scDim.eyeHeight()));
                         // 🔴 fix #64 (2026-05-10, dump 분석 — 사용자 보고 "전환 사이 카메라 올라갔다가 내려옴"):
                         //   entity.y push +1m 은 즉시. Camera.cameraY field 는 0.5 step lerp 추격
                         //   (= 5 frame 수렴) → 비대칭 spike.

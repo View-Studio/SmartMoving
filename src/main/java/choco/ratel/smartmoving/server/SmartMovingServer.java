@@ -45,6 +45,10 @@ public final class SmartMovingServer {
     /** 크롤링 종료 후 쿨다운 (10틱) — isInsideWall 억제에 사용 */
     public int crawlingCooldown;
 
+    /** 🔵 진단 dump window — HJ/slide/crawl/ICC transition 시 set → server tick TAIL 매 tick dump.
+     *   prefix [TX-MULTI-*] (= Transition 일반화). */
+    public int tranDumpRemainingTicks;
+
     /** 서버 측 크롤링 상태 */
     public boolean isCrawling;
 
@@ -152,10 +156,28 @@ public final class SmartMovingServer {
      */
     public void processStatePacket(ServerPlayerEntity player, long bits) {
         isClimbing        = ((bits >> 14) & 1) != 0;
+        // 🔵 [TX-MULTI-SERVER-RECV-ICC] dump.
+        boolean _oldICC = isCrawlClimbing;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
+        if (_oldICC != isCrawlClimbing) {
+            this.tranDumpRemainingTicks = 10;
+            System.out.println(String.format(
+                    "[TX-MULTI-SERVER-RECV-ICC] uuid=%s tick=%d y=%.3f bbMinY=%.3f oldICC=%b newICC=%b",
+                    player.getUuid(), player.age, player.getY(),
+                    player.getBoundingBox().minY, _oldICC, isCrawlClimbing));
+        }
         isCeilingClimbing = ((bits >> 18) & 1) != 0;
         isWallJumping     = ((bits >> 31) & 1) != 0;
+        // 🔵 [TX-MULTI-SERVER-RECV-CR] dump — isCrawling transition.
+        boolean _oldCrawl = isCrawling;
         setCrawling(((bits >> 13) & 1) != 0);
+        if (_oldCrawl != isCrawling) {
+            this.tranDumpRemainingTicks = 10;
+            System.out.println(String.format(
+                    "[TX-MULTI-SERVER-RECV-CR] uuid=%s tick=%d y=%.3f bbMinY=%.3f oldCR=%b newCR=%b",
+                    player.getUuid(), player.age, player.getY(),
+                    player.getBoundingBox().minY, _oldCrawl, isCrawling));
+        }
         // R-04: setSmall() 경유하여 calculateDimensions() 호출 → 서버 AABB 갱신
         boolean newSmall = ((bits >> 15) & 1) != 0;
         if (newSmall != isSmall) setSmall(player, newSmall);
@@ -192,8 +214,18 @@ public final class SmartMovingServer {
         //   client 와 동등하게 잔존 → reconcile 발생 X.
         boolean newHeadJumping = ((bits >> 20) & 1) != 0;
         if (newHeadJumping != isHeadJumping) {
+            // 🔵 [TX-MULTI-SERVER-RECV-HJ] dump.
+            boolean _oldHJ = isHeadJumping;
             isHeadJumping = newHeadJumping;
             if (newHeadJumping) player.calculateDimensions();   // 진입 시만 호출.
+            this.tranDumpRemainingTicks = 10;
+            net.minecraft.entity.EntityPose _pose = player.getPose();
+            net.minecraft.entity.EntityDimensions _dim = player.getDimensions(_pose);
+            System.out.println(String.format(
+                    "[TX-MULTI-SERVER-RECV-HJ] uuid=%s tick=%d y=%.3f bbMinY=%.3f oldHJ=%b newHJ=%b POSE=%s dimH=%.2f dimEye=%.2f",
+                    player.getUuid(), player.age, player.getY(),
+                    player.getBoundingBox().minY, _oldHJ, newHeadJumping,
+                    _pose, _dim.height(), _dim.eyeHeight()));
         }
         // 🔴 fix #63 (2026-05-10, 사용자 보고 "슬라이딩 시 모델 박스 1m 아래 + 종료 박스 박힘"):
         //   fix #55 의 isSliding 분기 가드 (= 진입 시 skip) 가 *정상 자체 슬라이딩 진입* 시
@@ -210,6 +242,8 @@ public final class SmartMovingServer {
         //   fix #42 history BUG (= "콜리전 1칸 위 고정") 도 fix #63 으로 정확 매핑 회복.
         boolean newSliding = ((bits >> 21) & 1) != 0;
         if (newSliding != isSliding) {
+            // 🔵 [TX-MULTI-SERVER-RECV-SL] dump.
+            boolean _oldSL = isSliding;
             isSliding = newSliding;
             if (newSliding) {
                 // 진입 시: isHeadJumping=false 일 때만 호출 (= 정상 슬라이딩 진입).
@@ -221,6 +255,14 @@ public final class SmartMovingServer {
                 // 종료 시: 항상 호출 (= STANDING 복원).
                 player.calculateDimensions();
             }
+            this.tranDumpRemainingTicks = 10;
+            net.minecraft.entity.EntityPose _pose = player.getPose();
+            net.minecraft.entity.EntityDimensions _dim = player.getDimensions(_pose);
+            System.out.println(String.format(
+                    "[TX-MULTI-SERVER-RECV-SL] uuid=%s tick=%d y=%.3f bbMinY=%.3f oldSL=%b newSL=%b POSE=%s dimH=%.2f dimEye=%.2f",
+                    player.getUuid(), player.age, player.getY(),
+                    player.getBoundingBox().minY, _oldSL, newSliding,
+                    _pose, _dim.height(), _dim.eyeHeight()));
         }
         // ── X/Z 땡김 fix: 클라/서버 박스 동기화 (bit 34, bit 22 는 angleJumpType 사용) ──
         boolean newClimbCrawling = ((bits >> 34) & 1) != 0;
