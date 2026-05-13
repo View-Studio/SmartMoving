@@ -347,6 +347,21 @@ public class MixinPlayerEntityRenderer {
         //   isCeilingClimbing 동일 패턴 (= L250-256) 차용. 외 분기 prev 갱신은 아래 (= 비행 prev 갱신 패턴).
         if (sm.isHeadJumping || sm.isRopeSliding) {
             float targetYawRad = sm.stats.currentHorizontalAngle;
+            // 🔴 fix #94/#95 (2026-05-13, 사용자 보고 "여우무빙 시 원래 몸 방향 → 바라보는 방향 보간"):
+            //   fix #94: wasSelfSlideFire 가드 추가. fix #95: 발사 frame 만 snap.
+            //   원인: fix #91 의 fade lerp 가 wasSelfSlideFire 가드 누락 → 여우무빙 발사 시
+            //     prev=직전 vanilla bodyYaw → 5 tick lerp.
+            //   fix #94 (= 매 frame prev=target): 발사 즉시 도달 ✓. 그러나 wasSelfSlideFire 잔존
+            //     동안 매 frame instant → 벽 박을 때 currentHorizontalAngle 변화 시 fade 사라짐.
+            //   fix #95 (= 발사 frame 만 snap + flag): 발사 frame 만 prev=target. 그 후 자연 fade
+            //     (= fix #91 효과). 벽 박을 때 자연 보간 유지.
+            //   X 회전 (fix #81 v2) 은 target=π/2 고정이라 매 frame snap 무관. Y 회전 target=
+            //     currentHorizontalAngle 동적이라 snap 1회 한정 필요.
+            if (sm.wasSelfSlideFire && !sm.smHeadJumpYawSnapDone) {
+                sm.smHeadJumpYaw_prev = targetYawRad;
+                sm.smHeadJumpYawFade_prevTime = animationProgress;
+                sm.smHeadJumpYawSnapDone = true;
+            }
             float laggedYawRad = lerpFadeAngle(sm.smHeadJumpYaw_prev, targetYawRad,
                                                 sm.smHeadJumpYawFade_prevTime, animationProgress);
             sm.smHeadJumpYaw_prev = laggedYawRad;
@@ -826,9 +841,12 @@ public class MixinPlayerEntityRenderer {
         //   헤드점프/RopeSliding 외 분기에서 prev = 직전 vanilla 또는 SM bodyYaw (라디안).
         //   진입 첫 frame fade 자연 시작 (= 직전 자세 → currentHorizontalAngle target lerp).
         //   메모리 feedback_fade_prev_pre_entry_pose.md 참조.
+        // 🔴 fix #95 (2026-05-13): smHeadJumpYawSnapDone reset — 외 분기 진입 시 false.
+        //   다음 헤드점프 진입 시 (= wasSelfSlideFire 매트릭스 매트릭스) 첫 frame snap 활성.
         if (!sm.isHeadJumping && !sm.isRopeSliding) {
             sm.smHeadJumpYaw_prev = (float) Math.toRadians(sm.smCachedBodyYawLaggedDeg);
             sm.smHeadJumpYawFade_prevTime = animationProgress;
+            sm.smHeadJumpYawSnapDone = false;
         }
 
     }

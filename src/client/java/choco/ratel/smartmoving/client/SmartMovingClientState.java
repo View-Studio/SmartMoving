@@ -778,6 +778,13 @@ public final class SmartMovingClientState {
     public float smHeadJumpYaw_prev = 0f;            // 이전 프레임 헤드점프 Y 회전 (라디안) lerp 결과
     public float smHeadJumpYawFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔴 fix #95 (2026-05-13): 여우무빙 발사 frame Y 회전 snap done flag.
+    //   fix #94 의 wasSelfSlideFire 가드가 매 frame prev=target 강제 → 진행 중 fade 사라짐.
+    //   해결: 발사 frame 만 prev=target snap + flag=true. 그 후 자연 fade 진행 (= 벽 박을 때
+    //   currentHorizontalAngle 변화 시 fix #91 패턴 자연 lerp).
+    //   reset: 외 분기 진입 시 (= !isHeadJumping && !isRopeSliding) false 로.
+    public boolean smHeadJumpYawSnapDone = false;
+
     // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 발사 → 자동 cycle 진입 시 시각 수평 강제 플래그.
     //   자체 슬라이딩 발사 분기 (L2055+) 에서 true set. 헤드점프 종료 시 (isHeadJumping false 전환) reset.
     //   setupTransforms 헤드점프 분기에서 검사 → thetaTarget=π/2 (= Quarter) 고정 강제.
