@@ -113,48 +113,6 @@ public abstract class MixinLivingEntityRenderer {
         // 🔴 (Phase 2 fix-3-1) ModifyArg 등 entity 인자 없는 mixin point 가 lookup 위해 사용.
         SmartMovingClientState.currentRenderTarget = sm_currentRenderPlayer;
 
-        // 🔵 [TX-MULTI-*-POSE-RENDER] dump — render thread 의 POSE 변화 정확 frame 식별.
-        // 🔵 [TX-MULTI-*-RENDER-FULL] dump — transition window 안 매 render frame 전체 state.
-        //   사용자 시각 인지가 render time 발생. tick TAIL dump 만으로 frame 정확 측정 못 함.
-        //   매 frame 의 partial tick + lerpedY + bb + POSE + dim 비교 = 사용자 시각 1:1 매핑.
-        if (sm_currentRenderPlayer != null && SmartMovingConfig.Config.enabled) {
-            SmartMovingClientState _smRender = SmartMovingClientState.get(sm_currentRenderPlayer);
-            if (_smRender.tranDumpRemainingTicks > 0) {
-                boolean _isSelf = sm_currentRenderPlayer instanceof net.minecraft.client.network.ClientPlayerEntity;
-                net.minecraft.entity.EntityPose _curPoseRender = sm_currentRenderPlayer.getPose();
-                double _lerpedY = sm_currentRenderPlayer.prevY
-                        + (sm_currentRenderPlayer.getY() - sm_currentRenderPlayer.prevY) * tickDelta;
-                net.minecraft.entity.EntityDimensions _dimR = sm_currentRenderPlayer
-                        .getDimensions(_curPoseRender);
-                net.minecraft.util.math.Box _bbR = sm_currentRenderPlayer.getBoundingBox();
-                double _bbDeltaR = _bbR.minY - sm_currentRenderPlayer.getY();
-                // POSE 변화 시 1회 명시 dump.
-                if (_smRender.lastSeenPoseRender != _curPoseRender) {
-                    System.out.println(String.format(
-                            "[TX-MULTI-%s-POSE-RENDER] uuid=%s tick=%d pt=%.3f prevPose=%s curPose=%s y=%.3f lerpedY=%.3f bbMinY=%.3f dimH=%.2f dimEye=%.2f dimBranch=%d",
-                            _isSelf ? "SELF" : "REMOTE",
-                            sm_currentRenderPlayer.getUuid(), sm_currentRenderPlayer.age, tickDelta,
-                            _smRender.lastSeenPoseRender, _curPoseRender,
-                            sm_currentRenderPlayer.getY(), _lerpedY,
-                            _bbR.minY, _dimR.height(), _dimR.eyeHeight(),
-                            _smRender.lastDimBranchId));
-                }
-                _smRender.lastSeenPoseRender = _curPoseRender;
-                // 매 render frame full dump (= transition window 안만).
-                //   사용자 시각 frame 1:1 매핑. spam 약간이지만 transition window 30 tick * 3 frame
-                //   = ~90 dump per transition.
-                System.out.println(String.format(
-                        "[TX-MULTI-%s-RENDER-FULL] uuid=%s tick=%d pt=%.3f y=%.3f lerpedY=%.3f bbMinY=%.3f bbΔ=%.3f POSE=%s dimH=%.2f dimEye=%.2f dimBranch=%d isCR=%b isSL=%b isHJ=%b",
-                        _isSelf ? "SELF" : "REMOTE",
-                        sm_currentRenderPlayer.getUuid(), sm_currentRenderPlayer.age, tickDelta,
-                        sm_currentRenderPlayer.getY(), _lerpedY,
-                        _bbR.minY, _bbDeltaR, _curPoseRender,
-                        _dimR.height(), _dimR.eyeHeight(),
-                        _smRender.lastDimBranchId,
-                        _smRender.isCrawling, _smRender.isSliding, _smRender.isHeadJumping));
-            }
-        }
-
         // 🔴 사용자 보고 fix (2026-05-04 — "1칸 공간 재진입 시 잠깐 SWIMMING 모델 보임"):
         //   원인: server 가 pose=SWIMMING 동기화 → client 첫 frame render 시점
         //   SmartMovingClientState 새로 생성 (= isCrawling=false). client tick 의 init 분기
@@ -196,39 +154,6 @@ public abstract class MixinLivingEntityRenderer {
                                        int light, CallbackInfo ci) {
         sm_currentRenderPlayer = null;
         SmartMovingClientState.currentRenderTarget = null;
-    }
-
-    // 🔵 [TX-MULTI-*-RENDER-MATRIX] dump — setAngles INVOKE 직전 matrix state.
-    //   vanilla render 식 적용 후 (= scale, translate -1.501, setupTransforms 등 모두 적용)
-    //   최종 matrix.m31 (= Y translation) = 모델 root 의 world Y 위치.
-    //   horizontalCollision + horizSpeed 같이 dump = 정지 vs 움직이는 slide 시각 차이 식별.
-    @Inject(method = "render",
-            at = @At(value = "INVOKE",
-                     target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V"))
-    private void sm_dumpRenderMatrix(LivingEntity entity, float yaw, float tickDelta,
-                                      MatrixStack matrices, VertexConsumerProvider vertexConsumers,
-                                      int light, CallbackInfo ci) {
-        if (sm_currentRenderPlayer == null) return;
-        if (!SmartMovingConfig.Config.enabled) return;
-        SmartMovingClientState _sm = SmartMovingClientState.get(sm_currentRenderPlayer);
-        if (_sm.tranDumpRemainingTicks <= 0) return;
-        boolean _isSelf = sm_currentRenderPlayer instanceof ClientPlayerEntity;
-        float _matrixY = matrices.peek().getPositionMatrix().m31();
-        boolean _hCol = sm_currentRenderPlayer.horizontalCollision;
-        net.minecraft.util.math.Vec3d _vel = sm_currentRenderPlayer.getVelocity();
-        double _horizSpeed = Math.sqrt(_vel.x * _vel.x + _vel.z * _vel.z);
-        double _lerpedY = sm_currentRenderPlayer.prevY
-                + (sm_currentRenderPlayer.getY() - sm_currentRenderPlayer.prevY) * tickDelta;
-        System.out.println(String.format(
-            "[TX-MULTI-%s-RENDER-MATRIX] uuid=%s tick=%d pt=%.3f matrixY=%.4f y=%.3f lerpedY=%.3f bbMinY=%.3f hCol=%b hSpeed=%.4f POSE=%s isSL=%b isCR=%b",
-            _isSelf ? "SELF" : "REMOTE",
-            sm_currentRenderPlayer.getUuid(), sm_currentRenderPlayer.age, tickDelta,
-            _matrixY,
-            sm_currentRenderPlayer.getY(), _lerpedY,
-            sm_currentRenderPlayer.getBoundingBox().minY,
-            _hCol, _horizSpeed,
-            sm_currentRenderPlayer.getPose(),
-            _sm.isSliding, _sm.isCrawling));
     }
 
     @ModifyArg(

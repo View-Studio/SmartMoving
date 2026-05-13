@@ -83,9 +83,7 @@ public class SmartMovingClient implements ClientModInitializer {
                     //   self (= ClientPlayerEntity) 는 자체 fix.
                     boolean wasSliding = target.isSliding;
                     boolean wasFlying = target.isFlying;
-                    // 🔵 [TX-MULTI-REMOTE-PKT] 진단 — packet 처리 전 transition 상태 저장.
                     boolean wasHJ = target.isHeadJumping;
-                    boolean wasCrawling = target.isCrawling;
                     boolean wasICC = target.isClimbCrawling;
                     double slideBoxMinYBefore = 0.0;
                     double flyBoxMinYBefore = 0.0;
@@ -161,31 +159,6 @@ public class SmartMovingClient implements ClientModInitializer {
                                 living2.calculateDimensions();
                             }
                         }
-                    }
-                    // 🔵 [TX-MULTI-REMOTE-PKT] dump — HJ/slide/crawl/ICC transition 검출 시 1회 출력.
-                    boolean _tranAny = (wasHJ != target.isHeadJumping)
-                            || (wasSliding != target.isSliding)
-                            || (wasCrawling != target.isCrawling)
-                            || (wasICC != target.isClimbCrawling);
-                    if (_tranAny
-                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remTran
-                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
-                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accTranDbg =
-                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remTran;
-                        target.tranDumpRemainingTicks = 30;
-                        net.minecraft.entity.EntityPose _pose = remTran.getPose();
-                        net.minecraft.entity.EntityDimensions _dim = remTran.getDimensions(_pose);
-                        System.out.println(String.format(
-                                "[TX-MULTI-REMOTE-PKT] uuid=%s tick=%d wasHJ=%b isHJ=%b wasSL=%b isSL=%b wasCR=%b isCR=%b wasICC=%b isICC=%b y=%.3f bbMinY=%.3f srvY=%.3f bti=%d POSE=%s dimH=%.2f dimEye=%.2f isFly=%b slideBBMinBefore=%.3f",
-                                remTran.getUuid(), remTran.age,
-                                wasHJ, target.isHeadJumping,
-                                wasSliding, target.isSliding,
-                                wasCrawling, target.isCrawling,
-                                wasICC, target.isClimbCrawling,
-                                remTran.getY(), remTran.getBoundingBox().minY,
-                                accTranDbg.sm_getServerY(), accTranDbg.sm_getBodyTrackingIncrements(),
-                                _pose, _dim.height(), _dim.eyeHeight(),
-                                target.isFlying, slideBoxMinYBefore));
                     }
                     // 🔴 (Phase 2 BUG-7) self side ICC ENTER 매핑 1:1 복제.
                     //   self side ICC 진입 (SmartMovingClientState L2367-L2423):
@@ -295,15 +268,6 @@ public class SmartMovingClient implements ClientModInitializer {
                                 (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteSlideExit;
                         double newY = remoteSlideExit.getY();
                         boolean willDrop = (slideBoxMinYBefore - newY) > 0.5;
-                        // 🔵 [TX-MULTI-REMOTE-SLEXIT] dump — willDrop 검사 + setPos 적용 여부.
-                        double _beforeY = remoteSlideExit.getY();
-                        System.out.println(String.format(
-                                "[TX-MULTI-REMOTE-SLEXIT-PRE] uuid=%s tick=%d slideBBMinBefore=%.3f y=%.3f drop=%.3f willDrop=%b isCR=%b srvY=%.3f bti=%d",
-                                remoteSlideExit.getUuid(), remoteSlideExit.age,
-                                slideBoxMinYBefore, _beforeY,
-                                slideBoxMinYBefore - _beforeY, willDrop,
-                                target.isCrawling,
-                                accX.sm_getServerY(), accX.sm_getBodyTrackingIncrements()));
                         if (willDrop) {
                             newY += 1.0;
                             remoteSlideExit.setPosition(remoteSlideExit.getX(), newY, remoteSlideExit.getZ());
@@ -313,11 +277,6 @@ public class SmartMovingClient implements ClientModInitializer {
                             accX.sm_setServerY(newY);
                             accX.sm_setBodyTrackingIncrements(0);
                         }
-                        System.out.println(String.format(
-                                "[TX-MULTI-REMOTE-SLEXIT-POST] uuid=%s tick=%d y=%.3f bbMinY=%.3f srvY=%.3f bti=%d",
-                                remoteSlideExit.getUuid(), remoteSlideExit.age,
-                                remoteSlideExit.getY(), remoteSlideExit.getBoundingBox().minY,
-                                accX.sm_getServerY(), accX.sm_getBodyTrackingIncrements()));
                     }
 
                     // 🔴 (BUG 2 fix, 2026-05-13) remote 헤드점프 착지 1칸 down jump 차단.
