@@ -767,6 +767,17 @@ public final class SmartMovingClientState {
     public float smHeadJumpTiltX_prev = 0f;       // 이전 프레임 헤드점프 X 회전 lerp 결과
     public float smHeadJumpFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
+    //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).
+    //   isHeadJump 분기 (SmartMovingModel L509): bipedOuter.rotateAngleY = currentHorizontalAngle.
+    //   fadeIntermediate 가 자연 fade lerp (0.2 factor) 적용 → 벽 박은 후 vx 반전 시
+    //   currentHorizontalAngle 매 frame 변화 → 모델 자연 회전 추적.
+    //   우리 1.21.1 매핑 누락: isHeadJumping 분기 (MixinPlayerEntityRenderer L342-347) 가
+    //   smBodyYawOverride = currentHorizontalAngle 직접 set → instant 회전.
+    //   해결: isCeilingClimbing fade 패턴 차용 — smHeadJumpYaw_prev field + lerpFadeAngle.
+    public float smHeadJumpYaw_prev = 0f;            // 이전 프레임 헤드점프 Y 회전 (라디안) lerp 결과
+    public float smHeadJumpYawFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
+
     // 🔴 fix #81 (2026-05-12): 자체 슬라이딩 발사 → 자동 cycle 진입 시 시각 수평 강제 플래그.
     //   자체 슬라이딩 발사 분기 (L2055+) 에서 true set. 헤드점프 종료 시 (isHeadJumping false 전환) reset.
     //   setupTransforms 헤드점프 분기에서 검사 → thetaTarget=π/2 (= Quarter) 고정 강제.
