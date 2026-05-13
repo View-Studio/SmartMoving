@@ -155,6 +155,11 @@ public final class SmartMovingServer {
      *   bit 21: isSliding       ★ 신규 (Phase D-1, POSE.SLIDING)
      */
     public void processStatePacket(ServerPlayerEntity player, long bits) {
+        // 🔴 fix #90 (2026-05-13, BUG: remote 측 벽 박은 후 slide→crawl 전환 시 모델 1m 잠긴 후 회복):
+        //   processStatePacket 시작 시 wasSL/wasCR 저장 — 끝에서 slide→crawl 자동 전환 매치 검사용.
+        boolean _wasSL_fix90 = this.isSliding;
+        boolean _wasCR_fix90 = this.isCrawling;
+
         isClimbing        = ((bits >> 14) & 1) != 0;
         // 🔵 [TX-MULTI-SERVER-RECV-ICC] dump.
         boolean _oldICC = isCrawlClimbing;
@@ -275,6 +280,31 @@ public final class SmartMovingServer {
         resetFallDistance     = isClimbing || isCrawlClimbing || isCeilingClimbing || isWallJumping;
         // 3-2: floatingTick 리셋 조건 (벽점프 제외 — 벽점프는 순간적이라 kick 위험 없음)
         resetTicksForFloatKick = isClimbing || isCrawlClimbing || isCeilingClimbing;
+
+        // 🔴 fix #90 (2026-05-13, 사용자 보고 "remote 벽 박은 후 slide→crawl 시 모델 1m 잠긴 후 회복"):
+        //   매칭 조건: wasSL=true && !newSL && !wasCR && newCR (= slide → crawl 자동 전환).
+        //
+        //   원인 (dump 검증 log_temp_2.txt):
+        //     server side packet 수신 시 setCrawling + setSliding(false) → calculateDimensions
+        //     호출만. entity.y 명시적 push 없음 → vanilla 자동 push out of blocks 에 의존.
+        //     - 평지 (벽 없음): vanilla 자동 push 가 1 tick 안 +1m 완료 → server.y=71 즉시 broadcast.
+        //     - 벽 박은: vanilla 자동 push 가 *수평+수직 결합* → +0.2m 만 1 tick → 다음 tick +0.8m.
+        //       server.y trajectory: 70 → 70.2 → 71. broadcast lag.
+        //     client (remote) vanilla lerpPosAndRotation 매 tick srvY 추격 → client.y 70.733
+        //     → 70.822 → ... → 71 (~500ms lerp) → 사용자 시각 "잠긴 후 회복".
+        //
+        //   해결: self side fix #70 (= SmartMovingClientState L2455 setPos(y+1)) 의 server 대칭 매핑.
+        //     processStatePacket 끝에 명시적 setPos(y+1) 호출 → server.y 즉시 71 → broadcast srvY=71
+        //     → client lerp target=71 → 잠기는 시점 없음.
+        //
+        //   회귀 검토:
+        //     - 정상 (벽 없음) 시: setPos(71) 후 박스 발=71=평지 위 1m. vanilla 자동 push 는 *bb 박힘*
+        //       조건이라 발동 X → +1m 만 적용. 회귀 없음.
+        //     - 벽 박은 시: setPos(71) 후 박스 위치 = (71, 71.8). self 가 벽 옆 평지 위 → 박스 벽 안
+        //       침투 X (= 벽 모서리 위 만 매치). 안전.
+        if (_wasSL_fix90 && !this.isSliding && !_wasCR_fix90 && this.isCrawling) {
+            player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+        }
     }
 
     // ── 3-1-A: 크롤링 상태 전환 + cooldown 설정 ──────────────────────

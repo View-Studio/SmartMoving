@@ -386,14 +386,18 @@ public abstract class MixinPlayerEntityClient {
             net.minecraft.entity.EntityPose _pose = remote.getPose();
             net.minecraft.entity.EntityDimensions _dim = remote.getDimensions(_pose);
             double _bbMinDelta = remote.getBoundingBox().minY - remote.getY();
+            double _vx = remote.getVelocity().x;
+            double _vz = remote.getVelocity().z;
+            double _hSpd = Math.sqrt(_vx * _vx + _vz * _vz);
             System.out.println(String.format(
-                    "[TX-MULTI-REMOTE-TICK] uuid=%s tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f srvY=%.3f bti=%d lastRY=%.3f prevY=%.3f isHJ=%b isCR=%b isSL=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b dimBranch=%d",
+                    "[TX-MULTI-REMOTE-TICK] uuid=%s tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f srvY=%.3f bti=%d lastRY=%.3f prevY=%.3f isHJ=%b isCR=%b isSL=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b hCol=%b hSpd=%.4f dimBranch=%d",
                     remote.getUuid(), remote.age, remote.getY(),
                     remote.getBoundingBox().minY, _bbMinDelta,
                     accDbg.sm_getServerY(), accDbg.sm_getBodyTrackingIncrements(),
                     remote.lastRenderY, remote.prevY,
                     sm.isHeadJumping, sm.isCrawling, sm.isSliding, sm.isClimbCrawling, sm.isFlying,
                     _pose, _dim.height(), _dim.eyeHeight(), remote.isOnGround(),
+                    remote.horizontalCollision, _hSpd,
                     sm.lastDimBranchId));
         }
         // 🔴 (Phase 1-B fix-2) stats source: getVelocity() → position delta.

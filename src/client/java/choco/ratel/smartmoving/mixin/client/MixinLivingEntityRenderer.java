@@ -198,6 +198,39 @@ public abstract class MixinLivingEntityRenderer {
         SmartMovingClientState.currentRenderTarget = null;
     }
 
+    // 🔵 [TX-MULTI-*-RENDER-MATRIX] dump — setAngles INVOKE 직전 matrix state.
+    //   vanilla render 식 적용 후 (= scale, translate -1.501, setupTransforms 등 모두 적용)
+    //   최종 matrix.m31 (= Y translation) = 모델 root 의 world Y 위치.
+    //   horizontalCollision + horizSpeed 같이 dump = 정지 vs 움직이는 slide 시각 차이 식별.
+    @Inject(method = "render",
+            at = @At(value = "INVOKE",
+                     target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V"))
+    private void sm_dumpRenderMatrix(LivingEntity entity, float yaw, float tickDelta,
+                                      MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                      int light, CallbackInfo ci) {
+        if (sm_currentRenderPlayer == null) return;
+        if (!SmartMovingConfig.Config.enabled) return;
+        SmartMovingClientState _sm = SmartMovingClientState.get(sm_currentRenderPlayer);
+        if (_sm.tranDumpRemainingTicks <= 0) return;
+        boolean _isSelf = sm_currentRenderPlayer instanceof ClientPlayerEntity;
+        float _matrixY = matrices.peek().getPositionMatrix().m31();
+        boolean _hCol = sm_currentRenderPlayer.horizontalCollision;
+        net.minecraft.util.math.Vec3d _vel = sm_currentRenderPlayer.getVelocity();
+        double _horizSpeed = Math.sqrt(_vel.x * _vel.x + _vel.z * _vel.z);
+        double _lerpedY = sm_currentRenderPlayer.prevY
+                + (sm_currentRenderPlayer.getY() - sm_currentRenderPlayer.prevY) * tickDelta;
+        System.out.println(String.format(
+            "[TX-MULTI-%s-RENDER-MATRIX] uuid=%s tick=%d pt=%.3f matrixY=%.4f y=%.3f lerpedY=%.3f bbMinY=%.3f hCol=%b hSpeed=%.4f POSE=%s isSL=%b isCR=%b",
+            _isSelf ? "SELF" : "REMOTE",
+            sm_currentRenderPlayer.getUuid(), sm_currentRenderPlayer.age, tickDelta,
+            _matrixY,
+            sm_currentRenderPlayer.getY(), _lerpedY,
+            sm_currentRenderPlayer.getBoundingBox().minY,
+            _hCol, _horizSpeed,
+            sm_currentRenderPlayer.getPose(),
+            _sm.isSliding, _sm.isCrawling));
+    }
+
     @ModifyArg(
         method = "render",
         at = @At(value = "INVOKE",

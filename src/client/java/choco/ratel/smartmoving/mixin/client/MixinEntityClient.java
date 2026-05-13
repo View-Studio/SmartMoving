@@ -39,6 +39,35 @@ public abstract class MixinEntityClient {
      *   상세는 MixinEntity.sm_afterMove 주석 참조.
      */
     /**
+     * 🔵 [TX-MULTI-*-SETPOS] dump — entity.y 변경 매 setPos 호출 stack trace.
+     *   transition window 안 + |dy| >= 0.5 (= 큰 변화만, 작은 motion 제외).
+     *   사용자 시나리오 "벽 충돌 시 self.y 71→70 push 1m drop" 의 호출 path 식별.
+     */
+    @Inject(method = "setPos(DDD)V", at = @At("HEAD"))
+    private void sm_setPosDump(double x, double y, double z,
+                                org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        if (!SmartMovingConfig.Config.enabled) return;
+        Object self = (Object) this;
+        if (!(self instanceof net.minecraft.client.network.AbstractClientPlayerEntity ap)) return;
+        SmartMovingClientState sm = SmartMovingClientState.get(ap);
+        if (sm.tranDumpRemainingTicks <= 0) return;
+        double curY = ap.getY();
+        double dy = y - curY;
+        if (Math.abs(dy) < 0.5) return;
+        boolean isSelf = ap instanceof ClientPlayerEntity;
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 2; i < Math.min(st.length, 12); i++) {
+            sb.append("\n  at ").append(st[i].getClassName()).append('.').append(st[i].getMethodName())
+              .append(':').append(st[i].getLineNumber());
+        }
+        System.out.println(String.format(
+                "[TX-MULTI-%s-SETPOS] uuid=%s tick=%d oldY=%.3f newY=%.3f dy=%.3f stack=%s",
+                isSelf ? "SELF" : "REMOTE",
+                ap.getUuid(), ap.age, curY, y, dy, sb.toString()));
+    }
+
+    /**
      * 🔵 [TX-MULTI-*-BB-CALC] dump — calculateBoundingBox 매 호출 결과 dump.
      *   transition window 안 + bb 높이 >= 1.0 (= STANDING 박스 1.8m 매치) 시만 출력.
      *   사용자 가설 "F3+B hitbox 1.8m STANDING 박스 잔존 frame" 정확 식별.

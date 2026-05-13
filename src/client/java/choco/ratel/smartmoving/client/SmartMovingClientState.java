@@ -2242,12 +2242,16 @@ public final class SmartMovingClientState {
                 boolean _inputContCrawl = _crawlToggleEn
                         ? this.crawlToggled
                         : (_sneakKeyRaw || (!_freeClimbEn && _grabKeyHeld));
+                double _vxSelf = player.getVelocity().x;
+                double _vzSelf = player.getVelocity().z;
+                double _hSpdSelf = Math.sqrt(_vxSelf * _vxSelf + _vzSelf * _vzSelf);
                 System.out.println(String.format(
-                        "[TX-MULTI-SELF-TICK] tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f hO=%.2f wasHJ=%b isHJ=%b isCrawl=%b isSlide=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b dimBranch=%d glfwSh=%b sneakKey=%b inSneak=%b entSneak=%b grabKey=%b crawlTog=%b mustCrawl=%b sneakHeldClmb=%b forceSneak=%s isClimbing=%b inputContCrawl=%b ctxContCrawl=%b wouldWantCrawl=%b wantCrawl=%b",
+                        "[TX-MULTI-SELF-TICK] tick=%d y=%.3f bbMinY=%.3f bbΔ=%.3f hO=%.2f wasHJ=%b isHJ=%b isCrawl=%b isSlide=%b isICC=%b isFly=%b POSE=%s dimH=%.2f dimEye=%.2f onG=%b hCol=%b hSpd=%.4f dimBranch=%d glfwSh=%b sneakKey=%b inSneak=%b entSneak=%b grabKey=%b crawlTog=%b mustCrawl=%b sneakHeldClmb=%b forceSneak=%s isClimbing=%b inputContCrawl=%b ctxContCrawl=%b wouldWantCrawl=%b wantCrawl=%b",
                         player.age, player.getY(), player.getBoundingBox().minY, _bbMinDeltaSelf,
                         this.heightOffset, this.wasHeadJumping, this.isHeadJumping,
                         this.isCrawling, this.isSliding, this.isClimbCrawling, this.isFlying,
                         _pose, _dim.height(), _dim.eyeHeight(), player.isOnGround(),
+                        player.horizontalCollision, _hSpdSelf,
                         this.lastDimBranchId,
                         _glfwShift,
                         _sneakKeyRaw,
@@ -2988,6 +2992,22 @@ public final class SmartMovingClientState {
                 double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
                         minY - 1D, minY, horizontalTolerance);
                 double b35Dy = crawlStandUpBottom - minY;
+                // 🔴 (벽 충돌 fix, 2026-05-13) onGround + dy<0 시 push skip.
+                //   사용자 보고 BUG: REMOTE 측 slide → 벽 충돌 시 모델 1m down lerp 추격 (= ~15 tick
+                //     모델 위치 변동 = 시각 "모델 덜컹").
+                //   root cause (= self side dump 검증, stack trace L2991):
+                //     - 벽 충돌 → mustCrawl=true 자동 crawl 진입.
+                //     - crawl 자동 종료 frame (= B-35 분기) 에 getMaxPlayerSolidBetween 측정.
+                //     - 벽 충돌 시 vanilla collision 으로 bb.X/Z 정렬 + horizontalTolerance -0.05 좁힘
+                //       가드 → ground block X/Z range 매트릭스 매치 X → fallback yMin (= bb.minY-1).
+                //     - b35Dy = (minY-1) - minY = -1m → player.move(-1) → self.y -1m drop.
+                //     - server broadcast → remote.y lerp 71→70 추격 ~15 tick = 모델 덜컹.
+                //   원래 의도 (= project_crawl_release_camera_jump_fix): 떨어지면서 풀림 시
+                //     (= onG=false + solid 없음) -1m drop 정상 (= 박스 발 정렬).
+                //   해결: onGround=true + dy<0 시 push skip. 떨어지면서 풀림 (= onG=false) 시 적용.
+                if (b35Dy < 0D && player.isOnGround()) {
+                    // skip — 지면 위 + dy<0 = 벽 충돌 시 fallback 잘못 매트릭스. self.y 보존.
+                } else {
                 player.move(MovementType.SELF, new Vec3d(0, b35Dy, 0));
                 // 🔴 Camera lerp 점프 차단 (사용자 보고 fix — 엎드린 채 떨어지면서 풀림 시 1인칭 덜컹):
                 //   B-35 분기 `move(0, crawlStandUpBottom - minY, 0)` = 박스 발 정렬. 떨어지는 중
@@ -3009,6 +3029,7 @@ public final class SmartMovingClientState {
                         ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
                     }
                 }
+                }  // 벽 충돌 fix else 분기 닫기.
             }
             // 분기 B: (isCrawling && !wasCrawling) || initializeCrawling
             //   → setHeightOffset(-1F) + move(0, -1D, 0) + (initializeCrawling → toCrawling())
