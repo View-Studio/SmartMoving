@@ -589,12 +589,13 @@ public final class SmartMovingSwimmer {
         }
 
         // ── [8-5] isJumpingOutOfWater ────────────────────────────────────────
-        // 원본: wantJumpOutOfWater = 수평이동 + 벽충돌 + diveUp + !isSlow
-        //       isJumpingOutOfWater = wantJumpOutOfWater && (waterMovementTicks > 10 || onGround)
-        boolean wantJumpOut = (moveForward != 0 || moveStrafe != 0)
-                && player.horizontalCollision
-                && diveUp;
-        if (wantJumpOut && (sm.waterMovementTicks > 10 || player.isOnGround())) {
+        // 🔵 (2026-05-20, Phase 0 검증 fix): 원본 L499-500 `else if(isJumpingOutOfWater) sp.motionY = 0.3`
+        //   1:1 매핑. sm.isJumpingOutOfWater 필드는 updateSwimState L212-220 에서 원본 L486-487
+        //   완전 식 (`!isSlow` + `wasJumpingOutOfWater` 포함) 으로 이미 갱신됨.
+        //   기존 매핑은 식 재계산 — `!sm.isSlow` 가드 누락 + `sm.wasJumpingOutOfWater` OR 항 누락 →
+        //   sneak hold 중 수면 점프 차단 안 됨 + 연속 frame jump 유지 매치 안 됨. 사용자 자각
+        //   가능 차이 (sneak 잠수 중 모서리 벽 충돌 시 의도치 않은 surface 점프).
+        if (sm.isJumpingOutOfWater) {
             motionY = JUMP_OUT_OF_WATER_VELOCITY;
         }
 
