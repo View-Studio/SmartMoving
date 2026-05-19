@@ -175,8 +175,19 @@ public abstract class MixinPlayerEntityClient {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
-        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isSwimming_sm || sm.isDiving;
+        // 🔵 (2026-05-20, Phase 0 검증 fix #102) swim/dive 별도 분기 — isSliding 패턴 1:1 차용.
+        //   원본 1.7.10 `setHeightOffset(-1F)` (L510-511 `if(isDiving||isSwimming)`) 효과 =
+        //     boundingBox.minY -= 1 (박스 +1m up) + height 0.8 + eyeHeight 변경 X (STANDING 1.62
+        //     잔존, position 변경 X). isSliding/isHeadJumping 매핑과 동일 의도.
+        //   기존 매핑 BUG: swim/dive 가 smSmall (eye=0.62) 에 들어가 박스 +1m up 차단 (mixin offset
+        //     가드 `eyeHeight>1 || pose==SLIDING` 통과 X) + 카메라 STANDING 보다 1m 낮음.
+        //   해결: isSliding 처럼 eye=1.62 강제 → mixin offset 가드 통과 (eye>1) → 박스 +1m up 자동
+        //     적용 → 박스 발 = entity.y + 1m + 카메라 = entity.y + 1.62 (STANDING 동일).
+        if (sm.isSwimming_sm || sm.isDiving) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
+        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;

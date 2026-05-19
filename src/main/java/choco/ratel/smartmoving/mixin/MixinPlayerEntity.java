@@ -89,11 +89,18 @@ public abstract class MixinPlayerEntity {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
             return;
         }
+        // 🔵 (2026-05-20, Phase 0 검증 fix #102) swim/dive 별도 분기 — 클라 매핑 1:1 대칭.
+        //   원본 1.7.10 `setHeightOffset(-1F)` 효과 = 박스 +1m up + eyeHeight 1.62 STANDING 유지.
+        //   client side `sm_getBaseDimensions_client` 의 swim/dive 분기 변경과 1:1 동기화 필수
+        //   (= server reconcile + multi remote bb 정합).
+        if (sm.isSwimming || sm.isDiving) {
+            cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(1.62F));
+            return;
+        }
         // 🔴 v26.12 — v26.5 가드 폐기 (client/server 양쪽 동기화).
         //   STANDING dim fall through BUG root. Fix 7 의 의도 (= smSmall 에 isCrawlClimbing 추가)
         //   1:1 복원. 사용자 보고 "STANDING → 엎드림" transition 차단.
-        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing
-                       || sm.isSwimming || sm.isDiving;
+        boolean smSmall = sm.isCrawling || sm.isCrawlClimbing;
         if (smSmall) {
             cir.setReturnValue(EntityDimensions.changing(0.6F, 0.8F).withEyeHeight(0.62F));
             return;
