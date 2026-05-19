@@ -273,7 +273,25 @@ public class SmartMovingClient implements ClientModInitializer {
                     //     calc dim 후 entity.y) 차이로 willDrop 검사 → drop > 0.5m 시 setPos(y+1).
                     //   회귀 차단: 비행 → 슬라이딩 종료 (fix #87) 등 slideBoxMinYBefore ≈ remote.y 케이스
                     //     (= mixin offset 이미 차단) → willDrop=false → push 안 함.
-                    if (wasSliding && !target.isSliding
+                    // 🔵 fix #100 (2026-05-20, 사용자 보고 "슬라이딩 → 절벽 → 헤드점프 자동 전환 시 REMOTE
+                    //   1칸 위 잠깐 올라갔다 정상 복귀"):
+                    //   진짜 path: SmartMovingClientState L2309-L2315 의 SlideToHeadJumping 자동 전환.
+                    //     = `isSliding=false; isHeadJumping=true; isAerodynamic=true` 비트만 set.
+                    //     self side entity.y push 없음 (= L2389 push 가드 `!isHeadJumping` 매치 X).
+                    //     POSE 측 line 126-127 `isHJ || isSL → SLIDING` → POSE=SLIDING 유지 → mixin offset
+                    //     활성 유지 (MixinEntity L122 가드 `pose!=SLIDING` 매치 X) → bb=entity.y+1 유지.
+                    //     = self 시각 무변화.
+                    //   remote 측 본 분기: wasSliding=true && target.isSliding=false 매치.
+                    //     slideBoxMinYBefore = remote.y+1 (calc dim 전 mixin 활성),
+                    //     newY = remote.y (calc dim 후 entity.y, mixin offset 여전 활성).
+                    //     willDrop = (remote.y+1 - remote.y) > 0.5 = **false positive true**.
+                    //     → setPos(remote.y+1) + lerp cancel → POSE=SLIDING 유지로 mixin offset 활성 →
+                    //     bb=(remote.y+1)+1=ground+2m → "1칸 위 부유" 시각. 다음 broadcast srvY=self.y
+                    //     도착 시 lerp 재개 → -1m down → 정상 위치 복귀.
+                    //   해결: 가드 `!target.isHeadJumping` 추가 — self side L2389 `!isHeadJumping` 가드 1:1
+                    //     매칭. slide → HJ 자동 전환 시 push 차단. 다른 slide-exit 케이스 (crawl/standing/
+                    //     비행) 는 isHJ=false 라 통과 → 기존 동작 유지.
+                    if (wasSliding && !target.isSliding && !target.isHeadJumping
                             && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteSlideExit
                             && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
                         choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accX =
