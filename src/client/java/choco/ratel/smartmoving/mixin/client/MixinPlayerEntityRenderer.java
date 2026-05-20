@@ -93,6 +93,17 @@ public class MixinPlayerEntityRenderer {
             cir.setReturnValue(Vec3d.ZERO);
             return;
         }
+        // 🔵 (2026-05-20, BUG-Swim-Anim-2 fix #110) swim/dive 모델 위치 보정.
+        //   사용자 보고 "모델이 콜리전보다 1칸 아래에서 나오고 있음" — fix #102 (swim/dive 박스
+        //   +1m up + eye 1.62) 적용 후 박스는 +1m up 되었으나 모델 origin 은 entity.y 그대로 →
+        //   박스 안 1m down 위치에 모델.
+        //   원본 1.7.10 setHeightOffset(-1F) = box.minY -=-1F + height -=1F + posY 변경 X →
+        //     entity.y 그대로. isCrawling 분기 (entity.y unchange) 와 동일 mechanism.
+        //   해결: isCrawling 동일 식 (-1.0 - scale*0.06) 적용. 모델 발 = 박스 발 (= ground 정렬).
+        if (sm.isSwimming_sm || sm.isDiving) {
+            cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
+            return;
+        }
 
         // 타인 플레이어 (B-14 / §16-22 / 원본 SmartMovingRender L124-L125):
         // !isOwnPlayer && entity.isSneaking() && isCrawl → d1 += 0.125 (지면 뚫림 방지)
@@ -514,15 +525,26 @@ public class MixinPlayerEntityRenderer {
         // SM 수영(isSwimming_sm): bipedOuter.rotateAngleX = Quarter - Sixteenth * standSneakFactor
         // 원본: fadeRotateAngleX = true + rotateAngleX = Quarter - Sixteenth * standSneakFactor
         // standSneakFactor: 정지/스니킹=1 → 67.5°, 보행=0 → 90°(완전 수평)
+        // 🔵 (2026-05-20, BUG-Swim-Anim-1/3 fix #110) 슬라이딩 L554-565 패턴 1:1 적용:
+        //   - pivotY = 1.5 - 3/16 = 1.3125 (= 엎드리기/슬라이딩 동일 머리 중심 회전).
+        //   - translate(0, pivotY, 0) → rotate(-tiltAngle) → translate(0, -pivotY, 0)
+        //     매트릭스 스택 — pivot 기준 회전. 사용자 보고 "회전 중심 머리 부분" fix.
+        //   - POSITIVE_X.rotation(-tiltAngle) 부호 반전 — vanilla scale(-1,-1,1) 보정
+        //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
+        //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
         if (sm.isSwimming_sm) {
             float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 8f * sm.swimStandSneakFactor;
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            float pivotY = 1.5f - 3f / 16f;   // = 1.3125 (엎드리기/슬라이딩 통일)
+            matrices.translate(0f, pivotY, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
         // SM 잠수(isDiving): 원본 SmartMovingModel.md L542 —
         //   bipedOuter.rotateAngleX = isLevitate ? Quarter - Sixteenth
         //                           : (isJump ? 0F : Quarter - currentVerticalAngle)
+        // 🔵 (2026-05-20, BUG-Swim-Anim-1/3 fix #110) isSwimming_sm 분기와 동일 패턴 적용.
         if (sm.isDiving) {
             float tiltAngle;
             if (sm.isLevitating) {
@@ -535,7 +557,10 @@ public class MixinPlayerEntityRenderer {
                 // 일반 잠수: Quarter - currentVerticalAngle (수직각 반영)
                 tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             }
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(tiltAngle));
+            float pivotY = 1.5f - 3f / 16f;
+            matrices.translate(0f, pivotY, 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
