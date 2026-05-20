@@ -300,7 +300,27 @@
       "PowerShell(./gradlew.bat compileJava compileClientJava --no-daemon 2>&1 | Select-Object -Last 60)",
       "PowerShell(./gradlew.bat compileClientJava --no-daemon 2>&1 | Select-Object -Last 40)",
       "PowerShell(./gradlew.bat compileClientJava --no-daemon 2>&1 | Select-Object -Last 30)",
-      "PowerShell(./gradlew.bat compileClientJava --no-daemon 2>&1 | Select-Object -Last 25)"
+      "PowerShell(./gradlew.bat compileClientJava --no-daemon 2>&1 | Select-Object -Last 25)",
+      "Bash(xargs -I {} git show --stat {})",
+      "Bash(:)",
+      "PowerShell(./gradlew.bat compileJava --console=plain 2>&1 | Select-Object -Last 60)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 80)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 30)",
+      "PowerShell(./gradlew.bat compileJava compileClientJava --console=plain 2>&1 | Select-Object -Last 50)",
+      "PowerShell(./gradlew.bat compileJava compileClientJava --console=plain 2>&1 | Select-Object -Last 20)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 15)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 10)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 12)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 8)",
+      "PowerShell(./gradlew.bat compileJava compileClientJava --console=plain 2>&1 | Select-Object -Last 15)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1)",
+      "PowerShell(./gradlew.bat compileClientJava --console=plain 2>&1 | Select-Object -Last 5)",
+      "Bash(powershell *)",
+      "Bash(javap -p -c BipedEntityModel.class)",
+      "Bash(sed -n '305,410p' /tmp/biped_full.txt)",
+      "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/entity/LimbAnimator.class\")",
+      "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/client/model/ModelPart.class\")",
+      "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/client/render/entity/model/CrossbowPosing.class\")"
     ]
   }
 }

@@ -977,6 +977,28 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(totalTime * 0.1f - QUARTER) - 1f) * 0.15f * sneakFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
+
+        // 🟡 DEBUG (fix #115 진단) sm_animateSwimming 끝 dump.
+        if ((sm.smDbgFrameCounter % 5) == 0) {
+            System.out.println("[SWIM-DBG-ANIM SWIM-POST]"
+                    + " factors[walk=" + String.format("%.3f", walkFactor)
+                    + " sneak=" + String.format("%.3f", sneakFactor)
+                    + " stand=" + String.format("%.3f", standFactor)
+                    + " dist=" + String.format("%.3f", distance) + "]"
+                    + " head[P=" + String.format("%.3f", head.pitch)
+                    + " Y=" + String.format("%.3f", head.yaw) + "]"
+                    + " body[Y=" + String.format("%.3f", body.yaw) + "]"
+                    + " arms[rP=" + String.format("%.3f", rightArm.pitch)
+                    + " rY=" + String.format("%.3f", rightArm.yaw)
+                    + " rR=" + String.format("%.3f", rightArm.roll)
+                    + " lP=" + String.format("%.3f", leftArm.pitch)
+                    + " lY=" + String.format("%.3f", leftArm.yaw)
+                    + " lR=" + String.format("%.3f", leftArm.roll) + "]"
+                    + " legs[rP=" + String.format("%.3f", rightLeg.pitch)
+                    + " rR=" + String.format("%.3f", rightLeg.roll)
+                    + " lP=" + String.format("%.3f", leftLeg.pitch)
+                    + " lR=" + String.format("%.3f", leftLeg.roll) + "]");
+        }
     }
 
     /**
@@ -1034,6 +1056,27 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
+
+        // 🟡 DEBUG (fix #115 진단) sm_animateDiving 끝 (= 우리 inject 적용 후) 값 dump.
+        //   pre-arms 와 차이 = 우리 sm_animateDiving 식이 적용한 변경.
+        if ((sm.smDbgFrameCounter % 5) == 0) {
+            System.out.println("[SWIM-DBG-ANIM DIVE-POST]"
+                    + " factors[walk=" + String.format("%.3f", walkFactor)
+                    + " stand=" + String.format("%.3f", standFactor)
+                    + " dist=" + String.format("%.3f", distance) + "]"
+                    + " arms[rP=" + String.format("%.3f", rightArm.pitch)
+                    + " rY=" + String.format("%.3f", rightArm.yaw)
+                    + " rR=" + String.format("%.3f", rightArm.roll)
+                    + " lP=" + String.format("%.3f", leftArm.pitch)
+                    + " lY=" + String.format("%.3f", leftArm.yaw)
+                    + " lR=" + String.format("%.3f", leftArm.roll) + "]"
+                    + " legs[rP=" + String.format("%.3f", rightLeg.pitch)
+                    + " rR=" + String.format("%.3f", rightLeg.roll)
+                    + " lP=" + String.format("%.3f", leftLeg.pitch)
+                    + " lR=" + String.format("%.3f", leftLeg.roll) + "]"
+                    + " scale[legY=" + String.format("%.3f", legSc)
+                    + " armY=" + String.format("%.3f", armSc) + "]");
+        }
     }
 
     /**

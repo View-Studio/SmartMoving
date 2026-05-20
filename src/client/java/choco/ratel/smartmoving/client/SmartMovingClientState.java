@@ -779,6 +779,7 @@ public final class SmartMovingClientState {
 
     // 🟡 DEBUG (fix #115 후 잔존 BUG 진단용) — 디버그 로그 throttle.
     public int smDbgLastTick = -1;
+    public int smDbgLastTickT = -1;
     public int smDbgFrameCounter = 0;
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):

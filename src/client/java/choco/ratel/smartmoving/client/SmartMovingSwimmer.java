@@ -210,13 +210,28 @@ public final class SmartMovingSwimmer {
         //   MixinClientPlayerEntity.isSneaking() override 는 수영 중 항상 false 반환
         //   (= 메모리 [[feedback_clientplayer_isSneaking_override]] + [[feedback_movementInput_vs_isSneaking]]
         //   패턴). raw `player.input.sneaking` 사용 → 원본 `esp.movementInput.sneak` 1:1.
+        // 🟡 (fix #115 후 잔존 BUG 진단 - levitating 변환 cause 추적)
         boolean diveUp16   = player.input.jumping;
         boolean diveDown16 = player.input.sneaking && cfg.diveDownOnSneak;
+        boolean prevLev = sm.isLevitating;
         sm.isLevitating = sm.isDiving
                 && !diveUp16
                 && !diveDown16
                 && player.input.movementSideways == 0F
                 && player.input.movementForward == 0F;
+        // 🟡 (fix #115 진단) isLevitating 변환 시점에만 로그
+        if (prevLev != sm.isLevitating) {
+            System.out.println("[SWIM-DBG-UPDATE LEV-CHANGE]"
+                    + " " + prevLev + "→" + sm.isLevitating
+                    + " | isDiving=" + sm.isDiving
+                    + " diveUp16=" + diveUp16 + " (rawJump=" + player.input.jumping + ")"
+                    + " diveDown16=" + diveDown16 + " (rawSneak=" + player.input.sneaking
+                    + " cfgDive=" + cfg.diveDownOnSneak + ")"
+                    + " movF=" + player.input.movementForward
+                    + " movS=" + player.input.movementSideways
+                    + " offset=" + String.format("%.4f", offset)
+                    + " psw=" + String.format("%.4f", sbv9a.playerSwimWaterBorder));
+        }
 
         // B-12 (세션 64): 원본 L481-L484 정정 — swimming/diving 만 증분, dipping 포함
         //   else 는 ticks=0 리셋. 기존 무조건 증분 (dipping 포함) 은 오역.

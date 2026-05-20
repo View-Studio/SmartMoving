@@ -607,6 +607,23 @@ public class MixinPlayerEntityRenderer {
             //   정상 frame: deltaTime * 0.2 lerp → 5 frame 후 ~99% 도달.
             float laggedTilt = lerpFadeAngle(sm.smSwimDiveTiltX_prev, targetTilt,
                                               sm.smSwimDiveFade_prevTime, animationProgress);
+            // 🟡 DEBUG (fix #115 진단) targetTilt 와 laggedTilt 매 tick 1번 로그
+            int curTickT = (int) Math.floor(animationProgress);
+            if (sm.smDbgLastTickT != curTickT) {
+                sm.smDbgLastTickT = curTickT;
+                String branch = sm.isDiving
+                    ? (sm.isLevitating ? "DIVE-LEV" : (sm_isPlayerJumping(player) ? "DIVE-JUMP" : "DIVE-VANG"))
+                    : "SWIM";
+                System.out.println("[SWIM-DBG-TILT tick=" + curTickT + " " + branch + "]"
+                        + " target=" + String.format("%.4f", targetTilt)
+                        + " (deg=" + String.format("%.1f", Math.toDegrees(targetTilt)) + ")"
+                        + " lagged=" + String.format("%.4f", laggedTilt)
+                        + " (deg=" + String.format("%.1f", Math.toDegrees(laggedTilt)) + ")"
+                        + " prevIn=" + String.format("%.4f", sm.smSwimDiveTiltX_prev)
+                        + " vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle)
+                        + " sSF=" + String.format("%.3f", sm.swimStandSneakFactor)
+                        + " jumpKey=" + sm_isPlayerJumping(player));
+            }
             sm.smSwimDiveTiltX_prev = laggedTilt;
             sm.smSwimDiveFade_prevTime = animationProgress;
 
