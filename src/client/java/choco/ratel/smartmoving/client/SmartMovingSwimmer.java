@@ -483,6 +483,26 @@ public final class SmartMovingSwimmer {
             if (!cfg.isDivingEnabled()) {
                 sm.isDiving = false;
             }
+
+            // 🔵 (2026-05-20, BUG-Swim-Anim-Surface-1자 fix #116) handleSwimming 안 isLevitating
+            //   재평가 — 원본 SmartMovingSelf L474+L505 1:1.
+            //   로그 실측 cause: tick 374 의 updateSwimState L218 식이 초기 분류 (offset 1.9 임계,
+            //     `offset=1.8976` < 1.9 → isDiving=false) 기준 → isLevitating=false. 그러나
+            //     handleSwimming 의 B 경로 재분류 (위 L476: offset>=1.5 → isDiving=true) 후
+            //     isDiving 가 true 로 변경되어도 isLevitating 식 재평가 X → setupTransforms 시점
+            //     `dv=true + lv=false` → DIVE-VANG branch → tilt = π/2 - vAng = π/2 - π/2 = 0 →
+            //     사용자 보고 "수면 도달 시 갑자기 1자".
+            //   원본 SmartMovingSelf L474 `boolean levitating = diving && !diveUp && !diveDown &&
+            //     moveStrafing == 0F && moveForward == 0F` 가 handleSwimming 안 (= isDiving
+            //     최종값 기준) 평가. L505 `isLevitating = levitating` 으로 field 갱신.
+            //   해결: B-9b 재분류 + Config 게이트 후 isLevitating 재평가. updateSwimState 의
+            //     L218 식은 그대로 두지만 (= 다른 분기 ref 영향), handleSwimming 의 재할당이
+            //     최종값 (= setupTransforms 시점 값).
+            sm.isLevitating = sm.isDiving
+                    && !diveUp
+                    && !diveDown
+                    && moveStrafe == 0F
+                    && moveForward == 0F;
         }
         // **B-9f 해소 (세션 130)**: (<0) 구간 handleSwimmingRejected (원본 L413-L414).
         //   playerSwimWaterBorder < 0 이면 물 위/밖 → SM 미처리, vanilla travel() 위임.
