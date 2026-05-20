@@ -91,6 +91,17 @@ public final class SmartMovingSwimmer {
     }
 
     public static void updateSwimState(ClientPlayerEntity player, SmartMovingClientState sm) {
+        // 🔵 (2026-05-20, BUG 1 fix #103) calculateDimensions 호출 트리거.
+        //   원본 1.7.10 `setHeightOffset(-1F)` 는 boundingBox.minY 직접 변경 → 즉시 박스 갱신.
+        //   1.21.1 매핑은 dim provider 패턴 → `Entity.calculateDimensions()` 호출 시점에만
+        //   캐시 갱신 + boundingBox recompute. updateSwimState 가 isSwimming_sm/isDiving 만 set
+        //   하고 호출 누락 → POSE/dim 갱신 1+ tick lag → 사용자 보고 "물 진입 시 콜리전 즉시 X,
+        //   jump 키 후 작아짐" (= 다음 tick vanilla updatePose 가 마침내 SWIMMING set).
+        //   해결: 진입 시 prev 저장 → return 직전 변화 검사 → calculateDimensions 호출.
+        //   메모리 [[feedback_processStatePacket_calculateDimensions]] 패턴 1:1 적용.
+        boolean prevSwim103 = sm.isSwimming_sm;
+        boolean prevDive103 = sm.isDiving;
+
         // B-10b-pre (세션 110): 원본 L105 `boolean wasJumpingOutOfWater = isJumpingOutOfWater`
         // 지역 snapshot. 1.21.1 은 updateSwimState + handleSwimming 분리 → 필드로 승격.
         // §7 B-10b-pre 근사. B-10b-post 공식 `isJumpingOutOfWater = ... || wasJumpingOutOfWater`
@@ -125,6 +136,10 @@ public final class SmartMovingSwimmer {
             // 1.21.1 추가 — waterMovementTicks 리셋 (원본 resetSwimming 에 없음. B-12 정정
             // 경로와 일관성 유지를 위해 물 밖에서 0).
             sm.waterMovementTicks  = 0;
+            // 🔵 (BUG 1 fix #103) dim 변화 시 calculateDimensions — 물 나감 시 swim/dive→false.
+            if (sm.isSwimming_sm != prevSwim103 || sm.isDiving != prevDive103) {
+                player.calculateDimensions();
+            }
             return;
         }
 
@@ -151,6 +166,10 @@ public final class SmartMovingSwimmer {
             // B-12 (세션 64): 원본 L481-L484 `if(swimming||diving) ticks++; else ticks=0;`.
             //   dipping 강제 경로는 swimming/diving 아님 → ticks=0 리셋.
             sm.waterMovementTicks = 0;
+            // 🔵 (BUG 1 fix #103) dim 변화 시 calculateDimensions — 강제 dipping (crawl 등) 진입.
+            if (sm.isSwimming_sm != prevSwim103 || sm.isDiving != prevDive103) {
+                player.calculateDimensions();
+            }
             return;
         }
 
@@ -234,6 +253,12 @@ public final class SmartMovingSwimmer {
         boolean couldStandUp = swimVals.playerSwimWaterBorder >= 0
                             && swimVals.minPlayerSwimWaterDepth <= 1.5;
         sm.isShallowDiveOrSwim = couldStandUp && (sm.isDiving || sm.isSwimming_sm);
+
+        // 🔵 (BUG 1 fix #103) 메인 분기 끝 — dim 변화 시 calculateDimensions.
+        //   첫 swim/dive 진입 frame 에서 즉시 박스 갱신 → 원본 setHeightOffset(-1F) 동일 timing.
+        if (sm.isSwimming_sm != prevSwim103 || sm.isDiving != prevDive103) {
+            player.calculateDimensions();
+        }
     }
 
     // ── [8-2] handleSwimming ─────────────────────────────────────────────────
@@ -354,14 +379,22 @@ public final class SmartMovingSwimmer {
         float moveForward = (float) movementInput.z;
         float moveStrafe  = (float) movementInput.x;
 
-        // B-3 (세션 27): User 배율 주입. 원본 SmartMovingSelf L476-L494 에서 speedFactor 는
-        // Self L119 지역변수(getConfigSpeedFactor * getPotionSpeedFactor * ...) 에서 시작,
-        // 이후 `*= _diveSpeedFactor.value` 또는 `*= _swimSpeedFactor.value` 로 곱셈.
-        // 1.21.1 는 vanilla travel() cancel 로 직접 계산 — getMovementSpeed inject (B-2) 영향
-        // 없음. Mover.getCombinedSpeedFactor(player, cfg) 로 User 배율 + 포션 효과 포함.
-        // Creative 게이트는 getConfigSpeedFactor 내부에서 자동 처리 (B-6).
-        float speedFactor = (sm.isDiving ? cfg.diveSpeedFactor : cfg.swimSpeedFactor)
-                          * SmartMovingMover.getCombinedSpeedFactor(player, cfg);
+        // 🔵 (2026-05-20, BUG 3 fix #105) speedFactor 4-factor 곱 + swim/dive 분기 별도 곱셈.
+        //   원본 SmartMovingSelf L119: `speedFactor = getConfigSpeedFactor() * getPotionSpeedFactor()
+        //     * getNonSlowInputSpeedFactor(moveForward, moveStrafing)` 후 L129
+        //     `speedFactor *= getSlowInputSpeedFactor()` (vanilla 아닐 때).
+        //   원본 L477-479: `if(diving) sf *= _diveSpeedFactor; if(swimming) sf *= _swimSpeedFactor;` —
+        //     swim/dive 분기만 별도 곱. dipping 시 적용 X.
+        //   기존 매핑 BUG:
+        //     1. `getCombinedSpeedFactor` (= config × potion) 만 사용 → nonSlow (sprint 1.5×)
+        //        + slow factor 누락 → 원본보다 ~33% 느림 (= 사용자 보고 "속도 느림").
+        //     2. dipping 시도 `swimSpeedFactor` 곱셈 (= sm.isDiving ? dive : swim, dipping false 매치) —
+        //        원본은 dipping 시 적용 X.
+        //   해결: `Mover.getSpeedFactor` (= 4 factor 곱 1:1) 사용 + swim/dive 매치 시만 분기별 곱셈.
+        float speedFactor = SmartMovingMover.getSpeedFactor(player, sm, cfg);
+        if (sm.isDiving)         speedFactor *= cfg.diveSpeedFactor;
+        else if (sm.isSwimming_sm) speedFactor *= cfg.swimSpeedFactor;
+        // dipping 시 분기별 factor 적용 X (원본 L477-479)
 
         Vec3d vel = player.getVelocity();
         double motionX = vel.x;
@@ -432,10 +465,9 @@ public final class SmartMovingSwimmer {
             // **B-9c dipping 분기 (세션 129)**: 원본 L309-L316 (A) / L362-L369 (B).
             //   A 경로: offset < 1.0 → -0.02D, else → -0.01D
             //   B 경로: 양 branch 모두 -0.02D (원본 L365-L368 — 중복이지만 원본 그대로)
-            Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
-            motionX += fly.x;
-            motionZ += fly.z;
-            motionX *= DAMPING_DIPPING_XZ;
+            // 🔵 (BUG 4 fix #106) damping 순서 정정 — 원본 L450-471 (damping 먼저) →
+            //   L502 (motionY += motionYDiff). 기존 (motion+diff)*damp 식은 terminal velocity
+            //   ~15% 작음. damp 먼저 → diff/fly 가산 식 1:1 매핑.
             double dippingOffset = sm.dippingDepth + 0.1625D;
             double dippingYDiff;
             if (isPathA) {
@@ -443,8 +475,13 @@ public final class SmartMovingSwimmer {
             } else {
                 dippingYDiff = -0.02D;
             }
-            motionY = (motionY + dippingYDiff) * DAMPING_DIPPING_Y;
+            motionX *= DAMPING_DIPPING_XZ;
+            motionY *= DAMPING_DIPPING_Y;
             motionZ *= DAMPING_DIPPING_XZ;
+            Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
+            motionX += fly.x;
+            motionY += dippingYDiff;
+            motionZ += fly.z;
 
         } else if (sm.isSwimming_sm) {
             // **B-9c 해소 (세션 129, B-9h 갱신 세션 130)**: 원본 L317-L348 A 경로 swimming
@@ -476,13 +513,15 @@ public final class SmartMovingSwimmer {
             else if (offset < 1.8D)   motionYDiff =  0.01D;
             else                       motionYDiff =  0.02D;
 
+            // 🔵 (BUG 4 fix #106) damping 순서 정정 — 원본 L450-471 (damping 먼저) →
+            //   L502 (motionY += motionYDiff). damp 먼저 → fly + diff 가산.
+            motionX *= DAMPING_SWIMMING;
+            motionY *= DAMPING_SWIMMING;
+            motionZ *= DAMPING_SWIMMING;
             Vec3d fly = moveFlying(player, moveStrafe, moveForward, BASE_SWIM_SPEED * speedFactor);
             motionX += fly.x;
             motionY += motionYDiff;
             motionZ += fly.z;
-            motionX *= DAMPING_SWIMMING;
-            motionY *= DAMPING_SWIMMING;
-            motionZ *= DAMPING_SWIMMING;
 
             sm.heightOffset = -1F;
 
@@ -539,18 +578,35 @@ public final class SmartMovingSwimmer {
                 else                        motionYDiff = 0.01D;
             }
 
-            // 원본 SmartMovingSelf.md L476:
-            //   moveFlying((float)motionYDiff, strafe, forward, 0.02F * speedFactor, _diveControlVertical.value)
-            // moveUpward 파라미터에 motionYDiff 를 전달 → 5-인자 diffMY 에 포함되어 반환됨.
-            // treeDimensional=true 이면 pitch 반영 수직 이동도 추가.
-            Vec3d fly = moveFlying(player, (float) motionYDiff, moveStrafe, moveForward,
-                    BASE_SWIM_SPEED * speedFactor, cfg.diveControlVertical);
-            motionX += fly.x;
-            motionY += fly.y; // moveUpward(=motionYDiff) 이미 fly.y 에 포함 — 별도 가산 금지
-            motionZ += fly.z;
+            // 🔵 (BUG 4 fix #106) diving levitating 분기 별도 처리 + damping 순서 정정.
+            //   원본 L489-496:
+            //     if(diving) {
+            //         if(diveUp || diveDown || levitating)
+            //             motionY = (motionY + motionYDiff) * 0.6;  // 강한 수직 제어 + 수평 0
+            //         else
+            //             moveFlying((float)motionYDiff, ..., _diveControlVertical);
+            //         moveFlying = false;  // 후속 horizontal moveFlying 차단
+            //     }
+            //   기존 매핑 BUG: levitating 분기 없이 항상 5인자 moveFlying → 가만히 + jump 홀딩 시
+            //     surface 도달 안 됨 (= 사용자 보고 (5) "호흡 안 차감 위치 수면" 미달성).
+            //   해결: (a) diveUp || diveDown || levitating → (motionY + diff) * 0.6 식 + 수평 damping
+            //           만 (= moveFlying 호출 X). (b) 일반 → 5인자 moveFlying (= 마우스 방향 이동).
+            //   damping 순서도 정정: motion *= 0.83 (먼저) → fly 가산 (= 원본 L450 → L494).
             motionX *= DAMPING_DIVING;
             motionY *= DAMPING_DIVING;
             motionZ *= DAMPING_DIVING;
+            if (diveUp || diveDown || sm.isLevitating) {
+                // 원본 L491-492: (motionY * 0.83 + motionYDiff) * 0.6 식 → terminal v = 1.2 m/s
+                //   surface 도달 빠름. 수평 motion 변경 X (= 원본 moveFlying=false 효과).
+                motionY = (motionY + motionYDiff) * 0.6D;
+            } else {
+                // 원본 L494: 5인자 moveFlying (pitch 반영 수직 + horizontal). moveUpward=motionYDiff.
+                Vec3d fly = moveFlying(player, (float) motionYDiff, moveStrafe, moveForward,
+                        BASE_SWIM_SPEED * speedFactor, cfg.diveControlVertical);
+                motionX += fly.x;
+                motionY += fly.y;
+                motionZ += fly.z;
+            }
 
             sm.heightOffset = -1F;
         }

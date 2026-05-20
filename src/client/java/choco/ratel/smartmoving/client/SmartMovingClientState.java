@@ -3575,14 +3575,24 @@ public final class SmartMovingClientState {
     }
 
     public static SwimBorderValues computeSwimBorderValues(ClientPlayerEntity player) {
-        Box pb = player.getBoundingBox();
+        // 🔵 (2026-05-20, BUG 2 fix #104) 박스 측정 좌표계 — entity.y 기준 STANDING 박스 직접 사용.
+        //   원본 1.7.10 mechanism: handleSwimming L256 `j = floor(sp.boundingBox.minY)` 측정 시점 =
+        //     swim 분기 진입 시 박스 (= heightOffset=0 잔존, = entity.y 기준 STANDING).
+        //     `setHeightOffset(-1F)` 적용 (L511) 은 swim 분기 *마지막* — 측정/박스 변경 분리.
+        //   1.21.1 매핑 BUG: fix #102 적용 후 `player.getBoundingBox()` 가 mixin offset 활성 박스
+        //     (= box.minY = entity.y + 1m) 반환 → playerSwimWaterBorder 1m 작게 계산 → 사용자
+        //     보고 "수면 1칸 아래까지만 올라감". 측정-박스 변경 분리 메커니즘 못 구현.
+        //   해결: player.getY() (= entity.y, mixin offset 무관) 직접 사용. STANDING height=1.8
+        //     hardcoded. 측정 = 원본 standing 박스 1:1.
+        double standingMinY = player.getY();
+        double standingMaxY = player.getY() + 1.8;
         int i = net.minecraft.util.math.MathHelper.floor(player.getX());
-        int j = net.minecraft.util.math.MathHelper.floor(pb.minY);
+        int j = net.minecraft.util.math.MathHelper.floor(standingMinY);
         int k = net.minecraft.util.math.MathHelper.floor(player.getZ());
-        double j_offset = pb.minY - j;
+        double j_offset = standingMinY - j;
 
-        double totalSwimWaterBorder      = getMaxPlayerLiquidBetween(player, pb.maxY - 1.8, pb.maxY + 1.2);
-        double minPlayerSwimWaterCeiling = getMinPlayerSolidBetween(player, pb.maxY - 1.8, pb.maxY + 1.2, 0);
+        double totalSwimWaterBorder      = getMaxPlayerLiquidBetween(player, standingMaxY - 1.8, standingMaxY + 1.2);
+        double minPlayerSwimWaterCeiling = getMinPlayerSolidBetween(player, standingMaxY - 1.8, standingMaxY + 1.2, 0);
         double realTotalSwimWaterBorder  = Math.min(totalSwimWaterBorder, minPlayerSwimWaterCeiling);
         double minPlayerSwimWaterDepth   = totalSwimWaterBorder
                 - getMaxPlayerSolidBetween(player, totalSwimWaterBorder - 2, totalSwimWaterBorder, 0);
