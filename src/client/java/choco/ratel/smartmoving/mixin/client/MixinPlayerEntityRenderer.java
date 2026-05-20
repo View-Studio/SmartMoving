@@ -220,16 +220,22 @@ public class MixinPlayerEntityRenderer {
             return;
         }
 
-        // isLevitating 우선 처리 (B-15 / §16-23): 원본 SmartMovingRender L132-L134 —
-        //   levitating 시 모든 모델의 currentHorizontalAngle = currentCameraAngle 강제 정렬.
-        // 원본은 분기 처리 후 마지막에 덮어쓰기지만 결과 동등 (모든 다른 분기 결과를 카메라
-        //   방향으로 덮어쓰는 효과 = 분기 진입 전 카메라 방향 단독 적용과 동일).
-        // 일반적으로 levitate 는 dive 자세와 함께 발생 (Levitation status effect).
-        if (sm.isLevitating) {
-            sm.smBodyYawActive = true;
-            sm.smBodyYawOverride = (float) Math.toDegrees(sm.stats.currentCameraAngle);
-            return;
-        }
+        // 🔵 (2026-05-21, fix #119) isLevitating 분기 제거 — swim/dive 분기 우선 매치 보장.
+        //   로그 실측 cause (docs/log_temp.txt):
+        //   - tick 237/238 (= 이동 종료 직후, isLevitating=false): swim/dive 분기 매치 → fix #118
+        //     4단계 패턴 적용 (smBodyYawOverride=0 + extraYaw fade + entity.bodyYaw force).
+        //   - tick 239+ (= 가만히 시 isLevitating=true): 기존 isLevitating 분기 매치 + early return →
+        //     fix #118 swim/dive 분기 도달 X.
+        //   기존 isLevitating 분기 식 `smBodyYawOverride = currentCameraAngle (deg)`:
+        //     → vanilla matrix R_y(180 - camera_deg) → 매트릭스 자체가 mouse 즉시 추적 (fade 없음).
+        //     → smSwimDiveExtraYaw_target 갱신 X → 마지막 값 잔존.
+        //     → entity.bodyYaw force 없음 → vanilla netHeadYaw 잔존.
+        //   = 사용자 보고 "가만히 시 마우스 회전 → 몸도 회전" 정확 cause.
+        //   해결: isLevitating 분기 제거. swim/dive 분기가 `dist < threshold ? camera : horizontal`
+        //     동등 식 보유 (= 가만히 시 dist=0 < 0.015 → camera 매치) + fix #118 패턴 (matrix cancel +
+        //     extraYaw fade + entity.bodyYaw force) 적용.
+        //   원본 1:1: SmartMovingRender L132-L134 의 "levitating 시 currentHorizontalAngle = camera"
+        //     강제는 swim/dive 분기 식의 가만히 threshold 통해 자연 매치 (= 식 동등).
 
         // ── 원본 SmartMovingModel 상태별 bipedOuter.rotateAngleY 1:1 이식 ──────
         // 1.21.1 은 bipedOuter 계층이 없어 bodyYaw 단일 경로로 근사. 라디안→도 변환.
