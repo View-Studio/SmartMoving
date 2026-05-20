@@ -895,6 +895,26 @@ public abstract class MixinPlayerEntityModelClient {
      * bipedOuter X 기울기는 setupTransforms Mixin에서 처리 (standSneakFactor 경유).
      */
     private void sm_animateSwimming(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+        // 🟡 DEBUG (fix #115 후 잔존 BUG 진단용) — setAngles 진입 시 매 5 frame 1번 dump.
+        if ((sm.smDbgFrameCounter++ % 5) == 0) {
+            System.out.println("[SWIM-DBG-ANIM SWIM]"
+                    + " state[sSF=" + String.format("%.3f", sm.swimStandSneakFactor) + "]"
+                    + " input[limbSw=" + String.format("%.4f", limbSwing)
+                    + " limbAm=" + String.format("%.4f", limbSwingAmount)
+                    + " tT=" + String.format("%.3f", totalTime) + "]"
+                    + " stats[chSpd=" + String.format("%.4f", sm.stats.currentHorizontalSpeed)
+                    + " thD=" + String.format("%.3f", sm.stats.totalHorizontalDistance) + "]"
+                    + " arms[rP=" + String.format("%.3f", rightArm.pitch)
+                    + " rY=" + String.format("%.3f", rightArm.yaw)
+                    + " rR=" + String.format("%.3f", rightArm.roll)
+                    + " lP=" + String.format("%.3f", leftArm.pitch)
+                    + " lY=" + String.format("%.3f", leftArm.yaw)
+                    + " lR=" + String.format("%.3f", leftArm.roll) + "]"
+                    + " legs[rP=" + String.format("%.3f", rightLeg.pitch)
+                    + " rR=" + String.format("%.3f", rightLeg.roll)
+                    + " lP=" + String.format("%.3f", leftLeg.pitch)
+                    + " lR=" + String.format("%.3f", leftLeg.roll) + "]");
+        }
         // 🔵 (2026-05-20, BUG-Swim-Anim-6 fix #113) limbSwing/Amount → sm.stats 입력 교체.
         //   원본 SmartMovingModel L319-322: `distance = totalHorizontalDistance`, walkFactor/sneakFactor/
         //     standFactor 는 `currentHorizontalSpeed` 기준.
@@ -969,6 +989,22 @@ public abstract class MixinPlayerEntityModelClient {
      *   vanilla 가 매 프레임 head.pitch (j*PI/180) 와 head.pivotZ (B-9 reset 인프라) 모두 reset → 안전.
      */
     private void sm_animateDiving(SmartMovingClientState sm, float limbSwing, float limbSwingAmount) {
+        // 🟡 DEBUG (fix #115 후 잔존 BUG 진단용) — setAngles 진입 시 매 5 frame 1번 dump.
+        if ((sm.smDbgFrameCounter++ % 5) == 0) {
+            System.out.println("[SWIM-DBG-ANIM DIVE]"
+                    + " state[lv=" + sm.isLevitating + " smJump=" + sm.isJumping + "]"
+                    + " input[limbSw=" + String.format("%.4f", limbSwing)
+                    + " limbAm=" + String.format("%.4f", limbSwingAmount) + "]"
+                    + " stats[cSpd=" + String.format("%.4f", sm.stats.currentSpeed)
+                    + " tD=" + String.format("%.3f", sm.stats.totalDistance)
+                    + " vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle) + "]"
+                    + " pre-arms[rP=" + String.format("%.3f", rightArm.pitch)
+                    + " rY=" + String.format("%.3f", rightArm.yaw)
+                    + " lP=" + String.format("%.3f", leftArm.pitch)
+                    + " lY=" + String.format("%.3f", leftArm.yaw) + "]"
+                    + " pre-legs[rP=" + String.format("%.3f", rightLeg.pitch)
+                    + " lP=" + String.format("%.3f", leftLeg.pitch) + "]");
+        }
         // B-6 / §16-13: 원본 SmartMovingModel L365-L367 = totalDistance (3D 누적) +
         //   currentSpeed (3D 속도). 이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 →
         //   sm.stats.totalDistance/currentSpeed 로 교체. 다이빙은 수직+수평 운동 모두 강한
