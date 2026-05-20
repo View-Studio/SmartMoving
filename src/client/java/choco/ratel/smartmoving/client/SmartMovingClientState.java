@@ -784,6 +784,10 @@ public final class SmartMovingClientState {
     public float smSwimDiveExtraYaw_target = 0f;  // 현재 프레임 Y 회전 target (= horizontalAngle, rad)
     public float smSwimDiveExtraYaw_prev = 0f;    // 이전 프레임 보간 결과
 
+    // 🟡 DEBUG (fix #118 가만히 시 BUG 진단)
+    public int smDbgSwimYawTick = -1;
+    public int smDbgSwimYawTiltTick = -1;
+
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
     //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).
