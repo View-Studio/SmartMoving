@@ -784,6 +784,11 @@ public final class SmartMovingClientState {
     public float smSwimDiveExtraYaw_target = 0f;  // 현재 프레임 Y 회전 target (= horizontalAngle, rad)
     public float smSwimDiveExtraYaw_prev = 0f;    // 이전 프레임 보간 결과
 
+    // 🟡 DEBUG (2026-05-21) jump 꾹누름 헤엄 시 팔 회전 BUG 진단용 카운터.
+    //   sm_animateDiving 매 5 frame, sm_setupTransforms tick 단위 dump 위한 throttle field.
+    public int smDbgFrameCounterArm = 0;   // sm_animateDiving frame counter (5 frame 마다 dump)
+    public int smDbgJumpHeadTick = -1;     // sm_setupTransforms tick 1회 dump 보장 (last dumped tick)
+
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
     //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).

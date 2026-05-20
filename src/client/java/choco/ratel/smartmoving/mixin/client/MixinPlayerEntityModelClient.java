@@ -977,6 +977,37 @@ public abstract class MixinPlayerEntityModelClient {
         float walkFactor  = smFactor(sm.stats.currentSpeed, 0f, 0.15679921f);
         float standFactor = smFactor(sm.stats.currentSpeed, 0.15679921f, 0f);
 
+        // 🟡 DEBUG (jump 꾹누름 헤엄 시 팔 회전 BUG 진단)
+        //   사용자 보고: jump 꾹누름 + 헤엄 시 팔 회전 원본과 다름.
+        //   매 5 frame 1번 dump — sm_animateDiving 진입 시 pre-arms 값 + 입력 + factors.
+        if ((sm.smDbgFrameCounterArm++ % 5) == 0) {
+            System.out.println("[SWIM-DBG-DIVEARM-PRE]"
+                    + " input[limbSw=" + String.format("%.4f", limbSwing)
+                    + " limbAm=" + String.format("%.4f", limbSwingAmount) + "]"
+                    + " state[lv=" + sm.isLevitating
+                    + " smJump=" + sm.isJumping + "]"
+                    + " stats[cSpd=" + String.format("%.4f", sm.stats.currentSpeed)
+                    + " tD=" + String.format("%.3f", sm.stats.totalDistance)
+                    + " vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle) + "]"
+                    + " factors[walk=" + String.format("%.3f", walkFactor)
+                    + " stand=" + String.format("%.3f", standFactor)
+                    + " dist=" + String.format("%.3f", distance) + "]"
+                    + " pre-arms[rP=" + String.format("%.4f", rightArm.pitch)
+                    + " rY=" + String.format("%.4f", rightArm.yaw)
+                    + " rR=" + String.format("%.4f", rightArm.roll)
+                    + " lP=" + String.format("%.4f", leftArm.pitch)
+                    + " lY=" + String.format("%.4f", leftArm.yaw)
+                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
+                    + " pre-legs[rP=" + String.format("%.4f", rightLeg.pitch)
+                    + " rR=" + String.format("%.4f", rightLeg.roll)
+                    + " lP=" + String.format("%.4f", leftLeg.pitch)
+                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
+                    + " pivots[rArm(" + String.format("%.2f,%.2f,%.2f", rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ) + ")"
+                    + " lArm(" + String.format("%.2f,%.2f,%.2f", leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ) + ")]"
+                    + " scale[rArm.yS=" + String.format("%.3f", rightArm.yScale)
+                    + " lArm.yS=" + String.format("%.3f", leftArm.yScale) + "]");
+        }
+
         // 머리 자세 (원본 L370-L371)
         head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth
         head.pivotZ = -2f;       // 원본 bipedHead.rotationPointZ = -2F
@@ -1024,6 +1055,30 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
+
+        // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_animateDiving 끝 — 우리 inject 적용 후 최종 값.
+        if ((sm.smDbgFrameCounterArm % 5) == 0) {
+            System.out.println("[SWIM-DBG-DIVEARM-POST]"
+                    + " arms[rP=" + String.format("%.4f", rightArm.pitch)
+                    + " rY=" + String.format("%.4f", rightArm.yaw)
+                    + " rR=" + String.format("%.4f", rightArm.roll)
+                    + " lP=" + String.format("%.4f", leftArm.pitch)
+                    + " lY=" + String.format("%.4f", leftArm.yaw)
+                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
+                    + " legs[rP=" + String.format("%.4f", rightLeg.pitch)
+                    + " rR=" + String.format("%.4f", rightLeg.roll)
+                    + " lP=" + String.format("%.4f", leftLeg.pitch)
+                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
+                    + " scale[legY=" + String.format("%.4f", legSc)
+                    + " armY=" + String.format("%.4f", armSc) + "]"
+                    + " formula[rArmRoll_form=(cos(d+H)*0.523*2.5+Q)*walk+(Q+E)*stand"
+                    + " => cos(" + String.format("%.3f", distance + HALF) + ")="
+                    + String.format("%.4f", MathHelper.cos(distance + HALF))
+                    + " * 1.3066 + 0.7854 = "
+                    + String.format("%.4f", MathHelper.cos(distance + HALF) * 0.52264464f * 2.5f + QUARTER)
+                    + " * walk(" + String.format("%.3f", walkFactor) + ")"
+                    + " + 1.1781 * stand(" + String.format("%.3f", standFactor) + ")]");
+        }
     }
 
     /**

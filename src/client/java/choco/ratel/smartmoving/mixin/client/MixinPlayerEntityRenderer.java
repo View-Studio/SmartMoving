@@ -581,6 +581,34 @@ public class MixinPlayerEntityRenderer {
         //   기존 매핑 `sm.isJumping` = SM 자체 1-tick flag (= tryJump 한정, 거의 항상 false) →
         //     dive 분기에서 사용자 jump 꾹누름 시 tilt=0° 도달 안 함.
         //   해결: vanilla LivingEntity.jumping field 직접 사용 (= local player raw key).
+        // 🟡 DEBUG (jump 꾹누름 헤엄 시 팔/자세 BUG 진단) sm_setupTransforms 분기 매치 + tilt branch.
+        if ((sm.isSwimming_sm || sm.isDiving)
+                && player instanceof net.minecraft.client.network.ClientPlayerEntity localCpJ
+                && localCpJ == net.minecraft.client.MinecraftClient.getInstance().player) {
+            int curTickJ = (int) Math.floor(animationProgress);
+            if (sm.smDbgJumpHeadTick != curTickJ) {
+                sm.smDbgJumpHeadTick = curTickJ;
+                String branchKind = sm.isDiving
+                    ? (sm.isLevitating ? "DIVE-LEV" : (sm_isPlayerJumping(player) ? "DIVE-JUMP" : "DIVE-VANG"))
+                    : "SWIM";
+                System.out.println("[SWIM-DBG-JUMP-XFORM tick=" + curTickJ + " " + branchKind + "]"
+                        + " state[sw=" + sm.isSwimming_sm + " dv=" + sm.isDiving + " lv=" + sm.isLevitating
+                        + " smJump=" + sm.isJumping + "]"
+                        + " input[rawJump=" + localCpJ.input.jumping
+                        + " rawSneak=" + localCpJ.input.sneaking
+                        + " F=" + localCpJ.input.movementForward
+                        + " St=" + localCpJ.input.movementSideways + "]"
+                        + " stats[vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle)
+                        + " hAng=" + String.format("%.3f", sm.stats.currentHorizontalAngle)
+                        + " cSpd=" + String.format("%.4f", sm.stats.currentSpeed)
+                        + " chSpd=" + String.format("%.4f", sm.stats.currentHorizontalSpeed)
+                        + " hDist=" + String.format("%.4f", sm.stats.horizontalDistance)
+                        + " tD=" + String.format("%.3f", sm.stats.totalDistance) + "]"
+                        + " sSF=" + String.format("%.3f", sm.swimStandSneakFactor)
+                        + " mY=" + String.format("%.4f", player.getVelocity().y));
+            }
+        }
+
         if (sm.isSwimming_sm || sm.isDiving) {
             // 🔵 (2026-05-21, fix #120) Sixteenth 상수 매핑 정정 (π/16 → π/8).
             //   agent 실측 원본 SmartRenderUtilities.java L22-L26 체인 정의:
