@@ -777,10 +777,6 @@ public final class SmartMovingClientState {
     public float smSwimDiveTiltX_prev = 0f;       // 이전 프레임 swim/dive X 회전 lerp 결과
     public float smSwimDiveFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
-    // 🟡 DEBUG (fix #115 후 잔존 BUG 진단용) — 디버그 로그 throttle.
-    public int smDbgLastTick = -1;
-    public int smDbgLastTickT = -1;
-    public int smDbgFrameCounter = 0;
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
     //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).

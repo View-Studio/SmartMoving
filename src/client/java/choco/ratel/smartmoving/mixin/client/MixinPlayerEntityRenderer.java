@@ -535,41 +535,6 @@ public class MixinPlayerEntityRenderer {
         //   - POSITIVE_X.rotation(-tiltAngle) 부호 반전 — vanilla scale(-1,-1,1) 보정
         //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
         //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
-        // 🟡 DEBUG (fix #115 후 잔존 BUG 진단용) — swim/dive setupTransforms state 매 tick dump.
-        //   메모리 [[feedback_debug_log_first]]: "1차 시도 실패 시 즉시 디버그 로그 추가. 추측 분기 금지."
-        if (sm.isSwimming_sm || sm.isDiving) {
-            int curTick = (int) Math.floor(animationProgress);
-            if (sm.smDbgLastTick != curTick) {
-                sm.smDbgLastTick = curTick;
-                boolean isClient = player instanceof ClientPlayerEntity;
-                boolean rawJump = isClient && ((ClientPlayerEntity) player).input.jumping;
-                boolean rawSneak = isClient && ((ClientPlayerEntity) player).input.sneaking;
-                float rawFwd = isClient ? ((ClientPlayerEntity) player).input.movementForward : 0f;
-                float rawStr = isClient ? ((ClientPlayerEntity) player).input.movementSideways : 0f;
-                Vec3d vel = player.getVelocity();
-                net.minecraft.util.math.Box bb = player.getBoundingBox();
-                System.out.println("[SWIM-DBG-XFORM tick=" + curTick + "]"
-                        + " state[sw=" + sm.isSwimming_sm + " dv=" + sm.isDiving + " lv=" + sm.isLevitating
-                        + " dp=" + sm.isDipping + " smJump=" + sm.isJumping
-                        + " og=" + player.isOnGround() + " w=" + player.isTouchingWater() + "]"
-                        + " input[J=" + rawJump + " S=" + rawSneak + " F=" + rawFwd + " St=" + rawStr + "]"
-                        + " stats[vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle)
-                        + " hAng=" + String.format("%.3f", sm.stats.currentHorizontalAngle)
-                        + " cSpd=" + String.format("%.4f", sm.stats.currentSpeed)
-                        + " chSpd=" + String.format("%.4f", sm.stats.currentHorizontalSpeed)
-                        + " tD=" + String.format("%.3f", sm.stats.totalDistance)
-                        + " thD=" + String.format("%.3f", sm.stats.totalHorizontalDistance) + "]"
-                        + " fact[sSF=" + String.format("%.3f", sm.swimStandSneakFactor) + "]"
-                        + " pos[Y=" + String.format("%.3f", player.getY())
-                        + " bbMin=" + String.format("%.3f", bb.minY)
-                        + " bbMax=" + String.format("%.3f", bb.maxY)
-                        + " mY=" + String.format("%.4f", vel.y) + "]"
-                        + " fade[prev=" + String.format("%.3f", sm.smSwimDiveTiltX_prev)
-                        + " pT=" + String.format("%.2f", sm.smSwimDiveFade_prevTime)
-                        + " aniP=" + String.format("%.3f", animationProgress) + "]");
-            }
-        }
-
         // 🔵 (2026-05-20, fix #115) isSwimming_sm + isDiving 통합 fade 분기.
         //   사용자 보고 BUG 1 (수면 도달 시 1자) + BUG 2 (wasd 시 팔다리 이상) 공통 cause =
         //     fadeRotateAngleX 매핑 누락.
@@ -607,23 +572,6 @@ public class MixinPlayerEntityRenderer {
             //   정상 frame: deltaTime * 0.2 lerp → 5 frame 후 ~99% 도달.
             float laggedTilt = lerpFadeAngle(sm.smSwimDiveTiltX_prev, targetTilt,
                                               sm.smSwimDiveFade_prevTime, animationProgress);
-            // 🟡 DEBUG (fix #115 진단) targetTilt 와 laggedTilt 매 tick 1번 로그
-            int curTickT = (int) Math.floor(animationProgress);
-            if (sm.smDbgLastTickT != curTickT) {
-                sm.smDbgLastTickT = curTickT;
-                String branch = sm.isDiving
-                    ? (sm.isLevitating ? "DIVE-LEV" : (sm_isPlayerJumping(player) ? "DIVE-JUMP" : "DIVE-VANG"))
-                    : "SWIM";
-                System.out.println("[SWIM-DBG-TILT tick=" + curTickT + " " + branch + "]"
-                        + " target=" + String.format("%.4f", targetTilt)
-                        + " (deg=" + String.format("%.1f", Math.toDegrees(targetTilt)) + ")"
-                        + " lagged=" + String.format("%.4f", laggedTilt)
-                        + " (deg=" + String.format("%.1f", Math.toDegrees(laggedTilt)) + ")"
-                        + " prevIn=" + String.format("%.4f", sm.smSwimDiveTiltX_prev)
-                        + " vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle)
-                        + " sSF=" + String.format("%.3f", sm.swimStandSneakFactor)
-                        + " jumpKey=" + sm_isPlayerJumping(player));
-            }
             sm.smSwimDiveTiltX_prev = laggedTilt;
             sm.smSwimDiveFade_prevTime = animationProgress;
 
