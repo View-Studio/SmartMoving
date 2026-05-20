@@ -777,6 +777,13 @@ public final class SmartMovingClientState {
     public float smSwimDiveTiltX_prev = 0f;       // 이전 프레임 swim/dive X 회전 lerp 결과
     public float smSwimDiveFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔵 (2026-05-21, fix #118) swim/dive Y 회전 fade — 마우스 회전 lag 매핑.
+    //   원본 SmartMovingModel L333/L375 `bipedOuter.rotateAngleY = horizontalAngle` 가 fadeRotateAngleY=true
+    //   로 매 frame lerp (= 0.2 * deltaT). 우리 매핑 = sm_setupTransforms TAIL 의 swim/dive 분기 Y 회전
+    //   추가 + lerpFadeAngle. isFlying 분기 (smFlyingExtraYaw/smOuterExtraYaw_prev) 동일 패턴.
+    public float smSwimDiveExtraYaw_target = 0f;  // 현재 프레임 Y 회전 target (= horizontalAngle, rad)
+    public float smSwimDiveExtraYaw_prev = 0f;    // 이전 프레임 보간 결과
+
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
     //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).

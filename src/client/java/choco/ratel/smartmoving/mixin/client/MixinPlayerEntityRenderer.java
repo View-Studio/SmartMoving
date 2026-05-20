@@ -272,6 +272,22 @@ public class MixinPlayerEntityRenderer {
         }
 
         // isSwim/isDive (원본 L495/L553)
+        // 🔵 (2026-05-21, fix #118) mouse 회전 + bodyYaw + 머리 회전 BUG fix — isFlying L333-L352
+        //   검증된 4 단계 패턴 1:1 차용.
+        //   사용자 보고: (1) 머리 mouse 추적 X, (2) 가만히 시 카메라만 (몸 회전 X = fade lag),
+        //     (3) wasd + mouse 시 이동 방향 (lag).
+        //   원본 mechanism (agent 실측 cause):
+        //     - SmartMovingRender L148: renderYawOffset = forwardRotation (= lerpedYaw, camera).
+        //     - SmartMovingModel L333/L375: bipedOuter.rotateAngleY = horizontalAngle (= 가만히 camera,
+        //       이동 시 이동방향, fadeRotateAngleY=true 매 frame 0.2*deltaT lerp).
+        //     - SmartRenderRender L167: actualRotation=0 → vanilla glRotatef(180) → bodyYaw 시각 효과 0.
+        //     = 두 다른 yaw 값. 우리 매핑은 단일 smBodyYawOverride 으로 혼동 + fade 누락 + vanilla
+        //       matrix cancel 누락.
+        //   isFlying 패턴 1:1:
+        //     - smBodyYawOverride = 0f → vanilla POSITIVE_Y(180) → 모델 정면 정상 (matrix cancel 등가).
+        //     - smSwimDiveExtraYaw_target = horizontalAngle → sm_setupTransforms TAIL 에서 fade Y 회전.
+        //     - entity.bodyYaw = lerpedYaw force → vanilla setAngles 의 netHeadYaw = headYaw-bodyYaw ≈ 0
+        //       → 머리 mouse 추적 X.
         if (sm.isSwimming_sm || sm.isDiving) {
             float threshold = sm.isSlow ? 0.005F : 0.015F;
             double dist = sm.isDiving ? sm.stats.totalDistance : sm.stats.horizontalDistance;
@@ -279,7 +295,14 @@ public class MixinPlayerEntityRenderer {
                     ? sm.stats.currentCameraAngle
                     : sm.stats.currentHorizontalAngle;
             sm.smBodyYawActive = true;
-            sm.smBodyYawOverride = (float) Math.toDegrees(horizontalAngle);
+            sm.smBodyYawOverride = 0f;                              // matrix cancel 등가
+            sm.smSwimDiveExtraYaw_target = horizontalAngle;         // fade 보간 target (radian)
+
+            // entity.bodyYaw force — 원본 SmartMovingRender L148 1:1.
+            //   vanilla netHeadYaw = (headYaw_lerped - bodyYaw_lerped) → bodyYaw=lerpedYaw 시 ≈ 0.
+            float lerpedYaw = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
+            localPlayer.setBodyYaw(lerpedYaw);
+            localPlayer.prevBodyYaw = lerpedYaw;
             return;
         }
 
@@ -572,12 +595,30 @@ public class MixinPlayerEntityRenderer {
             //   정상 frame: deltaTime * 0.2 lerp → 5 frame 후 ~99% 도달.
             float laggedTilt = lerpFadeAngle(sm.smSwimDiveTiltX_prev, targetTilt,
                                               sm.smSwimDiveFade_prevTime, animationProgress);
+
+            // 🔵 (2026-05-21, fix #118-B) swim/dive Y 회전 fade — 마우스 회전 lag.
+            //   원본 bipedOuter.rotateAngleY = horizontalAngle (fadeRotateAngleY=true).
+            //   isFlying 분기 (L779-L780, L786-L788) 의 fade Y 회전 패턴 1:1 차용.
+            //   가만히 시 horizontalAngle = camera → 즉시 force 시 사용자 보고 "몸 회전 X" 매치 안 됨
+            //   → fade 적용 시 매 frame 0.2 lerp → 천천히 추적 (= 사용자 보고 매치).
+            //   wasd + mouse 시 horizontalAngle = 이동방향 (motion vector atan2) → mouse 변화 시
+            //   motion 변경 → horizontalAngle 추적 + fade lag (= 사용자 보고 매치).
+            float yawTarget = sm.smSwimDiveExtraYaw_target;
+            float yawLerped = lerpFadeAngle(sm.smSwimDiveExtraYaw_prev, yawTarget,
+                                             sm.smSwimDiveFade_prevTime, animationProgress);
+
             sm.smSwimDiveTiltX_prev = laggedTilt;
+            sm.smSwimDiveExtraYaw_prev = yawLerped;
             sm.smSwimDiveFade_prevTime = animationProgress;
 
             // 매트릭스 stack 적용 (= fix #114 pivotY=1.5 동일).
+            //   isFlying 패턴 (L782-L790): translate → R_y(-yaw, scale 부호 반전) → R_x(-tilt) → translate.
             float pivotY = 1.5f;
             matrices.translate(0f, pivotY, 0f);
+            if (yawLerped != 0f) {
+                // vanilla scale(-1,-1,1) 의 Y axis 부호 반전 보정 — isFlying L786-L788 패턴.
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-yawLerped));
+            }
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-laggedTilt));
             matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = laggedTilt;
@@ -585,6 +626,7 @@ public class MixinPlayerEntityRenderer {
             // swim/dive 비활성 시 fade prev reset (= 다음 진입 시 prev=0 시작).
             //   비행 fade prev reset 패턴 (L866-868) 동일.
             sm.smSwimDiveTiltX_prev = 0f;
+            sm.smSwimDiveExtraYaw_prev = 0f;
             sm.smSwimDiveFade_prevTime = animationProgress;
         }
 

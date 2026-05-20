@@ -980,6 +980,11 @@ public abstract class MixinPlayerEntityModelClient {
         // 머리 자세 (원본 L370-L371)
         head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth
         head.pivotZ = -2f;       // 원본 bipedHead.rotationPointZ = -2F
+        // 🔵 (2026-05-21, fix #118-C) head.yaw=0 강제 — 원본 L370-L371 head.rotateAngleY 미설정 (= 0 유지).
+        //   vanilla setAngles 의 head.yaw = netHeadYaw * π/180 잔존 차단 → 머리 mouse 추적 X.
+        //   memory [[feedback_smbody_yaw_force_head_yaw_zero]]: bodyYaw force 시 sm_animate* 에 head.yaw=0
+        //   강제 패턴. swim 분기는 setAnglesYXZ 가 head.yaw=cos sway 명시 set (= 잔존 cancel), dive 만 누락.
+        head.yaw = 0f;
 
         // 🔵 (2026-05-20, BUG-Swim-Anim-WASD fix #117) vanilla swing pitch cancel.
         //   로그 실측 cause: pre-arms[rP=0.486] (vanilla setAngles 끝, 우리 inject 진입 시) →
