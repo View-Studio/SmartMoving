@@ -309,29 +309,6 @@ public class MixinPlayerEntityRenderer {
             float lerpedYaw = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
             localPlayer.setBodyYaw(lerpedYaw);
             localPlayer.prevBodyYaw = lerpedYaw;
-
-            // 🟡 DEBUG (fix #118 사용자 보고 — 가만히 시 몸 회전 BUG 진단)
-            //   가설: dist < threshold 매치 → camera 추적 → mouse 회전 시 몸 추적.
-            //   원본은 swim 자체 motion 잔존으로 dist > threshold → currentHorizontalAngle 잔존?
-            //   인게임 실측: dist 실제 값 + horizontalAngle 결정 + fade lerp 동작.
-            if (player instanceof net.minecraft.client.network.ClientPlayerEntity localCp
-                    && localCp == net.minecraft.client.MinecraftClient.getInstance().player) {
-                int curTickSY = (int) Math.floor(animationProgress);
-                if (sm.smDbgSwimYawTick != curTickSY) {
-                    sm.smDbgSwimYawTick = curTickSY;
-                    System.out.println("[SWIMYAW-CAPTURE tick=" + curTickSY + " " + (sm.isDiving ? "DIVE" : "SWIM") + "]"
-                            + " dist=" + String.format("%.5f", dist)
-                            + " thr=" + String.format("%.3f", threshold)
-                            + " match=" + (dist < threshold ? "CAMERA" : "HORIZ")
-                            + " camAng=" + String.format("%.4f", sm.stats.currentCameraAngle)
-                            + " horizAng=" + String.format("%.4f", sm.stats.currentHorizontalAngle)
-                            + " target=" + String.format("%.4f", horizontalAngle)
-                            + " prev=" + String.format("%.4f", sm.smSwimDiveExtraYaw_prev)
-                            + " hDist=" + String.format("%.5f", sm.stats.horizontalDistance)
-                            + " tDist=" + String.format("%.5f", sm.stats.totalDistance)
-                            + " mouseYaw=" + String.format("%.4f", lerpedYaw));
-                }
-            }
             return;
         }
 
@@ -635,23 +612,6 @@ public class MixinPlayerEntityRenderer {
             float yawTarget = sm.smSwimDiveExtraYaw_target;
             float yawLerped = lerpFadeAngle(sm.smSwimDiveExtraYaw_prev, yawTarget,
                                              sm.smSwimDiveFade_prevTime, animationProgress);
-
-            // 🟡 DEBUG (fix #118 진단) fade lerp 실측
-            if (player instanceof net.minecraft.client.network.ClientPlayerEntity localCpT
-                    && localCpT == net.minecraft.client.MinecraftClient.getInstance().player) {
-                int curTickST = (int) Math.floor(animationProgress);
-                if (sm.smDbgSwimYawTiltTick != curTickST) {
-                    sm.smDbgSwimYawTiltTick = curTickST;
-                    System.out.println("[SWIMYAW-TILT tick=" + curTickST + "]"
-                            + " yawTarget=" + String.format("%.4f", yawTarget)
-                            + " yawPrev=" + String.format("%.4f", sm.smSwimDiveExtraYaw_prev)
-                            + " yawLerped=" + String.format("%.4f", yawLerped)
-                            + " tiltTarget=" + String.format("%.4f", targetTilt)
-                            + " tiltLerped=" + String.format("%.4f", laggedTilt)
-                            + " deltaT=" + String.format("%.3f", animationProgress - sm.smSwimDiveFade_prevTime)
-                            + " aniP=" + String.format("%.3f", animationProgress));
-                }
-            }
 
             sm.smSwimDiveTiltX_prev = laggedTilt;
             sm.smSwimDiveExtraYaw_prev = yawLerped;
