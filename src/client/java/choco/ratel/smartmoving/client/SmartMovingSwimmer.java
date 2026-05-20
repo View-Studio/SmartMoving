@@ -206,8 +206,12 @@ public final class SmartMovingSwimmer {
         //   diveDown = sneak && Config._diveDownOnSneak.value
         // 완전 정적 잠수 상태 (입력 전혀 없음) 판정. 애니메이션(isDive Quarter-Sixteenth 수직
         // 각도 적용 조건) 등에 사용. R-11 A-2 불일치 #11 해소. 필드는 L179 기존 이식됨.
+        // 🔵 (BUG 5 fix #107) raw sneak key 사용 — player.isSneaking() override 우회.
+        //   MixinClientPlayerEntity.isSneaking() override 는 수영 중 항상 false 반환
+        //   (= 메모리 [[feedback_clientplayer_isSneaking_override]] + [[feedback_movementInput_vs_isSneaking]]
+        //   패턴). raw `player.input.sneaking` 사용 → 원본 `esp.movementInput.sneak` 1:1.
         boolean diveUp16   = player.input.jumping;
-        boolean diveDown16 = player.isSneaking() && cfg.diveDownOnSneak;
+        boolean diveDown16 = player.input.sneaking && cfg.diveDownOnSneak;
         sm.isLevitating = sm.isDiving
                 && !diveUp16
                 && !diveDown16
@@ -368,7 +372,8 @@ public final class SmartMovingSwimmer {
         //   L292-L296 `if (wasSwimming && wantShallowSwim && swimDown) { swimDown=false;
         //   isFakeShallowWaterSneaking=true; }` 통합. swimDown 은 swimming A 경로
         //   motionYDiff 계산 시 소비 (원본 L320-L321).
-        boolean swimDown = player.isSneaking() && cfg.swimDownOnSneak;
+        // 🔵 (BUG 5 fix #107) raw sneak key — isSneaking override 우회.
+        boolean swimDown = player.input.sneaking && cfg.swimDownOnSneak;
         if (wasSwimming && wantShallowSwim && swimDown) {
             swimDown = false;
             sm.isFakeShallowWaterSneaking = true;
@@ -402,8 +407,14 @@ public final class SmartMovingSwimmer {
         double motionZ = vel.z;
 
         // 점프(다이브업) / 스닉(다이브다운) 키
+        // 🔵 (BUG 5 fix #107) diveDown 식 원본 L279 1:1 — raw sneak + cfg gate.
+        //   기존: `player.isSneaking() && sm.isDiving` — isSneaking override 우회 X +
+        //         cfg.diveDownOnSneak 가드 누락 + `sm.isDiving` 가드 잘못 추가
+        //         (원본 L279 = `esp.movementInput.sneak && Config._diveDownOnSneak.value` 만).
+        //   해결: raw sneak + cfg.diveDownOnSneak. isDiving 가드는 후속 motion 분기에서
+        //         자연 처리 (dive 분기 안에서만 diveDown 식 매치).
         boolean diveUp   = jumping;
-        boolean diveDown = player.isSneaking() && sm.isDiving;
+        boolean diveDown = player.input.sneaking && cfg.diveDownOnSneak;
 
         // **B-9b 해소 (세션 129)**: 원본 L306 `moveSwim` + A/B 경로 판정 이식.
         //   moveSwim = pitch < 0 && forward > 0 || pitch > 0 && forward < 0
