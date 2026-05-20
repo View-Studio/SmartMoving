@@ -582,17 +582,27 @@ public class MixinPlayerEntityRenderer {
         //     dive 분기에서 사용자 jump 꾹누름 시 tilt=0° 도달 안 함.
         //   해결: vanilla LivingEntity.jumping field 직접 사용 (= local player raw key).
         if (sm.isSwimming_sm || sm.isDiving) {
+            // 🔵 (2026-05-21, fix #120) Sixteenth 상수 매핑 정정 (π/16 → π/8).
+            //   agent 실측 원본 SmartRenderUtilities.java L22-L26 체인 정의:
+            //     Whole = π * 2, Half = π, Quarter = Half/2 = π/2,
+            //     Eighth = Quarter/2 = π/4, Sixteenth = Eighth/2 = π/8 (≈ 22.5°).
+            //   "Sixteenth" 이름은 Whole(2π) 의 16분의 1 = π/8 (= MixinPlayerEntityModelClient L62
+            //     의 SIXTEENTH 상수 = HALF/8 동일 정의). 본 분기는 hardcode `Math.PI/16f` (= π/16
+            //     = 11.25°) 잘못 사용 → fix #111 의 오역. 사용자 보고 "가만히 시 덜 기움" cause.
+            //   원본 식 (SmartMovingModel L332 isSwim, L374 isDive): `Quarter - Sixteenth × sSF`
+            //     또는 `Quarter - Sixteenth`. 가만히 (sSF=1) / levitate → π/2 - π/8 = 3π/8 = 67.5°.
+            //   이동 (sSF=0) → π/2 = 90°. 사용자 보고 매치.
             float targetTilt;
             if (sm.isDiving) {
                 if (sm.isLevitating) {
-                    targetTilt = (float) Math.PI / 2f - (float) Math.PI / 16f;
+                    targetTilt = (float) Math.PI / 2f - (float) Math.PI / 8f;
                 } else if (sm_isPlayerJumping(player)) {  // ★ vanilla jumping = raw space bar
                     targetTilt = 0f;
                 } else {
                     targetTilt = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
                 }
             } else {  // isSwimming_sm
-                targetTilt = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
+                targetTilt = (float) Math.PI / 2f - (float) Math.PI / 8f * sm.swimStandSneakFactor;
             }
 
             // 🔵 fade lerp (= ModelRotationRenderer.fadeIntermediate 1:1).
