@@ -895,11 +895,22 @@ public abstract class MixinPlayerEntityModelClient {
      * bipedOuter X 기울기는 setupTransforms Mixin에서 처리 (standSneakFactor 경유).
      */
     private void sm_animateSwimming(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
-        float walkFactor  = smFactor(limbSwingAmount, 0.15679921f, 0.52264464f);
+        // 🔵 (2026-05-20, BUG-Swim-Anim-6 fix #113) limbSwing/Amount → sm.stats 입력 교체.
+        //   원본 SmartMovingModel L319-322: `distance = totalHorizontalDistance`, walkFactor/sneakFactor/
+        //     standFactor 는 `currentHorizontalSpeed` 기준.
+        //   기존 매핑은 vanilla `limbSwing` (= LimbAnimator.pos, 누적 `velocity * 4 * tick` 단위) 사용
+        //     → 원본 `totalHorizontalDistance` (= 매 tick distance 누적, m 단위) 와 4배 빠른 cycle →
+        //     팔 stroke + 다리 kick + body sway + head sway 모두 4배 빠른 위상 → 사용자 보고
+        //     "팔 회전 이상" + "물 안 헤엄 팔/다리/몸통/머리 이상" 정확 cause.
+        //   dive 분기 (sm_animateDiving) 가 이미 sm.stats.totalDistance/currentSpeed 사용 — swim 도
+        //     동일 패턴.
+        float distance = sm.stats.totalHorizontalDistance;
+        float speed    = sm.stats.currentHorizontalSpeed;
+        float walkFactor  = smFactor(speed, 0.15679921f, 0.52264464f);
         float sneakFactor = Math.min(
-                smFactor(limbSwingAmount, 0f, 0.15679921f),
-                smFactor(limbSwingAmount, 0.52264464f, 0.15679921f));
-        float standFactor = smFactor(limbSwingAmount, 0.15679921f, 0f);
+                smFactor(speed, 0f, 0.15679921f),
+                smFactor(speed, 0.52264464f, 0.15679921f));
+        float standFactor = smFactor(speed, 0.15679921f, 0f);
         float standSneakFactor = standFactor + sneakFactor;
         sm.swimStandSneakFactor = standSneakFactor;
 
@@ -908,24 +919,22 @@ public abstract class MixinPlayerEntityModelClient {
         // R-17: YXZ → GL call Z, X, Y → setAnglesYXZ 헬퍼.
         setAnglesYXZ(head,
                 -EIGHTH * standSneakFactor,
-                MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor,
+                MathHelper.cos(distance / 2f - QUARTER) * walkFactor,
                 0f);
         head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-10 / §16-15, 수영 자세 머리 앞으로 2px)
 
         // 몸통 yaw (B-11 / §16-16): 자유형 영법 좌우 흔들림.
         // 원본 SmartMovingModel.java L335: bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance/2 - Quarter) * walkFactor
         //   (Breast 부재 — body 단일 노드만 적용).
-        body.yaw = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;
+        body.yaw = MathHelper.cos(distance / 2f - QUARTER) * walkFactor;
 
         // 팔 (YZX 순서): pitch=X(앞뒤 젓기), yaw=0, roll=Z(좌우 펼침)
         // 🔵 (2026-05-20, BUG-Swim-Anim-4/5 fix #112) setAnglesYZX → setAnglesYZX_v2.
         //   원본 SmartMovingModel L337-338 `rotationOrder = ModelRotationRenderer.YZX` 1:1 매핑.
-        //   기존 setAnglesYZX (v1) 은 vertex 적용 순서 XZY (= R_y * R_z * R_x → quaternion 곱
-        //     left-to-right → 적용 = X 먼저 → Z → Y 마지막) = 원본 YZX 와 반대.
-        //   setAnglesYZX_v2 = R_x * R_z * R_y → 적용 Y 먼저 → Z → X 마지막 = YZX 정확.
-        //   엎드리기 분기 (L1058-1059) 가 이미 v2 사용. 사용자 보고 "팔 회전 이상" + "물 안
-        //     팔/다리/몸통/머리 이상" 정확 cause.
-        float dist2      = limbSwing * 0.5f;
+        //   기존 setAnglesYZX (v1) 은 vertex 적용 순서 XZY = 원본 YZX 와 반대.
+        //   setAnglesYZX_v2 = R_x * R_z * R_y → 적용 Y → Z → X = YZX 정확.
+        //   엎드리기 분기 (L1058-1059) 가 이미 v2 사용.
+        float dist2      = distance * 0.5f;
         float rightPitch = ((dist2 % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float leftPitch  = (((dist2 + HALF) % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float rightRoll  = QUARTER + EIGHTH + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
@@ -933,9 +942,9 @@ public abstract class MixinPlayerEntityModelClient {
         setAnglesYZX_v2(rightArm, rightPitch, 0f, rightRoll);
         setAnglesYZX_v2(leftArm,  leftPitch,  0f, leftRoll);
 
-        // 다리 X (앞뒤 발차기)
-        rightLeg.pitch = MathHelper.cos(limbSwing) * 0.52264464f * walkFactor;
-        leftLeg.pitch  = MathHelper.cos(limbSwing + HALF) * 0.52264464f * walkFactor;
+        // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance (fix #113).
+        rightLeg.pitch = MathHelper.cos(distance) * 0.52264464f * walkFactor;
+        leftLeg.pitch  = MathHelper.cos(distance + HALF) * 0.52264464f * walkFactor;
 
         float feetZ = SIXTEENTH * standSneakFactor
                 + MathHelper.cos(totalTime * 0.1f) * 0.4f * (standFactor - sneakFactor);

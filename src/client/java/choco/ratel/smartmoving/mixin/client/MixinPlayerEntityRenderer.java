@@ -536,16 +536,19 @@ public class MixinPlayerEntityRenderer {
         //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
         //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
         if (sm.isSwimming_sm) {
-            // 🔵 (2026-05-20, fix #111 — fix #110 식 정정) Sixteenth = π/16 (= 11.25°) 사용.
-            //   기존 매핑 `π/8` (= 22.5°) 는 코드와 주석 (L514-516 "Sixteenth") 불일치 — 정지 시
-            //   67.5° 자세 (= 너무 일어선) → 사용자 보고 "물에서 가만히 있을 때 각도 이상".
-            //   원본 SmartMovingModel L331: `bipedOuter.rotateAngleX = Quarter - Sixteenth*sSF`
-            //     = π/2 - π/16 * sSF. 정지 sSF=1 → 78.75°, 이동 sSF=0 → 90°.
+            // 🔵 (2026-05-20, fix #113 — fix #111 pivotY 정정) 원본 isSwim 분기는 bipedOuter pivot
+            //   변경 안 함 (SmartRenderModel.java L39-40 `setRotationPoint(0,0,0)` default 유지).
+            //   기존 fix #110/#111 의 pivotY = 1.3125 (= 엎드리기/슬라이딩 통일 차용) 는 잘못된
+            //   차용 — 슬라이딩은 원본 `bipedOuter.rotationPointY=5F` (5/16) 명시, 엎드리기는
+            //   `bipedTorso.rotationPointY=3F`. swim/dive 는 pivot 변경 없음.
+            //   pivotY=1.3125 효과: 회전 중심 = 머리 부근. 머리는 거의 제자리 + 발 크게 swing →
+            //     시각상 "세워진 자세" (사용자 보고 잔존).
+            //   pivotY=0 효과: 회전 중심 = 모델 origin. 전체 모델 동일 회전 → 원본 "수평 누운"
+            //     자세.
+            //   원본 SmartMovingModel L331-332: `bipedOuter.rotateAngleX = Quarter - Sixteenth*sSF`.
+            //     pivot 변경 없음 = pivot (0,0,0) 기준 회전.
             float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
-            float pivotY = 1.5f - 3f / 16f;   // = 1.3125 (엎드리기/슬라이딩 통일)
-            matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
-            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
@@ -565,10 +568,9 @@ public class MixinPlayerEntityRenderer {
                 // 일반 잠수: Quarter - currentVerticalAngle (수직각 반영)
                 tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             }
-            float pivotY = 1.5f - 3f / 16f;
-            matrices.translate(0f, pivotY, 0f);
+            // 🔵 (fix #113) 원본 isDive 분기도 bipedOuter pivot 변경 안 함 (SmartMovingModel L373-375).
+            //   pivotY=0 = 원본 1:1.
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
-            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
