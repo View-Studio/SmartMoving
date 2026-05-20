@@ -223,27 +223,29 @@ public final class SmartMovingSwimmer {
         //   isJumpingOutOfWater 공식 (원본 L486-L487) 이식 시 이 ticks 값이 정확해야 함.
         if (sm.isSwimming_sm || sm.isDiving) {
             sm.waterMovementTicks++;
-
-            // B-10b-post (세션 111): 원본 L486-L487 공식 이식:
-            //   wantJumpOutOfWater = (moveForward != 0 || moveStrafing != 0)
-            //                     && sp.isCollidedHorizontally && diveUp && !isSlow
-            //   isJumpingOutOfWater = wantJumpOutOfWater
-            //                     && (waterMovementTicks > 10 || sp.onGround || wasJumpingOutOfWater)
-            // 수면 탈출 점프 진행 판정. handleSwimming L500 `motionY = 0.30000001192092896D`
-            // 설정의 게이트. 의존 전수 충족 (B-10d diveUp16 + B-12 ticks + B-10b-pre
-            // wasJumpingOutOfWater + vanilla horizontalCollision/isOnGround).
-            boolean wantJumpOutOfWater = (player.input.movementForward != 0F
-                                       || player.input.movementSideways != 0F)
-                    && player.horizontalCollision
-                    && diveUp16
-                    && !sm.isSlow;
-            sm.isJumpingOutOfWater = wantJumpOutOfWater
-                    && (sm.waterMovementTicks > 10
-                        || player.isOnGround()
-                        || sm.wasJumpingOutOfWater);
         } else {
             sm.waterMovementTicks = 0;
         }
+
+        // 🔵 (BUG 7 fix #108) isJumpingOutOfWater 식 위치 — 1.12.2 1:1 매핑.
+        //   1.7.10 L486-L487 식이 `if(swim||dive)` 분기 안만 평가 → dipping 시 평가 안 됨 →
+        //     1칸 물 + 옆 블록 + jump + wasd 시 surface 점프 (motionY=0.3) 미발동.
+        //   1.12.2 L470-L473 식이 `if(!useStandard)` 안 (= swim/dive/dipping 모두) → dipping
+        //     시도 isJumpingOutOfWater 평가 → `onGround` 분기로 매치 → motionY=0.3 step up.
+        //   해결: 식 위치를 `if(swim||dive)` 분기 *밖* 으로 이동. 우리 매핑은 updateSwimState +
+        //     handleSwimming 분리 구조 → 식 평가는 여기, motion 적용은 handleSwimming 끝 final
+        //     override (fix #101) 자동 매치.
+        //   회귀 안전성: ticks=0 잔존 (dipping 시) 이지만 onGround / wasJumpingOutOfWater 분기로
+        //     자체 매치. swim/dive 진입 시 ticks>10 조건도 그대로 작동.
+        boolean wantJumpOutOfWater = (player.input.movementForward != 0F
+                                   || player.input.movementSideways != 0F)
+                && player.horizontalCollision
+                && diveUp16
+                && !sm.isSlow;
+        sm.isJumpingOutOfWater = wantJumpOutOfWater
+                && (sm.waterMovementTicks > 10
+                    || player.isOnGround()
+                    || sm.wasJumpingOutOfWater);
 
         // B-10a-post (세션 109): 원본 L507 `isShallowDiveOrSwim = couldStandUp && (isDiving ||
         // isSwimming);` 이식. `couldStandUp` = 원본 L276 공식.
@@ -415,6 +417,17 @@ public final class SmartMovingSwimmer {
         //         자연 처리 (dive 분기 안에서만 diveDown 식 매치).
         boolean diveUp   = jumping;
         boolean diveDown = player.input.sneaking && cfg.diveDownOnSneak;
+
+        // 🔵 (BUG 6 fix #109) jump + sneak 동시 누름 시 둘 다 cancel — 원본 L298-L299 / 1.12.2 L306-307 1:1.
+        //   `if (isDiving && diveUp && diveDown) diveUp = diveDown = false;`
+        //   = 잠수 중 jump+sneak 동시 누름 시 정지 (= levitating 자세 또는 default motion 식).
+        //   기존 매핑 누락 → jump 우선 동작 (= cancel 식 안 발동, diveUp=true 잔존, motion 식
+        //     `if(diveUp || diveDown || levitating) motionY = (motionY+diff)*0.6` 진입 → 상승).
+        //   사용자 인지 "원본=jump 우선" 은 우리 매핑 동작을 원본으로 오인. 실제 원본 = 정지.
+        if (sm.isDiving && diveUp && diveDown) {
+            diveUp = false;
+            diveDown = false;
+        }
 
         // **B-9b 해소 (세션 129)**: 원본 L306 `moveSwim` + A/B 경로 판정 이식.
         //   moveSwim = pitch < 0 && forward > 0 || pitch > 0 && forward < 0
