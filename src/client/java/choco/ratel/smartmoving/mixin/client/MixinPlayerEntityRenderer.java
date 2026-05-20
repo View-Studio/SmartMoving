@@ -93,15 +93,18 @@ public class MixinPlayerEntityRenderer {
             cir.setReturnValue(Vec3d.ZERO);
             return;
         }
-        // 🔵 (2026-05-20, BUG-Swim-Anim-2 fix #110) swim/dive 모델 위치 보정.
-        //   사용자 보고 "모델이 콜리전보다 1칸 아래에서 나오고 있음" — fix #102 (swim/dive 박스
-        //   +1m up + eye 1.62) 적용 후 박스는 +1m up 되었으나 모델 origin 은 entity.y 그대로 →
-        //   박스 안 1m down 위치에 모델.
-        //   원본 1.7.10 setHeightOffset(-1F) = box.minY -=-1F + height -=1F + posY 변경 X →
-        //     entity.y 그대로. isCrawling 분기 (entity.y unchange) 와 동일 mechanism.
-        //   해결: isCrawling 동일 식 (-1.0 - scale*0.06) 적용. 모델 발 = 박스 발 (= ground 정렬).
+        // 🔵 (2026-05-20, fix #111 — fix #110 정정) swim/dive 모델 위치.
+        //   기존 fix #110 매핑 `-1.0 - scale*0.06` 은 isCrawling 패턴 차용이었으나 박스 차이 1m
+        //   고려 누락 → 모델이 박스보다 더 1m 아래 (= 사용자 보고 "1칸 아래" 잔존).
+        //   - isCrawling: 박스 = (entity.y, entity.y+0.8) (mixin offset 차단, eye=0.62).
+        //     모델 root 보정 = -1.06m → 모델 회전 후 박스 안 정렬.
+        //   - swim/dive: 박스 = (entity.y+1, entity.y+1.8) (mixin offset 활성, eye=1.62 fix #102).
+        //     박스가 1m 위로 push 됨 → 모델도 +1m 더 위로 = isCrawling 식 + 1m.
+        //   결과: -1.06 + 1.0 = -0.06 ≈ Vec3d.ZERO (= 슬라이딩 패턴 동일).
+        //   슬라이딩의 경우 entity.y 자체 -1m push → ZERO offset 으로 박스 안 정렬.
+        //   swim/dive 는 entity.y unchange + 박스 +1m up → ZERO offset 으로 동일 시각 정렬.
         if (sm.isSwimming_sm || sm.isDiving) {
-            cir.setReturnValue(new Vec3d(0D, -1.0D - entity.getScale() * 0.06D, 0D));
+            cir.setReturnValue(Vec3d.ZERO);
             return;
         }
 
@@ -533,7 +536,12 @@ public class MixinPlayerEntityRenderer {
         //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
         //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
         if (sm.isSwimming_sm) {
-            float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 8f * sm.swimStandSneakFactor;
+            // 🔵 (2026-05-20, fix #111 — fix #110 식 정정) Sixteenth = π/16 (= 11.25°) 사용.
+            //   기존 매핑 `π/8` (= 22.5°) 는 코드와 주석 (L514-516 "Sixteenth") 불일치 — 정지 시
+            //   67.5° 자세 (= 너무 일어선) → 사용자 보고 "물에서 가만히 있을 때 각도 이상".
+            //   원본 SmartMovingModel L331: `bipedOuter.rotateAngleX = Quarter - Sixteenth*sSF`
+            //     = π/2 - π/16 * sSF. 정지 sSF=1 → 78.75°, 이동 sSF=0 → 90°.
+            float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
             float pivotY = 1.5f - 3f / 16f;   // = 1.3125 (엎드리기/슬라이딩 통일)
             matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));

@@ -918,13 +918,20 @@ public abstract class MixinPlayerEntityModelClient {
         body.yaw = MathHelper.cos(limbSwing / 2f - QUARTER) * walkFactor;
 
         // 팔 (YZX 순서): pitch=X(앞뒤 젓기), yaw=0, roll=Z(좌우 펼침)
+        // 🔵 (2026-05-20, BUG-Swim-Anim-4/5 fix #112) setAnglesYZX → setAnglesYZX_v2.
+        //   원본 SmartMovingModel L337-338 `rotationOrder = ModelRotationRenderer.YZX` 1:1 매핑.
+        //   기존 setAnglesYZX (v1) 은 vertex 적용 순서 XZY (= R_y * R_z * R_x → quaternion 곱
+        //     left-to-right → 적용 = X 먼저 → Z → Y 마지막) = 원본 YZX 와 반대.
+        //   setAnglesYZX_v2 = R_x * R_z * R_y → 적용 Y 먼저 → Z → X 마지막 = YZX 정확.
+        //   엎드리기 분기 (L1058-1059) 가 이미 v2 사용. 사용자 보고 "팔 회전 이상" + "물 안
+        //     팔/다리/몸통/머리 이상" 정확 cause.
         float dist2      = limbSwing * 0.5f;
         float rightPitch = ((dist2 % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float leftPitch  = (((dist2 + HALF) % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float rightRoll  = QUARTER + EIGHTH + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
         float leftRoll   = -QUARTER - EIGHTH - MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
-        setAnglesYZX(rightArm, rightPitch, 0f, rightRoll);
-        setAnglesYZX(leftArm,  leftPitch,  0f, leftRoll);
+        setAnglesYZX_v2(rightArm, rightPitch, 0f, rightRoll);
+        setAnglesYZX_v2(leftArm,  leftPitch,  0f, leftRoll);
 
         // 다리 X (앞뒤 발차기)
         rightLeg.pitch = MathHelper.cos(limbSwing) * 0.52264464f * walkFactor;
