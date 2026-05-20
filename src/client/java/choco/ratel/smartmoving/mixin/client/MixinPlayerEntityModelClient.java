@@ -1039,6 +1039,27 @@ public abstract class MixinPlayerEntityModelClient {
         head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth
         head.pivotZ = -2f;       // 원본 bipedHead.rotationPointZ = -2F
 
+        // 🔵 (2026-05-20, BUG-Swim-Anim-WASD fix #117) vanilla swing pitch cancel.
+        //   로그 실측 cause: pre-arms[rP=0.486] (vanilla setAngles 끝, 우리 inject 진입 시) →
+        //     DIVE-POST arms[rP=0.454] (우리 inject 끝, arm.pitch 미설정 → vanilla 값 유지).
+        //   = vanilla 1.21.1 BipedEntityModel.setAngles 의 swing 식 (= cos(limbSwing*0.6662+π) *
+        //     2 * limbSwingAmount * 0.5) 잔존 → wasd 시 limbSwingAmount > 0 → arm.pitch ±0.5
+        //     swing → 사용자 보고 "몸통 기준 앞뒤로의 회전값" 정확 cause.
+        //   원본 mechanism (실제 코드 read 확정):
+        //     - SmartMovingModel extends SmartRenderContext (= ModelBiped 상속 X).
+        //     - SmartRenderModel.reset() 매 frame arm.X = 0 reset.
+        //     - SmartMovingModel.animateArmSwinging L640-647 의 `if(isStandard)` 가드로 isDive 시
+        //       isStandard=false → super.animateArmSwinging (= vanilla ModelBiped swing 식) 호출
+        //       자체 미발생 → arm.X 가 0 그대로.
+        //   1.21.1 vanilla BipedEntityModel.setAngles 는 가드 없이 swing 식 항상 적용 → 명시
+        //     reset 필수.
+        //   원본 isDive 분기 (L363-L391) 가 arm.X / leg.X 미설정 = "0 유지" 가 의도.
+        //   isSwim/isCrawl/isSlide 분기는 arm.X 명시 set → 영향 X (= isDive 만 고유 cancel 필요).
+        rightArm.pitch = 0f;
+        leftArm.pitch  = 0f;
+        rightLeg.pitch = 0f;
+        leftLeg.pitch  = 0f;
+
         // 다리 Z (발차기)
         rightLeg.roll = (MathHelper.cos(distance) + 1f) * 0.52264464f * walkFactor + SIXTEENTH * standFactor;
         leftLeg.roll  = (MathHelper.cos(distance + HALF) - 1f) * 0.52264464f * walkFactor - SIXTEENTH * standFactor;
