@@ -767,6 +767,16 @@ public final class SmartMovingClientState {
     public float smHeadJumpTiltX_prev = 0f;       // 이전 프레임 헤드점프 X 회전 lerp 결과
     public float smHeadJumpFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
 
+    // 🔵 (2026-05-20, BUG-Swim-Anim-1/2 fix #115) swim/dive 전용 fade prev.
+    //   원본 SmartMovingModel L331 (isSwim) + L373 (isDive): `bipedOuter.fadeRotateAngleX = true`.
+    //   원본 ModelRotationRenderer.fadeIntermediate L315-L345: 매 frame `current = prev +
+    //     (target - prev) * deltaTime * 0.2F`. 진입/전환 시 점진 lerp.
+    //   비행/헤드점프 fade prev 와 분리 — 비행/헤드점프 ↔ swim/dive 전환 시 prev 값 leak 차단.
+    //   사용자 보고: "수면 도달 시 갑자기 1자" (= dive tilt 즉시 0 변환) + "wasd 시 팔다리 이상"
+    //     (= currentVerticalAngle 동적 변화 즉시 적용) 모두 fade 부재 cause.
+    public float smSwimDiveTiltX_prev = 0f;       // 이전 프레임 swim/dive X 회전 lerp 결과
+    public float smSwimDiveFade_prevTime = -999f; // 이전 프레임 totalTime (-999 = 미초기화)
+
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):
     //   원본 SmartRenderModel L208-209: bipedOuter.fadeRotateAngleY = true (= EntityPig 외).
     //   isHeadJump 분기 (SmartMovingModel L509): bipedOuter.rotateAngleY = currentHorizontalAngle.

@@ -535,57 +535,57 @@ public class MixinPlayerEntityRenderer {
         //   - POSITIVE_X.rotation(-tiltAngle) 부호 반전 — vanilla scale(-1,-1,1) 보정
         //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
         //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
-        if (sm.isSwimming_sm) {
-            // 🔵 (2026-05-20, fix #114 — fix #113 pivotY=0 revert) 매트릭스 stack 정밀 재분석:
-            //   vanilla LivingEntityRenderer.render 순서:
-            //     setupTransforms (← 우리 inject 시점) → scale(-1,-1,1) → translate(0, -1.501, 0)
-            //     → ModelPart render.
-            //   매트릭스 stack 의 R_x 회전 중심 = 매트릭스 origin (= (0,0,0) ModelPart space).
-            //   ModelPart space (0,0,0) world 위치 추적 (vertex chain right-to-left):
-            //     ModelPart pivot (0,0,0) → T(-1.501) → (0,-1.501,0) → scale(-1,-1,1) → (0,1.501,0)
-            //     → R_y(180-bY) → M_init → world (entity.x, entity.y + 1.501, entity.z) = 머리.
-            //   fix #113 pivotY=0 효과: 회전 중심 = matrices origin (= entity.y world, scale 전 origin).
-            //     모델 회전이 entity 발 위치 기준 → 사용자 보고 "회전 중심 머리에서 발로 변경" +
-            //     "모델이 박스 밑으로 떨어짐" 정확 매치.
-            //   원본 SmartRenderModel L39-40 `bipedOuter.setRotationPoint(0,0,0)` = ModelPart space
-            //     pivot (0,0,0). matrices origin (= entity.y+1.501 world) 기준 회전. 즉 머리 위치
-            //     기준 회전 (= 원본 의도).
-            //   해결: matrices.translate(0, 1.5, 0) → R_x → matrices.translate(0, -1.5, 0).
-            //     R_x 회전 중심 = entity.y + 1.501 - 1.5 + 1.5 = entity.y + 1.501 (= 머리).
-            //   슬라이딩 pivotY = 1.5 - 5/16 = 1.1875 (원본 isSlide L448 `rotationPointY=5F` 1:1).
-            //   엎드리기 pivotY = 1.5 - 3/16 = 1.3125 (원본 isCrawl `bipedTorso.rotationPointY=3F`).
-            //   swim/dive 의 원본 = bipedOuter pivot 변경 없음 → pivotY = 1.5 - 0 = 1.5.
-            //   메모리 [[feedback_rotation_pivot_pattern]]: "translate(0, +1.5, 0) 보정 필수".
-            float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
-            float pivotY = 1.5f;
-            matrices.translate(0f, pivotY, 0f);
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
-            matrices.translate(0f, -pivotY, 0f);
-            sm.smOuterTiltX = tiltAngle;
-        }
-
-        // SM 잠수(isDiving): 원본 SmartMovingModel.md L542 —
-        //   bipedOuter.rotateAngleX = isLevitate ? Quarter - Sixteenth
-        //                           : (isJump ? 0F : Quarter - currentVerticalAngle)
-        // 🔵 (2026-05-20, BUG-Swim-Anim-1/3 fix #110) isSwimming_sm 분기와 동일 패턴 적용.
-        if (sm.isDiving) {
-            float tiltAngle;
-            if (sm.isLevitating) {
-                // Quarter - Sixteenth ≈ 7π/16 (살짝 덜 수평)
-                tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f;
-            } else if (sm.isJumping) {
-                // 점프 중 잠수: 수직각 0 (정자세)
-                tiltAngle = 0f;
-            } else {
-                // 일반 잠수: Quarter - currentVerticalAngle (수직각 반영)
-                tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+        // 🔵 (2026-05-20, fix #115) isSwimming_sm + isDiving 통합 fade 분기.
+        //   사용자 보고 BUG 1 (수면 도달 시 1자) + BUG 2 (wasd 시 팔다리 이상) 공통 cause =
+        //     fadeRotateAngleX 매핑 누락.
+        //   원본 SmartMovingModel L331 (isSwim) + L373 (isDive): `bipedOuter.fadeRotateAngleX = true`.
+        //   원본 ModelRotationRenderer.fadeIntermediate L315-L345: 매 frame `current = prev +
+        //     (target - prev) * deltaTime * 0.2F` 점진 lerp. 진입/전환 시 부드러운 자세 변화.
+        //   기존 매핑 = 즉시 R_x(tilt) 적용 → vAngle / sSF 동적 변화 시 즉시 자세 변화 → 사용자
+        //     "이상한 흔들림" + "1자 변환" 인지.
+        //   해결: lerpFadeAngle 헬퍼 (= 비행/헤드점프 분기 검증 패턴) 차용. swim/dive 통합 분기 +
+        //     별도 prev field (smSwimDiveTiltX_prev) 사용.
+        //
+        //   isJumping 매핑 정정:
+        //   원본 isDive `isJump` 변수 = `moving.isJumping()` override 메서드 (SmartMovingSelf L3264)
+        //     = vanilla player.jumping field (= raw space bar 누름).
+        //   기존 매핑 `sm.isJumping` = SM 자체 1-tick flag (= tryJump 한정, 거의 항상 false) →
+        //     dive 분기에서 사용자 jump 꾹누름 시 tilt=0° 도달 안 함.
+        //   해결: vanilla LivingEntity.jumping field 직접 사용 (= local player raw key).
+        if (sm.isSwimming_sm || sm.isDiving) {
+            float targetTilt;
+            if (sm.isDiving) {
+                if (sm.isLevitating) {
+                    targetTilt = (float) Math.PI / 2f - (float) Math.PI / 16f;
+                } else if (sm_isPlayerJumping(player)) {  // ★ vanilla jumping = raw space bar
+                    targetTilt = 0f;
+                } else {
+                    targetTilt = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
+                }
+            } else {  // isSwimming_sm
+                targetTilt = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
             }
-            // 🔵 (fix #114) swim 분기와 동일 패턴 — pivotY=1.5 (= 머리 위치 회전 중심).
+
+            // 🔵 fade lerp (= ModelRotationRenderer.fadeIntermediate 1:1).
+            //   prev 시작값 = 진입 직전 자세 (= 0, vanilla STANDING). [[feedback_fade_prev_pre_entry_pose]].
+            //   진입 frame: prevTime < -100f → lerpFadeAngle 즉시 target return (= snap).
+            //   정상 frame: deltaTime * 0.2 lerp → 5 frame 후 ~99% 도달.
+            float laggedTilt = lerpFadeAngle(sm.smSwimDiveTiltX_prev, targetTilt,
+                                              sm.smSwimDiveFade_prevTime, animationProgress);
+            sm.smSwimDiveTiltX_prev = laggedTilt;
+            sm.smSwimDiveFade_prevTime = animationProgress;
+
+            // 매트릭스 stack 적용 (= fix #114 pivotY=1.5 동일).
             float pivotY = 1.5f;
             matrices.translate(0f, pivotY, 0f);
-            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-laggedTilt));
             matrices.translate(0f, -pivotY, 0f);
-            sm.smOuterTiltX = tiltAngle;
+            sm.smOuterTiltX = laggedTilt;
+        } else {
+            // swim/dive 비활성 시 fade prev reset (= 다음 진입 시 prev=0 시작).
+            //   비행 fade prev reset 패턴 (L866-868) 동일.
+            sm.smSwimDiveTiltX_prev = 0f;
+            sm.smSwimDiveFade_prevTime = animationProgress;
         }
 
         // SM 슬라이딩(isSliding): bipedOuter.rotateAngleX = Quarter
@@ -971,6 +971,19 @@ public class MixinPlayerEntityRenderer {
      *   즉시 적용 (보간 skip).
      */
     @Unique
+    /**
+     * 🔵 (fix #115) vanilla LivingEntity.jumping (= raw space bar) 검사 헬퍼.
+     *   LivingEntity.jumping = protected — 직접 access 불가. ClientPlayerEntity 의 경우
+     *   input.jumping 으로 등가 (= ClientPlayerEntity.tickMovement 안 `jumping = input.jumping`).
+     *   remote player 의 경우 isJumping field 동기화 X → false return (= 향후 packet sync 시 갱신).
+     */
+    private static boolean sm_isPlayerJumping(net.minecraft.client.network.AbstractClientPlayerEntity player) {
+        if (player instanceof net.minecraft.client.network.ClientPlayerEntity localPlayer) {
+            return localPlayer.input.jumping;
+        }
+        return false;
+    }
+
     private static float lerpFadeAngle(float prev, float target, float prevTime, float currentTime) {
         // prevTime 미초기화 또는 2 ticks 이상 차이 → 즉시 적용 (보간 skip)
         if (prevTime < -100f) return target;
