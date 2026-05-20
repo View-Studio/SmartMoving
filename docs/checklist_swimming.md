@@ -1,5 +1,8 @@
 # SmartMoving 수영 (Swim/Dive) 기능 작업 체크리스트
 
+**상태**: ✅ **완결 (2026-05-20)** — 사용자 명시 선언. 함부로 수정 금지.
+**적용 fix**: #101~#109 (총 9 fix).
+**완결 메모리**: [[project_swimming_complete]]
 **작성일**: 2026-05-20
 **근거**: [docs/research_swimming.md](research_swimming.md)
 **작업 범위**: 기능 (state / motion / transition / 박스 dim / 키 입력 / 멀티 동기화). 애니메이션 제외.
