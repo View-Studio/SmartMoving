@@ -536,19 +536,31 @@ public class MixinPlayerEntityRenderer {
         //     (= [[feedback_render_scale_negation]] + BUG-Slide-Anim-2 "하늘 봄" 정확 매치).
         //     사용자 보고 "180도 뒤집혀 하늘 보고 있음" fix.
         if (sm.isSwimming_sm) {
-            // 🔵 (2026-05-20, fix #113 — fix #111 pivotY 정정) 원본 isSwim 분기는 bipedOuter pivot
-            //   변경 안 함 (SmartRenderModel.java L39-40 `setRotationPoint(0,0,0)` default 유지).
-            //   기존 fix #110/#111 의 pivotY = 1.3125 (= 엎드리기/슬라이딩 통일 차용) 는 잘못된
-            //   차용 — 슬라이딩은 원본 `bipedOuter.rotationPointY=5F` (5/16) 명시, 엎드리기는
-            //   `bipedTorso.rotationPointY=3F`. swim/dive 는 pivot 변경 없음.
-            //   pivotY=1.3125 효과: 회전 중심 = 머리 부근. 머리는 거의 제자리 + 발 크게 swing →
-            //     시각상 "세워진 자세" (사용자 보고 잔존).
-            //   pivotY=0 효과: 회전 중심 = 모델 origin. 전체 모델 동일 회전 → 원본 "수평 누운"
-            //     자세.
-            //   원본 SmartMovingModel L331-332: `bipedOuter.rotateAngleX = Quarter - Sixteenth*sSF`.
-            //     pivot 변경 없음 = pivot (0,0,0) 기준 회전.
+            // 🔵 (2026-05-20, fix #114 — fix #113 pivotY=0 revert) 매트릭스 stack 정밀 재분석:
+            //   vanilla LivingEntityRenderer.render 순서:
+            //     setupTransforms (← 우리 inject 시점) → scale(-1,-1,1) → translate(0, -1.501, 0)
+            //     → ModelPart render.
+            //   매트릭스 stack 의 R_x 회전 중심 = 매트릭스 origin (= (0,0,0) ModelPart space).
+            //   ModelPart space (0,0,0) world 위치 추적 (vertex chain right-to-left):
+            //     ModelPart pivot (0,0,0) → T(-1.501) → (0,-1.501,0) → scale(-1,-1,1) → (0,1.501,0)
+            //     → R_y(180-bY) → M_init → world (entity.x, entity.y + 1.501, entity.z) = 머리.
+            //   fix #113 pivotY=0 효과: 회전 중심 = matrices origin (= entity.y world, scale 전 origin).
+            //     모델 회전이 entity 발 위치 기준 → 사용자 보고 "회전 중심 머리에서 발로 변경" +
+            //     "모델이 박스 밑으로 떨어짐" 정확 매치.
+            //   원본 SmartRenderModel L39-40 `bipedOuter.setRotationPoint(0,0,0)` = ModelPart space
+            //     pivot (0,0,0). matrices origin (= entity.y+1.501 world) 기준 회전. 즉 머리 위치
+            //     기준 회전 (= 원본 의도).
+            //   해결: matrices.translate(0, 1.5, 0) → R_x → matrices.translate(0, -1.5, 0).
+            //     R_x 회전 중심 = entity.y + 1.501 - 1.5 + 1.5 = entity.y + 1.501 (= 머리).
+            //   슬라이딩 pivotY = 1.5 - 5/16 = 1.1875 (원본 isSlide L448 `rotationPointY=5F` 1:1).
+            //   엎드리기 pivotY = 1.5 - 3/16 = 1.3125 (원본 isCrawl `bipedTorso.rotationPointY=3F`).
+            //   swim/dive 의 원본 = bipedOuter pivot 변경 없음 → pivotY = 1.5 - 0 = 1.5.
+            //   메모리 [[feedback_rotation_pivot_pattern]]: "translate(0, +1.5, 0) 보정 필수".
             float tiltAngle = (float) Math.PI / 2f - (float) Math.PI / 16f * sm.swimStandSneakFactor;
+            float pivotY = 1.5f;
+            matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
@@ -568,9 +580,11 @@ public class MixinPlayerEntityRenderer {
                 // 일반 잠수: Quarter - currentVerticalAngle (수직각 반영)
                 tiltAngle = (float) Math.PI / 2f - sm.stats.currentVerticalAngle;
             }
-            // 🔵 (fix #113) 원본 isDive 분기도 bipedOuter pivot 변경 안 함 (SmartMovingModel L373-375).
-            //   pivotY=0 = 원본 1:1.
+            // 🔵 (fix #114) swim 분기와 동일 패턴 — pivotY=1.5 (= 머리 위치 회전 중심).
+            float pivotY = 1.5f;
+            matrices.translate(0f, pivotY, 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation(-tiltAngle));
+            matrices.translate(0f, -pivotY, 0f);
             sm.smOuterTiltX = tiltAngle;
         }
 
