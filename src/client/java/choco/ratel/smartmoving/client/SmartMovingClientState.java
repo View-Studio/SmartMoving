@@ -786,8 +786,36 @@ public final class SmartMovingClientState {
 
     // 🟡 DEBUG (2026-05-21) jump 꾹누름 헤엄 시 팔 회전 BUG 진단용 카운터.
     //   sm_animateDiving 매 5 frame, sm_setupTransforms tick 단위 dump 위한 throttle field.
-    public int smDbgFrameCounterArm = 0;   // sm_animateDiving frame counter (5 frame 마다 dump)
+    public int smDbgFrameCounterArm = 0;   // sm_animateDiving/sm_animateSwimming frame counter (5 frame 마다 dump)
     public int smDbgJumpHeadTick = -1;     // sm_setupTransforms tick 1회 dump 보장 (last dumped tick)
+    public int smDbgCaptureTick = -1;      // sm_captureBodyYaw tick 1회 dump 보장
+    public int smDbgTiltTick = -1;         // sm_setupTransforms tilt/yaw fade lerp tick 1회 dump 보장
+
+    // 🔴 fix #123 (2026-05-21, 사용자 보고 "수영 애니메이션 끊김 — 비행 처럼 fade"):
+    //   원본 1.7.10 SmartMovingModel L319-361 (isSwim) / L363-391 (isDive) 의 arm/leg/head/body
+    //   회전식은 fadeRotateAngle false (= instant) 매핑. 우리 매핑이 1.21.1 frame rate (60 FPS)
+    //   에서 그대로 적용 시 사용자 보고 "끊김". 비행 fade pattern (= [[project_flying_complete]])
+    //   1:1 차용 — 각 input angle 별 prev field + lerpFadeAngle 매 frame 보간.
+    //
+    //   swim prev field (= sm_animateSwimming 의 모든 dynamic input):
+    public float smSwimRightArmPitch_prev = 0f;
+    public float smSwimRightArmRoll_prev  = 0f;
+    public float smSwimLeftArmPitch_prev  = 0f;
+    public float smSwimLeftArmRoll_prev   = 0f;
+    public float smSwimBodySway_prev      = 0f;  // body.yaw + arm.yaw (Phase 1, breast 자식 등가) + head.yaw 공유
+    public float smSwimHeadPitch_prev     = 0f;
+    public float smSwimRightLegPitch_prev = 0f;
+    public float smSwimRightLegRoll_prev  = 0f;
+    public float smSwimLeftLegPitch_prev  = 0f;
+    public float smSwimLeftLegRoll_prev   = 0f;
+    public float smSwimAnimFade_prevTime  = -999f;
+
+    //   dive prev field (= sm_animateDiving 의 dynamic input — arm.roll/leg.roll 만 변동):
+    public float smDiveRightArmRoll_prev = 0f;
+    public float smDiveLeftArmRoll_prev  = 0f;
+    public float smDiveRightLegRoll_prev = 0f;
+    public float smDiveLeftLegRoll_prev  = 0f;
+    public float smDiveAnimFade_prevTime = -999f;
 
 
     // 🔴 fix #91 (2026-05-13, 사용자 보고 "헤드점프 + 벽 박을 때 몸 회전 중간 이어짐 없음"):

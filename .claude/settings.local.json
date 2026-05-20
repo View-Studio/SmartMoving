@@ -320,7 +320,14 @@
       "Bash(sed -n '305,410p' /tmp/biped_full.txt)",
       "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/entity/LimbAnimator.class\")",
       "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/client/model/ModelPart.class\")",
-      "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/client/render/entity/model/CrossbowPosing.class\")"
+      "Bash(unzip -q -j \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-clientonly-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" \"net/minecraft/client/render/entity/model/CrossbowPosing.class\")",
+      "Bash(./gradlew :compileClientJava)",
+      "Bash(jar -xf mc.jar net/minecraft/client/model/ModelPart.class)",
+      "Bash(jar -xf mc.jar net/minecraft/entity/Entity.class)",
+      "Bash(jar -tf mc.jar)",
+      "Bash(cp \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-common-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" /tmp/mcjar/mc-common.jar)",
+      "Bash(jar -xf mc-common.jar net/minecraft/entity/Entity.class)",
+      "Bash(jar -xf mc-common.jar net/minecraft/entity/LivingEntity.class)"
     ]
   }
 }

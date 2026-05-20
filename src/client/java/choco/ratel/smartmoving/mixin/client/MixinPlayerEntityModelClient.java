@@ -447,7 +447,7 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isSwimming_sm) {
             sm_animateSwimming(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isDiving) {
-            sm_animateDiving(sm, limbSwing, limbSwingAmount);
+            sm_animateDiving(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isCrawling) {
             sm_animateCrawling(sm, headYaw);
         } else if (sm.isSliding) {
@@ -904,8 +904,13 @@ public abstract class MixinPlayerEntityModelClient {
         //     "팔 회전 이상" + "물 안 헤엄 팔/다리/몸통/머리 이상" 정확 cause.
         //   dive 분기 (sm_animateDiving) 가 이미 sm.stats.totalDistance/currentSpeed 사용 — swim 도
         //     동일 패턴.
-        float distance = sm.stats.totalHorizontalDistance;
-        float speed    = sm.stats.currentHorizontalSpeed;
+        // 🔴 (2026-05-21, fix #125) 사용자 보고 "60Hz 보간 필요". direct field 접근이
+        //   tick 단위 (= 50ms) jump → 끊김. SmartStatistics.getXxx(partialTicks) sub-tick
+        //   interpolation 사용 — `prev + (current - prev) * partialTicks` (= 원본 1:1).
+        //   partialTicks = totalTime - floor(totalTime) (= animationProgress 의 fractional 부분).
+        float partialTicks = totalTime - (float) Math.floor(totalTime);
+        float distance = sm.stats.getTotalHorizontalDistance(partialTicks);
+        float speed    = sm.stats.getCurrentHorizontalSpeed(partialTicks);
         float walkFactor  = smFactor(speed, 0.15679921f, 0.52264464f);
         float sneakFactor = Math.min(
                 smFactor(speed, 0f, 0.15679921f),
@@ -914,35 +919,276 @@ public abstract class MixinPlayerEntityModelClient {
         float standSneakFactor = standFactor + sneakFactor;
         sm.swimStandSneakFactor = standSneakFactor;
 
-        // 머리 (YXZ 순서): rotateAngleY = cos(distance/2 - Quarter) * walkFactor,
-        //                  rotateAngleX = -Eighth * standSneakFactor (원본 SmartMovingModel.java L504-L506).
-        // R-17: YXZ → GL call Z, X, Y → setAnglesYXZ 헬퍼.
-        setAnglesYXZ(head,
-                -EIGHTH * standSneakFactor,
-                MathHelper.cos(distance / 2f - QUARTER) * walkFactor,
-                0f);
-        head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F (B-10 / §16-15, 수영 자세 머리 앞으로 2px)
+        // 🟡 DEBUG (jump 꾹누름 헤엄 팔 BUG 진단) sm_animateSwimming 진입 PRE state.
+        //   isSwim 분기 — DIVE 와 별도. SWIM 자세 식: arm.pitch = sawtooth*walk + Sixteenth*sSF,
+        //   arm.roll = Q+E + cos(t)*sSF*0.8. dive 와 식 완전 다름.
+        if ((sm.smDbgFrameCounterArm++ % 5) == 0) {
+            System.out.println("[SWIM-DBG-SWIMARM-PRE]"
+                    + " input[limbSw=" + String.format("%.4f", limbSwing)
+                    + " limbAm=" + String.format("%.4f", limbSwingAmount)
+                    + " tT=" + String.format("%.4f", totalTime) + "]"
+                    + " state[sw=" + sm.isSwimming_sm
+                    + " dv=" + sm.isDiving
+                    + " lv=" + sm.isLevitating
+                    + " smJump=" + sm.isJumping
+                    + " dip=" + sm.isDipping + "]"
+                    + " stats[chSpd=" + String.format("%.4f", speed)
+                    + " tHD=" + String.format("%.3f", distance)
+                    + " hDist=" + String.format("%.4f", sm.stats.horizontalDistance) + "]"
+                    + " factors[walk=" + String.format("%.3f", walkFactor)
+                    + " sneak=" + String.format("%.3f", sneakFactor)
+                    + " stand=" + String.format("%.3f", standFactor)
+                    + " sSF=" + String.format("%.3f", standSneakFactor) + "]"
+                    + " pre-arms[rP=" + String.format("%.4f", rightArm.pitch)
+                    + " rY=" + String.format("%.4f", rightArm.yaw)
+                    + " rR=" + String.format("%.4f", rightArm.roll)
+                    + " lP=" + String.format("%.4f", leftArm.pitch)
+                    + " lY=" + String.format("%.4f", leftArm.yaw)
+                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
+                    + " pre-legs[rP=" + String.format("%.4f", rightLeg.pitch)
+                    + " rR=" + String.format("%.4f", rightLeg.roll)
+                    + " lP=" + String.format("%.4f", leftLeg.pitch)
+                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
+                    + " pre-head[P=" + String.format("%.4f", head.pitch)
+                    + " Y=" + String.format("%.4f", head.yaw)
+                    + " R=" + String.format("%.4f", head.roll) + "]"
+                    + " pre-body[P=" + String.format("%.4f", body.pitch)
+                    + " Y=" + String.format("%.4f", body.yaw)
+                    + " R=" + String.format("%.4f", body.roll) + "]");
+        }
 
-        // 몸통 yaw (B-11 / §16-16): 자유형 영법 좌우 흔들림.
-        // 원본 SmartMovingModel.java L335: bipedBreast.rotateAngleY = bipedBody.rotateAngleY = cos(distance/2 - Quarter) * walkFactor
-        //   (Breast 부재 — body 단일 노드만 적용).
-        body.yaw = MathHelper.cos(distance / 2f - QUARTER) * walkFactor;
+        // 🔴 (2026-05-21, fix #122) "팔이랑 몸통 분리" — vanilla 1.21.1 BipedEntityModel 의
+        //   arm 이 root 직접 자식 (vs 원본 SmartRender 의 arm 이 bipedBreast 자식 = body sway
+        //   영향 받음). 우리 매핑에서 arm.yaw 에 body sway 값 추가 = 원본 breast 자식 효과 등가.
+        //
+        // 🔴 (2026-05-21, fix #124 정정) 원본 SmartRender model tree 정확 분석:
+        //   - head: outer × torso(0) × breast(sway) × neck(0) × head(sway) = 2 × sway.
+        //   - body: outer × torso(0) × body(sway) = **1 × sway** (= breast 와 sibling, 자식 X).
+        //   - arm: outer × torso(0) × breast(sway) × shoulder(0) × arm(0) = 1 × sway.
+        //   호출 흐름 검증 (SmartMovingModel L626-632 animateHeadRotation):
+        //     setRotationAngles → isSwim 분기 실행 → bipedHead.Y=sway, bipedBreast.Y=sway, bipedBody.Y=sway.
+        //     isStandard=false (L73) → imp.superAnimateHeadRotation skip → bipedNeck.ignoreBase=false 유지.
+        //   = bipedNeck 의 parent transform 적용 → head 의 합성 = breast(sway) + head(sway) = 2×sway.
+        //   = bipedBody 는 bipedTorso 자식 (= breast 와 sibling) → body 의 합성 = 1×sway.
+        //   사용자 verbatim "body 변경 전이 원본과 동일" 정확 매치 — body 만 revert.
+        float bodySway = MathHelper.cos(distance / 2f - QUARTER) * walkFactor;
 
-        // 팔 (YZX 순서): pitch=X(앞뒤 젓기), yaw=0, roll=Z(좌우 펼침)
-        // 🔵 (2026-05-20, BUG-Swim-Anim-4/5 fix #112) setAnglesYZX → setAnglesYZX_v2.
-        //   원본 SmartMovingModel L337-338 `rotationOrder = ModelRotationRenderer.YZX` 1:1 매핑.
-        //   기존 setAnglesYZX (v1) 은 vertex 적용 순서 XZY = 원본 YZX 와 반대.
-        //   setAnglesYZX_v2 = R_x * R_z * R_y → 적용 Y → Z → X = YZX 정확.
-        //   엎드리기 분기 (L1058-1059) 가 이미 v2 사용.
+        // 🔴 (2026-05-21, fix #127) 원본 합성 visual 정확 매핑.
+        //   사용자 보고 "머리 회전이 원본보다 빠른 느낌" cause = fix #124 의 setAnglesYXZ_standard
+        //   (= R_x(pitch) × R_y(2×sway)) 가 원본 합성 (= R_y(sway) × R_x(pitch) × R_y(sway)) 과
+        //   pitch ≠ 0 시 다른 형태 → cycle 안 angular velocity 빨라짐.
+        //   원본 model tree (SmartRenderModel L52, L59): head → neck → breast.
+        //     M_head = R_x(pitch) × R_y(sway_head), M_breast = R_y(sway_breast).
+        //     합성 M = M_breast × M_head = R_y(sway) × R_x(pitch) × R_y(sway).
+        //   setAnglesRyRxRy_standard (= 새 helper, 표준 ZYX 분해) 사용.
+        setAnglesRyRxRy_standard(head, bodySway, -EIGHTH * standSneakFactor, bodySway);
+        head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F
+
+        // 🟡 DEBUG (cycle period 실측 — 사용자 보고 "head 회전 빠른 느낌"):
+        //   매 5 frame: input bodySway 값, distance, cSpd, head.yaw 결과 dump.
+        //   sm.isFast / wantSprint 추가 (= sprint 자동 활성 cause 검증).
+        if ((sm.smDbgFrameCounterArm % 5) == 0) {
+            System.out.println("[SWIM-DBG-HEADCYC]"
+                    + " tT=" + String.format("%.4f", totalTime)
+                    + " pt=" + String.format("%.4f", partialTicks)
+                    + " dist=" + String.format("%.4f", distance)
+                    + " cSpd=" + String.format("%.4f", speed)
+                    + " walk=" + String.format("%.3f", walkFactor)
+                    + " sSF=" + String.format("%.3f", standSneakFactor)
+                    + " bodySway=" + String.format("%.4f", bodySway)
+                    + " (deg=" + String.format("%.2f", Math.toDegrees(bodySway)) + ")"
+                    + " head[P=" + String.format("%.4f", head.pitch)
+                    + " Y=" + String.format("%.4f", head.yaw)
+                    + " R=" + String.format("%.4f", head.roll) + "]"
+                    + " head_yaw_deg=" + String.format("%.2f", Math.toDegrees(head.yaw))
+                    + " sprint[isFast=" + sm.isFast
+                    + " wantSprint=" + sm.wantSprint + "]");
+        }
+
+        // 몸통 yaw — bipedBody 의 합성 = 1×sway (= torso 자식, breast 와 sibling, breast 영향 X).
+        body.yaw = bodySway;
+
+        // 🔴 (2026-05-21, fix #129) 사용자 verbatim "팔 회전 이상함" + 메모리 가이드 적용.
+        //   원본 SmartMovingModel L337-L344 (isSwim 분기 arm):
+        //     bipedRightArm.rotationOrder = YZX (= vertex 적용 Y → Z → X).
+        //     bipedRightArm.rotateAngleZ = Quarter + Eighth + cos(t*0.1) * sSF * 0.8.
+        //     bipedRightArm.rotateAngleX = ((distance*0.5) % Whole - Half) * walk + Sixteenth * sSF.
+        //     bipedRightArm.rotateAngleY = 명시 안 됨 (= 0).
+        //   메모리 [[feedback_animation_porting]] 가이드: "arm/leg 의 local Z → 그냥 arm.roll = localZ
+        //     직접 대입. sin/cos 3D 외재적 분해 금지. 1.21.1 ModelPart 는 pitch-first 내재적
+        //     ZYX (= R_z × R_y × R_x)".
+        //   메모리 [[feedback_zxy_zyx_rotation_order]] 가이드: "작은 yaw (< π/4): ModelPart
+        //     직접 set + 원본 부호 그대로 안전".
+        //   = arm.yaw = bodySway (< 0.5 rad ≈ 28° < π/4) 영역에서 직접 set 안전.
+        //   fix #121 의 setAnglesYZX_standard (= quaternion 합성 + euler 분해) 가 메모리 가이드
+        //     위반. JOML euler 분해 시 큰 X (sawtooth ±π) 큰 Z (3π/4) 영역에서 분해 결과 ≠ 의도.
+        //   해결: 원본 식 결과 = ModelPart.pitch/yaw/roll 직접 대입.
+        //   fix #122 (arm.yaw = bodySway) 유지 — breast 자식 효과 등가.
+        // 🔴 (2026-05-21, fix #138 revert) 사용자 verbatim "방금 변경 돌리고 dump 추가".
+        //   = fix #137 (좌우 swap) 그대로.
+        // 🔴 (2026-05-21, fix #141) roll sign swap 만 revert.
+        // 🔴 (2026-05-21, fix #144) pitch phase swap 도 revert (= 원본 1:1 매핑).
+        //   원본 SmartMovingModel.java L343-L344:
+        //     bipedRightArm.rotateAngleX = ((d*0.5)%Whole-Half) * walk + Sixteenth * sSF.   (= sawtooth(d))
+        //     bipedLeftArm.rotateAngleX  = ((d*0.5+Half)%Whole-Half) * walk + Sixteenth * sSF. (= sawtooth(d+π))
+        //   원본 SmartMovingModel.java L340-L341:
+        //     bipedRightArm.rotateAngleZ = +(Q+E) + cos*sSF*0.8.
+        //     bipedLeftArm.rotateAngleZ  = -(Q+E) - cos*sSF*0.8.
+        //   fix #137 swap 의 원인 = fix #122 의 R_y middle position 잘못. fix #144 helper 정정 후
+        //     swap 필요 없음 → revert.
         float dist2      = distance * 0.5f;
+        // 원본 1:1 (= fix #137/#141 swap revert):
         float rightPitch = ((dist2 % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float leftPitch  = (((dist2 + HALF) % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
-        float rightRoll  = QUARTER + EIGHTH + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
-        float leftRoll   = -QUARTER - EIGHTH - MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
-        setAnglesYZX_v2(rightArm, rightPitch, 0f, rightRoll);
-        setAnglesYZX_v2(leftArm,  leftPitch,  0f, leftRoll);
+        float rightRoll  =  (QUARTER + EIGHTH) + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
+        float leftRoll   = -(QUARTER + EIGHTH) - MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
+        // 🔴 (2026-05-21, fix #140) 원본 visual 정확 매핑.
+        //   원본 합성 = R_y(sway) × R_x(pitch) × R_z(roll) (= breast 자식 + arm YZX rotation order).
+        //   vanilla ModelPart 식 R_z × R_y × R_x 와 다른 합성 → setAnglesYXZ_breastSwim helper 사용.
+        //   fix #122 의 arm.yaw = bodySway 매핑 잘못 → 새 helper 적용.
+        setAnglesYXZ_breastSwim(rightArm, bodySway, rightPitch, rightRoll);
+        setAnglesYXZ_breastSwim(leftArm,  bodySway, leftPitch,  leftRoll);
 
-        // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance (fix #113).
+        // 🔴 (2026-05-21, fix #146) arm pivot 의 R_y(bodySway) 변환 — 어깨가 몸통과 떨어진 BUG fix.
+        //   사용자 verbatim "어깨가 확실히 몸통에 붙어있어야되는데 지금 떨어져있다는 거야".
+        //
+        //   원인:
+        //     원본 1.7.10 model tree: bipedBreast.R_y(bodySway) → bipedRightShoulder.pivot(-5,2,0)
+        //       → bipedRightArm.R(R_x×R_z, YZX, Y=0).
+        //     원본 vertex_world = R_y(bodySway) × ( shoulder.pivot + arm.R 자체 × vertex )
+        //                       = R_y(bodySway) × shoulder.pivot   +   R_y(bodySway) × arm.R 자체 × vertex.
+        //                          ↑ shoulder pivot 도 R_y 적용
+        //     vanilla 1.21.1 BipedEntityModel tree: root → arm 직접 (= body 와 형제).
+        //       arm.pivot = (-5, 2, 0). arm.R 자체 적용 후 + arm.pivot.
+        //     fix #140 helper q = R_y(bodySway) × R_x × R_z → arm.R 에 R_y 포함.
+        //     vanilla 매핑 vertex_world = arm.pivot + q × vertex
+        //                                = (-5, 2, 0)    +    R_y(bodySway) × R_x × R_z × vertex.
+        //                                   ↑ pivot 에 R_y 적용 누락 ✗
+        //     = vertex 부분 동등, pivot 부분 차이 (= R_y × shoulder.pivot 누락).
+        //
+        //   검증 (bodySway = -0.277, log line 11):
+        //     fix #145 arm pivot world = (-0.3125, 0.125, 0.0).
+        //     body shoulder corner world = R_y(-0.277) × (-4, 0, -2) / 16 = (-0.2405, 0, -0.0683).
+        //     Z 차이 = +0.0683 (= +1.09 pixel forward 떨어짐) ✗.
+        //   fix #146 arm pivot world = R_y(-0.277) × (-5, 2, 0) / 16 = (-0.301, 0.125, -0.0854).
+        //     Z 차이 = -0.0171 (= -0.27 pixel) ✓ 거의 align.
+        //
+        //   적용: arm.pivot 의 R_y(bodySway) 변환 (= pivot 의 X-Z plane 회전).
+        //     R_y(sway) × (vx, vy, vz) = (vx*cos + vz*sin, vy, -vx*sin + vz*cos).
+        //     rightArm.pivot (-5, 2, 0) → (-5*cos, 2, 5*sin).
+        //     leftArm.pivot (+5, 2, 0)  → (+5*cos, 2, -5*sin).
+        //
+        //   회귀 차단: ModelPart.pivot field 인스턴스별. swim 분기 이후 다른 분기 진입 시 default
+        //     reset 필요 → sm_animate* dispatcher 또는 default 값 reset (= 아래 default 복원).
+        float swayCos = MathHelper.cos(bodySway);
+        float swaySin = MathHelper.sin(bodySway);
+        rightArm.pivotX = -5f * swayCos;
+        rightArm.pivotZ =  5f * swaySin;
+        leftArm.pivotX  =  5f * swayCos;
+        leftArm.pivotZ  = -5f * swaySin;
+        // pivotY = 2 (= R_y 의 Y axis invariant, 변경 X).
+
+        // 🟡 DEBUG (팔 회전 자세 — 사용자 verbatim "팔 회전 dump"):
+        //   매 5 frame: arm 의 input 식 + ModelPart pitch/yaw/roll + vertex 변환 결과 (= R_z*R_y*R_x 적용 + scale 적용).
+        //   arm vertex (0, 0.5, 0) (= arm length down direction, ModelPart local space) 를 ModelPart 의 rotation 으로 변환.
+        //   = arm 끝 의 ModelPart-local position 계산 → scale(-1,-1,1) 적용 → visual position.
+        if ((sm.smDbgFrameCounterArm % 5) == 0) {
+            // 🔴 (2026-05-21, fix #142) dump 식 잘못 정정:
+            //   기존: rpc=cos(rightPitch), rrc=cos(rightRoll), ryc=cos(rightArm.yaw).
+            //     = input pitch/roll + ModelPart yaw 의 mix → 잘못된 검산.
+            //   정확: helper(R_y(sway) × R_x(input_pitch) × R_z(input_roll)) 의 ZYX 분해 후
+            //     ModelPart.pitch/yaw/roll 가 input pitch/roll 과 다른 값.
+            //     ModelPart 적용 = R_z(ModelPart.roll) × R_y(ModelPart.yaw) × R_x(ModelPart.pitch) × vertex.
+            //   정정: 모든 sin/cos 가 ModelPart 값 사용.
+            // ModelPart 의 rotateZYX 적용: R = R_z(roll) × R_y(yaw) × R_x(pitch).
+            // vertex 변환: vertex → R_x → R_y → R_z.
+            // arm 의 vertex = (0, 0.5, 0) (length direction = +Y).
+            // right arm 검산:
+            float rpc = (float) Math.cos(rightArm.pitch), rps = (float) Math.sin(rightArm.pitch);
+            float ryc = (float) Math.cos(rightArm.yaw),   rys = (float) Math.sin(rightArm.yaw);
+            float rrc = (float) Math.cos(rightArm.roll),  rrs = (float) Math.sin(rightArm.roll);
+            // vertex (0, 0.5, 0) → R_x(pitch): (0, 0.5*cos(p), 0.5*sin(p)).
+            float rx1 = 0f, ry1 = 0.5f * rpc, rz1 = 0.5f * rps;
+            // → R_y(yaw): (x*cos + z*sin, y, -x*sin + z*cos).
+            float rx2 = rx1 * ryc + rz1 * rys, ry2 = ry1, rz2 = -rx1 * rys + rz1 * ryc;
+            // → R_z(roll): (x*cos - y*sin, x*sin + y*cos, z).
+            float rx3 = rx2 * rrc - ry2 * rrs, ry3 = rx2 * rrs + ry2 * rrc, rz3 = rz2;
+            // scale(-1, -1, 1) 적용.
+            float rxv = -rx3, ryv = -ry3, rzv = rz3;
+
+            // left arm 검산 (동일 방식, ModelPart 값 사용):
+            float lpc = (float) Math.cos(leftArm.pitch), lps = (float) Math.sin(leftArm.pitch);
+            float lyc = (float) Math.cos(leftArm.yaw),   lys = (float) Math.sin(leftArm.yaw);
+            float lrc = (float) Math.cos(leftArm.roll),  lrs = (float) Math.sin(leftArm.roll);
+            float lx1 = 0f, ly1 = 0.5f * lpc, lz1 = 0.5f * lps;
+            float lx2 = lx1 * lyc + lz1 * lys, ly2 = ly1, lz2 = -lx1 * lys + lz1 * lyc;
+            float lx3 = lx2 * lrc - ly2 * lrs, ly3 = lx2 * lrs + ly2 * lrc, lz3 = lz2;
+            float lxv = -lx3, lyv = -ly3, lzv = lz3;
+
+            // 🔴 (2026-05-21, fix #142b) cone axis 직접 측정 추가:
+            //   cone axis = R 의 R_x 회전 axis (= +X in ModelPart space) 의 변환 direction.
+            //   = R_z(roll) × R_y(yaw) × (+1, 0, 0).
+            //   양쪽 arm 의 visual cone axis 직접 비교 → 좌우 mirror 여부 식별.
+            float r_cone_pre_x = ryc;            // = cos(yaw) * 1 + 0 * sin(yaw) = cos(yaw).
+            float r_cone_pre_z = -rys;           // = -1 * sin(yaw) + 0 * cos(yaw) = -sin(yaw).
+            float r_cone_x = r_cone_pre_x * rrc; // R_z(roll) × (cos(yaw), 0, -sin(yaw)).
+            float r_cone_y = r_cone_pre_x * rrs;
+            float r_cone_z = r_cone_pre_z;
+            // scale(-1, -1, 1).
+            float r_coneVx = -r_cone_x, r_coneVy = -r_cone_y, r_coneVz = r_cone_z;
+
+            float l_cone_pre_x = lyc;
+            float l_cone_pre_z = -lys;
+            float l_cone_x = l_cone_pre_x * lrc;
+            float l_cone_y = l_cone_pre_x * lrs;
+            float l_cone_z = l_cone_pre_z;
+            float l_coneVx = -l_cone_x, l_coneVy = -l_cone_y, l_coneVz = l_cone_z;
+
+            // cycle phase 정보.
+            float sawtoothR = ((dist2 % WHOLE) - HALF);
+            float sawtoothL = (((dist2 + HALF) % WHOLE) - HALF);
+            float dynamicCos = MathHelper.cos(totalTime * 0.1f);
+
+            System.out.println("[SWIM-DBG-ARM]"
+                    + " tT=" + String.format("%.3f", totalTime)
+                    + " dist=" + String.format("%.3f", distance)
+                    + " dist2=" + String.format("%.3f", dist2)
+                    + " cSpd=" + String.format("%.3f", speed)
+                    + " walk=" + String.format("%.3f", walkFactor)
+                    + " sSF=" + String.format("%.3f", standSneakFactor)
+                    + " bodySway=" + String.format("%.3f", bodySway)
+                    + " phaseR=" + String.format("%.3f", sawtoothR) + "(" + String.format("%.1f", Math.toDegrees(sawtoothR)) + "°)"
+                    + " phaseL=" + String.format("%.3f", sawtoothL) + "(" + String.format("%.1f", Math.toDegrees(sawtoothL)) + "°)"
+                    + " cos(t)=" + String.format("%.3f", dynamicCos));
+
+            System.out.println("[SWIM-DBG-ARM-RIGHT]"
+                    + " input[pitch=" + String.format("%.3f", rightPitch) + "(" + String.format("%.1f", Math.toDegrees(rightPitch)) + "°)"
+                    + " yaw=" + String.format("%.3f", rightArm.yaw) + "(" + String.format("%.1f", Math.toDegrees(rightArm.yaw)) + "°)"
+                    + " roll=" + String.format("%.3f", rightRoll) + "(" + String.format("%.1f", Math.toDegrees(rightRoll)) + "°)]"
+                    + " ModelPart[pitch=" + String.format("%.3f", rightArm.pitch)
+                    + " yaw=" + String.format("%.3f", rightArm.yaw)
+                    + " roll=" + String.format("%.3f", rightArm.roll) + "]"
+                    + " pivot[" + String.format("%.2f,%.2f,%.2f", rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ) + "]"
+                    + " vertex_local(0,0.5,0)_after_rotation[" + String.format("%.3f,%.3f,%.3f", rx3, ry3, rz3) + "]"
+                    + " visual_after_scale[" + String.format("%.3f,%.3f,%.3f", rxv, ryv, rzv) + "]"
+                    + " cone_axis_visual[" + String.format("%.3f,%.3f,%.3f", r_coneVx, r_coneVy, r_coneVz) + "]"
+                    + " ground_yaw_deg=" + String.format("%.1f", Math.toDegrees(Math.atan2(rxv, -rzv))));
+
+            System.out.println("[SWIM-DBG-ARM-LEFT]"
+                    + " input[pitch=" + String.format("%.3f", leftPitch) + "(" + String.format("%.1f", Math.toDegrees(leftPitch)) + "°)"
+                    + " yaw=" + String.format("%.3f", leftArm.yaw) + "(" + String.format("%.1f", Math.toDegrees(leftArm.yaw)) + "°)"
+                    + " roll=" + String.format("%.3f", leftRoll) + "(" + String.format("%.1f", Math.toDegrees(leftRoll)) + "°)]"
+                    + " ModelPart[pitch=" + String.format("%.3f", leftArm.pitch)
+                    + " yaw=" + String.format("%.3f", leftArm.yaw)
+                    + " roll=" + String.format("%.3f", leftArm.roll) + "]"
+                    + " pivot[" + String.format("%.2f,%.2f,%.2f", leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ) + "]"
+                    + " vertex_local(0,0.5,0)_after_rotation[" + String.format("%.3f,%.3f,%.3f", lx3, ly3, lz3) + "]"
+                    + " visual_after_scale[" + String.format("%.3f,%.3f,%.3f", lxv, lyv, lzv) + "]"
+                    + " cone_axis_visual[" + String.format("%.3f,%.3f,%.3f", l_coneVx, l_coneVy, l_coneVz) + "]"
+                    + " ground_yaw_deg=" + String.format("%.1f", Math.toDegrees(Math.atan2(lxv, -lzv))));
+        }
+
+        // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance.
         rightLeg.pitch = MathHelper.cos(distance) * 0.52264464f * walkFactor;
         leftLeg.pitch  = MathHelper.cos(distance + HALF) * 0.52264464f * walkFactor;
 
@@ -957,6 +1203,37 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(totalTime * 0.1f - QUARTER) - 1f) * 0.15f * sneakFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
+
+        // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_animateSwimming POST — 우리 inject 적용 후 최종 값.
+        if ((sm.smDbgFrameCounterArm % 5) == 0) {
+            System.out.println("[SWIM-DBG-SWIMARM-POST]"
+                    + " arms[rP=" + String.format("%.4f", rightArm.pitch)
+                    + " rY=" + String.format("%.4f", rightArm.yaw)
+                    + " rR=" + String.format("%.4f", rightArm.roll)
+                    + " lP=" + String.format("%.4f", leftArm.pitch)
+                    + " lY=" + String.format("%.4f", leftArm.yaw)
+                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
+                    + " legs[rP=" + String.format("%.4f", rightLeg.pitch)
+                    + " rR=" + String.format("%.4f", rightLeg.roll)
+                    + " lP=" + String.format("%.4f", leftLeg.pitch)
+                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
+                    + " head[P=" + String.format("%.4f", head.pitch)
+                    + " Y=" + String.format("%.4f", head.yaw) + "]"
+                    + " body[Y=" + String.format("%.4f", body.yaw) + "]"
+                    + " scale[legY=" + String.format("%.4f", legSc)
+                    + " armY=" + String.format("%.4f", armSc) + "]"
+                    + " formula[rArmPitch_form=((d2%W)-H)*walk+Sixteenth*sSF"
+                    + " => sawtooth=" + String.format("%.4f", ((distance * 0.5f) % WHOLE) - HALF)
+                    + " * walk(" + String.format("%.3f", walkFactor) + ")"
+                    + " + " + String.format("%.4f", SIXTEENTH) + " * sSF(" + String.format("%.3f", standSneakFactor) + ")"
+                    + " = " + String.format("%.4f", rightArm.pitch) + "]"
+                    + " formula[rArmRoll_form=Q+E+cos(t*0.1)*sSF*0.8"
+                    + " => " + String.format("%.4f", QUARTER + EIGHTH)
+                    + " + cos(" + String.format("%.3f", totalTime * 0.1f) + ")="
+                    + String.format("%.4f", MathHelper.cos(totalTime * 0.1f))
+                    + " * sSF(" + String.format("%.3f", standSneakFactor) + ") * 0.8"
+                    + " = " + String.format("%.4f", rightArm.roll) + "]");
+        }
     }
 
     /**
@@ -968,14 +1245,19 @@ public abstract class MixinPlayerEntityModelClient {
      *   - head.pivotZ = -2F (원본 L371): 머리 앞으로 2px 이동
      *   vanilla 가 매 프레임 head.pitch (j*PI/180) 와 head.pivotZ (B-9 reset 인프라) 모두 reset → 안전.
      */
-    private void sm_animateDiving(SmartMovingClientState sm, float limbSwing, float limbSwingAmount) {
+    private void sm_animateDiving(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
         // B-6 / §16-13: 원본 SmartMovingModel L365-L367 = totalDistance (3D 누적) +
         //   currentSpeed (3D 속도). 이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 →
         //   sm.stats.totalDistance/currentSpeed 로 교체. 다이빙은 수직+수평 운동 모두 강한
         //   상태 → 차이 가시화 가능.
-        float distance    = sm.stats.totalDistance * 0.7f;
-        float walkFactor  = smFactor(sm.stats.currentSpeed, 0f, 0.15679921f);
-        float standFactor = smFactor(sm.stats.currentSpeed, 0.15679921f, 0f);
+        // 🔴 (2026-05-21, fix #125) 60Hz 보간 — getter (partialTicks) 사용.
+        //   direct field 접근 = tick 단위 jump → 끊김. sub-tick interpolation 적용.
+        float partialTicks = totalTime - (float) Math.floor(totalTime);
+        float interpTotalDistance  = sm.stats.getTotalDistance(partialTicks);
+        float interpCurrentSpeed   = sm.stats.getCurrentSpeed(partialTicks);
+        float distance    = interpTotalDistance * 0.7f;
+        float walkFactor  = smFactor(interpCurrentSpeed, 0f, 0.15679921f);
+        float standFactor = smFactor(interpCurrentSpeed, 0.15679921f, 0f);
 
         // 🟡 DEBUG (jump 꾹누름 헤엄 시 팔 회전 BUG 진단)
         //   사용자 보고: jump 꾹누름 + 헤엄 시 팔 회전 원본과 다름.
@@ -1038,11 +1320,9 @@ public abstract class MixinPlayerEntityModelClient {
         rightLeg.pitch = 0f;
         leftLeg.pitch  = 0f;
 
-        // 다리 Z (발차기)
+        // 🔴 fix #123 reverted (2026-05-21, 사용자 보고 진폭 축소): fade 제거, 원본 instant 식 복원.
         rightLeg.roll = (MathHelper.cos(distance) + 1f) * 0.52264464f * walkFactor + SIXTEENTH * standFactor;
         leftLeg.roll  = (MathHelper.cos(distance + HALF) - 1f) * 0.52264464f * walkFactor - SIXTEENTH * standFactor;
-
-        // 팔 Z (젓기 — 원본은 YZX 근사)
         rightArm.roll = (MathHelper.cos(distance + HALF) * 0.52264464f * 2.5f + QUARTER) * walkFactor
                 + (QUARTER + EIGHTH) * standFactor;
         leftArm.roll  = (MathHelper.cos(distance) * 0.52264464f * 2.5f - QUARTER) * walkFactor
@@ -1734,6 +2014,141 @@ public abstract class MixinPlayerEntityModelClient {
         part.pitch = e.x;
         part.yaw   = e.y;
         part.roll  = e.z;
+    }
+
+    /**
+     * 🔴 (2026-05-21, swim 팔 회전 궤적 BUG fix) 표준 ZYX intrinsic Euler 분해.
+     *
+     * JOML 1.10.5 의 getEulerAnglesZYX 가 e.x 분모를 `0.5 - x² + y²` (비표준, BUG) 로
+     * 계산 → 큰 sawtooth pitch (= ±π) + 큰 roll (= Q+E = 135°) 영역에서 ModelPart.rotateZYX
+     * 적용 결과 quaternion ≠ 우리 의도 q (= qX*qZ*qY) → "회전 궤적 이상" 시각 BUG.
+     *
+     * 검증 (disassembly):
+     *   e.x = atan2(y*z + w*x, 0.5 - x*x + y*y)   ← 분모 +y² BUG
+     *   e.y = safeAsin(2*(w*y - x*z))             ← 표준
+     *   e.z = atan2(x*y + w*z, 0.5 - y*y - z*z)   ← 표준
+     *
+     * 표준 ZYX intrinsic 분해 식 (= R = R_z(γ) * R_y(β) * R_x(α) 형태):
+     *   α (pitch X) = atan2(2*(w*x + y*z), 1 - 2*(x² + y²))
+     *   β (yaw Y)   = asin(2*(w*y - x*z))
+     *   γ (roll Z)  = atan2(2*(w*z + x*y), 1 - 2*(y² + z²))
+     *
+     * vanilla `ModelPart.rotate` 의 적용 식 = `new Quaternionf().rotationZYX(roll, yaw, pitch)`
+     * = R = R_z(roll) * R_y(yaw) * R_x(pitch). = ZYX intrinsic. ✓
+     *
+     * 사용처 한정 — swim 분기 arm 만 (= 큰 sawtooth + 큰 roll 영역). 다른 분기는
+     * setAnglesYZX_v2 그대로 (= JOML BUG 결과가 정착된 자세 — 회귀 차단).
+     */
+    private static void setAnglesYZX_standard(ModelPart part, float pitch, float yaw, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationX(pitch)
+                .mul(new Quaternionf().rotationZ(roll))
+                .mul(new Quaternionf().rotationY(yaw));
+        float x = q.x, y = q.y, z = q.z, w = q.w;
+        // 표준 ZYX intrinsic Euler 분해.
+        float alpha = (float) Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+        float beta  = (float) Math.asin(Math.max(-1.0, Math.min(1.0, 2.0 * (w * y - x * z))));
+        float gamma = (float) Math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+        part.pitch = alpha;
+        part.yaw   = beta;
+        part.roll  = gamma;
+    }
+
+    /**
+     * 🔴 (2026-05-21, fix #126) 원본 YXZ rotationOrder 의 표준 분해 매핑.
+     *
+     * setAnglesYXZ (= JOML getEulerAnglesZYX 사용) 의 e.x 분모 `0.5 - x² + y²` BUG 가
+     * 큰 yaw (= 2 × sway, ±115° peak) + pitch (= -EIGHTH × sSF) 영역에서 cycle 안 다른
+     * quadrant 으로 분해 → frame 간 discontinuity 시각 BUG. 사용자 보고 "swim 시 머리가
+     * 돌아가다가 몸쪽으로 꺾임" 정확 매치.
+     *
+     * 표준 ZYX intrinsic 분해 식 (= R = R_z(γ) × R_y(β) × R_x(α) 형태):
+     *   α (pitch X) = atan2(2*(w*x + y*z), 1 - 2*(x² + y²))
+     *   β (yaw Y)   = asin(2*(w*y - x*z))
+     *   γ (roll Z)  = atan2(2*(w*z + x*y), 1 - 2*(y² + z²))
+     *
+     * 사용처 한정 — swim head 만 (= 큰 yaw 영역). 다른 분기 (sliding body 등) 은 setAnglesYXZ
+     * 그대로 유지 (= 정착 자세 회귀 차단).
+     */
+    private static void setAnglesYXZ_standard(ModelPart part, float pitch, float yaw, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationZ(roll)
+                .mul(new Quaternionf().rotationX(pitch))
+                .mul(new Quaternionf().rotationY(yaw));
+        float x = q.x, y = q.y, z = q.z, w = q.w;
+        float alpha = (float) Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+        float beta  = (float) Math.asin(Math.max(-1.0, Math.min(1.0, 2.0 * (w * y - x * z))));
+        float gamma = (float) Math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+        part.pitch = alpha;
+        part.yaw   = beta;
+        part.roll  = gamma;
+    }
+
+    /**
+     * 🔴 (2026-05-21, fix #127) swim head 의 원본 합성 visual 정확 매핑.
+     *
+     * 원본 model tree: head 가 bipedNeck 자식 → bipedBreast 자식.
+     *   M_head = R_z(0) × R_x(pitch) × R_y(sway_head)  (YXZ vertex order Y → X → Z).
+     *   M_neck = identity.
+     *   M_breast = R_y(sway_breast)                    (XYZ vertex order, no pitch/roll).
+     *   = visual 합성 M = M_breast × M_neck × M_head = R_y(sway) × R_x(pitch) × R_y(sway).
+     *
+     * fix #124 의 setAnglesYXZ_standard(head, pitch, 2*sway, 0) 가 R_x(pitch) × R_y(2×sway)
+     * 형태로 매핑 → pitch=0 시 R_y(2×sway) 동일하지만, pitch ≠ 0 시 두 R_y 사이에 R_x 끼어
+     * 있는 nested form 과 차이 → cycle 안 angular velocity 빨라짐 (= 사용자 "머리 회전 빠른 느낌").
+     *
+     * 정확 매핑: q = R_y(sway_breast) × R_x(pitch) × R_y(sway_head) 합성 → 표준 ZYX 분해.
+     */
+    /**
+     * 🔴 (2026-05-21, fix #140) swim arm 의 원본 visual 정확 매핑.
+     * 🔴 (2026-05-21, fix #145) fix #144 의 helper 식 변경 revert (= fix #140 식이 원본 정확).
+     *
+     * 원본 ModelRotationRenderer.java L145-L155 의 YZX rotation order GL call 순서:
+     *   L146 (YZX 매치): GL.rotate(X).
+     *   L152 (YZX 매치): GL.rotate(Z).
+     *   L155 (YZX 매치): GL.rotate(Y).
+     *   = GL call 순서 X → Z → Y.
+     *   GL post-multiply: matrix = R_x × R_z × R_y. vertex 적용 = matrix × vertex.
+     *
+     * 원본 model tree: arm 이 bipedBreast 자식. bipedBreast.rotateAngleY = sway.
+     *   bipedArm (YZX, X=pitch, Y=0, Z=roll) 의 R = R_x(pitch) × R_z(roll) × R_y(0) = R_x × R_z.
+     *   부모 bipedBreast 의 R_y(sway) 적용:
+     *   = arm 의 final R = R_y(sway) × R_x(pitch) × R_z(roll). (matrix form, 좌측이 outermost)
+     *   = vertex 적용 vertex → R_z → R_x → R_y.
+     *
+     * fix #122 (arm.yaw = bodySway) 매핑이 잘못 (R_y middle position).
+     * fix #137 swap 가 fix #122 의 visual 보정 (= 좌우 flip).
+     * fix #140 helper 추가 시 swap 유지 — 잘못. fix #144 가 모두 revert + helper 식 변경.
+     * fix #145 = fix #144 의 helper 식 변경 revert (= fix #140 식 정확). swap revert 유지.
+     *
+     * q = R_y(sway) × R_x(pitch) × R_z(roll). 표준 ZYX 분해.
+     */
+    private static void setAnglesYXZ_breastSwim(ModelPart part, float swayBreast, float pitch, float roll) {
+        Quaternionf q = new Quaternionf()
+                .rotationY(swayBreast)
+                .mul(new Quaternionf().rotationX(pitch))
+                .mul(new Quaternionf().rotationZ(roll));
+        float x = q.x, y = q.y, z = q.z, w = q.w;
+        float alpha = (float) Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+        float beta  = (float) Math.asin(Math.max(-1.0, Math.min(1.0, 2.0 * (w * y - x * z))));
+        float gamma = (float) Math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+        part.pitch = alpha;
+        part.yaw   = beta;
+        part.roll  = gamma;
+    }
+
+    private static void setAnglesRyRxRy_standard(ModelPart part, float swayBreast, float pitch, float swayHead) {
+        Quaternionf q = new Quaternionf()
+                .rotationY(swayBreast)
+                .mul(new Quaternionf().rotationX(pitch))
+                .mul(new Quaternionf().rotationY(swayHead));
+        float x = q.x, y = q.y, z = q.z, w = q.w;
+        float alpha = (float) Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+        float beta  = (float) Math.asin(Math.max(-1.0, Math.min(1.0, 2.0 * (w * y - x * z))));
+        float gamma = (float) Math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+        part.pitch = alpha;
+        part.yaw   = beta;
+        part.roll  = gamma;
     }
 
     /**

@@ -44,6 +44,9 @@ public class SmartStatistics {
     /** 🔴 (2026-05-03 crawl) currentHorizontalSpeedFlattened 의 partial ticks lerp 보간용 prev. */
     public float prevCurrentHorizontalSpeedFlattened;
 
+    /** DEBUG (2026-05-21): swim cycle raw 측정용 throttle counter. */
+    public int smDbgCalculateCounter = 0;
+
     // ── 프레임 단위 이동량 ────────────────────────────────────
     public double horizontalDistance;
     public double verticalDistance;
@@ -77,6 +80,19 @@ public class SmartStatistics {
         double diffZ = z - prevZ;
 
         horizontalDistance = Math.sqrt(diffX * diffX + diffZ * diffZ);
+
+        // 🟡 DEBUG (swim cycle 빠른 cause — raw player movement 측정).
+        //   사용자 보고: 우리 매핑 head 회전 cycle 가 원본보다 빠름. cycle period = 4π / cSpd.
+        //   cSpd = EMA(raw × 4). 만약 우리 raw > 원본 raw → cycle 빠름.
+        //   매 25 tick (= 1.25초) 한번 dump (raw + cSpd + raw×4) — verbose 회피.
+        if ((smDbgCalculateCounter++ % 25) == 0 && horizontalDistance > 0.05) {
+            System.out.println("[SWIM-DBG-RAW]"
+                    + " hDist=" + String.format("%.6f", horizontalDistance)
+                    + " raw_x4=" + String.format("%.4f", horizontalDistance * 4f)
+                    + " cSpd_pre=" + String.format("%.4f", currentHorizontalSpeed)
+                    + " diffX=" + String.format("%.6f", diffX)
+                    + " diffZ=" + String.format("%.6f", diffZ));
+        }
         verticalDistance = Math.abs(diffY);
         distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
 
@@ -200,16 +216,35 @@ public class SmartStatistics {
                 + (currentVerticalSpeed - prevCurrentVerticalSpeed) * partialTicks);
     }
 
+    // 🔴 (2026-05-21, fix #147) sub-tick interpolation 식 정정 — explicit lerp(p, prev, cur).
+    //   사용자 verbatim "팔이 회전할때 엄청 잠깐 뚜둑 거리면서 끊기면서 잔상".
+    //
+    //   원인:
+    //     기존 식 `total - cSpd * (1 - p)` = `prev_total + cSpd * p` (정상 sequence 가정).
+    //     가정: total = prev_total + cSpd (= 위 update L172 의 결과).
+    //     근데 cSpd_field 가 spike (raw 의 velocity spike) 또는 sequence race 시 가정 깨짐 →
+    //     `total - cSpd * (1-p)` 와 `prev_total + cSpd * p` 가 다른 결과 → tick boundary 에서
+    //     partial 0.180 → 0.000 transition 시 distance backward jump.
+    //   log 검증 (sample 22 partial 0.180 dist 1491.352 → sample 23 partial 0.000 dist 1491.235):
+    //     기존 식 가정 시 sample 23 distance = total_1932 - cSpd_1932 = prev_total = total_1931.
+    //     sample 22 distance = total_1931 - cSpd_1931 * 0.820. = expected < sample 23 distance.
+    //     근데 log: sample 22 > sample 23 = 0.117 backward.
+    //     = cSpd_1931 음수 또는 가정 모순. = field race / spike 가능.
+    //
+    //   해결: explicit lerp(p, prev_total_field, total_field).
+    //     정상 sequence 시 = 동등 식. inconsistency 시 prev_total_field 직접 사용 → 더 robust.
     public float getTotalDistance(float partialTicks) {
-        return totalDistance - currentSpeed * (1.0F - partialTicks);
+        return prevTotalDistance + (totalDistance - prevTotalDistance) * partialTicks;
     }
 
     public float getTotalHorizontalDistance(float partialTicks) {
-        return totalHorizontalDistance - currentHorizontalSpeed * (1.0F - partialTicks);
+        return prevTotalHorizontalDistance
+                + (totalHorizontalDistance - prevTotalHorizontalDistance) * partialTicks;
     }
 
     public float getTotalVerticalDistance(float partialTicks) {
-        return totalVerticalDistance - currentVerticalSpeed * (1.0F - partialTicks);
+        return prevTotalVerticalDistance
+                + (totalVerticalDistance - prevTotalVerticalDistance) * partialTicks;
     }
 
     public void reset() {

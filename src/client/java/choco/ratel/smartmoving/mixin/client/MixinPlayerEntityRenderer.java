@@ -309,6 +309,34 @@ public class MixinPlayerEntityRenderer {
             float lerpedYaw = localPlayer.prevYaw + (localPlayer.getYaw() - localPlayer.prevYaw) * tickDelta;
             localPlayer.setBodyYaw(lerpedYaw);
             localPlayer.prevBodyYaw = lerpedYaw;
+
+            // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_captureBodyYaw swim/dive 분기 — fix #118 4 단계 동작.
+            //   tick 단위 1회 dump (= smDbgCaptureTick 매치 → skip).
+            int curTickC = (int) Math.floor(animationProgress);
+            if (sm.smDbgCaptureTick != curTickC) {
+                sm.smDbgCaptureTick = curTickC;
+                String inputStr = "";
+                if (localPlayer instanceof net.minecraft.client.network.ClientPlayerEntity localCp) {
+                    inputStr = " input[F=" + localCp.input.movementForward
+                            + " St=" + localCp.input.movementSideways
+                            + " J=" + localCp.input.jumping
+                            + " Sn=" + localCp.input.sneaking + "]";
+                }
+                System.out.println("[SWIM-DBG-CAPTURE tick=" + curTickC + "]"
+                        + " state[sw=" + sm.isSwimming_sm + " dv=" + sm.isDiving
+                        + " lv=" + sm.isLevitating + " slow=" + sm.isSlow + "]"
+                        + " thresh=" + String.format("%.4f", threshold)
+                        + " dist=" + String.format("%.4f", dist)
+                        + " distLT=" + (dist < threshold)
+                        + " horAng=" + String.format("%.4f", horizontalAngle)
+                        + " (camera=" + String.format("%.4f", sm.stats.currentCameraAngle)
+                        + " ; hAng=" + String.format("%.4f", sm.stats.currentHorizontalAngle) + ")"
+                        + " yaw[lerped=" + String.format("%.4f", lerpedYaw)
+                        + " bodyYaw_pre=" + String.format("%.4f", localPlayer.prevBodyYaw)
+                        + " getYaw=" + String.format("%.4f", localPlayer.getYaw())
+                        + " prevYaw=" + String.format("%.4f", localPlayer.prevYaw) + "]"
+                        + inputStr);
+            }
             return;
         }
 
@@ -650,6 +678,29 @@ public class MixinPlayerEntityRenderer {
             float yawTarget = sm.smSwimDiveExtraYaw_target;
             float yawLerped = lerpFadeAngle(sm.smSwimDiveExtraYaw_prev, yawTarget,
                                              sm.smSwimDiveFade_prevTime, animationProgress);
+
+            // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_setupTransforms swim/dive — tilt/yaw lerp + 적용 matrix.
+            if (player instanceof net.minecraft.client.network.ClientPlayerEntity localCpT
+                    && localCpT == net.minecraft.client.MinecraftClient.getInstance().player) {
+                int curTickT = (int) Math.floor(animationProgress);
+                if (sm.smDbgTiltTick != curTickT) {
+                    sm.smDbgTiltTick = curTickT;
+                    System.out.println("[SWIM-DBG-TILT tick=" + curTickT + "]"
+                            + " tilt[tgt=" + String.format("%.4f", targetTilt)
+                            + " (deg=" + String.format("%.2f", Math.toDegrees(targetTilt)) + ")"
+                            + " prev=" + String.format("%.4f", sm.smSwimDiveTiltX_prev)
+                            + " lerped=" + String.format("%.4f", laggedTilt)
+                            + " (deg=" + String.format("%.2f", Math.toDegrees(laggedTilt)) + ")]"
+                            + " yaw[tgt=" + String.format("%.4f", yawTarget)
+                            + " prev=" + String.format("%.4f", sm.smSwimDiveExtraYaw_prev)
+                            + " lerped=" + String.format("%.4f", yawLerped) + "]"
+                            + " fade[prevTime=" + String.format("%.3f", sm.smSwimDiveFade_prevTime)
+                            + " animProg=" + String.format("%.3f", animationProgress)
+                            + " dT=" + String.format("%.4f", animationProgress - sm.smSwimDiveFade_prevTime) + "]"
+                            + " sSF=" + String.format("%.3f", sm.swimStandSneakFactor)
+                            + " bodyYaw_now=" + String.format("%.4f", player.getBodyYaw()));
+                }
+            }
 
             sm.smSwimDiveTiltX_prev = laggedTilt;
             sm.smSwimDiveExtraYaw_prev = yawLerped;

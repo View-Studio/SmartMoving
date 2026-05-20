@@ -699,6 +699,9 @@ public final class SmartMovingSwimmer {
             motionY = JUMP_OUT_OF_WATER_VELOCITY;
         }
 
+        // 🔴 fix #128 reverted (2026-05-21, 사용자 보고 "swim 속도 자체가 느려졌다"):
+        //   fix #128 의 swim 후 friction 0.91 적용이 swim speed 변경 (= 1.5배 느림). 사용자 의도 X.
+        //   사용자 verbatim "머리 회전 속도만 보라" — swim physics 변경 회피.
         player.setVelocity(motionX, motionY, motionZ);
         player.move(MovementType.SELF, player.getVelocity());
         player.fallDistance = 0F;
