@@ -1515,28 +1515,42 @@ public final class SmartMovingClientState {
                 //   직후 frame 은 isCrawling=false 라 검사 안 함 → mustCrawl=false 유지 →
                 //   isCrawling 잘못 활성 차단.
                 if (isCrawling || isClimbCrawling) {
-                    // 🔴 (Phase 3, Crawl 1:1 fix — task #10): 원본 mustCrawl 정확 식 적용.
-                    //   원본 SmartMovingSelf L2399-L2401 라인별 1:1:
-                    //     crawlStandUpBottom = getMaxPlayerSolidBetween(minY - (init?0:1), minY,
-                    //                          crawlOverEdge ? 0 : -0.05);
-                    //     crawlStandUpCeiling = getMinPlayerSolidBetween(maxY, maxY + 1.1, 0);
-                    //     mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < sp.height - heightOffset;
-                    //   이전 매핑 `!canStandUp(player)` 는 STANDING box 빈 공간 검사 (~0.1 블록 근사).
-                    //   정확 식 = 천장 - 바닥 < height - heightOffset (height=1.8F, heightOffset=-1 시
-                    //   가용 공간 < 2.8 검사 = 정확 매핑).
                     Box bb = player.getBoundingBox();
                     double minYR = bb.minY;
                     double maxYR = bb.maxY;
-                    double horizontalTolerance = cfg0.crawlOverEdge ? 0 : -0.05;
-                    double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
-                            minYR - (initializeCrawling ? 0D : 1D), minYR, horizontalTolerance);
-                    double crawlStandUpCeiling = SmartMovingClimber.getMinPlayerSolidBetween(player,
-                            maxYR, maxYR + 1.1D, 0);
-                    float playerHeight = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
-                    mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < playerHeight - heightOffset;
-                    if (player.getAbilities().flying
-                            && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
+                    // 🔴 fix #70 v4 (2026-05-22, sliding rapid toggle 잠긴 자가유지 차단):
+                    //   log 실측: fix #70 v3 push 후 1 tick 만 안착. 다음 tick vanilla gravity vy=-0.08
+                    //   적용 → entity.y down → 박스 ground 안 박힘. 박스 footprint 안 ground block top
+                    //   매치 시 mustCrawl=true 매치 (= ceiling=bbMaxY=63.8 - bottom=63 = 0.8 < 2.8) →
+                    //   잠긴 자가유지. vanilla 가 박스 push out X (= cause 깊이 불명).
+                    //   해결: mustCrawl 식 진입 시 박스 ground 안 박힘 검출 (= 박스 발 < ground top) →
+                    //     entity.y push up + mustCrawl=false 강제. isCrawling=false 가능 (= wantCrawl 매치 X
+                    //     + mustCrawl=false) → POSE=STANDING 복귀.
+                    //   가드: ground top 위 검사 범위 yMax=bbMin+1.5 + 1칸 천장 매치 차단 (groundTop ≤ bbMin+1.0).
+                    double _stuckGroundTop = getMaxPlayerSolidBetween(player, minYR - 0.5, minYR + 1.5, 0);
+                    if (_stuckGroundTop > minYR + 0.005 && _stuckGroundTop <= minYR + 1.0) {
+                        // 박스 ground 안 박힘 → push + mustCrawl=false.
+                        double _pushY = _stuckGroundTop - minYR;
+                        player.setPosition(player.getX(), player.getY() + _pushY, player.getZ());
+                        player.lastRenderY += _pushY;
+                        player.prevY += _pushY;
+                        player.setVelocity(player.getVelocity().x, 0, player.getVelocity().z);
+                        player.fallDistance = 0;
                         mustCrawl = false;
+                    } else {
+                        // 🔴 (Phase 3, Crawl 1:1 fix — task #10): 원본 mustCrawl 정확 식 적용.
+                        //   원본 SmartMovingSelf L2399-L2401 라인별 1:1.
+                        double horizontalTolerance = cfg0.crawlOverEdge ? 0 : -0.05;
+                        double crawlStandUpBottom = getMaxPlayerSolidBetween(player,
+                                minYR - (initializeCrawling ? 0D : 1D), minYR, horizontalTolerance);
+                        double crawlStandUpCeiling = SmartMovingClimber.getMinPlayerSolidBetween(player,
+                                maxYR, maxYR + 1.1D, 0);
+                        float playerHeight = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+                        mustCrawl = crawlStandUpCeiling - crawlStandUpBottom < playerHeight - heightOffset;
+                        if (player.getAbilities().flying
+                                && (cfg0.isFlyingEnabled() || cfg0.isLevitateSmallEnabled())) {
+                            mustCrawl = false;
+                        }
                     }
                 } else {
                     mustCrawl = false;
@@ -2458,6 +2472,25 @@ public final class SmartMovingClientState {
                             player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                             player.lastRenderY += 1.0;
                             player.prevY += 1.0;
+                            // 🔴 fix #70 v3 (2026-05-22): 가드 제거 — POSE 매번 SWIMMING 강제.
+                            //   log 실측 (sliding rapid toggle): fix #70 v2 의 `if (pose == SLIDING)` 가드 매치 X.
+                            //     tick 1804 SLIDE-FIX70 시점 pose=STANDING 잔존 (= 이전 cycle 의 fix 결과
+                            //     또는 vanilla updatePose 미매치). setPose(SWIMMING) 호출 안 됨.
+                            //     다음 tick 1805: sneak 재누름 → 6-AND 진입 → sm_updatePose_client →
+                            //     setPose(SLIDING). 같은 tick SS-SlideStop → sm.isSliding=false. POSE=SLIDING
+                            //     잔존 → mixin offset 활성. 박스 +1m up.
+                            //     다음 tick 1806: vanilla updatePose → POSE=SWIMMING. mixin 차단. 박스 발
+                            //     = entity.y. 단 vy 잔존 → 4 tick 동안 entity.y 64 → 63 down → mcr=true 잠긴.
+                            //   해결:
+                            //     1. POSE 가드 제거 — 무조건 setPose(SWIMMING). STANDING/SLIDING 모두 변경.
+                            //     2. calculateDimensions 호출 → 박스 즉시 dim crawl 갱신.
+                            //     3. velocity Y=0 → vy 누적 차단.
+                            //     4. fallDistance=0 → 잠긴 시점 fall reset.
+                            //     5. onGround=true → vanilla collision check 정상 안착 보장.
+                            player.setPose(net.minecraft.entity.EntityPose.SWIMMING);
+                            player.setVelocity(player.getVelocity().x, 0, player.getVelocity().z);
+                            player.fallDistance = 0;
+                            player.setOnGround(true);
                         }
                         this.heightOffset = 0F;
                         player.calculateDimensions();

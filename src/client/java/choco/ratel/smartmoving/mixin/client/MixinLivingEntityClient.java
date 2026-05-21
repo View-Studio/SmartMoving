@@ -112,6 +112,28 @@ public abstract class MixinLivingEntityClient {
         //     매 frame 분기 진입 차단). 원본 spec 부분 확장 (= 원본 1.7.10 식 isSwim||isDive 만).
         boolean wasDipping  = sm.isDipping;
         boolean wasShortInWater = wasSwimming || wasDiving || wasDipping;
+        // 🔴 fix #155 (2026-05-22): sliding rapid toggle 후 잠긴 visual 차단 — 매 tick 잠긴 검출.
+        //   log 실측: sliding rapid toggle → SlideToHeadJumping 자동 전환 → falling → 다음 ground 도달
+        //     → 박스 발 = ground - 1 안 박힘. fix #70 v4 (mustCrawl 식 안) 는 isCrawling 시점만 매치 →
+        //     handleCrash → toCrawling 호출 후 잠긴 cycle 발생 가능.
+        //   해결: sm_travel_client 진입 시 매 tick (isCrawling || isHeadJumping || isSliding) + onGround=true
+        //     시점 박스 ground 안 박힘 검출 → entity.y push + velocity Y/fallDistance reset.
+        //   가드: groundTop > bbMin + 0.005 (= 잠긴 detection) + groundTop <= bbMin + 1.0 (= 1칸 천장 매치 차단).
+        if (player.isOnGround() && (sm.isCrawling || sm.isHeadJumping || sm.isSliding || sm.isClimbCrawling)) {
+            net.minecraft.util.math.Box _stuckBb = player.getBoundingBox();
+            double _stuckBbMin = _stuckBb.minY;
+            double _stuckGround = choco.ratel.smartmoving.client.SmartMovingClientState
+                    .getMaxPlayerSolidBetween(player, _stuckBbMin - 0.5, _stuckBbMin + 1.5, 0);
+            if (_stuckGround > _stuckBbMin + 0.005 && _stuckGround <= _stuckBbMin + 1.0) {
+                double _pushY = _stuckGround - _stuckBbMin;
+                player.setPosition(player.getX(), player.getY() + _pushY, player.getZ());
+                player.lastRenderY += _pushY;
+                player.prevY += _pushY;
+                player.setVelocity(player.getVelocity().x, 0, player.getVelocity().z);
+                player.fallDistance = 0;
+            }
+        }
+        // 🔴 fix #155 끝.
 
         // B-7a (세션 127): 원본 SmartMovingSelf L132 `isLiquidClimbing` 지역 변수 승격.
         //   isLiquidClimbing = Config.isFreeClimbingEnabled() && sp.fallDistance <= 3.0
