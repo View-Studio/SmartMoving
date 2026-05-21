@@ -44,6 +44,31 @@ public class SmartStatistics {
     /** 🔴 (2026-05-03 crawl) currentHorizontalSpeedFlattened 의 partial ticks lerp 보간용 prev. */
     public float prevCurrentHorizontalSpeedFlattened;
 
+    /**
+     * 🔴 (2026-05-22, fix #149) tick boundary 의 dist backward jump 차단용 monotonic guard.
+     *
+     * 원인 (log 실측):
+     *   매 tick boundary (= render frame partial=0.000 시점) 의 getTotalHorizontalDistance 결과가
+     *   직전 frame (partial≈0.82) 결과보다 1 cSpd 만큼 BACKWARD jump.
+     *   예: tT=384.82 dist=34.294 → tT=385.00 dist=33.855 (-0.439). tT=385.16 dist=34.476 (forward 재개).
+     *
+     * 식 역산: partial=0.000 frame 호출 시점 `prevTotalHorizontalDistance` field 가 1 tick stale
+     *   (= prev_total_384 의 값. expected = total_384). 즉 vanilla 1.21.1 의 render frame partial=0.000
+     *   시점이 entity tick (= Entity.move() TAIL 의 calculate() 호출) 호출 sequence 보다 직전.
+     *
+     * 결과: swim arm 식 `sawtooth(dist × 0.5) × walk` 의 dist backward → input.pitch backward →
+     *   사용자 보고 "팔 회전 뚜둑" plicking 의 진짜 cause.
+     *
+     * 해결: 매 frame 의 dist getter 결과가 직전 호출 결과보다 작으면 (= backward) 직전 값 유지.
+     *   → tick boundary frame 만 1 frame stationary (≈ 50ms). visual 자연.
+     *
+     * 회귀 차단: 모든 분기 (swim/dive/flying/sliding/crawling/headjumping/ceilingclimbing) 에서
+     *   dist 가 monotonic 누적 (SmartStatistics.reset() 호출 안 됨). guard 의 영향 = backward 차단만.
+     */
+    private float lastDistResult = 0f;
+    private float lastHorizontalDistResult = 0f;
+    private float lastVerticalDistResult = 0f;
+
     /** DEBUG (2026-05-21): swim cycle raw 측정용 throttle counter. */
     public int smDbgCalculateCounter = 0;
 
@@ -234,17 +259,35 @@ public class SmartStatistics {
     //   해결: explicit lerp(p, prev_total_field, total_field).
     //     정상 sequence 시 = 동등 식. inconsistency 시 prev_total_field 직접 사용 → 더 robust.
     public float getTotalDistance(float partialTicks) {
-        return prevTotalDistance + (totalDistance - prevTotalDistance) * partialTicks;
+        float result = prevTotalDistance + (totalDistance - prevTotalDistance) * partialTicks;
+        // 🔴 (2026-05-22, fix #149) monotonic guard — tick boundary backward jump 차단.
+        if (result < lastDistResult - 0.001f) {
+            result = lastDistResult;
+        }
+        lastDistResult = result;
+        return result;
     }
 
     public float getTotalHorizontalDistance(float partialTicks) {
-        return prevTotalHorizontalDistance
+        float result = prevTotalHorizontalDistance
                 + (totalHorizontalDistance - prevTotalHorizontalDistance) * partialTicks;
+        // 🔴 (2026-05-22, fix #149) monotonic guard — tick boundary backward jump 차단.
+        if (result < lastHorizontalDistResult - 0.001f) {
+            result = lastHorizontalDistResult;
+        }
+        lastHorizontalDistResult = result;
+        return result;
     }
 
     public float getTotalVerticalDistance(float partialTicks) {
-        return prevTotalVerticalDistance
+        float result = prevTotalVerticalDistance
                 + (totalVerticalDistance - prevTotalVerticalDistance) * partialTicks;
+        // 🔴 (2026-05-22, fix #149) monotonic guard — tick boundary backward jump 차단.
+        if (result < lastVerticalDistResult - 0.001f) {
+            result = lastVerticalDistResult;
+        }
+        lastVerticalDistResult = result;
+        return result;
     }
 
     public void reset() {
@@ -265,6 +308,10 @@ public class SmartStatistics {
         prevTotalHorizontalDistance = 0;
         prevTotalVerticalDistance = 0;
         prevTotalDistance = 0;
+        // 🔴 (fix #149) monotonic guard 도 reset.
+        lastDistResult = 0f;
+        lastHorizontalDistResult = 0f;
+        lastVerticalDistResult = 0f;
         horizontalDistance = 0;
         verticalDistance = 0;
         distance = 0;

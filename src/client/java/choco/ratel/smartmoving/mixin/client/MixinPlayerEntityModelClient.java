@@ -1037,7 +1037,9 @@ public abstract class MixinPlayerEntityModelClient {
         //   fix #137 swap 의 원인 = fix #122 의 R_y middle position 잘못. fix #144 helper 정정 후
         //     swap 필요 없음 → revert.
         float dist2      = distance * 0.5f;
-        // 원본 1:1 (= fix #137/#141 swap revert):
+        // 원본 1:1 (= fix #137/#141 swap revert).
+        // 사용자 보고 "팔 회전 뚜둑" plicking 의 진짜 cause = SmartStatistics dist field 의 tick boundary
+        //   backward jump (= partial=0.000 frame 시 prev_total stale). fix #149 monotonic guard 로 해결.
         float rightPitch = ((dist2 % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float leftPitch  = (((dist2 + HALF) % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float rightRoll  =  (QUARTER + EIGHTH) + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
@@ -1089,7 +1091,7 @@ public abstract class MixinPlayerEntityModelClient {
         // pivotY = 2 (= R_y 의 Y axis invariant, 변경 X).
 
         // 🟡 DEBUG (팔 회전 자세 — 사용자 verbatim "팔 회전 dump"):
-        //   매 5 frame: arm 의 input 식 + ModelPart pitch/yaw/roll + vertex 변환 결과 (= R_z*R_y*R_x 적용 + scale 적용).
+        //   매 5 frame: arm 의 input 식 + ModelPart pitch/yaw/roll + vertex 변환 결과.
         //   arm vertex (0, 0.5, 0) (= arm length down direction, ModelPart local space) 를 ModelPart 의 rotation 으로 변환.
         //   = arm 끝 의 ModelPart-local position 계산 → scale(-1,-1,1) 적용 → visual position.
         if ((sm.smDbgFrameCounterArm % 5) == 0) {
@@ -1234,6 +1236,7 @@ public abstract class MixinPlayerEntityModelClient {
                     + " * sSF(" + String.format("%.3f", standSneakFactor) + ") * 0.8"
                     + " = " + String.format("%.4f", rightArm.roll) + "]");
         }
+
     }
 
     /**
