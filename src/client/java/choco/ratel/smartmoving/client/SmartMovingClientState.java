@@ -4429,6 +4429,40 @@ public final class SmartMovingClientState {
                 }
                 // 원본 L1402: move(0, crawlStandUpBottom - minY, 0, true)
                 player.move(MovementType.SELF, new Vec3d(0, crawlStandUpBottom - minY, 0));
+            } else {
+                // 🔴 (2026-05-22 fix #151) 사용자 보고: "지상 물 swim → 정상 ground 진출 시 지면 1칸 아래".
+                //   log 실측 cause: swim 시 mixin offset 활성 → entity.y = ground - 1 (= 박스 발 = ground).
+                //     swim 종료 시 mixin offset 차단 → 박스 발 = entity.y = ground - 1 → 박스 ground 안 박힘.
+                //     vanilla gravity 가 매 tick 적용 → entity.y down → 다음 ground top 도달 → 사용자 visual
+                //     "1칸 아래 잠긴".
+                //   분기 3 식 (= crawlStandUpBottom > minY strict `>`) 가 swim 박스 가정 (= minY=entity.y+1)
+                //     기준. 정상 ground 진출 시 crawlStandUpBottom = minY (= ground top 정확) → 매치 X →
+                //     push 누락. 원본 1.7.10 spec 도 동일 strict `>` (= 원본은 setHeightOffset 의 posY 변경
+                //     없음 spec 이라 entity.y mismatch 없음. 우리 매핑은 mixin offset 으로 entity.y 가
+                //     swim 박스 발 -1m → 차단 후 mismatch BUG).
+                //   해결: 분기 1/2/3 매치 X 시 entity.y 박스 박힘 검사 (= entity.y < crawlStandUpBottom) +
+                //     push up. 1.5m 이하 push 만 (= 안전망, 큰 push 차단).
+                if (player.getY() < crawlStandUpBottom - 0.001D
+                        && (crawlStandUpBottom - player.getY()) <= 1.5D) {
+                    double pushY = crawlStandUpBottom - player.getY();
+                    // 🔴 (2026-05-22 fix #151 v2) push + dim/Camera 즉시 동기화 — 1 frame visual artifact 차단.
+                    //   log 실측 cause: push 만 적용 시 entity.y 갱신 ✓ 단 박스 dim 잔존 (= swim dim 0.8) →
+                    //   1 frame 동안 박스 visual = (entity.y, entity.y+0.8) = 박스 발 ground+0 ~ 박스 위 ground+0.8.
+                    //   사용자 visual = ground 1칸 아래 (= 박스 발 보단 visual 모델/콜리전).
+                    //   해결: calculateDimensions 호출 → dim 즉시 STANDING (1.8) → 박스 = (ground, ground+1.8) 정상.
+                    //   Camera 동기화 — 비행 패턴 [project_restoreFromFlying_complete] 1:1.
+                    player.setPosition(player.getX(), crawlStandUpBottom, player.getZ());
+                    player.lastRenderY += pushY;
+                    player.prevY += pushY;
+                    player.calculateDimensions();
+                    net.minecraft.client.render.Camera cam =
+                            net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                    if (cam != null) {
+                        float eye = player.getStandingEyeHeight();
+                        ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                        ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                    }
+                }
             }
         }
     }

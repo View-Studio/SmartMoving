@@ -290,6 +290,27 @@ public final class SmartMovingSwimmer {
         // 🔵 (BUG 1 fix #103) 메인 분기 끝 — dim 변화 시 calculateDimensions.
         //   첫 swim/dive 진입 frame 에서 즉시 박스 갱신 → 원본 setHeightOffset(-1F) 동일 timing.
         if (sm.isSwimming_sm != prevSwim103 || sm.isDiving != prevDive103) {
+            // 🔴 (2026-05-22 fix #152) 사용자 보고: swim → dipping 전환 시 박스 발 1m down BUG.
+            //   log 실측 (tick 219→220): swim 시 mixin offset 활성 (dim swim h=0.8 eye=1.62) →
+            //     박스 +1m up → 박스 발 = entity.y+1 = ground top. entity.y = ground - 1.
+            //     swim → dipping 전환 시 dim 변경 (swim 0.8 → STANDING 1.8, orphan SWIMMING 가드)
+            //     → mixin offset 차단 → 박스 발 = entity.y = ground - 1. **박스 위쪽 ground 안 박힘**.
+            //     vanilla push out 차단 (= sm_travel_client ci.cancel) → entity.y 잔존.
+            //   원본 1.7.10 spec: swim 시 posY 변경 X (= setHeightOffset 의 box.minY += 1 만).
+            //     dipping 시 박스 발 = posY = ground. 우리 매핑 entity.y 가 swim 시 ground-1 → mismatch.
+            //   해결: swim 종료 시점 (= prev=true → cur=false) entity.y push to ground top.
+            boolean swimEnded = (prevSwim103 || prevDive103) && !sm.isSwimming_sm && !sm.isDiving;
+            if (swimEnded) {
+                double upperGround = SmartMovingClientState.getMaxPlayerSolidBetween(
+                        player, player.getY(), player.getY() + 1.5, 0);
+                if (upperGround > player.getY() + 0.001D
+                        && (upperGround - player.getY()) <= 1.5D) {
+                    double pushY = upperGround - player.getY();
+                    player.setPosition(player.getX(), upperGround, player.getZ());
+                    player.lastRenderY += pushY;
+                    player.prevY += pushY;
+                }
+            }
             player.calculateDimensions();
         }
     }
