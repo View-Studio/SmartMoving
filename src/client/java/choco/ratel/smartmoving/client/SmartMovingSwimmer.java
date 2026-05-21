@@ -118,11 +118,13 @@ public final class SmartMovingSwimmer {
         // - isInLiquid (B-7d 세션 127) — AABB 액체 판정 (vanilla isTouchingWater 보다 정밀)
         // - player.isInLava() → 원본 handleLavaMovement() 대응 (vanilla 액체 교차 판정)
         SmartMovingConfig cfg7c = SmartMovingConfig.Config;
+        // 🔴 (2026-05-22) isLavaLikeWaterEnabled(player) overload 사용 — Creative 모드 자동 true.
+        //   원본 1.7.10 _lavaLikeWater = Creative(...) helper 1:1 매핑 복원. 사용자 보고 BUG fix.
         boolean handleSwim = !sm.isFlying
                 && !sm.isLiquidClimbing
                 && (player.isTouchingWater()
                     || (sm.isSwimming_sm && SmartMovingClientState.isInLiquid(player))
-                    || (cfg7c.isLavaLikeWaterEnabled() && player.isInLava()));
+                    || (cfg7c.isLavaLikeWaterEnabled(player) && player.isInLava()));
         if (!handleSwim) {
             // B-10-reset-post (세션 114): 원본 L1488-L1498 `resetSwimming()` 메서드 호출.
             // updateSwimState 진입 `!handleSwim` 분기 (원본 L242/L253) 대응 — 물 밖 전환 시
@@ -849,9 +851,15 @@ public final class SmartMovingSwimmer {
         // 원본 L586: d1 = posY 저장 (벽 점프 isOffsetPositionInLiquid 체크용 prev posY)
         double d1 = player.getY();
 
-        // 원본 L587: moveFlying(strafe=movementInput.x, forward=movementInput.z, 0.02F)
+        // 🔴 (2026-05-22) 사용자 보고 BUG fix: 용암 진입 시 플레이어 멈춤 (motion 누적 X).
+        //   원인: 원본 vanilla 1.7.10 moveFlying = motion 에 += 누적. 우리 매핑은 SM 자체 moveFlying
+        //     (Vec3d return) + setVelocity(moved) = 이전 motion 덮어쓰기 → 매 frame 0 reset → 작은
+        //     speed (0.02F) 만 적용 + damping 0.5 = 거의 정지.
+        //   원본 식: sp.moveFlying(moveStrafing, moveForward, 0.02F);  // motion += fly
+        //           sp.moveEntity(motionX, motionY, motionZ);
+        //   해결: getVelocity().add(moved) = += 누적. 다른 swim 분기 (L526/L566) 와 일관.
         Vec3d moved = moveFlying(player, (float) movementInput.x, (float) movementInput.z, 0.02F);
-        player.setVelocity(moved);
+        player.setVelocity(player.getVelocity().add(moved));
 
         // 원본 L588: moveEntity(motionX, motionY, motionZ) — 실제 이동
         player.move(MovementType.SELF, player.getVelocity());

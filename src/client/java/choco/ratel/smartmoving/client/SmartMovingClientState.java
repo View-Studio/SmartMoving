@@ -3468,7 +3468,8 @@ public final class SmartMovingClientState {
         //   포커스 #2.6 A-1: §7 근사 B-42c-b 해소 (lava 분기 복원, 세션 2).
         if (fluid.isIn(net.minecraft.registry.tag.FluidTags.LAVA)) {
             SmartMovingConfig cfg = SmartMovingConfig.Config;
-            return cfg.isLavaLikeWaterEnabled() ? fluid.getHeight(player.getWorld(), pos) : 0F;
+            // 🔴 (2026-05-22) overload(player) 사용 — Creative 모드 자동 true (원본 1.7.10 spec).
+            return cfg.isLavaLikeWaterEnabled(player) ? fluid.getHeight(player.getWorld(), pos) : 0F;
         }
 
         // 분기 6 (원본 L147-L148): modded liquid (`material.isLiquid()` → 1F)

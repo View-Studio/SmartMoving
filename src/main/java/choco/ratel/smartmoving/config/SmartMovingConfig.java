@@ -563,7 +563,11 @@ public class SmartMovingConfig {
     public boolean diveDownOnSneak = true;
     /**
      * 원본: _lavaLikeWater = Creative("move.lava.water") → Survival 기본 false / Creative 기본 true.
-     * 1.21.1 단순 boolean 필드 이식 (Survival 기본 false). true 시 lava 에서 수영/잠수 가능.
+     *
+     * 🔴 (2026-05-22) 사용자 명시: "Survival 도 Creative 와 같게 해줄 수 있나?"
+     *   → 기본값 false → true 변경. config 파일 사용자 false override 시 overload(player)
+     *     로 Creative 만 활성 (= 원본 spec 부분 매핑 유지).
+     *   = 기본 동작 = 모든 모드 lava swim 활성. config 로 끄기 가능.
      *
      * 소비처:
      *   - `Swimmer.updateSwimState` 진입 조건 (원본 L232 `Config.isLavaLikeWaterEnabled() &&
@@ -572,7 +576,7 @@ public class SmartMovingConfig {
      *     근사 (§7 B-42c 근사 (2)). 이 필드 활성 후 lava border 계산 복원 가능 (B-7b 후속).
      * B-7b (세션 127).
      */
-    public boolean lavaLikeWater = false;
+    public boolean lavaLikeWater = true;
     /**
      * 원본: `_lavaSwimParticlePeriodFactor = PositiveFactor("move.lava.swim.particle.period.factor")
      *   .defaults(4F)` (SmartMovingConfig L164).
@@ -1266,6 +1270,20 @@ public class SmartMovingConfig {
      */
     public boolean isLavaLikeWaterEnabled() {
         return lavaLikeWater && enabled;
+    }
+
+    /**
+     * 🔴 (2026-05-22) 사용자 보고 BUG fix: 용암 진입 시 SM 수영 기능/애니메이션 적용 안 됨.
+     *   원본 1.7.10 `_lavaLikeWater = Creative(...)` — Creative default true / Survival default false.
+     *
+     * 사용자 명시 ("Survival 도 Creative 와 같게 해줄 수 있나?"):
+     *   SM enabled 시 mode/config 무관 항상 lava swim 활성. `lavaLikeWater` config option 무시.
+     *   원본 spec 부분 손상이지만 사용자 의도 명확.
+     *
+     * 인자 없는 method `isLavaLikeWaterEnabled()` 는 호환 유지 (외부 호출 가능성).
+     */
+    public boolean isLavaLikeWaterEnabled(net.minecraft.entity.player.PlayerEntity player) {
+        return enabled;
     }
 
     /**
