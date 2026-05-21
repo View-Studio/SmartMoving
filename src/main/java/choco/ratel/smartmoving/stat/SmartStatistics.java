@@ -69,9 +69,6 @@ public class SmartStatistics {
     private float lastHorizontalDistResult = 0f;
     private float lastVerticalDistResult = 0f;
 
-    /** DEBUG (2026-05-21): swim cycle raw 측정용 throttle counter. */
-    public int smDbgCalculateCounter = 0;
-
     // ── 프레임 단위 이동량 ────────────────────────────────────
     public double horizontalDistance;
     public double verticalDistance;
@@ -105,19 +102,6 @@ public class SmartStatistics {
         double diffZ = z - prevZ;
 
         horizontalDistance = Math.sqrt(diffX * diffX + diffZ * diffZ);
-
-        // 🟡 DEBUG (swim cycle 빠른 cause — raw player movement 측정).
-        //   사용자 보고: 우리 매핑 head 회전 cycle 가 원본보다 빠름. cycle period = 4π / cSpd.
-        //   cSpd = EMA(raw × 4). 만약 우리 raw > 원본 raw → cycle 빠름.
-        //   매 25 tick (= 1.25초) 한번 dump (raw + cSpd + raw×4) — verbose 회피.
-        if ((smDbgCalculateCounter++ % 25) == 0 && horizontalDistance > 0.05) {
-            System.out.println("[SWIM-DBG-RAW]"
-                    + " hDist=" + String.format("%.6f", horizontalDistance)
-                    + " raw_x4=" + String.format("%.4f", horizontalDistance * 4f)
-                    + " cSpd_pre=" + String.format("%.4f", currentHorizontalSpeed)
-                    + " diffX=" + String.format("%.6f", diffX)
-                    + " diffZ=" + String.format("%.6f", diffZ));
-        }
         verticalDistance = Math.abs(diffY);
         distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
 

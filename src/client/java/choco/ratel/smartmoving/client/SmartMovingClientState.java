@@ -784,13 +784,6 @@ public final class SmartMovingClientState {
     public float smSwimDiveExtraYaw_target = 0f;  // 현재 프레임 Y 회전 target (= horizontalAngle, rad)
     public float smSwimDiveExtraYaw_prev = 0f;    // 이전 프레임 보간 결과
 
-    // 🟡 DEBUG (2026-05-21) jump 꾹누름 헤엄 시 팔 회전 BUG 진단용 카운터.
-    //   sm_animateDiving 매 5 frame, sm_setupTransforms tick 단위 dump 위한 throttle field.
-    public int smDbgFrameCounterArm = 0;   // sm_animateDiving/sm_animateSwimming frame counter (5 frame 마다 dump)
-    public int smDbgJumpHeadTick = -1;     // sm_setupTransforms tick 1회 dump 보장 (last dumped tick)
-    public int smDbgCaptureTick = -1;      // sm_captureBodyYaw tick 1회 dump 보장
-    public int smDbgTiltTick = -1;         // sm_setupTransforms tilt/yaw fade lerp tick 1회 dump 보장
-
     // 🔴 fix #123 (2026-05-21, 사용자 보고 "수영 애니메이션 끊김 — 비행 처럼 fade"):
     //   원본 1.7.10 SmartMovingModel L319-361 (isSwim) / L363-391 (isDive) 의 arm/leg/head/body
     //   회전식은 fadeRotateAngle false (= instant) 매핑. 우리 매핑이 1.21.1 frame rate (60 FPS)

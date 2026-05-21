@@ -119,6 +119,16 @@ public abstract class MixinLivingEntityClient {
         // [8-2] 수중 이동 처리 — SM이 처리하면 vanilla travel() 취소
         if (SmartMovingSwimmer.handleSwimming(player, sm, movementInput, this.jumping,
                                                wasSwimming, wasDiving)) {
+            // 🔴 (2026-05-22) 사용자 보고 BUG fix: 물에 빠진 상태로 일반 벽 그랩 → 취소 시 isClimbing 잔존.
+            //   원인: 그랩 키 떼면 wantClimb=false → isLiquidClimbing=false → handleSwimming 처리 진입
+            //     → ci.cancel + return → 아래 G-01 reset (L172-, sm.isClimbing=false) 절대 도달 X
+            //     → 다음 tick handleSwimming 매치 cycle → isClimbing=true 영구 잔존
+            //     → sm_setAngles L424 (sm.isClimbing 우선순위) 매치 → sm_animateClimbing → 그랩 자세 잔존.
+            //   해결: swim 처리 시점 명시 resetClimbing() (= handleClimbing 안의 매 tick reset 와 등가).
+            //   회귀 차단: resetClimbing 자체가 그랩 클라이밍 완결 영역의 매 tick reset 인프라.
+            //     일반 벽 grab + ladder/vine grab 케이스 모두 swim 진입 전 / 진입 중에는 isClimbing=false
+            //     가 정상 (= swim 자세 그대로). reset 영향 = 잔존 cleanup.
+            sm.resetClimbing();
             ci.cancel();
             return;
         }

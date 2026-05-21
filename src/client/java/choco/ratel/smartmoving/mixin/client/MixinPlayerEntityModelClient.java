@@ -919,44 +919,6 @@ public abstract class MixinPlayerEntityModelClient {
         float standSneakFactor = standFactor + sneakFactor;
         sm.swimStandSneakFactor = standSneakFactor;
 
-        // 🟡 DEBUG (jump 꾹누름 헤엄 팔 BUG 진단) sm_animateSwimming 진입 PRE state.
-        //   isSwim 분기 — DIVE 와 별도. SWIM 자세 식: arm.pitch = sawtooth*walk + Sixteenth*sSF,
-        //   arm.roll = Q+E + cos(t)*sSF*0.8. dive 와 식 완전 다름.
-        if ((sm.smDbgFrameCounterArm++ % 5) == 0) {
-            System.out.println("[SWIM-DBG-SWIMARM-PRE]"
-                    + " input[limbSw=" + String.format("%.4f", limbSwing)
-                    + " limbAm=" + String.format("%.4f", limbSwingAmount)
-                    + " tT=" + String.format("%.4f", totalTime) + "]"
-                    + " state[sw=" + sm.isSwimming_sm
-                    + " dv=" + sm.isDiving
-                    + " lv=" + sm.isLevitating
-                    + " smJump=" + sm.isJumping
-                    + " dip=" + sm.isDipping + "]"
-                    + " stats[chSpd=" + String.format("%.4f", speed)
-                    + " tHD=" + String.format("%.3f", distance)
-                    + " hDist=" + String.format("%.4f", sm.stats.horizontalDistance) + "]"
-                    + " factors[walk=" + String.format("%.3f", walkFactor)
-                    + " sneak=" + String.format("%.3f", sneakFactor)
-                    + " stand=" + String.format("%.3f", standFactor)
-                    + " sSF=" + String.format("%.3f", standSneakFactor) + "]"
-                    + " pre-arms[rP=" + String.format("%.4f", rightArm.pitch)
-                    + " rY=" + String.format("%.4f", rightArm.yaw)
-                    + " rR=" + String.format("%.4f", rightArm.roll)
-                    + " lP=" + String.format("%.4f", leftArm.pitch)
-                    + " lY=" + String.format("%.4f", leftArm.yaw)
-                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
-                    + " pre-legs[rP=" + String.format("%.4f", rightLeg.pitch)
-                    + " rR=" + String.format("%.4f", rightLeg.roll)
-                    + " lP=" + String.format("%.4f", leftLeg.pitch)
-                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
-                    + " pre-head[P=" + String.format("%.4f", head.pitch)
-                    + " Y=" + String.format("%.4f", head.yaw)
-                    + " R=" + String.format("%.4f", head.roll) + "]"
-                    + " pre-body[P=" + String.format("%.4f", body.pitch)
-                    + " Y=" + String.format("%.4f", body.yaw)
-                    + " R=" + String.format("%.4f", body.roll) + "]");
-        }
-
         // 🔴 (2026-05-21, fix #122) "팔이랑 몸통 분리" — vanilla 1.21.1 BipedEntityModel 의
         //   arm 이 root 직접 자식 (vs 원본 SmartRender 의 arm 이 bipedBreast 자식 = body sway
         //   영향 받음). 우리 매핑에서 arm.yaw 에 body sway 값 추가 = 원본 breast 자식 효과 등가.
@@ -983,27 +945,6 @@ public abstract class MixinPlayerEntityModelClient {
         //   setAnglesRyRxRy_standard (= 새 helper, 표준 ZYX 분해) 사용.
         setAnglesRyRxRy_standard(head, bodySway, -EIGHTH * standSneakFactor, bodySway);
         head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F
-
-        // 🟡 DEBUG (cycle period 실측 — 사용자 보고 "head 회전 빠른 느낌"):
-        //   매 5 frame: input bodySway 값, distance, cSpd, head.yaw 결과 dump.
-        //   sm.isFast / wantSprint 추가 (= sprint 자동 활성 cause 검증).
-        if ((sm.smDbgFrameCounterArm % 5) == 0) {
-            System.out.println("[SWIM-DBG-HEADCYC]"
-                    + " tT=" + String.format("%.4f", totalTime)
-                    + " pt=" + String.format("%.4f", partialTicks)
-                    + " dist=" + String.format("%.4f", distance)
-                    + " cSpd=" + String.format("%.4f", speed)
-                    + " walk=" + String.format("%.3f", walkFactor)
-                    + " sSF=" + String.format("%.3f", standSneakFactor)
-                    + " bodySway=" + String.format("%.4f", bodySway)
-                    + " (deg=" + String.format("%.2f", Math.toDegrees(bodySway)) + ")"
-                    + " head[P=" + String.format("%.4f", head.pitch)
-                    + " Y=" + String.format("%.4f", head.yaw)
-                    + " R=" + String.format("%.4f", head.roll) + "]"
-                    + " head_yaw_deg=" + String.format("%.2f", Math.toDegrees(head.yaw))
-                    + " sprint[isFast=" + sm.isFast
-                    + " wantSprint=" + sm.wantSprint + "]");
-        }
 
         // 몸통 yaw — bipedBody 의 합성 = 1×sway (= torso 자식, breast 와 sibling, breast 영향 X).
         body.yaw = bodySway;
@@ -1090,106 +1031,6 @@ public abstract class MixinPlayerEntityModelClient {
         leftArm.pivotZ  = -5f * swaySin;
         // pivotY = 2 (= R_y 의 Y axis invariant, 변경 X).
 
-        // 🟡 DEBUG (팔 회전 자세 — 사용자 verbatim "팔 회전 dump"):
-        //   매 5 frame: arm 의 input 식 + ModelPart pitch/yaw/roll + vertex 변환 결과.
-        //   arm vertex (0, 0.5, 0) (= arm length down direction, ModelPart local space) 를 ModelPart 의 rotation 으로 변환.
-        //   = arm 끝 의 ModelPart-local position 계산 → scale(-1,-1,1) 적용 → visual position.
-        if ((sm.smDbgFrameCounterArm % 5) == 0) {
-            // 🔴 (2026-05-21, fix #142) dump 식 잘못 정정:
-            //   기존: rpc=cos(rightPitch), rrc=cos(rightRoll), ryc=cos(rightArm.yaw).
-            //     = input pitch/roll + ModelPart yaw 의 mix → 잘못된 검산.
-            //   정확: helper(R_y(sway) × R_x(input_pitch) × R_z(input_roll)) 의 ZYX 분해 후
-            //     ModelPart.pitch/yaw/roll 가 input pitch/roll 과 다른 값.
-            //     ModelPart 적용 = R_z(ModelPart.roll) × R_y(ModelPart.yaw) × R_x(ModelPart.pitch) × vertex.
-            //   정정: 모든 sin/cos 가 ModelPart 값 사용.
-            // ModelPart 의 rotateZYX 적용: R = R_z(roll) × R_y(yaw) × R_x(pitch).
-            // vertex 변환: vertex → R_x → R_y → R_z.
-            // arm 의 vertex = (0, 0.5, 0) (length direction = +Y).
-            // right arm 검산:
-            float rpc = (float) Math.cos(rightArm.pitch), rps = (float) Math.sin(rightArm.pitch);
-            float ryc = (float) Math.cos(rightArm.yaw),   rys = (float) Math.sin(rightArm.yaw);
-            float rrc = (float) Math.cos(rightArm.roll),  rrs = (float) Math.sin(rightArm.roll);
-            // vertex (0, 0.5, 0) → R_x(pitch): (0, 0.5*cos(p), 0.5*sin(p)).
-            float rx1 = 0f, ry1 = 0.5f * rpc, rz1 = 0.5f * rps;
-            // → R_y(yaw): (x*cos + z*sin, y, -x*sin + z*cos).
-            float rx2 = rx1 * ryc + rz1 * rys, ry2 = ry1, rz2 = -rx1 * rys + rz1 * ryc;
-            // → R_z(roll): (x*cos - y*sin, x*sin + y*cos, z).
-            float rx3 = rx2 * rrc - ry2 * rrs, ry3 = rx2 * rrs + ry2 * rrc, rz3 = rz2;
-            // scale(-1, -1, 1) 적용.
-            float rxv = -rx3, ryv = -ry3, rzv = rz3;
-
-            // left arm 검산 (동일 방식, ModelPart 값 사용):
-            float lpc = (float) Math.cos(leftArm.pitch), lps = (float) Math.sin(leftArm.pitch);
-            float lyc = (float) Math.cos(leftArm.yaw),   lys = (float) Math.sin(leftArm.yaw);
-            float lrc = (float) Math.cos(leftArm.roll),  lrs = (float) Math.sin(leftArm.roll);
-            float lx1 = 0f, ly1 = 0.5f * lpc, lz1 = 0.5f * lps;
-            float lx2 = lx1 * lyc + lz1 * lys, ly2 = ly1, lz2 = -lx1 * lys + lz1 * lyc;
-            float lx3 = lx2 * lrc - ly2 * lrs, ly3 = lx2 * lrs + ly2 * lrc, lz3 = lz2;
-            float lxv = -lx3, lyv = -ly3, lzv = lz3;
-
-            // 🔴 (2026-05-21, fix #142b) cone axis 직접 측정 추가:
-            //   cone axis = R 의 R_x 회전 axis (= +X in ModelPart space) 의 변환 direction.
-            //   = R_z(roll) × R_y(yaw) × (+1, 0, 0).
-            //   양쪽 arm 의 visual cone axis 직접 비교 → 좌우 mirror 여부 식별.
-            float r_cone_pre_x = ryc;            // = cos(yaw) * 1 + 0 * sin(yaw) = cos(yaw).
-            float r_cone_pre_z = -rys;           // = -1 * sin(yaw) + 0 * cos(yaw) = -sin(yaw).
-            float r_cone_x = r_cone_pre_x * rrc; // R_z(roll) × (cos(yaw), 0, -sin(yaw)).
-            float r_cone_y = r_cone_pre_x * rrs;
-            float r_cone_z = r_cone_pre_z;
-            // scale(-1, -1, 1).
-            float r_coneVx = -r_cone_x, r_coneVy = -r_cone_y, r_coneVz = r_cone_z;
-
-            float l_cone_pre_x = lyc;
-            float l_cone_pre_z = -lys;
-            float l_cone_x = l_cone_pre_x * lrc;
-            float l_cone_y = l_cone_pre_x * lrs;
-            float l_cone_z = l_cone_pre_z;
-            float l_coneVx = -l_cone_x, l_coneVy = -l_cone_y, l_coneVz = l_cone_z;
-
-            // cycle phase 정보.
-            float sawtoothR = ((dist2 % WHOLE) - HALF);
-            float sawtoothL = (((dist2 + HALF) % WHOLE) - HALF);
-            float dynamicCos = MathHelper.cos(totalTime * 0.1f);
-
-            System.out.println("[SWIM-DBG-ARM]"
-                    + " tT=" + String.format("%.3f", totalTime)
-                    + " dist=" + String.format("%.3f", distance)
-                    + " dist2=" + String.format("%.3f", dist2)
-                    + " cSpd=" + String.format("%.3f", speed)
-                    + " walk=" + String.format("%.3f", walkFactor)
-                    + " sSF=" + String.format("%.3f", standSneakFactor)
-                    + " bodySway=" + String.format("%.3f", bodySway)
-                    + " phaseR=" + String.format("%.3f", sawtoothR) + "(" + String.format("%.1f", Math.toDegrees(sawtoothR)) + "°)"
-                    + " phaseL=" + String.format("%.3f", sawtoothL) + "(" + String.format("%.1f", Math.toDegrees(sawtoothL)) + "°)"
-                    + " cos(t)=" + String.format("%.3f", dynamicCos));
-
-            System.out.println("[SWIM-DBG-ARM-RIGHT]"
-                    + " input[pitch=" + String.format("%.3f", rightPitch) + "(" + String.format("%.1f", Math.toDegrees(rightPitch)) + "°)"
-                    + " yaw=" + String.format("%.3f", rightArm.yaw) + "(" + String.format("%.1f", Math.toDegrees(rightArm.yaw)) + "°)"
-                    + " roll=" + String.format("%.3f", rightRoll) + "(" + String.format("%.1f", Math.toDegrees(rightRoll)) + "°)]"
-                    + " ModelPart[pitch=" + String.format("%.3f", rightArm.pitch)
-                    + " yaw=" + String.format("%.3f", rightArm.yaw)
-                    + " roll=" + String.format("%.3f", rightArm.roll) + "]"
-                    + " pivot[" + String.format("%.2f,%.2f,%.2f", rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ) + "]"
-                    + " vertex_local(0,0.5,0)_after_rotation[" + String.format("%.3f,%.3f,%.3f", rx3, ry3, rz3) + "]"
-                    + " visual_after_scale[" + String.format("%.3f,%.3f,%.3f", rxv, ryv, rzv) + "]"
-                    + " cone_axis_visual[" + String.format("%.3f,%.3f,%.3f", r_coneVx, r_coneVy, r_coneVz) + "]"
-                    + " ground_yaw_deg=" + String.format("%.1f", Math.toDegrees(Math.atan2(rxv, -rzv))));
-
-            System.out.println("[SWIM-DBG-ARM-LEFT]"
-                    + " input[pitch=" + String.format("%.3f", leftPitch) + "(" + String.format("%.1f", Math.toDegrees(leftPitch)) + "°)"
-                    + " yaw=" + String.format("%.3f", leftArm.yaw) + "(" + String.format("%.1f", Math.toDegrees(leftArm.yaw)) + "°)"
-                    + " roll=" + String.format("%.3f", leftRoll) + "(" + String.format("%.1f", Math.toDegrees(leftRoll)) + "°)]"
-                    + " ModelPart[pitch=" + String.format("%.3f", leftArm.pitch)
-                    + " yaw=" + String.format("%.3f", leftArm.yaw)
-                    + " roll=" + String.format("%.3f", leftArm.roll) + "]"
-                    + " pivot[" + String.format("%.2f,%.2f,%.2f", leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ) + "]"
-                    + " vertex_local(0,0.5,0)_after_rotation[" + String.format("%.3f,%.3f,%.3f", lx3, ly3, lz3) + "]"
-                    + " visual_after_scale[" + String.format("%.3f,%.3f,%.3f", lxv, lyv, lzv) + "]"
-                    + " cone_axis_visual[" + String.format("%.3f,%.3f,%.3f", l_coneVx, l_coneVy, l_coneVz) + "]"
-                    + " ground_yaw_deg=" + String.format("%.1f", Math.toDegrees(Math.atan2(lxv, -lzv))));
-        }
-
         // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance.
         rightLeg.pitch = MathHelper.cos(distance) * 0.52264464f * walkFactor;
         leftLeg.pitch  = MathHelper.cos(distance + HALF) * 0.52264464f * walkFactor;
@@ -1205,38 +1046,6 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(totalTime * 0.1f - QUARTER) - 1f) * 0.15f * sneakFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
-
-        // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_animateSwimming POST — 우리 inject 적용 후 최종 값.
-        if ((sm.smDbgFrameCounterArm % 5) == 0) {
-            System.out.println("[SWIM-DBG-SWIMARM-POST]"
-                    + " arms[rP=" + String.format("%.4f", rightArm.pitch)
-                    + " rY=" + String.format("%.4f", rightArm.yaw)
-                    + " rR=" + String.format("%.4f", rightArm.roll)
-                    + " lP=" + String.format("%.4f", leftArm.pitch)
-                    + " lY=" + String.format("%.4f", leftArm.yaw)
-                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
-                    + " legs[rP=" + String.format("%.4f", rightLeg.pitch)
-                    + " rR=" + String.format("%.4f", rightLeg.roll)
-                    + " lP=" + String.format("%.4f", leftLeg.pitch)
-                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
-                    + " head[P=" + String.format("%.4f", head.pitch)
-                    + " Y=" + String.format("%.4f", head.yaw) + "]"
-                    + " body[Y=" + String.format("%.4f", body.yaw) + "]"
-                    + " scale[legY=" + String.format("%.4f", legSc)
-                    + " armY=" + String.format("%.4f", armSc) + "]"
-                    + " formula[rArmPitch_form=((d2%W)-H)*walk+Sixteenth*sSF"
-                    + " => sawtooth=" + String.format("%.4f", ((distance * 0.5f) % WHOLE) - HALF)
-                    + " * walk(" + String.format("%.3f", walkFactor) + ")"
-                    + " + " + String.format("%.4f", SIXTEENTH) + " * sSF(" + String.format("%.3f", standSneakFactor) + ")"
-                    + " = " + String.format("%.4f", rightArm.pitch) + "]"
-                    + " formula[rArmRoll_form=Q+E+cos(t*0.1)*sSF*0.8"
-                    + " => " + String.format("%.4f", QUARTER + EIGHTH)
-                    + " + cos(" + String.format("%.3f", totalTime * 0.1f) + ")="
-                    + String.format("%.4f", MathHelper.cos(totalTime * 0.1f))
-                    + " * sSF(" + String.format("%.3f", standSneakFactor) + ") * 0.8"
-                    + " = " + String.format("%.4f", rightArm.roll) + "]");
-        }
-
     }
 
     /**
@@ -1261,37 +1070,6 @@ public abstract class MixinPlayerEntityModelClient {
         float distance    = interpTotalDistance * 0.7f;
         float walkFactor  = smFactor(interpCurrentSpeed, 0f, 0.15679921f);
         float standFactor = smFactor(interpCurrentSpeed, 0.15679921f, 0f);
-
-        // 🟡 DEBUG (jump 꾹누름 헤엄 시 팔 회전 BUG 진단)
-        //   사용자 보고: jump 꾹누름 + 헤엄 시 팔 회전 원본과 다름.
-        //   매 5 frame 1번 dump — sm_animateDiving 진입 시 pre-arms 값 + 입력 + factors.
-        if ((sm.smDbgFrameCounterArm++ % 5) == 0) {
-            System.out.println("[SWIM-DBG-DIVEARM-PRE]"
-                    + " input[limbSw=" + String.format("%.4f", limbSwing)
-                    + " limbAm=" + String.format("%.4f", limbSwingAmount) + "]"
-                    + " state[lv=" + sm.isLevitating
-                    + " smJump=" + sm.isJumping + "]"
-                    + " stats[cSpd=" + String.format("%.4f", sm.stats.currentSpeed)
-                    + " tD=" + String.format("%.3f", sm.stats.totalDistance)
-                    + " vAng=" + String.format("%.3f", sm.stats.currentVerticalAngle) + "]"
-                    + " factors[walk=" + String.format("%.3f", walkFactor)
-                    + " stand=" + String.format("%.3f", standFactor)
-                    + " dist=" + String.format("%.3f", distance) + "]"
-                    + " pre-arms[rP=" + String.format("%.4f", rightArm.pitch)
-                    + " rY=" + String.format("%.4f", rightArm.yaw)
-                    + " rR=" + String.format("%.4f", rightArm.roll)
-                    + " lP=" + String.format("%.4f", leftArm.pitch)
-                    + " lY=" + String.format("%.4f", leftArm.yaw)
-                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
-                    + " pre-legs[rP=" + String.format("%.4f", rightLeg.pitch)
-                    + " rR=" + String.format("%.4f", rightLeg.roll)
-                    + " lP=" + String.format("%.4f", leftLeg.pitch)
-                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
-                    + " pivots[rArm(" + String.format("%.2f,%.2f,%.2f", rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ) + ")"
-                    + " lArm(" + String.format("%.2f,%.2f,%.2f", leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ) + ")]"
-                    + " scale[rArm.yS=" + String.format("%.3f", rightArm.yScale)
-                    + " lArm.yS=" + String.format("%.3f", leftArm.yScale) + "]");
-        }
 
         // 머리 자세 (원본 L370-L371)
         head.pitch  = -EIGHTH;   // 원본 bipedHead.rotateAngleX = -Eighth
@@ -1338,30 +1116,6 @@ public abstract class MixinPlayerEntityModelClient {
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor;
         setArmScales(rightArm, leftArm, armSc, armSc);
-
-        // 🟡 DEBUG (jump 헤엄 팔 BUG 진단) sm_animateDiving 끝 — 우리 inject 적용 후 최종 값.
-        if ((sm.smDbgFrameCounterArm % 5) == 0) {
-            System.out.println("[SWIM-DBG-DIVEARM-POST]"
-                    + " arms[rP=" + String.format("%.4f", rightArm.pitch)
-                    + " rY=" + String.format("%.4f", rightArm.yaw)
-                    + " rR=" + String.format("%.4f", rightArm.roll)
-                    + " lP=" + String.format("%.4f", leftArm.pitch)
-                    + " lY=" + String.format("%.4f", leftArm.yaw)
-                    + " lR=" + String.format("%.4f", leftArm.roll) + "]"
-                    + " legs[rP=" + String.format("%.4f", rightLeg.pitch)
-                    + " rR=" + String.format("%.4f", rightLeg.roll)
-                    + " lP=" + String.format("%.4f", leftLeg.pitch)
-                    + " lR=" + String.format("%.4f", leftLeg.roll) + "]"
-                    + " scale[legY=" + String.format("%.4f", legSc)
-                    + " armY=" + String.format("%.4f", armSc) + "]"
-                    + " formula[rArmRoll_form=(cos(d+H)*0.523*2.5+Q)*walk+(Q+E)*stand"
-                    + " => cos(" + String.format("%.3f", distance + HALF) + ")="
-                    + String.format("%.4f", MathHelper.cos(distance + HALF))
-                    + " * 1.3066 + 0.7854 = "
-                    + String.format("%.4f", MathHelper.cos(distance + HALF) * 0.52264464f * 2.5f + QUARTER)
-                    + " * walk(" + String.format("%.3f", walkFactor) + ")"
-                    + " + 1.1781 * stand(" + String.format("%.3f", standFactor) + ")]");
-        }
     }
 
     /**
