@@ -119,9 +119,34 @@ public final class SmartMovingSwimmer {
         // - player.isInLava() → 원본 handleLavaMovement() 대응 (vanilla 액체 교차 판정)
         SmartMovingConfig cfg7c = SmartMovingConfig.Config;
         // 🔴 (2026-05-22) isLavaLikeWaterEnabled(player) overload 사용 — Creative 모드 자동 true.
-        //   원본 1.7.10 _lavaLikeWater = Creative(...) helper 1:1 매핑 복원. 사용자 보고 BUG fix.
+        // 🔴 (2026-05-22) 사용자 보고 fix v4 — 1칸 공간 + dipping 시점 정확 매핑.
+        //
+        //   log 실측 (line 371~): sm[cr=false dip=true] 매 tick + handleSwimming=true → ci.cancel →
+        //     fromSwimmingOrDiving 도달 X → 자동 crawl 진입 path 없음. **이전 fix v3 의 !isCrawling 가드 효과
+        //     X** (= isCrawling=false 시).
+        //
+        //   사용자 verbatim 3 시나리오 모두 cause = 1칸 공간 안 dipping 활성 시 swim 처리 cycle:
+        //   1. swim → 1칸 진입 시 dipping 활성 frame 잠시 STANDING.
+        //   2. 1칸 공간 + dipping 잔존 → 엎드리기 전환 X (= 자동 crawl path 없음).
+        //   3. 엎드리기 + 물 진입 → swim 진입 → isCrawling reset → STANDING.
+        //
+        //   해결: 1칸 공간 (= 박스 발+1m 위 ceiling) 검출 시 handleSwim=false 강제. swim 처리 skip →
+        //     resetSwimming → dipping=false → fromSwimmingOrDiving 분기 진입 → 분기 1 매치 → 자동 crawl.
+        //   dipping=true 시점만 검사 (= 성능 회피, 정상 swim 영향 X).
+        //   박스 식 = swim 박스 가정 (entity.y+1, entity.y+1.8). 박스 dim 잔존 무관 일관 결과.
+        boolean inSmallHole = false;
+        if (sm.isDipping) {
+            double standMinY = player.getY() + 1.0;
+            double standMaxY = standMinY + 0.8;
+            double cBot = SmartMovingClientState.getMaxPlayerSolidBetween(player, standMinY - 1D, standMinY, 0);
+            double cCeil = SmartMovingClientState.getMinPlayerSolidBetween(player, standMaxY, standMaxY + 1.1D, 0);
+            float plH = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
+            inSmallHole = (cCeil - cBot) < plH;
+        }
         boolean handleSwim = !sm.isFlying
                 && !sm.isLiquidClimbing
+                && !sm.isCrawling
+                && !inSmallHole
                 && (player.isTouchingWater()
                     || (sm.isSwimming_sm && SmartMovingClientState.isInLiquid(player))
                     || (cfg7c.isLavaLikeWaterEnabled(player) && player.isInLava()));

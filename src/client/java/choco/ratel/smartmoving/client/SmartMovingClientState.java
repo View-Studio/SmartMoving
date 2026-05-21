@@ -4349,7 +4349,10 @@ public final class SmartMovingClientState {
      * 호출: sm_travel_client 내 handleSwimming 반환 false 분기 (원본 handleLand L648).
      */
     public void fromSwimmingOrDiving(ClientPlayerEntity player, boolean wasShortInWater) {
-        boolean isShortInWater = isSwimming_sm || isDiving;
+        // 🔴 (2026-05-22 fix #150 v3) isShortInWater 식 정정 — dipping 잔존 시도 진입 가능 +
+        //   매 frame 누적 BUG (= setPos 매 tick 호출 시 entity.y +1m 무한 상승) 방지.
+        //   `isDipping && isCrawling` 가드로 한 번 진입 후 차단.
+        boolean isShortInWater = isSwimming_sm || isDiving || (isDipping && isCrawling);
         if (wasShortInWater && !isShortInWater && !player.isSleeping()) {
             // **B-42-B39 해소 (세션 124)**: 원본 L1363-L1404 전면 AABB 정밀 이식.
             // B-42a/b/c 헬퍼 소비 → crawlStandUpBottom / crawlStandUpLiquidCeiling /
@@ -4358,8 +4361,17 @@ public final class SmartMovingClientState {
             // 원본 L1369 setHeightOffset(-1F) — 1.21.1 boundingBox 미조작, 필드만 설정.
             heightOffset = -1F;
 
-            double minY = player.getBoundingBox().minY;
-            double maxY = player.getBoundingBox().maxY;
+            // 🔴 (2026-05-22) 사용자 보고 fix: 1칸 공간 swim 종료 "가끔만" 자동 crawl 매치 BUG.
+            //   log 실측 cause: 우리 매핑 박스 dim 가 frame 마다 다름 (= dim 매치 결과 잔존). swim 박스
+            //     dim (0.6, 0.8, 1.62) 잔존 시 mixin offset 활성 → box.minY = entity.y + 1 → 분기 1 매치.
+            //     STANDING dim (= orphan SWIMMING 가드 매치) 잔존 시 mixin offset 차단 → box.minY = entity.y
+            //     → diff_solid = 2.0 → 분기 1 매치 X.
+            //   원본 1.7.10 식 (L1369-1375): setHeightOffset(-1F) → box.minY += 1, height -= 1 (= 0.8).
+            //     크기 계산 시 box.minY/maxY = (posY+1, posY+1.8). 우리 매핑은 박스 미조작 (field 만 set).
+            //   해결: 원본 효과 직접 매핑 — minY = entity.y + 1 (= swim 박스 발), maxY = minY + 0.8
+            //     (= 원본 setHeightOffset(-1F) 후 box height). 동적 박스 dim 무관 일관 결과.
+            double minY = player.getY() + 1.0;        // 원본 setHeightOffset(-1F) 후 box.minY
+            double maxY = minY + 0.8;                  // 원본 box height (1.8 - 1 = 0.8) 적용
             double crawlStandUpBottom        = getMaxPlayerSolidBetween(player, minY - 1D, minY, 0);
             double crawlStandUpLiquidCeiling = getMinPlayerLiquidBetween(player, maxY, maxY + 1.1D);
             double crawlStandUpCeiling       = getMinPlayerSolidBetween(player, maxY, maxY + 1.1D, 0);
@@ -4367,12 +4379,40 @@ public final class SmartMovingClientState {
             // 원본 L1375 resetHeightOffset()
             heightOffset = 0F;
 
-            float playerHeight = player.getHeight();
+            // 🔴 (2026-05-22 fix #150) playerHeight = STANDING 강제 (원본 1.7.10 bb 항상 STANDING).
+            //   우리 매핑 동적 박스 (= dim 잔존 시 0.8) 사용 시 분기 1 매치 X BUG. STANDING 강제로 일관.
+            //   [project_crawl_reentry_complete] / [feedback_dynamic_pose_bb_check] 패턴.
+            float playerHeight = player.getDimensions(net.minecraft.entity.EntityPose.STANDING).height();
             if (crawlStandUpCeiling - crawlStandUpBottom < playerHeight) {
                 // 분기 1 (L1377-L1383): 깊은 물 → 작은 구멍 크롤
                 isCrawling   = true;
                 isDipping    = false;
                 heightOffset = -1F;
+
+                // 🔴 (2026-05-22) 사용자 보고 fix: 물 안 1칸 공간 → 수영 종료 시 STANDING 강제 → 블록 낑김.
+                //   비행 패턴 [project_restoreFromFlying_complete] 1:1 차용.
+                //
+                //   swim/dive 시 박스 +1m up (fix #102) → 박스 발 = entity.y+1, entity.y = ground-1.
+                //   crawl 진입 시 dim 0.62 → mixin offset 차단 → 박스 발 = entity.y = ground-1 → 박힘.
+                //   vanilla push out → entity.y = ground → 박스 = (ground, ground+0.8) 안전.
+                //   단 mustCrawl=false 시 다음 tick reset → STANDING 복귀 cycle.
+                //
+                //   3 fix:
+                //   1. setPos(y+1) + lastRenderY/prevY 동기화 — 박스 ground 위 정렬.
+                //   2. Camera cameraY = standingEyeHeight(crawling=0.62) 강제 — lerp 점프 차단.
+                //   3. mustCrawl=true 강제 — same-tick isCrawling 재계산 reset 차단.
+                player.calculateDimensions();
+                player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
+                player.lastRenderY += 1.0;
+                player.prevY += 1.0;
+                net.minecraft.client.render.Camera cam =
+                        net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera();
+                if (cam != null) {
+                    float eye = player.getStandingEyeHeight();
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setCameraY(eye);
+                    ((choco.ratel.smartmoving.mixin.client.MixinCamera) (Object) cam).sm_setLastCameraY(eye);
+                }
+                mustCrawl = true;
             } else if (crawlStandUpLiquidCeiling - crawlStandUpBottom < playerHeight) {
                 // 분기 2 (L1384-L1390): 깊은 물 → 물 아래 크롤
                 isCrawling           = true;

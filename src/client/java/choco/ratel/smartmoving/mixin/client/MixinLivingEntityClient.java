@@ -101,7 +101,17 @@ public abstract class MixinLivingEntityClient {
         // handleSwimming 의 isFakeShallowWaterSneaking 판정(원본 L243) + fromSwimmingOrDiving 전환 감지에 사용.
         boolean wasSwimming = sm.isSwimming_sm;
         boolean wasDiving   = sm.isDiving;
-        boolean wasShortInWater = wasSwimming || wasDiving;
+        // 🔴 (2026-05-22) 사용자 보고 fix: 물 안 1칸 공간 swim 종료 시 자동 crawl 미작동.
+        //   log 실측 cause: 우리 매핑에서 dive → dipping 전환이 handleSwimming 안 발생 (= 같은 frame
+        //     sm.isDiving=true → false set). 다음 tick 진입 시 wasDive=false → wasShortInWater=false.
+        //   사용자 시나리오: 1칸 공간 안 isTouchingWater=true 잔존 (= vanilla 박스 일부 물 매치) →
+        //     handleSwim=true → dipping 매 tick 유지. 옆 물 사라짐 시 isTouchingWater=false → handleSwim=false
+        //     → resetSwimming → isDipping=false. 그 frame 의 wasShortInWater=false (= 직전 tick swim/dive
+        //     이미 false) → fromSwimmingOrDiving 분기 진입 X → 자동 crawl 미발동.
+        //   해결: wasShortInWater 식에 wasDipping 포함. isShortInWater 도 isDipping 포함 (= dipping 도중
+        //     매 frame 분기 진입 차단). 원본 spec 부분 확장 (= 원본 1.7.10 식 isSwim||isDive 만).
+        boolean wasDipping  = sm.isDipping;
+        boolean wasShortInWater = wasSwimming || wasDiving || wasDipping;
 
         // B-7a (세션 127): 원본 SmartMovingSelf L132 `isLiquidClimbing` 지역 변수 승격.
         //   isLiquidClimbing = Config.isFreeClimbingEnabled() && sp.fallDistance <= 3.0

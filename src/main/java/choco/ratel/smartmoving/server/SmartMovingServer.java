@@ -173,6 +173,18 @@ public final class SmartMovingServer {
         isWallJumping     = ((bits >> 31) & 1) != 0;
         boolean _oldCrawl = isCrawling;
         setCrawling(((bits >> 13) & 1) != 0);
+        // 🔴 (2026-05-22) 사용자 보고 fix: 1칸 공간 swim 종료 + 엎드리기 → 물 진입 시 server reconcile.
+        //   cause: swim ↔ crawl transition 시 isSmall 식 (= 8 SM OR) 변화 X (swim=true → crawl=true).
+        //     → setSmall 호출 X → server calculateDimensions 호출 X → server dim 잔존 (eye=1.62) +
+        //     client dim 갱신 (eye=0.62) → mixin offset 가드 매치 결과 다름 → server 박스 +1m up,
+        //     client 박스 정상 → server reconcile → 사용자 verbatim "엎드리기 가끔만" / "STANDING 위로" /
+        //     "땅 잠김" 모두 같은 cause.
+        //   해결: bit 13 (isCrawling) 변경 시 calculateDimensions 명시 호출 — 다른 bit (= isClimbCrawling
+        //     L246 / isHeadJumping L213 / isSliding L235) 와 동일 패턴.
+        //   메모리: feedback_processStatePacket_calculateDimensions, feedback_server_reconcile_box_sync.
+        if (_oldCrawl != isCrawling) {
+            player.calculateDimensions();
+        }
         // R-04: setSmall() 경유하여 calculateDimensions() 호출 → 서버 AABB 갱신
         boolean newSmall = ((bits >> 15) & 1) != 0;
         if (newSmall != isSmall) setSmall(player, newSmall);
