@@ -47,6 +47,8 @@ public final class SmartMovingServer {
 
     /** 서버 측 크롤링 상태 */
     public boolean isCrawling;
+    /** 🔵 fix #153 v3 (2026-05-22): swim/dive → crawl multi-step transition history flag. */
+    public int smRecentSwimDiveEndTick_fix153 = -9999;
 
     /** 서버 측 작은 크기 상태. setSmall() → calculateDimensions() 경로로 서버 AABB 갱신. */
     public boolean isSmall;
@@ -166,6 +168,11 @@ public final class SmartMovingServer {
         //     (= 잠긴 시각) 또는 REMOTE.y > ground (= 공중에서 standing) BUG 발생.
         //   fix: self side standUp 의 +1m push 가 server side 에도 동일 매핑.
         boolean _wasHJ_fix98 = this.isHeadJumping;
+        // 🔵 fix #153 v2 (2026-05-22 복원): swim → crawl transition server mirror push.
+        //   log 실측: SERVER-CR tick=616 server.y=70 잔존 (= state packet 가 c2s movement 보다 먼저 처리).
+        //   self.y c2s = 71 (= setPos+1). state packet 처리 시 server.y = prev (= 70). mirror push 필요.
+        boolean _wasSwim_fix153 = this.isSwimming;
+        boolean _wasDive_fix153 = this.isDiving;
 
         isClimbing        = ((bits >> 14) & 1) != 0;
         isCrawlClimbing   = ((bits >> 12) & 1) != 0;
@@ -304,6 +311,26 @@ public final class SmartMovingServer {
                 && !this.isClimbCrawling && !this.isClimbing && !this.isCeilingClimbing
                 && !this.isSwimming && !this.isDiving && !this.isLevitating) {
             player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+        }
+
+        // 🔵 fix #153 v3 (2026-05-22 history flag): swim/dive → crawl mirror push.
+        //   log 실측: server side 도 multi-step state 변경 가능 (= REMOTE 측 2 packet 받은 cause).
+        //   해결: history flag — swim/dive 종료 detection 시 set, crawl 진입 시 5 tick 안 검출 + push.
+        boolean _smEndedFix153 = (_wasSwim_fix153 || _wasDive_fix153)
+                && !this.isSwimming && !this.isDiving;
+        if (_smEndedFix153) {
+            this.smRecentSwimDiveEndTick_fix153 = player.age;
+        }
+        boolean _recentSwimEndedFix153 = (player.age - this.smRecentSwimDiveEndTick_fix153) >= 0
+                && (player.age - this.smRecentSwimDiveEndTick_fix153) <= 10;
+        if (_recentSwimEndedFix153
+                && !_wasCR_fix90 && this.isCrawling
+                && !_wasHJ_fix98 && !this.isHeadJumping
+                && !_wasSL_fix90 && !this.isSliding
+                && !this.isClimbCrawling && !this.isClimbing && !this.isCeilingClimbing
+                && !this.isLevitating) {
+            player.setPos(player.getX(), player.getY() + 1.0, player.getZ());
+            this.smRecentSwimDiveEndTick_fix153 = -9999;
         }
 
         // 🔵 fix #98-v2 (2026-05-14): isHeadJumping=true → false + 다른 SM phase 모두 false 매치 시

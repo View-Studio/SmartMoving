@@ -85,6 +85,10 @@ public class SmartMovingClient implements ClientModInitializer {
                     boolean wasFlying = target.isFlying;
                     boolean wasHJ = target.isHeadJumping;
                     boolean wasICC = target.isClimbCrawling;
+                    // 🔵 fix #154 (2026-05-22) — swim/dive → crawl direct transition snapshot (remote sink fix).
+                    boolean wasSwim_fix154 = target.isSwimming_sm;
+                    boolean wasDive_fix154 = target.isDiving;
+                    boolean wasCR_fix154 = target.isCrawling;
                     double slideBoxMinYBefore = 0.0;
                     double flyBoxMinYBefore = 0.0;
                     if (entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity rsPre
@@ -358,6 +362,64 @@ public class SmartMovingClient implements ClientModInitializer {
                         remoteHJCr.prevY = newYHJCr;
                         accHJCr.sm_setServerY(newYHJCr);
                         accHJCr.sm_setBodyTrackingIncrements(0);
+                    }
+                    // 🔵 fix #154 (2026-05-22) — swim/dive → crawl direct transition remote sink fix.
+                    //   사용자 보고: "swim → 1칸 공간 진입 자동 crawl 순간 remote 시 상대가 잠깐 땅으로 들어갔다 올라옴".
+                    //
+                    //   진짜 path:
+                    //   - self side: fix #150 fromSwimmingOrDiving 분기 1 → setPos(y+1) + isCrawling=true.
+                    //     self.y c2s = ground. server.y = ground (= c2s movement packet 자동 동기화).
+                    //   - server side: fix #150 calculateDimensions 만 호출 (= mirror push 없음, self setPos 가
+                    //     c2s 로 server 동기화). broadcast srvY = ground.
+                    //   - remote side: 진입 시점 remote.y = ground - 1 (= 이전 swim broadcast srvY 의 lerp 결과).
+                    //     CR dim → mixin offset 차단 → 박스 발 = remote.y = ground - 1 → 잠긴 visual.
+                    //     vanilla lerp 가 srvY=ground 추격 → ~3 tick 도달.
+                    //
+                    //   메모리: [project_remote_landing_sink_pattern] fix #92/#93 패턴 (= groundY 직접 측정).
+                    //   [feedback_remote_setpos_newY_srvY_plus_1]: server side mirror push 없으면 groundY-1 식.
+                    //
+                    //   fix: remote packet lambda 안 setPos(groundY-1) + lerp cancel. fix #92 패턴 1:1.
+                    //   newY = groundY - 1 (= self.y 와 동기, mixin offset 차단 후 박스 발 = entity.y = ground).
+                    // 🔵 fix #154 v4 (2026-05-22): multi-step transition history flag.
+                    //   log 실측: server side broadcast 가 dv 변경 vs cr 변경 별도 2 packet. REMOTE 측
+                    //   lambda 매 호출 was[dv=true]→cur[dv=false cr=false] (= dv 종료) +
+                    //   was[dv=false]→cur[dv=false cr=true] (= cr 진입) 2 step. single-transition 가드 매치 X.
+                    //   해결: swim/dive 종료 detection 시 flag set + crawl 진입 detection 시 flag 5 tick 안 검사.
+                    boolean _swimEndedFix154 = (wasSwim_fix154 || wasDive_fix154)
+                            && !target.isSwimming_sm && !target.isDiving;
+                    if (_swimEndedFix154 && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity _rememF154
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        target.smRecentSwimDiveEndTick = _rememF154.age;
+                    }
+                    boolean _recentSwimEndedFix154 = entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity _checkRecent
+                            && (_checkRecent.age - target.smRecentSwimDiveEndTick) >= 0
+                            && (_checkRecent.age - target.smRecentSwimDiveEndTick) <= 10;
+                    if (_recentSwimEndedFix154
+                            && !wasCR_fix154 && target.isCrawling
+                            && !wasHJ && !target.isHeadJumping
+                            && !wasSliding && !target.isSliding
+                            && !wasIcc && !target.isClimbCrawling
+                            && !target.isClimbing && !target.isCeilingClimbing
+                            && !target.isFlying && !target.isLevitating
+                            && !target.isAngleJumping() && !target.isRopeSliding
+                            && entity instanceof net.minecraft.client.network.AbstractClientPlayerEntity remoteSwCr
+                            && !(entity instanceof net.minecraft.client.network.ClientPlayerEntity)) {
+                        // 🔵 (2026-05-22 fix #154 v3) fix #99 v4 패턴 1:1 — newY = srvY + 1.
+                        //   이전 v2 (groundY 직접 측정) 식: getMaxPlayerSolidBetween 의 clamp 가 잠긴 시
+                        //     ground top 매치 X (= yMax 작음). v2 식 정상 위치 시도 ceiling 매치 (= yMax 큼).
+                        //   해결: fix #99 v4 식 차용 — newY = srvY + 1. server side fix #153 v2 mirror push
+                        //     적용 → server.y = self.y = ground. broadcast S2C state 시점 srvY prev = ground-1
+                        //     (= 이전 broadcast 잔존). newY = prev srvY + 1 = ground = self.y. REMOTE.y 정렬.
+                        //   [project_remote_hjcr_direct_transition_fix] / [feedback_remote_setpos_newY_srvY_plus_1].
+                        choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor accSwCr =
+                                (choco.ratel.smartmoving.mixin.client.MixinLivingEntityAccessor)(Object) remoteSwCr;
+                        double newYSwCr = accSwCr.sm_getServerY() + 1.0;
+                        remoteSwCr.setPosition(remoteSwCr.getX(), newYSwCr, remoteSwCr.getZ());
+                        remoteSwCr.lastRenderY = newYSwCr;
+                        remoteSwCr.prevY = newYSwCr;
+                        accSwCr.sm_setServerY(newYSwCr);
+                        accSwCr.sm_setBodyTrackingIncrements(0);
+                        target.smRecentSwimDiveEndTick = -9999;  // 1회 한정 clear.
                     }
                     if (wasHJ && !target.isHeadJumping
                             && !target.isSliding && !target.isCrawling

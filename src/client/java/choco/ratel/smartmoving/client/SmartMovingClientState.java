@@ -528,6 +528,11 @@ public final class SmartMovingClientState {
      */
     public boolean mustCrawl;
 
+    /** 🔵 fix #154 v4 (2026-05-22): REMOTE side multi-step transition history flag.
+     *   log 실측: server side broadcast 가 dv 변경 vs cr 변경 별도 2 packet. REMOTE 측 lambda
+     *   매치 X. flag 로 swim/dive 종료 후 5 tick 안 crawl 진입 detection. */
+    public int smRecentSwimDiveEndTick = -9999;
+
     /**
      * 원본 SmartMovingSelf `wantCrawlNotClimb` (L2452-L2461 갱신):
      *   wantCrawlNotClimb = wantCrawlNotClimb || (grab.StartPressed && !wasCrawling &&
