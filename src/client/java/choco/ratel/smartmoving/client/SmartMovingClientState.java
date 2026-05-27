@@ -1607,6 +1607,10 @@ public final class SmartMovingClientState {
             //   누름 시 등반 의도 (사다리/덩굴 정면) 면 crawl 진입 차단.
             boolean facedClimbable_ = SmartMovingClimber.isFacedToLadder(player, isClimbCrawling)
                     || SmartMovingClimber.isFacedToSolidVine(player, isClimbCrawling);
+            // 🔴 DEBUG dump #172 (2026-05-27): wouldWantCrawl 평가 OR 항 분리.
+            boolean _wwc_or1 = isCrawling && (inputContinueCrawl || contextContinueCrawl);
+            boolean _wwc_or2 = grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround()
+                    && !facedClimbable_;
             wouldWantCrawl =
                     !player.getAbilities().flying &&
                     !isSliding &&  // 🔴 (2026-05-04 사용자 보고 — "비행 → grab+sneak 착지 슬라이딩 90° 꺾임"):
@@ -1617,12 +1621,16 @@ public final class SmartMovingClientState {
                     //   동시 잔존 → setupTransforms 가 sliding R_x(-π/2) + crawling R_x(-78.75°)
                     //   둘 다 적용 (별도 if) → 90° 꺾임 + setAngles 가 isCrawling 분기 우선 →
                     //   엎드리기 자세. 명시 가드로 cycle 자체 차단.
-                    (
-                        (isCrawling && (inputContinueCrawl || contextContinueCrawl))
-                        ||
-                        (grabJustPressed && (sneakToggled || sneakPressedRaw) && player.isOnGround()
-                                && !facedClimbable_)
-                    );
+                    (_wwc_or1 || _wwc_or2);
+            // 🔴 DEBUG: wWC 매치 시 OR 항 dump.
+            if (wouldWantCrawl || _wwc_or1 || _wwc_or2) {
+                System.out.println(String.format(
+                    "[SLD-WWC] t=%d wWC=%b | or1(cr&&iCC/cCC)=%b cr=%b iCC=%b cCC=%b | or2(grabJP&&sneak&&onG&&!faced)=%b gJP=%b sToggle=%b sR=%b onG=%b facedCl=%b | sld=%b fly=%b",
+                    player.age, wouldWantCrawl,
+                    _wwc_or1, isCrawling, inputContinueCrawl, contextContinueCrawl,
+                    _wwc_or2, grabJustPressed, sneakToggled, sneakPressedRaw, player.isOnGround(), facedClimbable_,
+                    isSliding, player.getAbilities().flying));
+            }
             boolean wouldWantCrawl_ = wouldWantCrawl;  // 하위 호환용 지역 별칭
             // 원본 진입 경로 추가 가드(!flying/!swim/!dive/!dipping/!climbing/!crawlClimbing/!ceilingClimbing/
             //   !sliding/!headJumping): 1.21.1 에서는 canCrawl(원본 L1805)과 중복. 여기선 상태 전환을
@@ -2081,6 +2089,38 @@ public final class SmartMovingClientState {
                 isCrawling = !isSliding && canCrawl && (wantCrawl || mustCrawl);
                 // ICC EXIT 후 isCrawling 자연 false 시 iccExitJustToCrawl 플래그 reset.
                 if (!isCrawling) iccExitJustToCrawl = false;
+
+                // 🔴 DEBUG dump #171 (2026-05-27): sliding shift 연타 BUG 진단용.
+                //   사용자 보고 "shift 연타 시 sliding 진입 끊김 + 땅 잠김". 매 tick state 추적.
+                // 🔴 (2026-05-27 dump 강화): transition 사이 standing tick 도 dump (= velocity 추적).
+                //   wasRunning/isRunning/wasGroundSprinting 추가 → sprint 진행 중 매 tick dump.
+                if (sneakKeyStartPressed || sneakKeyStopPressed || isSliding || isCrawling || wasCrawling || isHeadJumping
+                        || wasRunning || isRunning(player) || wasGroundSprinting || sneakPressedRaw) {
+                    boolean _enterMatchFixed = cfg0.slide && cfg0.enabled
+                            && SmartMovingKeys.grab.isPressed()
+                            && (isStandupSprintingOrRunning(player)
+                                    || wasGroundSprinting
+                                    || (wasRunning && !isRunning(player) && player.isOnGround()))
+                            && !isCrawling
+                            && sneakKeyStartPressed
+                            && !isDipping;
+                    Box _bbDump = player.getBoundingBox();
+                    double _groundDump = getMaxPlayerSolidBetween(player, _bbDump.minY - 1.0, _bbDump.minY + 0.5, 0);
+                    Vec3d _velDump = player.getVelocity();
+                    double _spDump = Math.sqrt(_velDump.x * _velDump.x + _velDump.z * _velDump.z);
+                    System.out.println(String.format(
+                        "[SLD] t=%d sR=%b sld=%b cr=%b wCr=%b hj=%b wWC=%b iCC=%b mC=%b wgs=%b wRun=%b iRun=%b grab=%b onG=%b sprt=%b fall=%.2f bM=%.3f drop=%.3f eY=%.3f pose=%s dimH=%.2f hO=%.1f vX=%.4f vZ=%.4f sp=%.4f | enter=%b cnC=%b wC=%b",
+                        player.age,
+                        sneakPressedRaw,
+                        isSliding, isCrawling, wasCrawling, isHeadJumping, wouldWantCrawl, inputContinueCrawl, mustCrawl,
+                        wasGroundSprinting, wasRunning, isRunning(player),
+                        SmartMovingKeys.grab.isPressed(), player.isOnGround(), player.isSprinting(),
+                        player.fallDistance, _bbDump.minY, (_groundDump - _bbDump.minY),
+                        player.getY(), player.getPose(),
+                        player.getDimensions(player.getPose()).height(), this.heightOffset,
+                        _velDump.x, _velDump.z, _spDump,
+                        _enterMatchFixed, canCrawl, wantCrawl));
+                }
                 // contextContinueCrawl 해제 (L2446-L2447) 는 L822 pre-compute 블록에 이미 이식.
 
                 // 🔴 heightOffset 잔존 cleanup (사용자 보고 BUG: 가만히 standing 시 heightOffset=-1F 잔존):
@@ -2169,7 +2209,8 @@ public final class SmartMovingClientState {
             //   timing 차이 정합).
             if (cfg0.slide && cfg0.enabled
                     && SmartMovingKeys.grab.isPressed()
-                    && (wasGroundSprinting
+                    && (isStandupSprintingOrRunning(player)
+                            || wasGroundSprinting
                             || (wasRunning && !isRunning(player) && player.isOnGround()))
                     && !isCrawling
                     && sneakKeyStartPressed
@@ -2218,6 +2259,14 @@ public final class SmartMovingClientState {
                 //   = (entity.y-1)+1 = entity.y = ground (정렬). collision X. entity.y -= 1 적용.
                 //   결과: entity.y = ground - 1m. 박스 발 = ground. 정상.
                 //   1.12.2 의 boundingBox 직접 변경 효과 1:1 매핑.
+                // 🔴 DEBUG dump #172 (2026-05-27): sliding 진입 시점.
+                {
+                    Box _bbEnter = player.getBoundingBox();
+                    double _groundEnter = getMaxPlayerSolidBetween(player, _bbEnter.minY - 1.0, _bbEnter.minY + 0.5, 0);
+                    System.out.println(String.format(
+                        "[SLD-ENTER] t=%d bM_pre=%.3f gY=%.3f onG=%b vY=%.3f",
+                        player.age, _bbEnter.minY, _groundEnter, player.isOnGround(), player.getVelocity().y));
+                }
                 heightOffset = -1F;
                 isSliding = true;                                        // 원본 L2558 — move 전에 set.
                 isHeadJumping = false;                                   // 원본 L2559 (fix #53).
@@ -2439,6 +2488,17 @@ public final class SmartMovingClientState {
                     if (!isHeadJumping && !isFlying) {
                         wasCrawling = toCrawling();
                     }
+                    // 🔴 DEBUG dump #172 (2026-05-27): sliding 종료 시점. POSE/entity.y/dim 추가.
+                    {
+                        Box _bbExit = player.getBoundingBox();
+                        double _groundExit = getMaxPlayerSolidBetween(player, _bbExit.minY - 1.0, _bbExit.minY + 0.5, 0);
+                        System.out.println(String.format(
+                            "[SLD-EXIT] t=%d sR=%b speed2=%.4f hj=%b fly=%b cr_after=%b bM=%.3f gY=%.3f eY=%.3f pose=%s dimH=%.3f eye=%.3f",
+                            player.age, sneakPressedRaw, horizontalSpeedSquare, isHeadJumping, isFlying, isCrawling,
+                            _bbExit.minY, _groundExit, player.getY(), player.getPose(),
+                            player.getDimensions(player.getPose()).height(),
+                            player.getDimensions(player.getPose()).eyeHeight()));
+                    }
                     // 🔴 fix #62 v2 (2026-05-10, dump 분석 — server 박스 정상 확인 후):
                     //   server reconcile 가능성 X (= fix #63 으로 server/client 박스 동등 검증).
                     //   진짜 BUG = SS-SlideStop 종료 직후 *다음 tick* 박스 박힘:
@@ -2469,6 +2529,8 @@ public final class SmartMovingClientState {
                         double _predictedMinY70 = player.getY();
                         boolean _willDrop70 = (_currentBoxMinY70 - _predictedMinY70) > 0.5;
                         if (_willDrop70) {
+                            // 🔴 DEBUG dump #172b (2026-05-27): push 발동 path 식별.
+                            System.out.println(String.format("[SLD-PUSH70] t=%d eY_pre=%.3f", player.age, player.getY()));
                             player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                             player.lastRenderY += 1.0;
                             player.prevY += 1.0;
@@ -2539,6 +2601,15 @@ public final class SmartMovingClientState {
                 if (!isHeadJumping) {
                     wasCrawling = true;
                     isCrawling = false;
+                }
+                // 🔴 DEBUG dump #172 (2026-05-27): 큰 낙하 분기 매치 시점.
+                {
+                    Box _bbFall = player.getBoundingBox();
+                    double _groundFall = getMaxPlayerSolidBetween(player, _bbFall.minY - 1.0, _bbFall.minY + 0.5, 0);
+                    System.out.println(String.format(
+                        "[SLD-FALL] t=%d fall=%.2f hj=%b wCr_after=%b cr_after=%b bM=%.3f gY=%.3f",
+                        player.age, player.fallDistance, isHeadJumping, wasCrawling, isCrawling,
+                        _bbFall.minY, _groundFall));
                 }
             }
 
@@ -2958,6 +3029,8 @@ public final class SmartMovingClientState {
                         if (player.input.movementForward <= 0F) {
                             this.iccExitJustToCrawl = true;
                         }
+                        // 🔴 DEBUG dump #172b (2026-05-27): push 발동 path 식별.
+                        System.out.println(String.format("[SLD-PUSH-ICC] t=%d eY_pre=%.3f", player.age, player.getY()));
                         player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                         player.lastRenderY += 1.0;
                         player.prevY += 1.0;
@@ -3987,6 +4060,8 @@ public final class SmartMovingClientState {
             if (_wasSmallBox && this.justEndedHeadJump
                     && !isHeadJumping && !isSliding && !isCrawling && !isCrawlClimbing
                     && !isSwimming_sm && !isDiving && !isFlying && !isLevitating) {
+                // 🔴 DEBUG dump #172b (2026-05-27): push 발동 path 식별.
+                System.out.println(String.format("[SLD-PUSH-HJEND] t=%d eY_pre=%.3f", player.age, player.getY()));
                 player.setPose(net.minecraft.entity.EntityPose.STANDING);
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
@@ -4069,6 +4144,8 @@ public final class SmartMovingClientState {
             //     박스 발 = entity.y = ground - 1m 박힘 → push 필수).
             if (wasSmallBox && this.isCrawling
                     && (wasFlying || wasLevitating)) {
+                // 🔴 DEBUG dump #172b (2026-05-27): push 발동 path 식별.
+                System.out.println(String.format("[SLD-PUSH-FLYEND] t=%d eY_pre=%.3f", player.age, player.getY()));
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                 player.lastRenderY += 1.0;
@@ -4439,6 +4516,8 @@ public final class SmartMovingClientState {
                 //   1. setPos(y+1) + lastRenderY/prevY 동기화 — 박스 ground 위 정렬.
                 //   2. Camera cameraY = standingEyeHeight(crawling=0.62) 강제 — lerp 점프 차단.
                 //   3. mustCrawl=true 강제 — same-tick isCrawling 재계산 reset 차단.
+                // 🔴 DEBUG dump #172b (2026-05-27): push 발동 path 식별.
+                System.out.println(String.format("[SLD-PUSH-SWIMEND] t=%d eY_pre=%.3f", player.age, player.getY()));
                 player.calculateDimensions();
                 player.setPosition(player.getX(), player.getY() + 1.0, player.getZ());
                 player.lastRenderY += 1.0;
