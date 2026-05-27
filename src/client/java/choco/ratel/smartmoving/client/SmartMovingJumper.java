@@ -633,16 +633,6 @@ public final class SmartMovingJumper {
         sm.wantWallJumping = canWallJumping &&
                 (sm.triggerWallJumping || sm.continueWallJumping ||
                  (sm.wantWallJumping && jumpPressed && !player.horizontalCollision));
-
-        // 🔴 DEBUG dump #161 (2026-05-27): wall jump cycle 진단용. 사용자 인게임 재현 후 log 분석.
-        if (sm.wantWallJumping || sm.jumpKeyStartPressed || sm.wallJumpCount > 0 || sm.continueWallJumping) {
-            System.out.println(String.format(
-                "[WJ-UWJS] t=%d wantWJ=%b can=%b trig=%b cont=%b wjCnt=%d jStart=%b jPress=%b onGr=%b fly=%b cl=%b sw=%b dv=%b lev=%b hj=%b horiCol=%b",
-                player.age, sm.wantWallJumping, canWallJumping, sm.triggerWallJumping, sm.continueWallJumping,
-                sm.wallJumpCount, sm.jumpKeyStartPressed, jumpPressed,
-                player.isOnGround(), sm.isFlying, sm.isClimbing, sm.isSwimming_sm, sm.isDiving,
-                sm.isLevitating, sm.isHeadJumping, player.horizontalCollision));
-        }
     }
 
     // ── [10-5] handleWallJumping ─────────────────────────────────────────────
@@ -660,19 +650,6 @@ public final class SmartMovingJumper {
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // 🔴 DEBUG dump #161 (2026-05-27): handleWallJumping 진입 시점 dump.
-        Vec3d _dbgVel = player.getVelocity();
-        net.minecraft.util.math.Box _dbgBb = player.getBoundingBox();
-        if (sm.wantWallJumping) {
-            System.out.println(String.format(
-                "[WJ-HWJ entry] t=%d wantWJ=%b wasColl=%b horiCol=%b cont=%b trig=%b wjCnt=%d onGr=%b fall=%.2f vel=(%.3f,%.3f,%.3f) jM=(%.3f,%.3f) yaw=%.1f bb=(%.3f,%.3f,%.3f -> %.3f,%.3f,%.3f)",
-                player.age, sm.wantWallJumping, sm.wasCollidedHorizontally, player.horizontalCollision,
-                sm.continueWallJumping, sm.triggerWallJumping, sm.wallJumpCount,
-                player.isOnGround(), player.fallDistance,
-                _dbgVel.x, _dbgVel.y, _dbgVel.z, sm.jumpMotionX, sm.jumpMotionZ, player.getYaw(),
-                _dbgBb.minX, _dbgBb.minY, _dbgBb.minZ, _dbgBb.maxX, _dbgBb.maxY, _dbgBb.maxZ));
-        }
-
         // 원본 L1948: `if (!wantWallJumping || Double.isNaN(horizontalCollisionAngle)) return;`
         // 🔴 fix #157 (2026-05-27): NaN 가드 복원 — 사용자 보고 "벽 없어도 평지에서 발동
         //   (= 뱅글뱅글 + 상승)". 기존 calculateSeparateCollisionAngle 의 NaN fallback (=
@@ -681,10 +658,7 @@ public final class SmartMovingJumper {
         //   movementAngle → handleWallJumping 진행 → 공중 wall jump 발동.
         if (!sm.wantWallJumping) return;
         float horizontalCollisionAngle = calculateSeparateCollisionAngle(player);
-        if (Float.isNaN(horizontalCollisionAngle)) {
-            System.out.println(String.format("[WJ-HWJ return-NaN] t=%d", player.age));
-            return;
-        }
+        if (Float.isNaN(horizontalCollisionAngle)) return;
 
         // 🔴 fix #162 (2026-05-27): wasCollidedHorizontally=false 강제.
         //   dump 정밀 분석 (docs/log_temp.txt t=1057~1063):
@@ -779,13 +753,7 @@ public final class SmartMovingJumper {
 
         // Phase G 차이 2/3 1:1 정정: tryJump 결과 if 분기 + 후처리는 성공 시에만 (원본 L1990-L1996).
         //   기존: tryJump 결과 무시 + isWallJumping 이중 set + tryJump 호출 전 후처리.
-        System.out.println(String.format(
-            "[WJ-HWJ pre-tryJump] t=%d jumpType=%d jumpAngle=%.1f hCA=%.1f wasColl=%b grab=%b",
-            player.age, jumpType, jumpAngle, horizontalCollisionAngle, sm.wasCollidedHorizontally, grabPressed));
-        boolean _tryResult = tryJump(player, sm, jumpType, null, null, jumpAngle);
-        System.out.println(String.format(
-            "[WJ-HWJ tryJump] t=%d result=%b", player.age, _tryResult));
-        if (_tryResult) {
+        if (tryJump(player, sm, jumpType, null, null, jumpAngle)) {
             // 원본 L1992: continueWallJumping = !isHeadJumping (WallHead 시 false)
             sm.continueWallJumping = !sm.isHeadJumping;
             // 원본 L1993: sp.isCollidedHorizontally = false
@@ -818,12 +786,7 @@ public final class SmartMovingJumper {
         //   사용자 verbatim (재): "대각선 벽 모서리는 일반적인 벽점프가 되어야되는데 안되고 있음".
         //   원본 헬퍼 spec = corner case 시 corner angle (45/135/225/315) 반환 → 일반 wall jump
         //   발동. corner case 도 사용자 의도 wall jump 발동.
-        float _angle = getHorizontalCollisionangle(posZ, negZ, posX, negX);
-        // 🔴 DEBUG dump #161 (2026-05-27): collision 4축 + angle 결과.
-        System.out.println(String.format(
-            "[WJ-CSA] t=%d posX=%b negX=%b posZ=%b negZ=%b angle=%.1f",
-            player.age, posX, negX, posZ, negZ, _angle));
-        return _angle;
+        return getHorizontalCollisionangle(posZ, negZ, posX, negX);
     }
 
     /**

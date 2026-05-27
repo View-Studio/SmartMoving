@@ -492,6 +492,21 @@ public class MixinPlayerEntityRenderer {
         // 🔴 (Phase 2 fix-3-1) ModifyArg 인자에 entity 없음 → currentRenderTarget cursor 통해 sm 인스턴스 lookup.
         SmartMovingClientState sm = SmartMovingClientState.currentRenderTargetSm();
         if (sm == null) return bodyYaw;
+
+        // 🔴 fix #170 (2026-05-27): 인벤토리 화면 그리기 시점 fade lerp skip — vanilla bodyYaw 통과.
+        //   사용자 보고: "인벤토리 창 좌상단에 보이는 플레이어 모델의 몸이 막 뒤틀리고 있어".
+        //   dump 분석 (docs/log_temp.txt [INV-PRE]/[INV-POST]):
+        //     매 frame 2 setupTransforms 호출 (= 일반 render + InventoryScreen.drawEntity 자체 호출).
+        //     Pattern A (bodyYaw=180, vanilla 인벤토리 임시 set) ↔ Pattern B (bodyYaw=164.9, 사용자
+        //     실제 yaw). sm.applyFadeAngleDegrees prev 갱신 매 호출 → 두 target 사이 prev oscillate
+        //     → matrix bodyYaw 매 frame 변동 → 모델 회전 매 frame 변동 + setAngles headYaw 인자
+        //     변동 → head.yaw 매 frame 변동 = "막 뒤틀림" 시각.
+        //   해결: 인벤토리 화면 시점 fade 적용 X (= vanilla bodyYaw 통과). prev 갱신 안 함 →
+        //     일반 render 만 fade prev 누적 → oscillate 차단.
+        net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (_mc.currentScreen instanceof net.minecraft.client.gui.screen.ingame.InventoryScreen) {
+            return bodyYaw;
+        }
         // vanilla 1 frame lerped bodyYaw 캐시 (sm_modifyNetHeadYaw 의 head 보정에 사용).
         sm.smCachedBodyYawNaturalDeg = bodyYaw;
         float result;
