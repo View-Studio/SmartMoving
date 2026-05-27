@@ -97,6 +97,32 @@ public abstract class MixinEntity {
      *   eyeHeight 0.62 라 미통과). PlayerEntity 만.
      *   abilities=null 가드: PlayerEntity 생성자가 abilities 초기화 전 setPosition 호출 가능.
      */
+    /**
+     * 🔴 fix #175 v4 helper — SM isSliding state 검사. client/server 분기.
+     *   - server side: SmartMovingServer 직접.
+     *   - client side: reflection 으로 SmartMovingClientState 접근 (= main mixin 안 client class import
+     *     회피 → dedicated server build 시 ClassNotFoundError 위험 해소).
+     *   reflection 실패 시 sliding=true 반환 (= 가드 통과 → main mixin 활성, 기존 동작 유지).
+     */
+    @org.spongepowered.asm.mixin.Unique
+    private static boolean sm_checkIsSlidingState(PlayerEntity player) {
+        if (player instanceof ServerPlayerEntity sp) {
+            return SmartMovingServer.get(sp).isSliding;
+        }
+        // client side - 완전 reflection (main module compile 시 client class symbol 회피).
+        try {
+            Class<?> stateCls = Class.forName("choco.ratel.smartmoving.client.SmartMovingClientState");
+            Class<?> playerCls = Class.forName("net.minecraft.client.network.AbstractClientPlayerEntity");
+            java.lang.reflect.Method m = stateCls.getMethod("get", playerCls);
+            Object state = m.invoke(null, player);
+            if (state == null) return true;  // fall through to main mixin.
+            java.lang.reflect.Field f = stateCls.getField("isSliding");
+            return f.getBoolean(state);
+        } catch (Throwable e) {
+            return true;  // reflection 실패 시 정상 sliding 으로 간주 → main mixin 활성 유지.
+        }
+    }
+
     @Inject(method = "calculateBoundingBox", at = @At("RETURN"), cancellable = true)
     private void sm_offsetBoundingBoxForFlying(CallbackInfoReturnable<Box> cir) {
         if (!((Object) this instanceof PlayerEntity player)) return;
@@ -120,6 +146,19 @@ public abstract class MixinEntity {
         //   부작용: 일반 슬라이딩 시도 박스 +1m up — 1.12.2 동등 동작 (= 부작용 X).
         EntityPose pose = ((Entity) (Object) this).getPose();
         if (dim.eyeHeight() <= 1.0F && pose != EntityPose.SLIDING) return;
+
+        // 🔴 fix #175 v4 (2026-05-27, dump 검증 — 사용자 보고 "shift 빠르게 연타 시 땅 한 칸 들어감"):
+        //   별도 mixin inject (= MixinEntityClient.sm_cancelOffsetForStaleSliding) 시도 3 회 모두
+        //   inject 자체 활성 X (= dump FIX175-CHECK 매치 0 회). main mixin 의 가드에 직접 SM state
+        //   검사 추가.
+        //   매트릭스: pose=SLIDING + SM isSliding=false 잔존 (= SLD-EXIT 후 setPose(SWIMMING) 효과
+        //     지연 1 tick) 시 mixin offset 활성 잔존 → 박스 부유 → 모델 ground 안 잠김.
+        //   해결: 가드에 SM isSliding 검사 — false 시 차단 → 박스 발 = entity.y.
+        //   reflection 사용 — client class import 회피 (= dedicated server build risk 해소).
+        if (pose == EntityPose.SLIDING) {
+            boolean smIsSliding = sm_checkIsSlidingState(player);
+            if (!smIsSliding) return;
+        }
 
         Box original = cir.getReturnValue();
         cir.setReturnValue(original.offset(0.0, 1.0, 0.0));

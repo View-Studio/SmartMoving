@@ -6,8 +6,12 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityDimensions;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.MovementType;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -172,6 +176,9 @@ public abstract class MixinEntityClient {
      * multiPlayerInitialized > 0이면 실행 취소 후 카운터 1 감소.
      * 1.21.1: Entity.pushOutOfBlocks(double,double,double) — Entity에 정의됨.
      */
+    // fix #175 v1/v2/v3 모두 시도 — inject 자체 활성 X (= dump FIX175-CHECK 매치 0). revert.
+    // 다음 방향: main mixin (MixinEntity.sm_offsetBoundingBoxForFlying) 의 가드에 SM state 검사 추가.
+
     @Inject(method = "pushOutOfBlocks(DDD)V", at = @At("HEAD"), cancellable = true)
     private void sm_pushOutOfBlocks(double x, double y, double z, CallbackInfo ci) {
         if (!((Object) this instanceof ClientPlayerEntity player)) return;
