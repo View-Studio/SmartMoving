@@ -587,12 +587,28 @@ public final class SmartMovingJumper {
      */
     public static void updateWallJumpState(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
+
+        // 🔴 fix #157 (2026-05-27): 원본 L2865-L2896 순서 1:1 복원.
+        //   기존: wantWallJumping 계산 → continueWallJumping=false set 순서.
+        //   원본: continueWallJumping=false set → wantWallJumping 계산 순서.
+        //   순서 역전 BUG: jumpKey release 시점, wantWallJumping 식 우측 continueWallJumping=true
+        //   잔존 → wantWallJumping 매 tick true 유지 → handleWallJumping 매 tick 발동 → tryJump
+        //   성공 시 continueWallJumping=true 재set → **영구 자가유지 cycle** (= 사용자 보고
+        //   "jump 떼도 wall jump 탈출 안 됨").
+
+        // 1. (원본 L2865-L2866) continueWallJumping false 전환 — 먼저
+        boolean jumpPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
+        if (sm.continueWallJumping && (player.isOnGround() || sm.isClimbing || !jumpPressed)) {
+            sm.continueWallJumping = false;
+        }
+
+        // 2. (원본 L2868) canWallJumping
         boolean isWallJumpEnabled = cfg.wallUpJump || cfg.wallHeadJump;
         boolean canWallJumping = isWallJumpEnabled && !sm.isHeadJumping && !player.isOnGround()
                 && !sm.isClimbing && !sm.isSwimming_sm && !sm.isDiving
                 && !sm.isLevitating && !sm.isFlying;
 
-        // 더블클릭 모드 분기 (jump.md L629-643)
+        // 3. (원본 L2869-L2892) double click 처리
         if (cfg.wallJumpDoubleClick) {
             if (canWallJumping) {
                 if (sm.jumpKeyStartPressed) {
@@ -612,16 +628,20 @@ public final class SmartMovingJumper {
             sm.triggerWallJumping = sm.jumpKeyStartPressed;
         }
 
-        boolean jumpPressed = MinecraftClient.getInstance().options.jumpKey.isPressed();
-        // wantWallJumping 식 (SmartMovingSelf.md L1896-1898). 이전 틱 wantWallJumping 을 읽어
-        // "유지 조건" 에 활용하는 자기참조 패턴 — jumpPressed && !collided 이면 계속 true 유지.
+        // 4. (원본 L2894-L2896) wantWallJumping — 마지막
+        // 자기참조 패턴: 이전 틱 wantWallJumping 을 읽어 jumpPressed && !collided 이면 유지.
         sm.wantWallJumping = canWallJumping &&
                 (sm.triggerWallJumping || sm.continueWallJumping ||
                  (sm.wantWallJumping && jumpPressed && !player.horizontalCollision));
 
-        // continueWallJumping false 전환 (jump.md L667-668)
-        if (sm.continueWallJumping && (player.isOnGround() || sm.isClimbing || !jumpPressed)) {
-            sm.continueWallJumping = false;
+        // 🔴 DEBUG dump #161 (2026-05-27): wall jump cycle 진단용. 사용자 인게임 재현 후 log 분석.
+        if (sm.wantWallJumping || sm.jumpKeyStartPressed || sm.wallJumpCount > 0 || sm.continueWallJumping) {
+            System.out.println(String.format(
+                "[WJ-UWJS] t=%d wantWJ=%b can=%b trig=%b cont=%b wjCnt=%d jStart=%b jPress=%b onGr=%b fly=%b cl=%b sw=%b dv=%b lev=%b hj=%b horiCol=%b",
+                player.age, sm.wantWallJumping, canWallJumping, sm.triggerWallJumping, sm.continueWallJumping,
+                sm.wallJumpCount, sm.jumpKeyStartPressed, jumpPressed,
+                player.isOnGround(), sm.isFlying, sm.isClimbing, sm.isSwimming_sm, sm.isDiving,
+                sm.isLevitating, sm.isHeadJumping, player.horizontalCollision));
         }
     }
 
@@ -640,42 +660,102 @@ public final class SmartMovingJumper {
     public static void handleWallJumping(ClientPlayerEntity player, SmartMovingClientState sm) {
         SmartMovingConfig cfg = SmartMovingConfig.Config;
 
-        // 원본 L1948: 최우선 조건 — wantWallJumping=false 이면 즉시 return.
-        if (!sm.wantWallJumping) return;
+        // 🔴 DEBUG dump #161 (2026-05-27): handleWallJumping 진입 시점 dump.
+        Vec3d _dbgVel = player.getVelocity();
+        net.minecraft.util.math.Box _dbgBb = player.getBoundingBox();
+        if (sm.wantWallJumping) {
+            System.out.println(String.format(
+                "[WJ-HWJ entry] t=%d wantWJ=%b wasColl=%b horiCol=%b cont=%b trig=%b wjCnt=%d onGr=%b fall=%.2f vel=(%.3f,%.3f,%.3f) jM=(%.3f,%.3f) yaw=%.1f bb=(%.3f,%.3f,%.3f -> %.3f,%.3f,%.3f)",
+                player.age, sm.wantWallJumping, sm.wasCollidedHorizontally, player.horizontalCollision,
+                sm.continueWallJumping, sm.triggerWallJumping, sm.wallJumpCount,
+                player.isOnGround(), player.fallDistance,
+                _dbgVel.x, _dbgVel.y, _dbgVel.z, sm.jumpMotionX, sm.jumpMotionZ, player.getYaw(),
+                _dbgBb.minX, _dbgBb.minY, _dbgBb.minZ, _dbgBb.maxX, _dbgBb.maxY, _dbgBb.maxZ));
+        }
 
-        // calculateSeparateCollisionAngle 의 fallback 용 movementAngle (vel 기반).
-        // 원본은 horizontalCollisionAngle 필드를 별도 계산해 NaN 시 함수 시작에서 return.
-        // 1.21.1 매핑은 calculateSeparateCollisionAngle 안에서 NaN fallback 처리하므로
-        // 여기 fallback movementAngle 만 vel 기반 유지.
-        Vec3d vel = player.getVelocity();
-        float fallbackAngle = (float) Math.toDegrees(Math.atan2(-vel.x, vel.z));
-        if (fallbackAngle < 0) fallbackAngle += 360F;
-        float horizontalCollisionAngle = calculateSeparateCollisionAngle(player, fallbackAngle);
+        // 원본 L1948: `if (!wantWallJumping || Double.isNaN(horizontalCollisionAngle)) return;`
+        // 🔴 fix #157 (2026-05-27): NaN 가드 복원 — 사용자 보고 "벽 없어도 평지에서 발동
+        //   (= 뱅글뱅글 + 상승)". 기존 calculateSeparateCollisionAngle 의 NaN fallback (=
+        //   movementAngle 반환) 가 원본 NaN 가드 무력화. 공중 (= 4축 collision 모두 false) →
+        //   getHorizontalCollisionangle NaN → 원본 즉시 return. 매핑은 NaN → fallback
+        //   movementAngle → handleWallJumping 진행 → 공중 wall jump 발동.
+        if (!sm.wantWallJumping) return;
+        float horizontalCollisionAngle = calculateSeparateCollisionAngle(player);
+        if (Float.isNaN(horizontalCollisionAngle)) {
+            System.out.println(String.format("[WJ-HWJ return-NaN] t=%d", player.age));
+            return;
+        }
+
+        // 🔴 fix #162 (2026-05-27): wasCollidedHorizontally=false 강제.
+        //   dump 정밀 분석 (docs/log_temp.txt t=1057~1063):
+        //     사용자 시나리오 (W hold + 양 벽 사이 jump 연타) 시점 매 tick wasColl=true 매치 →
+        //     jumpType=WALL_UP_SLIDE (=13) + jumpAngle=horizontalCollisionAngle (= 벽 법선) →
+        //     setYaw(법선) = 사용자 정면 = 같은 방향 → 시각 회전 X. WALL_UP_SLIDE → noVertical=true
+        //     → motionY 미적용 → 상승 X.
+        //   원본 vs 우리 매핑 timing 차이:
+        //     원본 1.7.10 handleWallJumping = moveEntity 후 호출 + L1993 set false → 같은 tick
+        //     vanilla move() 추가 호출 없음 → 다음 tick wasColl=false 유지 → 회전 분기 매치.
+        //     우리 매핑 handleWallJumping = travel HEAD → L700 set false → 같은 tick vanilla
+        //     travel 본체 → vanilla move() → horizontalCollision 다시 true → 다음 tick wasColl=true
+        //     → slide 분기 매치 → 회전 X.
+        //   해결: wasCollidedHorizontally=false 강제. 사용자 verbatim "벽점프 시 반대방향으로 몸이
+        //     회전 + 앞벽 뒤벽 앞벽 뒤벽 연속" 매치. 원본 spec 의 WALL_UP_SLIDE 분기 (= 박스 벽
+        //     sliding 시 수직 미적용) 는 1.21.1 매핑에서 매치 어려움 — 사용자 의도 우선.
+        boolean wasCollH = false;
 
         // 원본 L1952-L1963: grab=true → WallHead/WallHeadSlide, grab=false → WallUp/WallUpSlide.
-        // wasCollidedHorizontally: 이전 틱부터 벽에 닿아있던 경우 Slide 타입 (수직 속도 미적용).
         boolean grabPressed = SmartMovingKeys.grab.isPressed();
         int jumpType;
         if (grabPressed) {
             if (!cfg.wallHeadJump) return;
             if (player.fallDistance > cfg.wallHeadJumpFallMaximumDistance) return;
-            jumpType = sm.wasCollidedHorizontally ? WALL_HEAD_SLIDE : WALL_HEAD;
+            jumpType = wasCollH ? WALL_HEAD_SLIDE : WALL_HEAD;
         } else {
             if (!cfg.wallUpJump) return;
             if (player.fallDistance > cfg.wallUpJumpFallMaximumDistance) return;
-            jumpType = sm.wasCollidedHorizontally ? WALL_UP_SLIDE : WALL_UP;
+            jumpType = wasCollH ? WALL_UP_SLIDE : WALL_UP;
         }
 
         // 원본 L1965-L1975: wasCollidedHorizontally=false → 반사 각도; true → 벽 법선 각도 그대로.
-        // Phase G 차이 1 1:1 정정: movementAngle 을 jumpMotion 기반으로 (원본 L1968 — 점프 시점
-        //   motion 보존). 기존 vel 기반은 같은 tick 내 motion 변동 영향.
+        // 🔴 fix #164 (2026-05-27): jumpMotion=0 시 fallback movementAngle = player.getYaw().
+        //   dump 정밀 분석 (docs/log_temp.txt 시나리오 A trigger 1/3 t=2109/2401):
+        //     박스 -X 벽 매치 + yaw=90 + jumpMotion=0 → fix #163 식 (= movementAngle=hCA=270) →
+        //     jumpAngle = 270*2 - 270 + 180 = 90. setYaw(90) = 변경 X. 사용자 보고 "정방향 또는
+        //     90도만 틀어진 방향" 매치.
+        //   분석:
+        //     W hold + 박스 벽 향함 → vel direction = yaw forward direction. 즉 vel direction 의
+        //     atan2 결과 = vanilla yaw 좌표계의 yaw. jumpMotion=0 시 vel direction 정보 손실 →
+        //     fallback 으로 player.getYaw() 사용해야 일관성.
+        //   검증 (모든 4축 매치 case):
+        //     +Z 벽 (yaw=0): jumpAngle = 0-0+180 = 180 ✓
+        //     -Z 벽 (yaw=180): jumpAngle = 360-180+180 = 360 mod 360 = 0 ✓
+        //     +X 벽 (yaw=270): jumpAngle = 180-270+180 = 90 ✓ (벽 법선 yaw=270 → 반대 +X→-X)
+        //     -X 벽 (yaw=90): jumpAngle = 540-90+180 = 270 ✓
+        //   = 모두 180° 회전 (= 벽 반대 방향). 사용자 의도 매치.
+        // 🔴 fix #168 (2026-05-27): jumpAngle 식 단순화 — vanilla collision clamp 영향 차단.
+        //   dump 분석 (t=2774): 박스 +Z 벽 매치 + 사용자 yaw=15° + jumpMotion=(-0.022, 0) (=
+        //   vanilla collision clamp 가 vel.z 만 clamp, vel.x 잔존). 식 movementAngle =
+        //   atan2(0.022, 0) = 90° → jumpAngle = 0*2 - 90 + 180 = **90°** → setYaw(90) → -X 방향
+        //   (= 벽 평행 90° 회전). 사용자 의도 = -Z 방향 (= 사용자 정면 반대).
+        //   원본 식도 동일 mechanism — vel.x 잔존 시 movementAngle ±90° → jumpAngle 벽 평행.
+        //   해결:
+        //     1. jumpMotion 가 충분히 큰 경우 (= 사용자 의도 strafe) 만 원본 식 사용.
+        //     2. jumpMotion 미세 (= vanilla clamp 잔존) 시 fallback: jumpAngle = yaw + 180
+        //        (= 사용자 정면 반대) 직접 set. 식 우회.
+        //   threshold = 0.05 (= W input motion 의 약 절반). vanilla clamp 후 잔존 0.02 미만
+        //   범위 cover. 사용자 strafe (0.1+) case 영향 X.
         float jumpAngle;
-        if (!sm.wasCollidedHorizontally) {
-            float movementAngle = (float) Math.toDegrees(Math.atan2(-sm.jumpMotionX, sm.jumpMotionZ));
-            if (movementAngle < 0) movementAngle += 360F;
-            // 원본 L1969-L1970 NaN 가드 (jumpMotion 둘 다 0 시 atan2(0,0)=0 → NaN 안 발생하나 1:1)
-            if (Float.isNaN(movementAngle)) return;
-            jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
+        if (!wasCollH) {
+            double jmMag = Math.abs(sm.jumpMotionX) + Math.abs(sm.jumpMotionZ);
+            if (jmMag < 0.05D) {
+                // fallback: 사용자 정면 반대 방향 (= yaw + 180). jumpMotion 미세 영향 차단.
+                jumpAngle = player.getYaw() + 180F;
+            } else {
+                float movementAngle = (float) Math.toDegrees(Math.atan2(-sm.jumpMotionX, sm.jumpMotionZ));
+                if (movementAngle < 0) movementAngle += 360F;
+                if (Float.isNaN(movementAngle)) return;
+                jumpAngle = horizontalCollisionAngle * 2 - movementAngle + 180F;
+            }
         } else {
             jumpAngle = horizontalCollisionAngle;
         }
@@ -683,7 +763,13 @@ public final class SmartMovingJumper {
         // Phase G BUG-1 1:1 정정: while>360 + orthogonalTolerance 분기 외부 적용 (원본 L1977-L1988).
         //   기존: !wasCollidedHorizontally 분기 안에만 적용 → wasCollidedHorizontally=true (Slide 타입)
         //         시 90° 정렬 미적용 → 점프 각도 부정확. 원본은 둘 다 적용.
+        // 🔴 fix #167 (2026-05-27): jumpAngle 범위 0~360 정규화. 원본 식 `while > 360` 만 → 음수
+        //   또는 정확 360.0 case 미처리. setYaw(360.0) → vanilla yaw field=360.0 그대로 (mod X)
+        //   → 매 tick yaw 누적 변동 → 인벤토리 player 모델 회전 진동/뒤틀림.
+        //   해결: while < 0 추가 + 정확 360 case 처리. jumpAngle 항상 [0, 360) 범위.
         while (jumpAngle > 360F) jumpAngle -= 360F;
+        while (jumpAngle < 0F) jumpAngle += 360F;
+        if (jumpAngle >= 360F) jumpAngle = 0F;
         if (cfg.wallUpJumpOrthogonalTolerance != 0F) {
             float aligned = jumpAngle;
             while (aligned > 45F) aligned -= 90F;
@@ -693,7 +779,13 @@ public final class SmartMovingJumper {
 
         // Phase G 차이 2/3 1:1 정정: tryJump 결과 if 분기 + 후처리는 성공 시에만 (원본 L1990-L1996).
         //   기존: tryJump 결과 무시 + isWallJumping 이중 set + tryJump 호출 전 후처리.
-        if (tryJump(player, sm, jumpType, null, null, jumpAngle)) {
+        System.out.println(String.format(
+            "[WJ-HWJ pre-tryJump] t=%d jumpType=%d jumpAngle=%.1f hCA=%.1f wasColl=%b grab=%b",
+            player.age, jumpType, jumpAngle, horizontalCollisionAngle, sm.wasCollidedHorizontally, grabPressed));
+        boolean _tryResult = tryJump(player, sm, jumpType, null, null, jumpAngle);
+        System.out.println(String.format(
+            "[WJ-HWJ tryJump] t=%d result=%b", player.age, _tryResult));
+        if (_tryResult) {
             // 원본 L1992: continueWallJumping = !isHeadJumping (WallHead 시 false)
             sm.continueWallJumping = !sm.isHeadJumping;
             // 원본 L1993: sp.isCollidedHorizontally = false
@@ -714,7 +806,7 @@ public final class SmartMovingJumper {
      *
      * 원본 call site: getHorizontalCollisionangle(posZ, negZ, posX, negX) — X/Z swap 유지.
      */
-    private static float calculateSeparateCollisionAngle(ClientPlayerEntity player, float movementAngle) {
+    private static float calculateSeparateCollisionAngle(ClientPlayerEntity player) {
         World world = player.getWorld();
         Box bb = player.getBoundingBox();
         double delta = 0.001D;
@@ -722,8 +814,16 @@ public final class SmartMovingJumper {
         boolean negX = !world.isSpaceEmpty(player, bb.offset(-delta, 0, 0));
         boolean posZ = !world.isSpaceEmpty(player, bb.offset(0, 0,  delta));
         boolean negZ = !world.isSpaceEmpty(player, bb.offset(0, 0, -delta));
-        float angle = getHorizontalCollisionangle(posZ, negZ, posX, negX);
-        return Float.isNaN(angle) ? (movementAngle + 180F) % 360F : angle;
+        // 🔴 fix #165 revert (2026-05-27): corner case NaN skip 제거.
+        //   사용자 verbatim (재): "대각선 벽 모서리는 일반적인 벽점프가 되어야되는데 안되고 있음".
+        //   원본 헬퍼 spec = corner case 시 corner angle (45/135/225/315) 반환 → 일반 wall jump
+        //   발동. corner case 도 사용자 의도 wall jump 발동.
+        float _angle = getHorizontalCollisionangle(posZ, negZ, posX, negX);
+        // 🔴 DEBUG dump #161 (2026-05-27): collision 4축 + angle 결과.
+        System.out.println(String.format(
+            "[WJ-CSA] t=%d posX=%b negX=%b posZ=%b negZ=%b angle=%.1f",
+            player.age, posX, negX, posZ, negZ, _angle));
+        return _angle;
     }
 
     /**

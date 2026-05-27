@@ -327,7 +327,11 @@
       "Bash(jar -tf mc.jar)",
       "Bash(cp \"C:/Users/user/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common/1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2/minecraft-common-1.21.1-net.fabricmc.yarn.1_21_1.1.21.1+build.3-v2.jar\" /tmp/mcjar/mc-common.jar)",
       "Bash(jar -xf mc-common.jar net/minecraft/entity/Entity.class)",
-      "Bash(jar -xf mc-common.jar net/minecraft/entity/LivingEntity.class)"
+      "Bash(jar -xf mc-common.jar net/minecraft/entity/LivingEntity.class)",
+      "PowerShell(Get-Item 'docs\\\\log_temp.txt' | Select-Object Name, Length, LastWriteTime; $lines = \\(Get-Content 'docs\\\\log_temp.txt' | Measure-Object -Line\\).Lines; Write-Host \"Lines: $lines\")",
+      "PowerShell($lines = \\(Get-Content 'docs\\\\log_temp.txt' | Measure-Object -Line\\).Lines; Write-Host \"Total lines: $lines\")",
+      "PowerShell(Get-Item 'docs\\\\log_temp.txt' | Select-Object Length, LastWriteTime; \\(Get-Content 'docs\\\\log_temp.txt' | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content 'docs\\\\log_temp.txt' | Measure-Object -Line\\).Lines)"
     ]
   }
 }
