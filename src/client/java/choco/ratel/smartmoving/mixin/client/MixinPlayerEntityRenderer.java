@@ -697,6 +697,12 @@ public class MixinPlayerEntityRenderer {
             //   값: -3/16 (발쪽 치우침) ↔ -1/16 (머리쪽 과보정) 중간 = -2/16.
             matrices.translate(0f, -2f / 16f, 0f);  // Y: 슬라이딩 머리쪽 보정 (회전 각도 차이 ⊃ 발쪽 치우침)
 
+            // 🔴 fix #176 (2026-05-27, 사용자 보고 "슬라이딩 시 모델 전체 살짝 공중에 떠있음"):
+            //   matrices.translate 의 Z axis → R_x(-π/2) 후 world Y (= 위-아래) 영향 (메모리
+            //   feedback_setupTransforms_translate_axis.md). 사용자 의도 = 모델 살짝 내림.
+            //   시도 이력: -1/16 → -2/16 → -3/16 (= 더 내림).
+            matrices.translate(0f, 0f, -3f / 16f);
+
             // 🔴 여우무빙 (= 슬라이딩 ↔ 헤드점프 직접 cycle, standing 안 거침) 헤드점프 prev
             //   자연 시작점 매핑 (2026-05-11, 사용자 보고 "여우무빙 시 몸 거의 회전 안 함,
             //   바로 수평 세팅"):
