@@ -1,8 +1,34 @@
-# Swing 애니메이션 작업 진행 상황 (마지막 업데이트: 2026-05-28)
+# Swing 애니메이션 작업 진행 상황 (= 완결, 마지막 업데이트: 2026-05-29)
 
-SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#195 시행착오 진행.
+**완결 선언** — 사용자 인게임 검증 후 OK. 상세 메모리:
+- [[project_swim_swing_complete]] — 수영 좌클릭 swing 시각 매핑 fix #186~#195.
+- [[project_swim_sneak_jump_priority]] — 수영 sneak+jump 입력 우선순위 fix #201+#202.
 
-## fix #195 (= swim preCancelParentXPivot SKIP) — 2026-05-28 후반
+## 갈무리 — 최종 fix 시리즈
+
+| Fix | 영역 | 결과 |
+|-----|------|------|
+| #186 | fix #177 패러다임 복원 | preserve + preCancelParentX (메모리 검증 13단계). |
+| #188 | animateArms override | @Inject HEAD @Cancellable + 원본 cubic + sin*π 식 1:1. |
+| #189 | walking arm swing SKIP | anySmState 시 limbSwingAmount=0 force. |
+| #190 | body sway SKIP | animateWorkingBody 식 anySmState 가드. |
+| #191 | swim/dive preserve 가드 | preferred arm preserve + cubic 식 보존. |
+| #192 | swim/dive preCancelParentX | thetaCancel = sm.smSwimDiveTiltX_prev. |
+| #193 | swim head 직접 set | ZYX singular 회피. head.yaw=2*bodySway. |
+| #194 | arm.pivot R_y(sway) 변환 유지 | 매 frame pivot 변환. 어깨 body 따라 이동. |
+| #195 | swim preCancelParentXPivot SKIP | Y/Z swap 차단. world y 변동 복원. |
+| #201 | sneak+jump 입력 우선순위 | swimDown/diveDown 식에 jump 가드. |
+| #202 | motion -= 0.04 sneak 가드 | 1.7.10 부분 적용. swim+jump 단독 수면 도달 차단. |
+
+## 보존 (= 회귀 차단)
+
+본 작업 시점 fix 전부 정착. 다른 작업 시 위 영역 함부로 수정 금지.
+
+## (역사적 기록) — fix #195 ROOT CAUSE 정리
+
+사용자 verbatim (fix #194 후): "팔 휘두를 때 어깨가 그 위치에 고정되서 몸 움직임에 안 따라감".
+
+**ROOT CAUSE** (= dump 정밀 + 매트릭스 합성 분석):
 
 사용자 verbatim (fix #194 후): "팔 휘두를 때 어깨가 그 위치에 고정되서 몸 움직임에 안 따라감".
 
