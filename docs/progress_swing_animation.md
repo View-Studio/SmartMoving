@@ -1,6 +1,56 @@
 # Swing 애니메이션 작업 진행 상황 (마지막 업데이트: 2026-05-28)
 
-SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#192 시행착오 진행.
+SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#195 시행착오 진행.
+
+## fix #195 (= swim preCancelParentXPivot SKIP) — 2026-05-28 후반
+
+사용자 verbatim (fix #194 후): "팔 휘두를 때 어깨가 그 위치에 고정되서 몸 움직임에 안 따라감".
+
+**ROOT CAUSE** (= dump 정밀 + 매트릭스 합성 분석):
+
+vanilla 매트릭스 합성에서 ModelPart pivot 의 world 매핑:
+- `pivot_world.x = -px, pivot_world.y = pz + 1.5, pivot_world.z = py - 0.001` (after `setupTransforms × scale × T(0, -1.501, 0)`).
+
+원본 의도 어깨 world = `R_x(swimTilt) × R_y(sway) × (-5, 2, 0)` scale 후 = **(5cos, 5sin, 2)** = y 변동 (어깨 위/아래).
+
+우리 fix #194 + fix #192 결과:
+- pivot = (-5cos, **5sin**, **-2**) ← fix #192 의 preCancelParentXPivot 이 Y/Z swap
+- world = (5cos, **-0.5 고정**, **5sin 변동**) ← y 고정, z 변동
+
+**fix #195**: swim 분기 `preCancelParentXPivot` 호출 **SKIP**. `preCancelParentXRotation` 만 유지 (= swing rotation 자세 효과). fix #194 의 pivot (= -5cos, 2, 5sin) 그대로 → world = (5cos, **5sin + 1.5**, 2) ≈ 원본 (5cos, 5sin, 2) 미세 +1.5 y offset만.
+
+## fix #194 (= swim swing 시 arm.pivot R_y(sway) 변환 유지) — 2026-05-28 후반
+
+사용자 verbatim (fix #193 후): "팔 휘두를 때 어깨가 그 위치에 고정되서 몸 움직임에 안 따라감".
+
+**ROOT CAUSE**: fix #191 의 preserve 가드가 arm.pivot 도 default (-5,2,0) / (5,2,0) 으로 reset → swing 시 어깨가 body sway 와 분리.
+
+**원본 1.7.10 fact**: bipedRightArm 의 부모 = bipedBreast (R_y(sway)). swing 시 `animateNonStandardWorking` 는 `arm.reset()` 만 (= rotation 0 reset). 부모 breast.R(sway) 는 유지 → arm 어깨 vertex = R_y(sway) × shoulder.pivot 매 frame 변동.
+
+**우리 매핑**: vanilla 1.21.1 에 breast 노드 없음. swim 의 arm.pivot R_y(sway) 변환 (fix #146) 가 breast 부모 효과 대체. **swing 시도 이 변환 유지** 해야 어깨가 body 따라 이동.
+
+**fix #194**: preserve 가드의 if-else 분기 제거. arm.pivot 변환 매 frame 무조건 적용. rotation (pitch/yaw/roll) 만 preserve. preCancelParentXPivot 가 추가로 pivot Y/Z 변환 (R_x 부모 cancel).
+
+## fix #193 (= swim head 직접 set, ZYX singular 회피) — 2026-05-28 후반
+
+사용자 보고 (fix #192 후): "jump 꾹누름 + 수면 swim 시 swing 만 이상. 어깨 위/아래 토글".
+
+**ROOT CAUSE 확정** (= 4 자료 + dump 강화 + agent 보고서):
+
+`setAnglesRyRxRy_standard` 가 `R_y(swayBreast) × R_x(pitch) × R_y(swayHead)` 합성 후 ZYX 분해. yaw ≈ ±π/2 (= singular) 시 atan2 분기 변동으로:
+- (pitch=π, yaw=π/2, roll=π) ↔ (pitch=0, yaw=π/2, roll=0) 토글.
+
+같은 input 의도지만 vanilla `rotationZYX(roll, yaw, pitch)` 재합성 시 다른 quaternion → visual 토글.
+
+**차이**:
+- 일반 swim: walkFactor < 1 → bodySway 작음 → yaw 작음 → singular 미도달 → 정상.
+- jump+swim: walkFactor=1 max → bodySway max → yaw ±π/2 도달 → singular 토글.
+
+**dump 검증** (log_temp.txt 4회차):
+- t=371 frame 10: head.pitch=**π**, head.yaw=1.55, head.roll=**π**
+- t=371 frame 11: head.pitch=**0**, head.yaw=1.54, head.roll=**0**
+
+**fix #193**: head 직접 set. `head.pitch = -EIGHTH * sSF; head.yaw = 2*bodySway; head.roll = 0;`. swimSSF=0 시 R_y(s)×R_y(s) commute = R_y(2s) 정확. swimSSF>0 시 sneak swim (walkFactor 작음, singular 미도달) → 미세 차이만.
 
 ## fix #192 (= swim/dive preCancelParentX) — 2026-05-28 마지막
 

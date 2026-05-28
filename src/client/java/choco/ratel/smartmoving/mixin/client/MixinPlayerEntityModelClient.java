@@ -329,6 +329,8 @@ public abstract class MixinPlayerEntityModelClient {
         // 🔴 DEBUG dump #179 (2026-05-27): swing 비교 — vanilla 결과 (= 진입 직후).
         //   사용자 의도 = 일반 standing swing vs SM phase swing 수치 비교.
         //   self 한정 + swing > 0 시만.
+        // 🔴 fix #193 (2026-05-28): dump 강화 — jump+swim swing 이상 cause 식별 위해.
+        //   원본 1.7.10 의 모든 swim 관련 state field + stats + setupTransforms tilt 값 추가.
         if (player.handSwingProgress > 0F
                 && net.minecraft.client.MinecraftClient.getInstance().player == player) {
             String _phase = sm.isFlying ? "FLY"
@@ -341,15 +343,48 @@ public abstract class MixinPlayerEntityModelClient {
                     : sm.isSwimming_sm ? "SW"
                     : sm.isDiving ? "DV"
                     : "STAND";
+
+            // fix #193: swim 관련 모든 state field dump.
+            //   vanilla jumping = LivingEntity.jumping (protected). ClientPlayerEntity 의 input.jumping
+            //   으로 등가 (= sm_isPlayerJumping 패턴 차용).
+            boolean vanillaJumping = false;
+            if (player instanceof net.minecraft.client.network.ClientPlayerEntity localP) {
+                vanillaJumping = localP.input.jumping;
+            }
+            String swimState = String.format(
+                "isDip=%b isSwim=%b isDive=%b isLev=%b isJumpOOW=%b wasJumpOOW=%b isShallow=%b isStillSwimJump=%b vanillaJump=%b",
+                sm.isDipping, sm.isSwimming_sm, sm.isDiving,
+                sm.isLevitating, sm.isJumpingOutOfWater, sm.wasJumpingOutOfWater,
+                sm.isShallowDiveOrSwim, sm.isStillSwimmingJump,
+                vanillaJumping);
+            // fix #193 v2: dispatcher 분기 결정 검증 — 모든 SM phase state.
+            String allPhaseState = String.format(
+                "Clb=%b CrCl=%b ClJmp=%b CeCl=%b Crl=%b Sld=%b Fly=%b HJ=%b Fall=%b AJmp=%b",
+                sm.isClimbing, sm.isCrawlClimbing, sm.isClimbJumping, sm.isCeilingClimbing,
+                sm.isCrawling, sm.isSliding, sm.isFlying, sm.isHeadJumping,
+                sm.doFallingAnimation, sm.isAngleJumping());
+
+            // fix #193: stats + factor + tilt.
+            float pt = SmartMovingClientState.globalCachedTickDelta;
+            float hSpd  = sm.stats.getCurrentHorizontalSpeed(pt);
+            float hDist = sm.stats.getTotalHorizontalDistance(pt);
+            float vSpd  = sm.stats.getCurrentVerticalSpeed(pt);
+            float vDist = sm.stats.getTotalVerticalDistance(pt);
+            float vAng  = sm.stats.currentVerticalAngle;
+            float swimSSF  = sm.swimStandSneakFactor;
+            float swimTilt = sm.smSwimDiveTiltX_prev;
+
             System.out.println(String.format(
-                "[SWING-T1-VANILLA t=%d] phase=%s swing=%.4f mainArm=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f",
+                "[SWING-T1-VANILLA t=%d] phase=%s swing=%.4f mainArm=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f | %s | %s | hSpd=%.4f hDist=%.4f vSpd=%.4f vDist=%.4f vAng=%.4f swimSSF=%.4f swimTilt=%.4f",
                 player.age, _phase, player.handSwingProgress, player.getMainArm(),
                 rightArm.pitch, rightArm.yaw, rightArm.roll,
                 rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
                 leftArm.pitch, leftArm.yaw, leftArm.roll,
                 leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
                 body.yaw,
-                head.pitch, head.yaw, head.roll));
+                head.pitch, head.yaw, head.roll,
+                swimState, allPhaseState,
+                hSpd, hDist, vSpd, vDist, vAng, swimSSF, swimTilt));
         }
 
         // ── [8-3][6-4] SM 활성 상태에서 leaningPitch 강제 0 ─────────────────
@@ -1156,15 +1191,36 @@ public abstract class MixinPlayerEntityModelClient {
         //   사용자 verbatim "body 변경 전이 원본과 동일" 정확 매치 — body 만 revert.
         float bodySway = MathHelper.cos(distance / 2f - QUARTER) * walkFactor;
 
-        // 🔴 (2026-05-21, fix #127) 원본 합성 visual 정확 매핑.
-        //   사용자 보고 "머리 회전이 원본보다 빠른 느낌" cause = fix #124 의 setAnglesYXZ_standard
-        //   (= R_x(pitch) × R_y(2×sway)) 가 원본 합성 (= R_y(sway) × R_x(pitch) × R_y(sway)) 과
-        //   pitch ≠ 0 시 다른 형태 → cycle 안 angular velocity 빨라짐.
-        //   원본 model tree (SmartRenderModel L52, L59): head → neck → breast.
-        //     M_head = R_x(pitch) × R_y(sway_head), M_breast = R_y(sway_breast).
-        //     합성 M = M_breast × M_head = R_y(sway) × R_x(pitch) × R_y(sway).
-        //   setAnglesRyRxRy_standard (= 새 helper, 표준 ZYX 분해) 사용.
-        setAnglesRyRxRy_standard(head, bodySway, -EIGHTH * standSneakFactor, bodySway);
+        // 🔴 fix #193 (2026-05-28): ZYX 분해 singular 회피 — head 직접 set.
+        //
+        // 사용자 보고: "jump 꾹누름 + 수면 swim 시 좌클릭 swing 만 이상. 어깨 위/아래 토글".
+        //
+        // ROOT CAUSE (= dump fact 정밀 분석):
+        //   setAnglesRyRxRy_standard 가 R_y(swayBreast) × R_x(pitch) × R_y(swayHead) 합성 후
+        //   ZYX 분해 → ModelPart pitch/yaw/roll set. yaw ≈ ±π/2 (= singular) 시 atan2 분기
+        //   변동으로 (pitch=π, yaw=π/2, roll=π) ↔ (pitch=0, yaw=π/2, roll=0) 토글.
+        //   같은 input 의도지만 vanilla rotationZYX(roll, yaw, pitch) 재합성 시 다른
+        //   quaternion → visual 토글.
+        //
+        // 차이 (일반 swim vs jump+swim):
+        //   - 일반 swim: walkFactor < 1 → bodySway 작음 → yaw 작음 → singular 미도달 → 정상.
+        //   - jump+swim: walkFactor=1 max → bodySway max ±1 → yaw ±π/2 도달 → singular 토글.
+        //
+        // dump 검증 (log_temp.txt 4회차):
+        //   t=371 frame 10 (partial≈0.67): head.pitch=π, head.yaw=1.55, head.roll=π.
+        //   t=371 frame 11 (partial≈0.83): head.pitch=0, head.yaw=1.54, head.roll=0.
+        //   거의 같은 yaw 인데 pitch+roll 토글.
+        //
+        // FIX: 원본 식 = R_y(s) × R_x(p) × R_y(s). swimSSF=0 시 p=0 → R_y(s) × R_y(s) commute
+        //   = R_y(2s). swimSSF>0 시 p=-EIGHTH*sSF (≠0) 미세 차이만 (sneak swim walkFactor 작음).
+        //   ModelPart 의 vanilla rotationZYX(roll, yaw, pitch) 매핑:
+        //     vertex_world = R_z(roll) × R_y(yaw) × R_x(pitch) × v_local.
+        //   head.yaw = 2*bodySway, head.pitch = -EIGHTH*sSF, head.roll = 0 직접 set.
+        //   = R_y(2s) × R_x(p) (vanilla 적용). 원본 R_y(s) × R_x(p) × R_y(s) 와 p=0 시 정확
+        //   일치. p≠0 시 sneak swim 인데 walkFactor 작음 → 시각 미세 차이만.
+        head.pitch = -EIGHTH * standSneakFactor;
+        head.yaw   = 2f * bodySway;
+        head.roll  = 0f;
         head.pivotZ = -2f;   // 원본 bipedHead.rotationPointZ = -2F
 
         // 몸통 yaw — bipedBody 의 합성 = 1×sway (= torso 자식, breast 와 sibling, breast 영향 X).
@@ -1261,25 +1317,29 @@ public abstract class MixinPlayerEntityModelClient {
         //
         //   회귀 차단: ModelPart.pivot field 인스턴스별. swim 분기 이후 다른 분기 진입 시 default
         //     reset 필요 → sm_animate* dispatcher 또는 default 값 reset (= 아래 default 복원).
-        // 🔴 fix #191: preserve 시 pivot default (= 원본 arm.reset() 의 pivot 0 등가).
-        //   1.21.1 vanilla pivot default = (-5,2,0) / (+5,2,0). 원본 reset 후 = (0,0,0) — 차이.
-        //   근데 우리 매핑은 vanilla pivot default 유지 (= 원본 shoulder pivot 등가).
+        // 🔴 fix #194 (2026-05-28): preserve 가드 안 pivot default 제거 — swing 시도 R_y(sway) 변환 유지.
+        //
+        // 사용자 verbatim (fix #193 후): "팔 휘두를 때 그때 기준으로 휘두르는 팔 어깨가 그 위치에
+        //   고정되서 그때 동안 움직이는 몸 움직임에 안 따라가고 거기 고정되어있어서".
+        //
+        // ROOT CAUSE: fix #191 의 preserve 가드가 arm.pivot 도 default (-5,2,0) / (5,2,0) 으로
+        //   reset → swing 시 어깨가 body sway 와 분리.
+        // 원본 1.7.10 model tree: bipedRightArm 의 부모 = bipedBreast (= R_y(sway)).
+        //   swing 시 animateNonStandardWorking 는 arm.reset() 만 (= rotation 0 reset). 부모
+        //   breast.R(sway) 는 유지 → arm 어깨 vertex = R_y(sway) × shoulder.pivot 매 frame 변동.
+        // 우리 매핑: vanilla 1.21.1 에 breast 노드 없음. swim 의 arm.pivot R_y(sway) 변환
+        //   (fix #146) 가 breast 부모 효과 대체. swing 시도 이 변환 유지해야 어깨가 body 따라 이동.
+        //
+        // FIX: arm.pivot 변환 매 frame 무조건 적용. rotation (pitch/yaw/roll) 만 preserve.
+        //   preCancelParentXPivot(theta=swimTilt≈π/2) 가 추가로 pivot Y/Z 변환 → 최종
+        //   pivot = (-5*cos, 5*sin (after R_y), -2 (after R_x cancel)). breast.R + outer.R cancel
+        //   결합. dump 검증 (정지 시 sin=0 → pivot=(-5,0,-2)) 정상.
         float swayCos = MathHelper.cos(bodySway);
         float swaySin = MathHelper.sin(bodySway);
-        if (!preserveRightSwim) {
-            rightArm.pivotX = -5f * swayCos;
-            rightArm.pivotZ =  5f * swaySin;
-        } else {
-            rightArm.pivotX = -5f;
-            rightArm.pivotZ =  0f;
-        }
-        if (!preserveLeftSwim) {
-            leftArm.pivotX  =  5f * swayCos;
-            leftArm.pivotZ  = -5f * swaySin;
-        } else {
-            leftArm.pivotX  =  5f;
-            leftArm.pivotZ  =  0f;
-        }
+        rightArm.pivotX = -5f * swayCos;
+        rightArm.pivotZ =  5f * swaySin;
+        leftArm.pivotX  =  5f * swayCos;
+        leftArm.pivotZ  = -5f * swaySin;
         // pivotY = 2 (= R_y 의 Y axis invariant, 변경 X).
 
         // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance.
@@ -1313,14 +1373,31 @@ public abstract class MixinPlayerEntityModelClient {
         //   동등 효과 (= preserve preferred arm 에 부모 R_x cancel 적용).
         // thetaCancel = sm.smSwimDiveTiltX_prev (= setupTransforms 가 setAngles 직전에
         //   set 한 fade lerped 값. setAngles → swim/dive 분기 호출 시점에 이번 frame 값).
+        // 🔴 fix #195 (2026-05-28): preCancelParentXPivot 호출 SKIP — Rotation 만 유지.
+        //
+        // 사용자 verbatim (fix #194 후): "팔 휘두를 때 어깨가 그 위치에 고정되서 몸 움직임에 안 따라감".
+        //
+        // ROOT CAUSE (= dump fact + vanilla 매트릭스 합성 분석):
+        //   ModelPart pivot world 매핑 (= setupTransforms × scale × T(0,-1.501,0) 후):
+        //     pivot_world.x = -px,  pivot_world.y = pz + 1.5,  pivot_world.z = py - 0.001.
+        //   원본 의도 어깨 world = R_x(swimTilt=π/2) × R_y(sway) × (-5, 2, 0) scale 후 = (5cos, 5sin, 2).
+        //   = y 변동 (= 어깨 위/아래).
+        //
+        //   fix #194 결과 ModelPart pivot = (-5cos, 2, 5sin) (= R_y(sway) 변환).
+        //   fix #192 preCancelParentXPivot(swimTilt=π/2) 적용 후 = (-5cos, 5sin, -2) (= Y/Z swap).
+        //   world = (5cos, -2+1.5, 5sin-0.001) = (5cos, -0.5 고정, 5sin).
+        //   = y 고정, z 변동 → 사용자 인지 "어깨 고정" 정확 매치.
+        //
+        // FIX: swim 분기 preCancelParentXPivot SKIP. fix #194 의 pivot (= -5cos, 2, 5sin) 그대로.
+        //   world = (5cos, 5sin + 1.5, 2 - 0.001) ≈ (5cos, 5sin + 1.5, 2). 원본 (5cos, 5sin, 2) 와
+        //   미세 차이 (+1.5 y offset) 만. 시각 정상.
+        //   preCancelParentXRotation 은 유지 — swing 시 cubic 식의 부모 R_x 회전 cancel 효과.
         if (swingSwim > 0F) {
             float thetaCancelSwim = sm.smSwimDiveTiltX_prev;
             if (preserveRightSwim) {
-                preCancelParentXPivot(rightArm, thetaCancelSwim);
                 preCancelParentXRotation(rightArm, thetaCancelSwim);
             }
             if (preserveLeftSwim) {
-                preCancelParentXPivot(leftArm, thetaCancelSwim);
                 preCancelParentXRotation(leftArm, thetaCancelSwim);
             }
         }
