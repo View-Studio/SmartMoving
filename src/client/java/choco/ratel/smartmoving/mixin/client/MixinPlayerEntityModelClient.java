@@ -611,9 +611,9 @@ public abstract class MixinPlayerEntityModelClient {
             rightArm.roll  = -THIRTYTWOTH;
             leftArm.roll   =  THIRTYTWOTH;
         } else if (sm.isSwimming_sm) {
-            sm_animateSwimming(sm, limbSwing, limbSwingAmount, animationProgress);
+            sm_animateSwimming(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isDiving) {
-            sm_animateDiving(sm, limbSwing, limbSwingAmount, animationProgress);
+            sm_animateDiving(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isCrawling) {
             sm_animateCrawling(sm, player, headYaw);
         } else if (sm.isSliding) {
@@ -1115,7 +1115,7 @@ public abstract class MixinPlayerEntityModelClient {
      * 원본: SmartMovingModel.setRotationAngles() 5번 분기 (isSwim).
      * bipedOuter X 기울기는 setupTransforms Mixin에서 처리 (standSneakFactor 경유).
      */
-    private void sm_animateSwimming(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateSwimming(SmartMovingClientState sm, AbstractClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
         // 🔵 (2026-05-20, BUG-Swim-Anim-6 fix #113) limbSwing/Amount → sm.stats 입력 교체.
         //   원본 SmartMovingModel L319-322: `distance = totalHorizontalDistance`, walkFactor/sneakFactor/
         //     standFactor 는 `currentHorizontalSpeed` 기준.
@@ -1206,12 +1206,29 @@ public abstract class MixinPlayerEntityModelClient {
         float leftPitch  = (((dist2 + HALF) % WHOLE) - HALF) * walkFactor + SIXTEENTH * standSneakFactor;
         float rightRoll  =  (QUARTER + EIGHTH) + MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
         float leftRoll   = -(QUARTER + EIGHTH) - MathHelper.cos(totalTime * 0.1f) * standSneakFactor * 0.8f;
+        // 🔴 fix #191 (2026-05-28): preferred arm preserve 가드 (= fix #177 패러다임).
+        //
+        // 사용자 보고 (fix #188~#190 후): "수영 시 팔 휘두르는게 안 고쳐졌다".
+        // 원본 fact (SmartMovingModel.setRotationAngles L317-362 + L667-679):
+        //   isSwim 분기 = arm 식 set (rotateAngleZ, rotateAngleX 등).
+        //   isWorking() 시 (= swing > 0) animateWorkingBody → animateNonStandardWorking →
+        //     bipedRightArm.reset() (= arm 의 rotation/pivot/scale 모두 0 reset)!
+        //   그 다음 animateWorkingArms (isStandard || isWorking()) → vanilla cubic 식 적용.
+        //   즉 원본은 swing 시 swim 자세 사라지고 cubic 식 결과만 남음.
+        // 우리 매핑 오류: sm_animateSwimming 이 vanilla animateArms (= fix #188 cubic) 후
+        //   호출 → arm 식 새로 set → cubic 결과 덮어씀 → swing visual 사라짐.
+        // 해결: preferred arm preserve (= fix #186/#177 패러다임). swing 시 preferred arm
+        //   식 SKIP + pivot default → vanilla cubic 식 결과 보존 (= 원본 reset 후 cubic 등가).
+        float swingSwim = ((BipedEntityModel<?>)(Object)this).handSwingProgress;
+        Arm preferredArmSwim = player.getMainArm();
+        boolean preserveRightSwim = swingSwim > 0F && preferredArmSwim == Arm.RIGHT;
+        boolean preserveLeftSwim  = swingSwim > 0F && preferredArmSwim == Arm.LEFT;
         // 🔴 (2026-05-21, fix #140) 원본 visual 정확 매핑.
         //   원본 합성 = R_y(sway) × R_x(pitch) × R_z(roll) (= breast 자식 + arm YZX rotation order).
         //   vanilla ModelPart 식 R_z × R_y × R_x 와 다른 합성 → setAnglesYXZ_breastSwim helper 사용.
         //   fix #122 의 arm.yaw = bodySway 매핑 잘못 → 새 helper 적용.
-        setAnglesYXZ_breastSwim(rightArm, bodySway, rightPitch, rightRoll);
-        setAnglesYXZ_breastSwim(leftArm,  bodySway, leftPitch,  leftRoll);
+        if (!preserveRightSwim) setAnglesYXZ_breastSwim(rightArm, bodySway, rightPitch, rightRoll);
+        if (!preserveLeftSwim)  setAnglesYXZ_breastSwim(leftArm,  bodySway, leftPitch,  leftRoll);
 
         // 🔴 (2026-05-21, fix #146) arm pivot 의 R_y(bodySway) 변환 — 어깨가 몸통과 떨어진 BUG fix.
         //   사용자 verbatim "어깨가 확실히 몸통에 붙어있어야되는데 지금 떨어져있다는 거야".
@@ -1244,12 +1261,25 @@ public abstract class MixinPlayerEntityModelClient {
         //
         //   회귀 차단: ModelPart.pivot field 인스턴스별. swim 분기 이후 다른 분기 진입 시 default
         //     reset 필요 → sm_animate* dispatcher 또는 default 값 reset (= 아래 default 복원).
+        // 🔴 fix #191: preserve 시 pivot default (= 원본 arm.reset() 의 pivot 0 등가).
+        //   1.21.1 vanilla pivot default = (-5,2,0) / (+5,2,0). 원본 reset 후 = (0,0,0) — 차이.
+        //   근데 우리 매핑은 vanilla pivot default 유지 (= 원본 shoulder pivot 등가).
         float swayCos = MathHelper.cos(bodySway);
         float swaySin = MathHelper.sin(bodySway);
-        rightArm.pivotX = -5f * swayCos;
-        rightArm.pivotZ =  5f * swaySin;
-        leftArm.pivotX  =  5f * swayCos;
-        leftArm.pivotZ  = -5f * swaySin;
+        if (!preserveRightSwim) {
+            rightArm.pivotX = -5f * swayCos;
+            rightArm.pivotZ =  5f * swaySin;
+        } else {
+            rightArm.pivotX = -5f;
+            rightArm.pivotZ =  0f;
+        }
+        if (!preserveLeftSwim) {
+            leftArm.pivotX  =  5f * swayCos;
+            leftArm.pivotZ  = -5f * swaySin;
+        } else {
+            leftArm.pivotX  =  5f;
+            leftArm.pivotZ  =  0f;
+        }
         // pivotY = 2 (= R_y 의 Y axis invariant, 변경 X).
 
         // 다리 X (앞뒤 발차기) — distance = sm.stats.totalHorizontalDistance.
@@ -1266,7 +1296,34 @@ public abstract class MixinPlayerEntityModelClient {
         float legSc = 1f + (MathHelper.cos(totalTime * 0.1f + QUARTER) - 1f) * 0.15f * sneakFactor;
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(totalTime * 0.1f - QUARTER) - 1f) * 0.15f * sneakFactor;
-        setArmScales(rightArm, leftArm, armSc, armSc);
+        // 🔴 fix #191: preserve 시 scale 도 default (= vanilla cubic swing 식과 호환).
+        float rightArmSc = preserveRightSwim ? 1f : armSc;
+        float leftArmSc  = preserveLeftSwim  ? 1f : armSc;
+        setArmScales(rightArm, leftArm, rightArmSc, leftArmSc);
+
+        // 🔴 fix #192 (2026-05-28): preCancelParentX 추가 — setupTransforms swim 분기의
+        //   R_x(67.5°~90°) 부모 회전 cancel. CR/SLD/HJ/FLY 와 같은 fix #186 패턴.
+        //
+        // 사용자 보고 (fix #191 후): "수영 시 팔 휘두르는게 이상하다".
+        // dump fact: rArm preserve 작동 (= vanilla cubic 결과 보존). 단 부모 R_x(67.5°) 회전
+        //   안에서 cubic 식 (= 직립 자세 가정) 이 적용 → 어깨가 정상 위치에서 휘둘러지는
+        //   visual (= STAND swing 과 동일) → SM swim 자세와 안 어울림.
+        // 원본 흐름: animateNonStandardWorking 의 shoulder.R(Z=π, Y=workAng, X=vert) 가
+        //   부모 회전 보정 + arm.reset() + cubic 식 적용. 1.21.1 매핑은 preCancelParentX 로
+        //   동등 효과 (= preserve preferred arm 에 부모 R_x cancel 적용).
+        // thetaCancel = sm.smSwimDiveTiltX_prev (= setupTransforms 가 setAngles 직전에
+        //   set 한 fade lerped 값. setAngles → swim/dive 분기 호출 시점에 이번 frame 값).
+        if (swingSwim > 0F) {
+            float thetaCancelSwim = sm.smSwimDiveTiltX_prev;
+            if (preserveRightSwim) {
+                preCancelParentXPivot(rightArm, thetaCancelSwim);
+                preCancelParentXRotation(rightArm, thetaCancelSwim);
+            }
+            if (preserveLeftSwim) {
+                preCancelParentXPivot(leftArm, thetaCancelSwim);
+                preCancelParentXRotation(leftArm, thetaCancelSwim);
+            }
+        }
     }
 
     /**
@@ -1278,7 +1335,7 @@ public abstract class MixinPlayerEntityModelClient {
      *   - head.pivotZ = -2F (원본 L371): 머리 앞으로 2px 이동
      *   vanilla 가 매 프레임 head.pitch (j*PI/180) 와 head.pivotZ (B-9 reset 인프라) 모두 reset → 안전.
      */
-    private void sm_animateDiving(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float totalTime) {
+    private void sm_animateDiving(SmartMovingClientState sm, AbstractClientPlayerEntity player, float limbSwing, float limbSwingAmount, float totalTime) {
         // B-6 / §16-13: 원본 SmartMovingModel L365-L367 = totalDistance (3D 누적) +
         //   currentSpeed (3D 속도). 이전 limbSwing/limbSwingAmount (수평) 잘못 매핑 →
         //   sm.stats.totalDistance/currentSpeed 로 교체. 다이빙은 수직+수평 운동 모두 강한
@@ -1317,18 +1374,33 @@ public abstract class MixinPlayerEntityModelClient {
         //     reset 필수.
         //   원본 isDive 분기 (L363-L391) 가 arm.X / leg.X 미설정 = "0 유지" 가 의도.
         //   isSwim/isCrawl/isSlide 분기는 arm.X 명시 set → 영향 X (= isDive 만 고유 cancel 필요).
-        rightArm.pitch = 0f;
-        leftArm.pitch  = 0f;
+        // 🔴 fix #191 (2026-05-28): preferred arm preserve 가드 (= fix #177 패러다임).
+        //   원본 dive + swing 시 (= isWorking()) animateWorkingBody → animateNonStandardWorking →
+        //     bipedRightArm.reset() → cubic 식 적용. = swing 시 dive 자세 사라지고 cubic 결과만.
+        //   우리 매핑 누락: arm.pitch=0 명시 cancel + arm.roll=식 set 이 vanilla cubic 식 결과
+        //     덮어씀 → swing 시 visual 사라짐.
+        //   해결: preserve 가드. swing 시 preferred arm 식 SKIP → vanilla cubic (= fix #188) 보존.
+        float swingDive = ((BipedEntityModel<?>)(Object)this).handSwingProgress;
+        Arm preferredArmDive = player.getMainArm();
+        boolean preserveRightDive = swingDive > 0F && preferredArmDive == Arm.RIGHT;
+        boolean preserveLeftDive  = swingDive > 0F && preferredArmDive == Arm.LEFT;
+
+        if (!preserveRightDive) rightArm.pitch = 0f;
+        if (!preserveLeftDive)  leftArm.pitch  = 0f;
         rightLeg.pitch = 0f;
         leftLeg.pitch  = 0f;
 
         // 🔴 fix #123 reverted (2026-05-21, 사용자 보고 진폭 축소): fade 제거, 원본 instant 식 복원.
         rightLeg.roll = (MathHelper.cos(distance) + 1f) * 0.52264464f * walkFactor + SIXTEENTH * standFactor;
         leftLeg.roll  = (MathHelper.cos(distance + HALF) - 1f) * 0.52264464f * walkFactor - SIXTEENTH * standFactor;
-        rightArm.roll = (MathHelper.cos(distance + HALF) * 0.52264464f * 2.5f + QUARTER) * walkFactor
-                + (QUARTER + EIGHTH) * standFactor;
-        leftArm.roll  = (MathHelper.cos(distance) * 0.52264464f * 2.5f - QUARTER) * walkFactor
-                - (QUARTER + EIGHTH) * standFactor;
+        if (!preserveRightDive) {
+            rightArm.roll = (MathHelper.cos(distance + HALF) * 0.52264464f * 2.5f + QUARTER) * walkFactor
+                    + (QUARTER + EIGHTH) * standFactor;
+        }
+        if (!preserveLeftDive) {
+            leftArm.roll  = (MathHelper.cos(distance) * 0.52264464f * 2.5f - QUARTER) * walkFactor
+                    - (QUARTER + EIGHTH) * standFactor;
+        }
 
         // 원본 SmartMovingModel.java L572-L583: 다리/팔 yScale (walkFactor 기반).
         // 원본 가드 `if (scaleLegType != NoScaleStart)` — 메인 모델 = Scale.
@@ -1336,7 +1408,24 @@ public abstract class MixinPlayerEntityModelClient {
         float legSc = 1f + (MathHelper.cos(distance - QUARTER) - 1f) * 0.25f * walkFactor;
         setLegScales(rightLeg, leftLeg, legSc, legSc);
         float armSc = 1f + (MathHelper.cos(distance + QUARTER) - 1f) * 0.15f * walkFactor;
-        setArmScales(rightArm, leftArm, armSc, armSc);
+        // fix #191: preserve 시 scale 도 default.
+        float rightArmScDive = preserveRightDive ? 1f : armSc;
+        float leftArmScDive  = preserveLeftDive  ? 1f : armSc;
+        setArmScales(rightArm, leftArm, rightArmScDive, leftArmScDive);
+
+        // 🔴 fix #192: preCancelParentX 추가 — setupTransforms dive 분기의 R_x 부모 회전 cancel.
+        //   swim 과 동일 fade prev field (sm.smSwimDiveTiltX_prev) 공유.
+        if (swingDive > 0F) {
+            float thetaCancelDive = sm.smSwimDiveTiltX_prev;
+            if (preserveRightDive) {
+                preCancelParentXPivot(rightArm, thetaCancelDive);
+                preCancelParentXRotation(rightArm, thetaCancelDive);
+            }
+            if (preserveLeftDive) {
+                preCancelParentXPivot(leftArm, thetaCancelDive);
+                preCancelParentXRotation(leftArm, thetaCancelDive);
+            }
+        }
     }
 
     /**

@@ -1,6 +1,40 @@
 # Swing 애니메이션 작업 진행 상황 (마지막 업데이트: 2026-05-28)
 
-SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#190 시행착오 진행.
+SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#192 시행착오 진행.
+
+## fix #192 (= swim/dive preCancelParentX) — 2026-05-28 마지막
+
+사용자 보고 (fix #191 후): "수영 시 팔 휘두르는게 이상하다 (설명 어려움)".
+
+**dump 분석 fact** (log_temp.txt 3회차):
+- SW/DV phase, fix #191 preserve 작동 확인 (rArm T1=T4).
+- lArm 은 swim/dive 자세 유지 (= 위로 뻗기, roll=-2.81/-2.36).
+- **rArm 은 vanilla cubic swing 만 적용** = STAND swing 과 동일 visual.
+- **양팔 비대칭 + rArm 이 SM 자세 안 됨** → 사용자 인지 "이상".
+
+**ROOT CAUSE**: setupTransforms 의 swim/dive 분기에서 `R_x(67.5°~90°)` 부모 회전 적용 (= 누운 자세). 우리 fix #188 cubic 식은 직립 자세 가정 → 부모 R_x 안에서 적용 시 visual 어색.
+
+**원본 1.7.10 흐름**: `animateNonStandardWorking` 의 `bipedRightShoulder.R(Z=π, Y=workAng, X=vert)` 가 부모 회전 보정. 그 다음 `arm.reset()` + cubic. 1.21.1 매핑 = preCancelParentX (= fix #186 패턴).
+
+**fix #192**: sm_animateSwimming/Diving 끝에 preCancelParentX 추가. `thetaCancel = sm.smSwimDiveTiltX_prev` (= setupTransforms fade lerped). HJ/CR/SLD/FLY 와 동일.
+
+## fix #191 (= swim/dive preserve 가드) — 2026-05-28 마지막
+
+사용자 보고 (fix #190 후): "수영 시 팔 휘두르는게 안 고쳐졌다".
+
+**원본 fact (SmartMovingModel.setRotationAngles L317-362 + L667-679)**:
+- isSwim/isDive 분기 = arm 식 set.
+- swing > 0 시 isWorking()=true → animateWorkingBody → animateNonStandardWorking → **`bipedRightArm.reset()`** (= arm 의 rotation/pivot/scale 모두 0 reset!).
+- 그 다음 animateWorkingArms (isStandard || isWorking()) → vanilla cubic 식 적용.
+
+**즉 원본 swing 시 swim/dive 자세 사라지고 cubic 식 결과만 남음**.
+
+**우리 매핑 누락**: `sm_animateSwimming` / `sm_animateDiving` 가 vanilla animateArms (= fix #188 cubic) 후 호출 → arm 식 새로 set → cubic 결과 덮어씀 → swing visual 사라짐.
+
+**fix #191**: preferred arm preserve 가드 추가 (= fix #186/#177 패러다임 차용).
+- 시그너처: `sm_animateSwimming(sm, player, ...)` / `sm_animateDiving(sm, player, ...)`.
+- swing > 0 시 preferred arm 의 setAnglesYXZ_breastSwim / arm.pitch / arm.roll / arm.pivot / arm.scale 식 SKIP.
+- 비-preferred arm 은 swim/dive 자세 유지.
 
 ## fix #190 (= body sway SKIP) — 2026-05-28 마지막
 
