@@ -212,6 +212,93 @@ public abstract class MixinPlayerEntityModelClient {
         }
     }
 
+    // ── animateArms Override (좌클릭 hand swing) — fix #187 (2026-05-28) ─────────
+    //
+    // 사용자 보고: "전반적으로 swing 휘두르는게 빠른 느낌. 여우무빙/HJ 두드러짐".
+    //
+    // ROOT CAUSE (= dump 분석 + vanilla 1.21.1 disassembly + 원본 1.7.10/1.12.2 verbatim 비교):
+    //   - vanilla 1.21.1 `BipedEntityModel.animateArms` = quartic ease (`f *= f; f *= f`).
+    //     → swing≈0.16 (= 1 tick = 0.05초) 만에 amplitude PEAK 도달 후 빠르게 감쇠 = 1-tick spike.
+    //   - vanilla 추가 효과: arm.pivot ±5 단위 sway (어깨 좌우/앞뒤 swing) +
+    //     두 arm.yaw 일괄 += body.yaw → 시각적 "큰 motion".
+    //   - 원본 1.7.10 SR.animateWorkingBody+Arms / 1.12.2 SRModel.animateWorking* = cubic ease.
+    //     swing=1 (= 6 tick = 0.3초) 시점 PEAK 도달. 어깨 sway 없음. 자연스러운 휘두름.
+    //
+    // FIX (사용자 결정 — 옵션 1: animateArms 자체 override + 원본 식 1:1 복원):
+    //   vanilla animateArms @Inject HEAD @Cancellable 로 차단 + 원본 식 1:1 적용.
+    //   STAND/SM phase 모두 일관 효과 (사용자 "전반적으로" = STAND 포함).
+    //
+    // 가드:
+    //   - swing <= 0 시 vanilla early-return path 등가 (= cancel X, 그냥 return).
+    //   - AbstractClientPlayerEntity 가드 (self + remote).
+    //   - SmartMovingRenderContext.firstPersonArmRender 시 vanilla 유지 (1인칭 hand leak 차단 패턴).
+    //   - SmartMovingClient.isSmRenderEnabled false 시 vanilla 유지 (SM 비활성 토글).
+    @Inject(method = "animateArms",
+            at = @At("HEAD"),
+            cancellable = true)
+    private void sm_animateArmsOverride(LivingEntity entity, float animationProgress, CallbackInfo ci) {
+        // vanilla early return path 등가
+        float swing = ((BipedEntityModel<?>)(Object)this).handSwingProgress;
+        if (swing <= 0F) return;
+
+        // self + remote 가드
+        if (!(entity instanceof AbstractClientPlayerEntity player)) return;
+
+        // 1인칭 hand 가드 — vanilla 유지 (BUG A 패턴: firstPersonArmRender 영역 SM 후킹 skip)
+        if (SmartMovingRenderContext.firstPersonArmRender) return;
+
+        // SM 비활성 시 vanilla 유지
+        if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(player)) return;
+
+        // 원본 1.7.10/1.12.2 SR.animateWorkingBody + animateWorkingArms 1:1 복원.
+        // Arm 결정: 원본 1.7.10 은 mainArm 기준 (preferredHand 개념 없음).
+        Arm mainArm = player.getMainArm();
+        ModelPart arm = (mainArm == Arm.LEFT) ? this.leftArm : this.rightArm;
+
+        // 🔴 fix #190 (2026-05-28): 원본 SmartMovingModel.animateWorkingBody (L667-673) 의
+        //   `if(isStandard)` 가드 1:1 매핑. SM phase 시 vanilla body sway 식 SKIP.
+        //
+        // 사용자 보고 (fix #189 후): "SM 중 팔 휘두를 때 몸통이 흔들린다. 원래 안 흔들림".
+        // 원본 fact: SmartMovingModel.animateWorkingBody → isStandard=false 시 vanilla
+        //   body sway 식 SKIP. 대신 animateNonStandardWorking 호출 (= 어깨 90° 직립만,
+        //   body.yaw 변경 X).
+        // animateWorkingArms 는 별도 가드 `isStandard || isWorking()` → SM phase + swing
+        //   시도 호출 (= preferredArm.pitch/yaw/roll 식은 그대로 적용).
+        SmartMovingClientState sm = SmartMovingClientState.get(player);
+        boolean anySmState = sm.isFlying || sm.isCrawling || sm.isSliding || sm.isHeadJumping
+                || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+                || sm.isSwimming_sm || sm.isDiving || sm.isRopeSliding || sm.isClimbJumping
+                || sm.doFallingAnimation || sm.isAngleJumping();
+
+        // animateWorkingBody (1.7.10 SR L298-304, 1.12.2 SR L401-406): isStandard 시만.
+        //   angle = sin(sqrt(swing) * 2π) * 0.2
+        //   body.yaw += angle
+        //   leftArm.pitch += angle
+        if (!anySmState) {
+            float angle = MathHelper.sin(MathHelper.sqrt(swing) * WHOLE) * 0.2F;
+            this.body.yaw += angle;
+            this.leftArm.pitch += angle;
+        }
+
+        // animateWorkingArms (1.7.10 SR L306-315, 1.12.2 SR L408-416):
+        //   isStandard || isWorking() (= swing>0) → SM phase + swing 시도 적용.
+        //   f6 = 1 - (1-swing)^3                  ← cubic (vanilla 1.21.1 는 quartic)
+        //   f7 = sin(f6 * π)
+        //   f8 = sin(swing * π) * -(head.pitch - 0.7) * 0.75
+        //   preferredArm.pitch -= f7 * 1.2 + f8
+        //   preferredArm.yaw  += sin(sqrt(swing) * 2π) * 0.4
+        //   preferredArm.roll -= sin(swing * π) * 0.4
+        float f6 = 1.0F - swing;
+        f6 = 1.0F - f6 * f6 * f6;
+        float f7 = MathHelper.sin(f6 * HALF);
+        float f8 = MathHelper.sin(swing * HALF) * -(this.head.pitch - 0.7F) * 0.75F;
+        arm.pitch -= f7 * 1.2F + f8;
+        arm.yaw  += MathHelper.sin(MathHelper.sqrt(swing) * WHOLE) * 0.4F;
+        arm.roll -= MathHelper.sin(swing * HALF) * 0.4F;
+
+        ci.cancel(); // vanilla quartic 식 + arm.pivot 어깨 sway + arm.yaw 일괄 += body.yaw 차단
+    }
+
     // ── [12-1] setAngles Mixin (TAIL — vanilla 애니메이션 완료 후 SM이 덮어씀) ──
 
     @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V",
@@ -1677,9 +1764,17 @@ public abstract class MixinPlayerEntityModelClient {
         rightLeg.roll =  SIXTYFOURTH * legFactorZ;
         leftLeg.roll  = -SIXTYFOURTH * legFactorZ;
 
-        // 🔴 fix #186 (2026-05-28): fix #182 패러다임 복원 — preCancelParentX (setupTransforms R_x((QUARTER - angle)) cancel).
+        // 🔴 fix #187 (2026-05-28): preCancelParentX θ 를 setupTransforms 의 fade lerped 값으로 변경.
+        //   기존: thetaCancelHJ = QUARTER - angle (= raw target). setupTransforms 는 fade lerp 결과
+        //   사용 → 두 식 mismatch → swing 진행 동안 cancel 부정확 → 사용자 verbatim
+        //   "HJ + 여우무빙 빠른 느낌".
+        //   해결: setupTransforms HJ 분기 (MixinPlayerEntityRenderer L914) 가 갱신한 마지막
+        //   thetaLerped 값 (= sm.smHeadJumpTiltX_prev) 사용. setupTransforms 가 setAngles 보다
+        //   먼저 호출되므로 이 시점에 이번 frame 적용 값.
+        //   여우무빙 (wasSelfSlideFire=true) 시도 setupTransforms 의 thetaTarget = π/2 고정 +
+        //   prev = π/2 강제 → smHeadJumpTiltX_prev = π/2 → preCancelParentX 정확 매치.
         if (swingHJ > 0F) {
-            float thetaCancelHJ = QUARTER - angle;
+            float thetaCancelHJ = sm.smHeadJumpTiltX_prev;
             if (preserveRightHJ) {
                 preCancelParentXPivot(rightArm, thetaCancelHJ);
                 preCancelParentXRotation(rightArm, thetaCancelHJ);

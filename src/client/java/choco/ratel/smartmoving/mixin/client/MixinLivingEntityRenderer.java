@@ -185,7 +185,38 @@ public abstract class MixinLivingEntityRenderer {
         // 🔴 (2026-05-05) self → Config.enabled / remote → 항상 true.
         if (!choco.ratel.smartmoving.client.SmartMovingClient.isSmRenderEnabled(sm_currentRenderPlayer)) return limbSwingAmount;
         SmartMovingClientState sm = SmartMovingClientState.get(sm_currentRenderPlayer.getUuid());
-        // 🔴 동일 fix — `currentHorizontalSpeed` (수평만) 1:1. `getCurrentSpeed` (3D) 사용 시
+
+        // 🔴 fix #189 (2026-05-28): 원본 SmartMovingModel.animateArmSwinging (L640-647) 의
+        //   `if(isStandard)` 가드 1:1 매핑. SM phase (= anySmState) 시 vanilla walking arm swing
+        //   식 효과 0 → base arm.pitch 진동 cancel.
+        //
+        // ROOT CAUSE (= 사용자 보고 fact + dump 검증):
+        //   사용자 verbatim "기본 STANDING 보다 SM 휘두르는게 더 빠르다 + 여우무빙 팔 지직".
+        //   dump fact (= log_temp.txt 2회차):
+        //     - STAND tick 1 swing 0.167: pitch -0.65 → -1.55 (변화 0.90)
+        //     - HJ    tick 1 swing 0.167: pitch -0.53 → -1.90 (변화 1.37 = 1.52배)
+        //   차이 cause: HJ 시 currentHorizontalSpeed 가 큰 값 → vanilla setAngles 의
+        //     arm.pitch = cos(limbSwing*0.6662+π)*2*limbDistance*0.5 식이 큰 amplitude
+        //     진동 → swing 식 (cubic + sin*π) 결과와 누적 → 시각적 "더 빠른 motion + 지직".
+        //
+        // 원본 1.7.10 흐름:
+        //   isStandard=false (SM phase) 시 imp.superAnimateArmSwinging() SKIP →
+        //   bipedRightArm.rotateAngleX (= 우리 arm.pitch 등가) 가 reset 직후 0 유지 →
+        //   animateWorkingArms 의 swing 식만 적용 (= 누적 없음).
+        //
+        // 1.21.1 매핑:
+        //   vanilla setAngles 는 통합 메서드라 walking arm 식만 SKIP 불가 → limbSwingAmount=0
+        //   force 로 식 효과 0 등가. leg 식도 0 (= SM 자세 매핑이 덮어쓰므로 영향 X).
+        //   STAND 시 currentSpeed ≈ 0 → 원래 영향 X (가드 안 걸려도 동일 효과).
+        boolean anySmState = sm.isFlying || sm.isCrawling || sm.isSliding || sm.isHeadJumping
+                || sm.isClimbing || sm.isCrawlClimbing || sm.isCeilingClimbing
+                || sm.isSwimming_sm || sm.isDiving || sm.isRopeSliding || sm.isClimbJumping
+                || sm.doFallingAnimation || sm.isAngleJumping();
+        if (anySmState) {
+            return 0f;
+        }
+
+        // 🔴 STAND 분기 — `currentHorizontalSpeed` (수평만) 1:1. `getCurrentSpeed` (3D) 사용 시
         //   점프/낙하 시 팔다리 swing 발생 (사용자 보고).
         return sm.stats.getCurrentHorizontalSpeed(SmartMovingClientState.globalCachedTickDelta);
     }

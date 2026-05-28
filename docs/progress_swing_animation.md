@@ -1,133 +1,181 @@
-# Swing 애니메이션 작업 진행 상황 (2026-05-27)
+# Swing 애니메이션 작업 진행 상황 (마지막 업데이트: 2026-05-28)
 
-사용자 보고: "엎드리기/슬라이딩/클라이밍/비행 시 좌클릭 swing 시각 이상". 다중 fix 시도 후 dump 분석 단계.
+SM phase 좌클릭 swing 애니메이션 매핑. fix #177~#190 시행착오 진행.
 
-## 현재 상태 (= 미해결)
+## fix #190 (= body sway SKIP) — 2026-05-28 마지막
 
-**dump 결과 fact 확정**. 사용자 시각 인지 검증 미수신.
+사용자 보고 (fix #189 후): "SM 중 팔 휘두를 때 몸통이 흔들린다. 원래 안 흔들림".
 
-### 시도된 fix 들
-
-| fix | 위치 | 상태 |
-|-----|------|------|
-| #177 | sm_animateClimbing/Crawling/Sliding 에 preferred arm preserve 추가 (= fix #177 식). | ✅ 적용됨 (= 메모리 verified) |
-| #178 | `MixinLivingEntity.sm_extendHandSwingDuration` (= swing duration +4). | ❌ revert. 모든 mode 영향 → 헤드점프 등 회귀. |
-| #179 v2 | sm_animateFlying 의 preferred arm `arm.roll += π/2` (= 어깨 90° 직립). | ❌ revert. dump 결과 vanilla swing pitch 보존 cancel → "한 축 까딱". |
-| #180 v2 | reset 인프라의 swing 영향 항목 (body.yaw, arm.pivot, arm.roll) self+swing 시 cancel skip. | ✅ 적용됨. STAND swing 정상화. |
-| #181 | vanilla animateArms 식 수동 재적용 (= 수영 fix #146 패턴 차용). | ❌ revert. 사용자 verbatim "swing 너무 크게 + 반대 방향". vanilla 식 2 배 누적. |
-| #182 | sm_animateHeadJumping 에 fix #177 식 추가 (= preferred arm preserve + preCancelParentX). | ✅ 적용됨. HJ swing dump 결과 preserve 작동 확인. |
-| #175 v5 | (sliding rapid toggle fix — swing 무관) | ✅ 별도 작업 정착 |
-
-### 검증된 dump fact (= peak swing frame, swing=0.5)
-
-| Phase | T1 vanilla rArm pitch | T5 우리 결과 | preCancelParentX theta | 비고 |
-|-------|------|------|------|------|
-| STAND | -0.97 | -0.97 (= vanilla 보존) | N/A | ✅ |
-| FLY | -0.97 | -0.94 (= 거의 vanilla) | (QUARTER - verticalAngle) * speedFactor ≈ 0 | ✅ |
-| HJ | -1.30 | **-2.82** | QUARTER - verticalAngle (= 큼) | preCancelParentX 큰 변형 |
-| CR | -1.07 | **-2.45** | π/2 - π/16 = 1.37 | preCancelParentX 큰 변형 |
-| SLD | (peak 미확정) | (preCancelParentX 변형) | π/2 = 1.57 | |
-| CL | -1.07 추정 | -1.07 추정 (= R_x 없음 → preCancelParentX 미적용) | (적용 X) | ✅ |
-
-### dump 5 단계 (= 디버그용)
-
-`MixinPlayerEntityModelClient.sm_setAngles`:
-- **T1 (`SWING-T1-VANILLA`)**: inject 진입 직후 (= vanilla setAngles + animateArms 결과).
-- **T2 (`SWING-T2-RESET`)**: reset 인프라 직후 (= fix #180 v2 가드 작동 확인).
-- **T3 (`SWING-T3-PRE`)**: SM phase 분기 진입 직전.
-- **T4 (`SWING-T4-POST`)**: sm_animateXxx 호출 직후.
-- **T5 (`SWING-T5-END`)**: inject 끝 (= outer layer copy 후).
-
-self + `handSwingProgress > 0` 가드.
-
-### 결정 미수신 — 사용자 시각 인지
-
-dump fact 만으로는 사용자 의도 식별 불가. 사용자 verbatim "swing 안 보임 / 한 축 까딱 작음" 모호. 정확 cause:
-- (A) **swing motion 자체 작음** (= FLY peak -55° 도 작음) → vanilla 1.21.1 식 자체 부족.
-- (B) **SM phase 의 swing 방향 부정확** → preCancelParentX 부호/식 검토.
-- (C) **HJ/CR 의 preCancelParentX 큰 변형 (= pitch ~vanilla*2)** 이 시각상 큰 motion 정상 vs 비정상.
-- (D) **lArm 정적 SM 자세** 가 사용자 인지 "한 축" cause.
-
-각 phase 별 사용자 시각 인지 명시 보고 필요.
-
-## 사용자 verbatim 관련 메모
-
-- "엎드리기/슬라이딩/클라이밍 좌클릭 시 팔 안 휘둘러짐" (= 작업 시작).
-- "비행 코드 무조건 참고. 1.7.10/1.12.2 원본 코드도 참고".
-- "비행 swing 도 좀 빠르게 보임. 속도 줄여" (= fix #178 시도 → 회귀).
-- "팔이 한축만으로 까딱까딱 완전 조금 움직임" (= fix #179 v2 후 dump).
-- "지금 비행도 잘 안 되고 있다".
-- "STAND swing 도 좀 이상" (= fix #180 v2 검증 결과 vanilla 정상화).
-- "(궁금증) STAND swing 은 그냥 기본으로 두면 안 되나?" (= 통찰 매치, fix #180 v2 가드 식).
-- "스마트무빙 시 반대로 휘두르는 느낌도 남" (= fix #181 시 보고).
-- "객관식 X. 추측 X. 메모리 + 원본 + dump fact 만".
-
-## 메모리 verified 패턴 (= 검증된 식)
-
-- `feedback_animateArms_cancel`: reset 인프라가 body.yaw / arm.pivot / arm.roll cancel + preferred arm preserve 패턴 ("움찔움찔" 차단 fix 검증).
-- `feedback_render_scale_negation`: vanilla scale(-1,-1,1) Y 부호 반전.
-- `feedback_zxy_zyx_rotation_order`: vanilla ZYX 회전 순서 + 작은 yaw (< π/4) 직접 set 안전.
-- `feedback_setupTransforms_translate_axis`: TAIL inject translate 의 축 변환 (= modelpart Y → world Z).
-- 수영 분기 `fix #146`: arm.pivot 의 R_y(bodySway) 변환 패턴 (= vanilla animateArms 의 식과 동일).
-
-## 원본 1.7.10/1.12.2 fact 정리
-
-`SRModel.animateWorkingArms` (= SM phase + swing 시도 호출):
+**원본 fact (SmartMovingModel.animateWorkingBody L667-673)**:
 ```java
-public void animateWorkingArms() {
-    float f6 = 1 - swingProgress;
-    f6 = 1 - f6³;
-    float f7 = sin(f6 * π/2);
-    float f8 = sin(swing * π/2) * -(head.pitch - 0.7) * 0.75;
-    rArm.pitch -= f7 * 1.2 + f8;             // ← 큰 swing 진폭 (-1.2 rad)
-    rArm.yaw   += sin(sqrt(swing) * π) * 0.4;
-    rArm.roll  -= sin(swing * π/2) * 0.4;
-}
+if(isStandard)                                  // ← STAND 시만 vanilla body sway
+    imp.superAnimateWorkingBody(...);
+else if(isWorking())
+    animateNonStandardWorking(viewVerticalAngelOffset);  // ← SM + swing: 어깨 90° 직립만
 ```
 
-`SMModel.animateNonStandardWorking` (= SM phase + swing 시도 호출):
+대비, `animateWorkingArms` 가드는 `isStandard || isWorking()` (= SM + swing 시도 호출). **두 식이 다른 가드**.
+
+**우리 fix #188 매핑 오류**: `body.yaw += sin(sqrt(swing)*2π)*0.2` 와 `leftArm.pitch += angle` 식을 SM phase 시도 적용. 원본은 isStandard 가드로 SM phase 시 SKIP.
+
+**fix #190**: `sm_animateArmsOverride` 안 animateWorkingBody 식만 `!anySmState` 가드로 분기. animateWorkingArms (= preferredArm.pitch/yaw/roll) 는 그대로 적용.
+
+## fix #189 (= base arm 진동 cancel) — 2026-05-28 후반
+
+**ROOT CAUSE 확정 (= 사용자 verbatim + dump fact)**:
+
+사용자: "기본 STANDING 보다 SM 휘두르는게 더 빠르다 + 여우무빙 팔 지직거림".
+
+dump 검증 (fix #188 후):
+- **STAND** tick 1 swing 0.167: pitch -0.65 → -1.55 (변화 0.90)
+- **HJ**    tick 1 swing 0.167: pitch -0.53 → -1.90 (변화 **1.37** = STAND 의 1.52배!)
+
+cause: HJ/SLD/fox 등 SM phase + 빠른 motion 시 `sm.stats.currentHorizontalSpeed` 큰 값 → `MixinLivingEntityRenderer.sm_modifyLimbSwingAmount` 가 vanilla setAngles 에 큰 limbDistance 전달 → vanilla `arm.pitch = cos(limbSwing*0.6662+π)*2*limbDistance*0.5` 식이 큰 amplitude 진동 → swing 식 (fix #188 cubic + sin*π) 결과와 누적 → 시각적 "더 빠른 + 지직".
+
+원본 1.7.10 `SmartMovingModel.animateArmSwinging` (L640-647):
 ```java
-bipedRightShoulder.rotateAngleZ = π/2;   // 어깨 90° 직립 정면
-bipedRightShoulder.rotateAngleX = verticalAngle;
-bipedRightShoulder.rotateAngleY = workingAngle;
-bipedRightShoulder.ignoreSuperRotation = true;
-bipedRightArm.reset();
+if(isStandard)                              // ← SM phase 시 SKIP!
+    if(isAngleJumping) animateAngleJumping();
+    else imp.superAnimateArmSwinging(...);  // walking arm swing
 ```
+즉 SM phase 시 walking arm swing 식 자체 SKIP → base arm.pitch=0 유지 → swing 식만 적용.
 
-- 1.21.1 vanilla biped 에 `bipedShoulder` 없음 → arm 자체에 매핑 필요.
-- `ignoreSuperRotation = true` 등가 = 부모 X 회전 cancel (= preCancelParentX 식).
+**fix #189**: `MixinLivingEntityRenderer.sm_modifyLimbSwingAmount` 안 anySmState 시 `0f` force. STAND 는 vanilla 유지 (= currentSpeed≈0 라 원래 영향 X).
 
-## 다음 작업 — 사용자 시각 인지 보고 받기
+## fix #188 (= 1차 시도, 부분 효과)
 
-1. 각 phase 인게임 swing 시각 명시 보고 (= STAND/FLY/HJ/CR/SLD/CL 각각 정상/작음/큼/방향 부정확/etc).
-2. 보고 받은 후 cause 식별:
-   - swing 진폭 작음 → vanilla 식 자체 부족 (= 별도 식 추가 또는 swing duration 조정).
-   - preCancelParentX 변형 부정확 → 부호/theta 식 변경.
-   - lArm 정적 자세 → 비-preferred arm 도 vanilla pitch 보존.
-3. 정확 fix 진행.
+**거의 완결**. 사용자 verbatim (2026-05-28): "거의 다 온거 같음 원본과 매우 유사해졌어 모든 동작의 팔휘두르는게".
 
-## dump 정리 — 미제거
+**잔존 issue**: 팔회전/전환 속도가 약간 빠른 느낌. **전반적으로 빠르며 여우무빙 시 더 두드러짐**.
 
-`MixinPlayerEntityModelClient.sm_setAngles` 안 5 단계 dump (T1-T5) 미제거. 다음 검증 시 사용. 작업 완결 후 일괄 제거.
+**최신 fix #188 (= 진짜 원인 fix)**: vanilla 1.21.1 `BipedEntityModel.animateArms` 자체를 `@Inject HEAD @Cancellable` 로 차단 + 원본 1.7.10/1.12.2 SR.animateWorking* 식 1:1 복원.
+
+### ROOT CAUSE (= 돌려막기 X, 원본 + 메모리 + dump + disassembly 4 자료 교차)
+
+| 항목 | vanilla 1.21.1 (현재) | 원본 1.7.10/1.12.2 |
+|------|------|------|
+| ease curve | **quartic** `f = 1 - (1-swing)⁴` | **cubic** `f6 = 1 - (1-swing)³` |
+| PEAK 위치 | swing≈0.16 (= 1 tick = 0.05초) | swing=1 (= 6 tick = 0.3초) |
+| 어깨 sway (arm.pivot) | ±5 단위 sin 진동 (= 큰 motion) | 없음 |
+| arm.yaw 일괄 += body.yaw | 두 arm 모두 변동 | 없음 (= preferred arm 만) |
+
+**사용자 verbatim 매핑**:
+- "전반적으로 빠르다" = vanilla quartic 식의 1-tick spike + 어깨 sway 큰 motion.
+- "여우무빙 두드러진다" = HJ + fox 카메라 빠른 motion + vanilla fast spike 결합 시각.
+
+**dump 검증** (log_temp.txt L1-L100): t=1248 swing=0.1667 안 sub-frame pitch peak -1.71. quartic peak 위치 swing≈0.16 와 정확 매치.
+
+### 자료 4건 교차 확인 (fact only)
+
+1. **원본 1.7.10**: `C:\Work\minecraft\porting\sm_original\SmartRender\src\main\java\net\smart\render\SmartRenderModel.java:298-315`. mp.onGround=swingProgress, Half=π, Whole=2π. ease cubic.
+2. **원본 1.12.2**: `C:\Work\minecraft\porting\sm_porting_1_12_2\...\SRModel.java:401-416`. mp.swingProgress, SRUtilities.Half=π. 동일 식.
+3. **vanilla 1.21.1 disassembly**: `BipedEntityModel.animateArms` bytecode 추출. `f *= f; f *= f` → quartic. arm.pivot ±5 sway. arm.yaw += body.yaw 일괄.
+4. **메모리**: feedback_animateArms_cancel, project_flying_complete 등 fix #186 의 preserve 패턴.
+
+## 정착된 fix (= 회귀 차단)
+
+### fix #186 (커밋 908a5c6, 2026-05-28)
+**fix #177 패러다임 완전 복원** (= 메모리 검증된 13단계 시행착오 정착 패턴).
+
+fix #183/#184/#185 의 잘못된 폐기 → revert.
+
+각 phase 복원:
+- **CL** (sm_animateClimbing): preserve 가드. preCancelParentX 미적용 (부모 R_x 없음, 메모리 명시).
+- **CR** (sm_animateCrawling): preserve + preCancelParentXPivot/Rotation (θ = π/2 - π/16 상수).
+- **SLD** (sm_animateSliding): quat override + preserve + preCancelParentX (θ = π/2 상수).
+- **FLY** (sm_animateFlying): preserve + preCancelParentX (θ = `lerpFadeAngle(...)` fade lerped). 비-preferred pivot default 복원.
+- **HJ** (sm_animateHeadJumping): preserve + preCancelParentX (θ = QUARTER - angle raw).
+- **Falling**: preserve. 부모 R_x 없음 → preCancelParentX 미적용.
+
+helper `smApplyOriginalSwingDelta` 제거. EntityModel cast 제거.
+
+### fix #187 (미커밋, 2026-05-28)
+**HJ preCancelParentX θ → setupTransforms fade lerped 값**.
+
+**cause**: setupTransforms HJ 분기 (`MixinPlayerEntityRenderer.java` L914) 가 `lerpFadeAngle(smHeadJumpTiltX_prev, thetaTarget, ...)` 사용 → fade 보간. preCancelParentX 는 raw target (`QUARTER - angle`) 사용 → **mismatch**.
+
+**여우무빙** (wasSelfSlideFire=true) 시 더 큰 mismatch:
+- setupTransforms thetaTarget = π/2 고정.
+- preCancelParentX = π/2 - currentVerticalAngle (= 다른 식).
+
+**fix**: `float thetaCancelHJ = sm.smHeadJumpTiltX_prev;` (= setupTransforms 가 이번 frame 갱신한 fade lerped 값). setupTransforms 가 setAngles 보다 먼저 호출되므로 매핑 정확.
+
+**파일**: `MixinPlayerEntityModelClient.java:1696`.
+
+## 잠재 추가 cause (CR/SLD 도 동일 패턴?)
+
+**CR/SLD 의 preCancelParentX 식이 상수**:
+- CR: `thetaCancelCrawl = π/2 - π/16` (상수).
+- SLD: `thetaCancelSlide = π/2` (상수).
+
+setupTransforms CR/SLD 분기가 fade lerp 사용 시 동일 mismatch 가능. fix #187 검증 결과 따라 동일 패턴 적용 검토.
+
+FLY 는 이미 fade lerp 사용 — 매핑 정확.
+
+## dump fact 매트릭스 (fix #186 후)
+
+| Phase | T1 vanilla | T4 우리 | 매핑 |
+|-------|------|------|------|
+| STAND | rArm pitch=-0.45 | T4 == T1 (sm_animateXxx 미진입) | ✅ vanilla swing |
+| FLY peak | pitch=-1.0 | preserve + preCancelParentX (fade lerped) | ✅ |
+| HJ peak | pitch=-1.45 | pitch +2.97 (wraparound, -π 부근) | ⚠ swing 진행 시 pivotY 매 sub-frame 변동 (= 사용자 "빠른 느낌") |
+| SLD peak | pitch=-0.33 | quat override + preserve | (?) 검증 필요 |
+| CR peak | pitch=-0.40 | preserve + preCancelParentX | (?) 검증 필요 |
+| CL peak | pitch=-0.43 | preserve (preCancelParentX 미적용) | ✅ |
+
+## 검증 절차
+
+1. 인게임 HJ + 여우무빙 시각 검증 (fix #187 후 "빠른 느낌" 해소 여부).
+2. dump T1-T5 다시 받기.
+3. 해소 시 CR/SLD 도 동일 cause 확인 (= 사용자 verbatim 잔존 시).
+4. 정착 시 메모리 추가 + commit.
+
+## 미제거 dump
+
+`MixinPlayerEntityModelClient.sm_setAngles` 안 5 단계 dump (T1-T5). 작업 완결 후 일괄 제거.
+
+## 사용자 verbatim 핵심 가이드
+
+- **"원본과 매우 유사해졌어"** — 큰 방향 정착.
+- **"오른팔만 움직이는게 맞아"** — preferred arm only (= 메모리 검증 패턴).
+- **"제발 좀 문제해결메모리도 확인하라고 했는데"** — 메모리 우선 확인 의무.
+- **"한 축 회전이 더 들어가야 빠짐"** = preCancelParentX 의 부모 R_x cancel 회전축 (= fix #186 복원).
+- **"HJ + 여우무빙 빠른 느낌"** = fade lerp 누락 mismatch (= fix #187 후보).
 
 ## 핵심 파일
 
 - `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityModelClient.java`:
   - L262-L298: T1 dump.
-  - L385-L410: reset 인프라 + fix #180 v2 가드.
+  - L391-L410: fix #180 v2 reset 인프라 (preserveSwing 가드).
   - L460-L482: T2 dump.
   - L486-L508: T3 dump.
   - L543-L566: T4 dump.
   - L591-L613: T5 dump.
-  - L800-L843: sm_animateClimbing + fix #177.
-  - L1310-L1355: sm_animateCrawling + fix #177.
-  - L1453-L1517: sm_animateSliding + fix #177.
-  - L1531-L1638: sm_animateFlying + fix #177.
-  - L1639-L1707: sm_animateHeadJumping + fix #182.
+  - L809-L820: sm_animateClimbing preserve 가드 (CL).
+  - L1326-L1351: sm_animateCrawling preserve + preCancelParentX (CR).
+  - L1465-L1510: sm_animateSliding preserve + preCancelParentX (SLD).
+  - L1546-L1633: sm_animateFlying preserve + preCancelParentX (FLY).
+  - L1648-L1710: sm_animateHeadJumping preserve + preCancelParentX (HJ, fix #187).
+  - L1750-L1775: sm_animateFalling preserve (Falling).
+  - L2137-L2160: preCancelParentXRotation / preCancelParentXPivot 헬퍼.
 
-## 회귀 차단
+- `src/client/java/choco/ratel/smartmoving/mixin/client/MixinPlayerEntityRenderer.java`:
+  - L899-L922: setupTransforms HJ 분기 (smHeadJumpTiltX_prev fade lerp).
 
-- fix #175 v5 (= sliding rapid toggle BUG) 관련 부분 건드리지 말 것.
-- fix #176 (= 슬라이딩 모델 dz=-3/16) 보존.
-- fix #180 v2 의 preserveSwing 가드 보존 (= STAND swing 정상화 식).
-- fix #182 의 sm_animateHeadJumping preserve 식 보존.
+- `src/client/java/choco/ratel/smartmoving/client/SmartMovingClientState.java`:
+  - L780-L781: smHeadJumpTiltX_prev / smHeadJumpFade_prevTime field.
+
+## 회귀 차단 (함부로 수정 금지)
+
+- fix #186 의 fix #177 패러다임 (= preserve 가드 + preCancelParentX).
+- 메모리 `feedback_animateArms_cancel`, `project_flying_complete`, `project_sliding_animation_complete` 의 검증 패턴.
+- fix #180 v2 의 reset 인프라 (= swing 시 일부 항목 skip).
+
+## 관련 메모리
+
+- `feedback_animateArms_cancel` — preserve + preCancelParentX 검증 패턴 (30일 전).
+- `project_flying_complete` — 비행 swing arm 13단계 시행착오 정착 (24일 전).
+- `project_sliding_animation_complete` — 슬라이딩 팔 회전 13단계 (23일 전).
+- `feedback_zxy_zyx_rotation_order` — ZYX gimbal lock 회피.
+- `feedback_render_scale_negation` — vanilla scale(-1,-1,1) 부호 반전.
+- `feedback_rotation_pivot_pattern` — head pivot 기준 회전 + ±1.5 translate.
