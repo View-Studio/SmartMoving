@@ -237,8 +237,13 @@ public final class SmartMovingSwimmer {
         //   MixinClientPlayerEntity.isSneaking() override 는 수영 중 항상 false 반환
         //   (= 메모리 [[feedback_clientplayer_isSneaking_override]] + [[feedback_movementInput_vs_isSneaking]]
         //   패턴). raw `player.input.sneaking` 사용 → 원본 `esp.movementInput.sneak` 1:1.
+        // 🔴 fix #201 (2026-05-29): swim/dive sneak+jump 동시 → jump 우선 매핑.
+        //   답지: 1.7.10 L445-446 `if(diveUp) motionY -= 0.04` 식 vs 1.12.2 L443-455 (제거).
+        //   project_swimming_complete fix #109 = 1.12.2 1:1 매핑. 즉 motionY -= 0.04 식 제거가 1.12.2 답지.
+        //   추가: swimDown/diveDown 에 jump 가드 → swim+sneak+jump 시 sneak 효과 무시.
+        //   사용자 verbatim "원래 됐었음 → jump 우선 위로 + 수면 끝까지" 매핑.
         boolean diveUp16   = player.input.jumping;
-        boolean diveDown16 = player.input.sneaking && cfg.diveDownOnSneak;
+        boolean diveDown16 = player.input.sneaking && cfg.diveDownOnSneak && !player.input.jumping;
         sm.isLevitating = sm.isDiving
                 && !diveUp16
                 && !diveDown16
@@ -423,7 +428,8 @@ public final class SmartMovingSwimmer {
         //   isFakeShallowWaterSneaking=true; }` 통합. swimDown 은 swimming A 경로
         //   motionYDiff 계산 시 소비 (원본 L320-L321).
         // 🔵 (BUG 5 fix #107) raw sneak key — isSneaking override 우회.
-        boolean swimDown = player.input.sneaking && cfg.swimDownOnSneak;
+        // 🔴 fix #201: swimDown jump 가드. swim+sneak+jump 시 swim 분기 미매치 → 위로 정상.
+        boolean swimDown = player.input.sneaking && cfg.swimDownOnSneak && !player.input.jumping;
         if (wasSwimming && wantShallowSwim && swimDown) {
             swimDown = false;
             sm.isFakeShallowWaterSneaking = true;
@@ -464,7 +470,8 @@ public final class SmartMovingSwimmer {
         //   해결: raw sneak + cfg.diveDownOnSneak. isDiving 가드는 후속 motion 분기에서
         //         자연 처리 (dive 분기 안에서만 diveDown 식 매치).
         boolean diveUp   = jumping;
-        boolean diveDown = player.input.sneaking && cfg.diveDownOnSneak;
+        // 🔴 fix #201: diveDown jump 가드. dive+sneak+jump 동시 → diveDown=false → cancel 식 미발동 → diveUp 잔존 → motionYDiff=0.05 (위로).
+        boolean diveDown = player.input.sneaking && cfg.diveDownOnSneak && !player.input.jumping;
 
         // 🔵 (BUG 6 fix #109) jump + sneak 동시 누름 시 둘 다 cancel — 원본 L298-L299 / 1.12.2 L306-307 1:1.
         //   `if (isDiving && diveUp && diveDown) diveUp = diveDown = false;`
@@ -544,9 +551,15 @@ public final class SmartMovingSwimmer {
             return false;
         }
 
-        // **B-9g 해소 (세션 130)**: 원본 L445-L446 `if (diveUp) motionY -= 0.04` 보정.
-        //   swimming/diving/dipping 공통 — motion 계산 진입 전 수직 모션 감쇠.
-        if (diveUp) {
+        // 🔴 fix #202 (2026-05-29): 1.7.10 L445-446 식 부분 적용 — sneak 가드.
+        //   사용자 verbatim "jump로 수면위까지 올라왔을 때 그냥 스탠딩이 됨" = swim+jump 단독 시
+        //   위로 안 됨 (= 수면 도달 X = SM swim state 유지) 이 사용자 의도.
+        //   사용자 verbatim "sneak+jump 동시 → 위로 정상" = sneak 누름 시 -= 0.04 미적용.
+        //
+        //   식: jump 단독 시 (= !sneak) motion -= 0.04 → 위로 안 됨 → 수면 도달 X.
+        //       jump+sneak 시 (= sneak) -= 0.04 미적용 + swimDown jump 가드 (= swim 분기 미매치)
+        //       → motion += motionYDiff → 위로 정상.
+        if (diveUp && !player.input.sneaking) {
             motionY -= 0.039999999105930328D;
         }
 

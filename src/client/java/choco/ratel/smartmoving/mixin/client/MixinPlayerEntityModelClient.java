@@ -326,67 +326,6 @@ public abstract class MixinPlayerEntityModelClient {
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
-        // 🔴 DEBUG dump #179 (2026-05-27): swing 비교 — vanilla 결과 (= 진입 직후).
-        //   사용자 의도 = 일반 standing swing vs SM phase swing 수치 비교.
-        //   self 한정 + swing > 0 시만.
-        // 🔴 fix #193 (2026-05-28): dump 강화 — jump+swim swing 이상 cause 식별 위해.
-        //   원본 1.7.10 의 모든 swim 관련 state field + stats + setupTransforms tilt 값 추가.
-        if (player.handSwingProgress > 0F
-                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
-            String _phase = sm.isFlying ? "FLY"
-                    : sm.isHeadJumping ? "HJ"
-                    : sm.isSliding ? "SLD"
-                    : sm.isCrawling ? "CR"
-                    : sm.isClimbing ? "CL"
-                    : sm.isCrawlClimbing ? "CC"
-                    : sm.isCeilingClimbing ? "CEI"
-                    : sm.isSwimming_sm ? "SW"
-                    : sm.isDiving ? "DV"
-                    : "STAND";
-
-            // fix #193: swim 관련 모든 state field dump.
-            //   vanilla jumping = LivingEntity.jumping (protected). ClientPlayerEntity 의 input.jumping
-            //   으로 등가 (= sm_isPlayerJumping 패턴 차용).
-            boolean vanillaJumping = false;
-            if (player instanceof net.minecraft.client.network.ClientPlayerEntity localP) {
-                vanillaJumping = localP.input.jumping;
-            }
-            String swimState = String.format(
-                "isDip=%b isSwim=%b isDive=%b isLev=%b isJumpOOW=%b wasJumpOOW=%b isShallow=%b isStillSwimJump=%b vanillaJump=%b",
-                sm.isDipping, sm.isSwimming_sm, sm.isDiving,
-                sm.isLevitating, sm.isJumpingOutOfWater, sm.wasJumpingOutOfWater,
-                sm.isShallowDiveOrSwim, sm.isStillSwimmingJump,
-                vanillaJumping);
-            // fix #193 v2: dispatcher 분기 결정 검증 — 모든 SM phase state.
-            String allPhaseState = String.format(
-                "Clb=%b CrCl=%b ClJmp=%b CeCl=%b Crl=%b Sld=%b Fly=%b HJ=%b Fall=%b AJmp=%b",
-                sm.isClimbing, sm.isCrawlClimbing, sm.isClimbJumping, sm.isCeilingClimbing,
-                sm.isCrawling, sm.isSliding, sm.isFlying, sm.isHeadJumping,
-                sm.doFallingAnimation, sm.isAngleJumping());
-
-            // fix #193: stats + factor + tilt.
-            float pt = SmartMovingClientState.globalCachedTickDelta;
-            float hSpd  = sm.stats.getCurrentHorizontalSpeed(pt);
-            float hDist = sm.stats.getTotalHorizontalDistance(pt);
-            float vSpd  = sm.stats.getCurrentVerticalSpeed(pt);
-            float vDist = sm.stats.getTotalVerticalDistance(pt);
-            float vAng  = sm.stats.currentVerticalAngle;
-            float swimSSF  = sm.swimStandSneakFactor;
-            float swimTilt = sm.smSwimDiveTiltX_prev;
-
-            System.out.println(String.format(
-                "[SWING-T1-VANILLA t=%d] phase=%s swing=%.4f mainArm=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f | %s | %s | hSpd=%.4f hDist=%.4f vSpd=%.4f vDist=%.4f vAng=%.4f swimSSF=%.4f swimTilt=%.4f",
-                player.age, _phase, player.handSwingProgress, player.getMainArm(),
-                rightArm.pitch, rightArm.yaw, rightArm.roll,
-                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
-                leftArm.pitch, leftArm.yaw, leftArm.roll,
-                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
-                body.yaw,
-                head.pitch, head.yaw, head.roll,
-                swimState, allPhaseState,
-                hSpd, hDist, vSpd, vDist, vAng, swimSSF, swimTilt));
-        }
-
         // ── [8-3][6-4] SM 활성 상태에서 leaningPitch 강제 0 ─────────────────
         // leaningPitch > 0이면 setupTransforms Branch 2(-90° X회전)와
         // setAngles Step 13(수영 팔 애니메이션)이 활성화된다. SM 상태에서는 억제.
@@ -531,29 +470,6 @@ public abstract class MixinPlayerEntityModelClient {
             leftArm.roll  = 0f;
         }
 
-        // 🔴 DEBUG dump T2 (2026-05-27): reset 인프라 직후 — vanilla 효과 cancel 결과.
-        if (player.handSwingProgress > 0F
-                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
-            String _phaseT2 = sm.isFlying ? "FLY"
-                    : sm.isHeadJumping ? "HJ"
-                    : sm.isSliding ? "SLD"
-                    : sm.isCrawling ? "CR"
-                    : sm.isClimbing ? "CL"
-                    : sm.isCrawlClimbing ? "CC"
-                    : sm.isCeilingClimbing ? "CEI"
-                    : sm.isSwimming_sm ? "SW"
-                    : sm.isDiving ? "DV"
-                    : "STAND";
-            System.out.println(String.format(
-                "[SWING-T2-RESET t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
-                player.age, _phaseT2,
-                rightArm.pitch, rightArm.yaw, rightArm.roll,
-                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
-                leftArm.pitch, leftArm.yaw, leftArm.roll,
-                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
-                body.yaw));
-        }
-
         // ── cloak.pitch 처리 (cfgEnabled 분기) — disabled 시 0 reset 작동 보장 ──
         // BUG-7 (세션 36): cfgEnabled 무관 매 호출 적용. cfgEnabled true → SIXTYFOURTH /
         //   false → 0 reset (vanilla 미reset 필드 — disabled 진입 시 잔존 정리).
@@ -595,29 +511,6 @@ public abstract class MixinPlayerEntityModelClient {
         //   매핑되어 둘 다 true 발생 → isClimbing 분기 진입 → 일반 클라이밍 식 적용 → 천장
         //   등반인데 팔/다리 가만히. 우선순위 변경으로 isCeilingClimbing 시 sm_animateCeilingClimbing
         //   호출 보장.
-        // 🔴 DEBUG dump T3 (2026-05-27): SM phase 분기 진입 직전.
-        if (player.handSwingProgress > 0F
-                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
-            String _phaseT3 = sm.isFlying ? "FLY"
-                    : sm.isHeadJumping ? "HJ"
-                    : sm.isSliding ? "SLD"
-                    : sm.isCrawling ? "CR"
-                    : sm.isClimbing ? "CL"
-                    : sm.isCrawlClimbing ? "CC"
-                    : sm.isCeilingClimbing ? "CEI"
-                    : sm.isSwimming_sm ? "SW"
-                    : sm.isDiving ? "DV"
-                    : "STAND";
-            System.out.println(String.format(
-                "[SWING-T3-PRE t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
-                player.age, _phaseT3,
-                rightArm.pitch, rightArm.yaw, rightArm.roll,
-                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
-                leftArm.pitch, leftArm.yaw, leftArm.roll,
-                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
-                body.yaw));
-        }
-
         if (sm.isRopeSliding) {
             sm_animateRopeSliding(animationProgress, player);
         } else if (sm.isCeilingClimbing) {
@@ -681,29 +574,6 @@ public abstract class MixinPlayerEntityModelClient {
         // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
         //   원본 SmartRenderModel L251 = SM 상태 무관 항상 적용. cfgEnabled false 시에도 0 reset 보장.
 
-        // 🔴 DEBUG dump T4 (2026-05-27): SM phase 분기 끝 직후 (outer layer copy 전).
-        if (player.handSwingProgress > 0F
-                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
-            String _phaseT4 = sm.isFlying ? "FLY"
-                    : sm.isHeadJumping ? "HJ"
-                    : sm.isSliding ? "SLD"
-                    : sm.isCrawling ? "CR"
-                    : sm.isClimbing ? "CL"
-                    : sm.isCrawlClimbing ? "CC"
-                    : sm.isCeilingClimbing ? "CEI"
-                    : sm.isSwimming_sm ? "SW"
-                    : sm.isDiving ? "DV"
-                    : "STAND";
-            System.out.println(String.format(
-                "[SWING-T4-POST t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
-                player.age, _phaseT4,
-                rightArm.pitch, rightArm.yaw, rightArm.roll,
-                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
-                leftArm.pitch, leftArm.yaw, leftArm.roll,
-                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
-                body.yaw));
-        }
-
         // ── outer layer 재동기화 (hat / jacket / sleeves / pants) ──────────────
         // 1.21.1 PlayerEntityModel 의 outer layer 6개는 root 의 직접 자식 — 부모
         //   transform 자동 상속 X. vanilla 는 super.setAngles 의 마지막에서 한 번만
@@ -722,30 +592,6 @@ public abstract class MixinPlayerEntityModelClient {
             playerModel.jacket.copyTransform(body);
         }
 
-        // 🔴 DEBUG dump #179 (2026-05-27): swing 비교 — 우리 override 결과 (= 진입 끝).
-        //   [SWING-A] 와 동일 self 가드 + 동일 phase 표시. vanilla 결과 vs override 결과 비교.
-        if (player.handSwingProgress > 0F
-                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
-            String _phaseB = sm.isFlying ? "FLY"
-                    : sm.isHeadJumping ? "HJ"
-                    : sm.isSliding ? "SLD"
-                    : sm.isCrawling ? "CR"
-                    : sm.isClimbing ? "CL"
-                    : sm.isCrawlClimbing ? "CC"
-                    : sm.isCeilingClimbing ? "CEI"
-                    : sm.isSwimming_sm ? "SW"
-                    : sm.isDiving ? "DV"
-                    : "STAND";
-            System.out.println(String.format(
-                "[SWING-T5-END t=%d] phase=%s swing=%.4f | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f",
-                player.age, _phaseB, player.handSwingProgress,
-                rightArm.pitch, rightArm.yaw, rightArm.roll,
-                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
-                leftArm.pitch, leftArm.yaw, leftArm.roll,
-                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
-                body.yaw,
-                head.pitch, head.yaw, head.roll));
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
