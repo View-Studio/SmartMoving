@@ -239,6 +239,32 @@ public abstract class MixinPlayerEntityModelClient {
 
         SmartMovingClientState sm = SmartMovingClientState.get(player);
 
+        // 🔴 DEBUG dump #179 (2026-05-27): swing 비교 — vanilla 결과 (= 진입 직후).
+        //   사용자 의도 = 일반 standing swing vs SM phase swing 수치 비교.
+        //   self 한정 + swing > 0 시만.
+        if (player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
+            String _phase = sm.isFlying ? "FLY"
+                    : sm.isHeadJumping ? "HJ"
+                    : sm.isSliding ? "SLD"
+                    : sm.isCrawling ? "CR"
+                    : sm.isClimbing ? "CL"
+                    : sm.isCrawlClimbing ? "CC"
+                    : sm.isCeilingClimbing ? "CEI"
+                    : sm.isSwimming_sm ? "SW"
+                    : sm.isDiving ? "DV"
+                    : "STAND";
+            System.out.println(String.format(
+                "[SWING-T1-VANILLA t=%d] phase=%s swing=%.4f mainArm=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f",
+                player.age, _phase, player.handSwingProgress, player.getMainArm(),
+                rightArm.pitch, rightArm.yaw, rightArm.roll,
+                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
+                leftArm.pitch, leftArm.yaw, leftArm.roll,
+                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
+                body.yaw,
+                head.pitch, head.yaw, head.roll));
+        }
+
         // ── [8-3][6-4] SM 활성 상태에서 leaningPitch 강제 0 ─────────────────
         // leaningPitch > 0이면 setupTransforms Branch 2(-90° X회전)와
         // setAngles Step 13(수영 팔 애니메이션)이 활성화된다. SM 상태에서는 억제.
@@ -357,24 +383,54 @@ public abstract class MixinPlayerEntityModelClient {
         //         vanilla 영향 없음. arm.pivot 기본값 ±5/0 도 vanilla setAngles Step 4 의 default.
         head.pivotZ = 0f;
         body.pivotZ = 0f;
-        body.yaw    = 0f;
         head.roll   = 0f;
-        leftArm.pivotX  =  5f;
-        leftArm.pivotZ  =  0f;
-        rightArm.pivotX = -5f;
-        rightArm.pivotZ =  0f;
-        // 🔴 (Phase 2 multi BUG-8 추가) sm_animateCrawling 의 set field 추가 reset:
-        //   sm_animateCrawling L1051-1052/L1062-1063/L1068-1073 가 leg.roll/arm.roll/scales 변경 →
-        //   vanilla setAngles 매 호출 시 reset 안 함 → 다른 player render 시 잔존 → 자세 leak.
-        //   매 frame default (0/1.0) 강제 → SM 분기 진입 시 sm_animateXxx 이 다시 set → 정상 흐름.
-        //   ※ arm.yaw 는 vanilla animateArms swing 시 set 하므로 reset 안 함 (= swing 효과 보존).
-        //   ※ self 도 reset 적용 — 다른 player 의 SM 자세 영향이 self render 에 leak 차단.
         rightLeg.roll = 0f;
         leftLeg.roll  = 0f;
-        rightArm.roll = 0f;
-        leftArm.roll  = 0f;
         setLegScales(rightLeg, leftLeg, 1f, 1f);
         setArmScales(rightArm, leftArm, 1f, 1f);
+        // 🔴 fix #180 v2 (2026-05-27, dump 분석 + 사용자 의문 (4) 반영):
+        //   기존 매 frame 무조건 reset 이 vanilla animateArms 의 swing 효과 cancel:
+        //     - body.yaw = sin(sqrt(swing)*2π) * 0.2 → 0 cancel.
+        //     - arm.pivotX = -cos(body.yaw)*5 → -5 cancel.
+        //     - arm.pivotZ = sin(body.yaw)*5 → 0 cancel.
+        //     - arm.roll = sin(swing*π) * -0.4 → 0 cancel.
+        //   사용자 verbatim "STAND swing 도 좀 이상" + "그냥 vanilla 기본으로 두자" → reset 인프라가
+        //     vanilla 정상 swing 깨뜨림. 해결: self + swing 시 swing 영향 항목만 reset skip.
+        //   multi leak 방어 — swing X frame 에서 자연 reset.
+        boolean preserveSwing = player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player;
+        if (!preserveSwing) {
+            body.yaw    = 0f;
+            leftArm.pivotX  =  5f;
+            leftArm.pivotZ  =  0f;
+            rightArm.pivotX = -5f;
+            rightArm.pivotZ =  0f;
+            rightArm.roll = 0f;
+            leftArm.roll  = 0f;
+        }
+
+        // 🔴 DEBUG dump T2 (2026-05-27): reset 인프라 직후 — vanilla 효과 cancel 결과.
+        if (player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
+            String _phaseT2 = sm.isFlying ? "FLY"
+                    : sm.isHeadJumping ? "HJ"
+                    : sm.isSliding ? "SLD"
+                    : sm.isCrawling ? "CR"
+                    : sm.isClimbing ? "CL"
+                    : sm.isCrawlClimbing ? "CC"
+                    : sm.isCeilingClimbing ? "CEI"
+                    : sm.isSwimming_sm ? "SW"
+                    : sm.isDiving ? "DV"
+                    : "STAND";
+            System.out.println(String.format(
+                "[SWING-T2-RESET t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
+                player.age, _phaseT2,
+                rightArm.pitch, rightArm.yaw, rightArm.roll,
+                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
+                leftArm.pitch, leftArm.yaw, leftArm.roll,
+                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
+                body.yaw));
+        }
 
         // ── cloak.pitch 처리 (cfgEnabled 분기) — disabled 시 0 reset 작동 보장 ──
         // BUG-7 (세션 36): cfgEnabled 무관 매 호출 적용. cfgEnabled true → SIXTYFOURTH /
@@ -417,12 +473,35 @@ public abstract class MixinPlayerEntityModelClient {
         //   매핑되어 둘 다 true 발생 → isClimbing 분기 진입 → 일반 클라이밍 식 적용 → 천장
         //   등반인데 팔/다리 가만히. 우선순위 변경으로 isCeilingClimbing 시 sm_animateCeilingClimbing
         //   호출 보장.
+        // 🔴 DEBUG dump T3 (2026-05-27): SM phase 분기 진입 직전.
+        if (player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
+            String _phaseT3 = sm.isFlying ? "FLY"
+                    : sm.isHeadJumping ? "HJ"
+                    : sm.isSliding ? "SLD"
+                    : sm.isCrawling ? "CR"
+                    : sm.isClimbing ? "CL"
+                    : sm.isCrawlClimbing ? "CC"
+                    : sm.isCeilingClimbing ? "CEI"
+                    : sm.isSwimming_sm ? "SW"
+                    : sm.isDiving ? "DV"
+                    : "STAND";
+            System.out.println(String.format(
+                "[SWING-T3-PRE t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
+                player.age, _phaseT3,
+                rightArm.pitch, rightArm.yaw, rightArm.roll,
+                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
+                leftArm.pitch, leftArm.yaw, leftArm.roll,
+                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
+                body.yaw));
+        }
+
         if (sm.isRopeSliding) {
             sm_animateRopeSliding(animationProgress, player);
         } else if (sm.isCeilingClimbing) {
             sm_animateCeilingClimbing(sm, headYaw);
         } else if (sm.isClimbing || sm.isCrawlClimbing) {
-            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch, animationProgress);
+            sm_animateClimbing(sm, player, limbSwing, limbSwingAmount, headPitch, animationProgress);
         } else if (isWeepingTwistingVines) {
             // 🔴 늘어진/휘어진 덩굴 — 사다리 자세 애니메이션 적용.
             //   사용자 의도: 기능은 vanilla 등반 그대로 (sm_travel_client bypass 유지). 애니메이션만 SM 사다리.
@@ -435,7 +514,7 @@ public abstract class MixinPlayerEntityModelClient {
             int origFeetType  = sm.actualFeetClimbType;
             sm.actualHandsClimbType = 1;  // UpGrab
             sm.actualFeetClimbType  = 1;  // DownStep
-            sm_animateClimbing(sm, limbSwing, limbSwingAmount, headPitch, animationProgress);
+            sm_animateClimbing(sm, player, limbSwing, limbSwingAmount, headPitch, animationProgress);
             sm.actualHandsClimbType = origHandsType;
             sm.actualFeetClimbType  = origFeetType;
         } else if (sm.isClimbJumping) {
@@ -449,9 +528,9 @@ public abstract class MixinPlayerEntityModelClient {
         } else if (sm.isDiving) {
             sm_animateDiving(sm, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isCrawling) {
-            sm_animateCrawling(sm, headYaw);
+            sm_animateCrawling(sm, player, headYaw);
         } else if (sm.isSliding) {
-            sm_animateSliding(sm, headYaw);
+            sm_animateSliding(sm, player, headYaw);
         } else if (flyingCreative) {
             sm_animateFlying(sm, player, limbSwing, limbSwingAmount, animationProgress);
         } else if (sm.isHeadJumping) {
@@ -480,6 +559,29 @@ public abstract class MixinPlayerEntityModelClient {
         // [B-16 / §16-24 / BUG-7] cloak.pitch 처리는 위로 이동 (BUG-13/16 cfgEnabled return 가드 위).
         //   원본 SmartRenderModel L251 = SM 상태 무관 항상 적용. cfgEnabled false 시에도 0 reset 보장.
 
+        // 🔴 DEBUG dump T4 (2026-05-27): SM phase 분기 끝 직후 (outer layer copy 전).
+        if (player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
+            String _phaseT4 = sm.isFlying ? "FLY"
+                    : sm.isHeadJumping ? "HJ"
+                    : sm.isSliding ? "SLD"
+                    : sm.isCrawling ? "CR"
+                    : sm.isClimbing ? "CL"
+                    : sm.isCrawlClimbing ? "CC"
+                    : sm.isCeilingClimbing ? "CEI"
+                    : sm.isSwimming_sm ? "SW"
+                    : sm.isDiving ? "DV"
+                    : "STAND";
+            System.out.println(String.format(
+                "[SWING-T4-POST t=%d] phase=%s | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f",
+                player.age, _phaseT4,
+                rightArm.pitch, rightArm.yaw, rightArm.roll,
+                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
+                leftArm.pitch, leftArm.yaw, leftArm.roll,
+                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
+                body.yaw));
+        }
+
         // ── outer layer 재동기화 (hat / jacket / sleeves / pants) ──────────────
         // 1.21.1 PlayerEntityModel 의 outer layer 6개는 root 의 직접 자식 — 부모
         //   transform 자동 상속 X. vanilla 는 super.setAngles 의 마지막에서 한 번만
@@ -496,6 +598,31 @@ public abstract class MixinPlayerEntityModelClient {
             playerModel.leftSleeve.copyTransform(leftArm);
             playerModel.rightSleeve.copyTransform(rightArm);
             playerModel.jacket.copyTransform(body);
+        }
+
+        // 🔴 DEBUG dump #179 (2026-05-27): swing 비교 — 우리 override 결과 (= 진입 끝).
+        //   [SWING-A] 와 동일 self 가드 + 동일 phase 표시. vanilla 결과 vs override 결과 비교.
+        if (player.handSwingProgress > 0F
+                && net.minecraft.client.MinecraftClient.getInstance().player == player) {
+            String _phaseB = sm.isFlying ? "FLY"
+                    : sm.isHeadJumping ? "HJ"
+                    : sm.isSliding ? "SLD"
+                    : sm.isCrawling ? "CR"
+                    : sm.isClimbing ? "CL"
+                    : sm.isCrawlClimbing ? "CC"
+                    : sm.isCeilingClimbing ? "CEI"
+                    : sm.isSwimming_sm ? "SW"
+                    : sm.isDiving ? "DV"
+                    : "STAND";
+            System.out.println(String.format(
+                "[SWING-T5-END t=%d] phase=%s swing=%.4f | rArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | lArm pitch=%.4f yaw=%.4f roll=%.4f pivot=(%.3f,%.3f,%.3f) | body yaw=%.4f | head pitch=%.4f yaw=%.4f roll=%.4f",
+                player.age, _phaseB, player.handSwingProgress,
+                rightArm.pitch, rightArm.yaw, rightArm.roll,
+                rightArm.pivotX, rightArm.pivotY, rightArm.pivotZ,
+                leftArm.pitch, leftArm.yaw, leftArm.roll,
+                leftArm.pivotX, leftArm.pivotY, leftArm.pivotZ,
+                body.yaw,
+                head.pitch, head.yaw, head.roll));
         }
     }
 
@@ -556,7 +683,7 @@ public abstract class MixinPlayerEntityModelClient {
      * handsClimbType/feetClimbType ordinal로 손/발 포즈 분기 (R-10/R-10b).
      * isCrawlClimbing 시 legAngleZ(roll) 보정 (R-10c).
      */
-    private void sm_animateClimbing(SmartMovingClientState sm, float limbSwing, float limbSwingAmount, float headPitch, float animationProgress) {
+    private void sm_animateClimbing(SmartMovingClientState sm, net.minecraft.client.network.AbstractClientPlayerEntity player, float limbSwing, float limbSwingAmount, float headPitch, float animationProgress) {
         // B-4 / §16-10 + 부드러움 1:1 (사용자 보고 후, 그랩 클라이밍 진자운동 부드러움 정정):
         //   원본 SmartRenderModel 은 매 frame `getCurrentSpeed(partialTicks)` lerp getter 로
         //   prev/current EMA 사이를 partial tick 비율로 보간 = 60Hz 부드러움.
@@ -679,8 +806,15 @@ public abstract class MixinPlayerEntityModelClient {
         float lArmPitch = MathHelper.cos(totalVerticalDistance * handsFrequenceUpFactor)        * verticalSpeed * handsDistanceUpFactor + handsDistanceUpOffset;
         float rArmYaw   = MathHelper.cos(totalHorizontalDistance * handsFrequenceSideFactor + QUARTER) * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;
         float lArmYaw   = MathHelper.cos(totalHorizontalDistance * handsFrequenceSideFactor)            * horizontalSpeed * handsDistanceSideFactor + handsDistanceSideOffset;
-        setAnglesYZX(rightArm, rArmPitch, rArmYaw, 0f);
-        setAnglesYZX(leftArm,  lArmPitch, lArmYaw, 0f);
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #177 패러다임 복원 (메모리 검증 패턴).
+        //   feedback_animateArms_cancel 메모리 명시: preferred arm preserve 가드.
+        //   클라이밍 분기는 setupTransforms 부모 R_x 회전 없음 → preCancelParentX 불필요 (메모리 명시).
+        float swingClimb = player.handSwingProgress;
+        Arm preferredArmClimb = player.getMainArm();
+        boolean preserveRightClimb = swingClimb > 0F && preferredArmClimb == Arm.RIGHT;
+        boolean preserveLeftClimb  = swingClimb > 0F && preferredArmClimb == Arm.LEFT;
+        if (!preserveRightClimb) setAnglesYZX(rightArm, rArmPitch, rArmYaw, 0f);
+        if (!preserveLeftClimb)  setAnglesYZX(leftArm,  lArmPitch, lArmYaw, 0f);
 
         // 원본 L206-L215: isHandsVineClimbing 추가 보정.
         if (sm.isHandsVineClimbing) {
@@ -1127,7 +1261,7 @@ public abstract class MixinPlayerEntityModelClient {
      *   - head.pivotZ = -2F (원본 L401): 몸이 수평이므로 머리 앞쪽 2 픽셀 이동
      *   - body.pivotY = +3F (원본 L405): 수평 자세에서 몸통 위치 보정 (SR bipedTorso 단일 노드 근사)
      */
-    private void sm_animateCrawling(SmartMovingClientState sm, float headYaw) {
+    private void sm_animateCrawling(SmartMovingClientState sm, net.minecraft.client.network.AbstractClientPlayerEntity player, float headYaw) {
         // 🔴 (Phase 1, Crawl 애니메이션 1:1):
         //   원본 SmartMovingModel L395-L397 입력 = totalHorizontalDistance + currentHorizontalSpeedFlattened.
         //   이전 매핑 limbSwing/limbSwingAmount (vanilla limbAnimator) 잘못. 그랩 클라이밍 패턴 동일.
@@ -1189,8 +1323,26 @@ public abstract class MixinPlayerEntityModelClient {
         // 🔴 setAnglesYZX_v2 사용 (2026-05-03 사용자 보고 fix — "팔이 하늘로 들림"):
         //   원본 YZX vertex 적용 = Y → Z → X. arm yaw=±90° 큰 회전 + pitch=225° 큰 회전 →
         //   회전 순서 차이가 팔 위치에 큰 visual 영향. v2 = 원본 1:1.
-        setAnglesYZX_v2(rightArm, HALF + EIGHTH, -QUARTER, rRoll);
-        setAnglesYZX_v2(leftArm,  HALF + EIGHTH,  QUARTER, lRoll);
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #177 패러다임 복원 (메모리 검증 패턴).
+        //   preserve 가드 + preCancelParentX 복원. CR 분기 setupTransforms R_x(-78.75°) 부모 회전 있음.
+        float swingCrawl = player.handSwingProgress;
+        Arm preferredArmCrawl = player.getMainArm();
+        boolean preserveRightCrawl = swingCrawl > 0F && preferredArmCrawl == Arm.RIGHT;
+        boolean preserveLeftCrawl  = swingCrawl > 0F && preferredArmCrawl == Arm.LEFT;
+        if (!preserveRightCrawl) setAnglesYZX_v2(rightArm, HALF + EIGHTH, -QUARTER, rRoll);
+        if (!preserveLeftCrawl)  setAnglesYZX_v2(leftArm,  HALF + EIGHTH,  QUARTER, lRoll);
+        if (swingCrawl > 0F) {
+            // setupTransforms R_x(-tiltAngle) cancel. tiltAngle = π/2 - π/16 = 78.75°.
+            float thetaCancelCrawl = (float)(Math.PI / 2 - Math.PI / 16);
+            if (preserveRightCrawl) {
+                preCancelParentXPivot(rightArm, thetaCancelCrawl);
+                preCancelParentXRotation(rightArm, thetaCancelCrawl);
+            }
+            if (preserveLeftCrawl) {
+                preCancelParentXPivot(leftArm, thetaCancelCrawl);
+                preCancelParentXRotation(leftArm, thetaCancelCrawl);
+            }
+        }
 
         // 원본 SmartMovingModel.java L622-L626 + L645-L648: 다리/팔 yScale.
         // 원본 가드 `if (scaleLegType != NoScaleStart)` / `scaleArmType != NoScaleStart` — 메인 모델 = Scale.
@@ -1231,7 +1383,7 @@ public abstract class MixinPlayerEntityModelClient {
      *   - body.offsetY = -0.4F (원본 L452): ModelPart 에 offsetY 필드 부재로 sm_setupTransforms 의
      *     matrices.translate(0, -0.4F/16F, 0) 로 보정 (slide 분기 안에 통합)
      */
-    private void sm_animateSliding(SmartMovingClientState sm, float headYaw) {
+    private void sm_animateSliding(SmartMovingClientState sm, net.minecraft.client.network.AbstractClientPlayerEntity player, float headYaw) {
         // 🔴 BUG-Slide-Anim-6 fix (2026-05-04 사용자 보고 — "디테일 값 다름"):
         //   원본 SmartMovingModel.java L439-L440 입력 = totalHorizontalDistance + currentHorizontalSpeed.
         //   SmartMovingModel L62/L84: `currentHorizontalSpeedFlattened` 가 NaN 아닐 때
@@ -1308,16 +1460,41 @@ public abstract class MixinPlayerEntityModelClient {
         float rPitch = MathHelper.cos(distance + QUARTER) * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
         float lPitch = MathHelper.cos(distance - HALF)    * SIXTYFOURTH * walkFactor + HALF - SIXTYFOURTH;
 
-        // 의도 q = q_x(pitch) * q_z(roll) * q_y(yaw) — 원본 1.7.10 YZX 매트릭스.
-        Quaternionf qRight = new Quaternionf().rotationY(armYaw);
-        qRight.premul(new Quaternionf().rotationZ(SIXTEENTH));
-        qRight.premul(new Quaternionf().rotationX(rPitch));
-        ((SmModelPartOverride)(Object) rightArm).sm_setOverrideQuat(qRight);
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #177 패러다임 복원 (메모리 검증 패턴).
+        //   preserve 가드 + preCancelParentX 복원. SLD setupTransforms R_x(-π/2) 부모 회전 있음.
+        //   preferred arm 의 sm_setOverrideQuat skip → vanilla animateArms swing 효과 보존 +
+        //   MixinModelPart override quat clear path (= 비-override frame vanilla path).
+        float swingSlide = player.handSwingProgress;
+        Arm preferredArmSlide = player.getMainArm();
+        boolean preserveRightSlide = swingSlide > 0F && preferredArmSlide == Arm.RIGHT;
+        boolean preserveLeftSlide  = swingSlide > 0F && preferredArmSlide == Arm.LEFT;
 
-        Quaternionf qLeft = new Quaternionf().rotationY(-armYaw);
-        qLeft.premul(new Quaternionf().rotationZ(-SIXTEENTH));
-        qLeft.premul(new Quaternionf().rotationX(lPitch));
-        ((SmModelPartOverride)(Object) leftArm).sm_setOverrideQuat(qLeft);
+        // 의도 q = q_x(pitch) * q_z(roll) * q_y(yaw) — 원본 1.7.10 YZX 매트릭스.
+        if (!preserveRightSlide) {
+            Quaternionf qRight = new Quaternionf().rotationY(armYaw);
+            qRight.premul(new Quaternionf().rotationZ(SIXTEENTH));
+            qRight.premul(new Quaternionf().rotationX(rPitch));
+            ((SmModelPartOverride)(Object) rightArm).sm_setOverrideQuat(qRight);
+        }
+
+        if (!preserveLeftSlide) {
+            Quaternionf qLeft = new Quaternionf().rotationY(-armYaw);
+            qLeft.premul(new Quaternionf().rotationZ(-SIXTEENTH));
+            qLeft.premul(new Quaternionf().rotationX(lPitch));
+            ((SmModelPartOverride)(Object) leftArm).sm_setOverrideQuat(qLeft);
+        }
+
+        if (swingSlide > 0F) {
+            float thetaCancelSlide = (float)(Math.PI / 2);
+            if (preserveRightSlide) {
+                preCancelParentXPivot(rightArm, thetaCancelSlide);
+                preCancelParentXRotation(rightArm, thetaCancelSlide);
+            }
+            if (preserveLeftSlide) {
+                preCancelParentXPivot(leftArm, thetaCancelSlide);
+                preCancelParentXRotation(leftArm, thetaCancelSlide);
+            }
+        }
     }
 
 
@@ -1363,8 +1540,9 @@ public abstract class MixinPlayerEntityModelClient {
         //   rotateAngleZ = (cos(distance + Half) * Sixtyfourth + Half - Sixteenth) * walkFactor + Quarter * standFactor   (날개짓)
         // R-17: XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
         //
-        // 🔴 (세션 65g): preferred arm 의 setAnglesXZY skip → vanilla setAngles + animateArms
-        //   가 set 한 swing 모션 잔존. 다른 팔만 날개짓 자세 적용.
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #177 패러다임 복원 (메모리 검증 13단계 시행착오 정착).
+        //   project_flying_complete 메모리 명시: 비행 swing arm 매핑 함부로 수정 금지.
+        //   preserve 가드 + preCancelParentX 복원. FLY setupTransforms R_x(-θ) 부모 회전 있음.
         float swing = player.handSwingProgress;
         Arm preferredArm = player.getMainArm();
         boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
@@ -1410,19 +1588,12 @@ public abstract class MixinPlayerEntityModelClient {
         head.yaw  = 0f;
         head.roll = 0f;
 
-        // 🔴 (세션 65k revert 65j): vanilla 효과 직접 set 매핑은 모든 vanilla setAngles 효과
-        //   (limbSwing 진폭, ArmPose ITEM offset, sneaking 등) 를 cancel → 사용자 보고
-        //   "전체적으로 휘두르는게 아예 이상해짐". 65h 매핑 (= setAnglesXZY skip + X cancel)
-        //   으로 되돌림. vanilla setAngles + animateArms 가 set 한 모든 효과 그대로 보존.
-        //   X/Z 시 미세 차이는 더 자세한 보고 후 추가 조정.
+        // 🔴 fix #186 (2026-05-28): fix #177 패러다임 복원 — preCancelParentXRotation/Pivot.
+        //   feedback_animateArms_cancel 메모리 명시: 부모 X 회전 있는 분기에 preCancel 필수.
+        //   vanilla animateArms 의 arm.pivot 변동 cancel (= 비-preferred 만 default).
         if (swing > 0F) {
             float thetaCancel = lerpFadeAngle(sm.smOuterTiltX_prev, theta,
                                               sm.smOuterFade_prevTime, totalTime);
-            // 🔴 (세션 65q): 회전 부호 반전 + 위치 보정 → 시각 결과가 수직/수평 동일.
-            //   사용자 의견: "수직 시 결과 올바름. 수평 값 조정해서 같게".
-            //   65k 의 R_x(+theta) cancel 은 scale Y 부호 반전 영향으로 실제 world R_x(-θ)
-            //   적용 → 부모 R_x(-θ) * R_x(-θ) = R_x(-2θ) → "90° 뒤로 젖혀짐".
-            //   부호 반전 (R_x(-theta)) + 위치 보정 → 시각 결과가 직립 swing 효과.
             if (preserveRight) {
                 preCancelParentXPivot(rightArm, thetaCancel);
                 preCancelParentXRotation(rightArm, thetaCancel);
@@ -1432,10 +1603,8 @@ public abstract class MixinPlayerEntityModelClient {
                 preCancelParentXRotation(leftArm, thetaCancel);
             }
 
-            // 🔴 (2026-04-27): vanilla animateArms 가 swing 시 양 팔 pivotZ = ±sin(body.yaw)*5
-            //   를 매 프레임 set → 비-preferred arm "움찔움찔" (사용자 보고 비행 중 왼팔).
-            //   비-preferred arm 만 vanilla setAngles Step 4 기본값 복원 (preferred arm 은
-            //   vanilla swing 효과 그대로 보존).
+            // 비-preferred arm 만 vanilla setAngles Step 4 기본값 복원
+            // (preferred arm 은 vanilla swing 효과 그대로 보존).
             if (!preserveRight) {
                 rightArm.pivotX = -5f;
                 rightArm.pivotZ =  0f;
@@ -1459,8 +1628,14 @@ public abstract class MixinPlayerEntityModelClient {
         // bendFactor: Factor(angle, Quarter, 0) ∩ Factor(angle, -Quarter, 0)
         // 수직 각도 0°(수평)일 때 최대 1, ±Quarter(수직)일 때 0. (SmartMovingModel.md 10번 분기)
         float bendFactor = Math.min(smFactor(angle, QUARTER, 0f), smFactor(angle, -QUARTER, 0f));
-        rightArm.pitch = bendFactor * -EIGHTH;
-        leftArm.pitch  = bendFactor * -EIGHTH;
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #182 패러다임 복원 (메모리 검증).
+        //   preserve 가드 + preCancelParentX 복원. HJ setupTransforms R_x(QUARTER - angle) 부모 회전 있음.
+        float swingHJ = player.handSwingProgress;
+        Arm preferredArmHJ = player.getMainArm();
+        boolean preserveRightHJ = swingHJ > 0F && preferredArmHJ == Arm.RIGHT;
+        boolean preserveLeftHJ  = swingHJ > 0F && preferredArmHJ == Arm.LEFT;
+        if (!preserveRightHJ) rightArm.pitch = bendFactor * -EIGHTH;
+        if (!preserveLeftHJ)  leftArm.pitch  = bendFactor * -EIGHTH;
         rightLeg.pitch = bendFactor * -EIGHTH;
         leftLeg.pitch  = bendFactor * -EIGHTH;
 
@@ -1494,13 +1669,26 @@ public abstract class MixinPlayerEntityModelClient {
         if (sm.smallOverGroundHeight < 5f && isOverGroundBlockSolid(player)) {
             armFactorZ = Math.min(armFactorZ, sm.smallOverGroundHeight / 5f);
         }
-        rightArm.roll  =  HALF - SIXTEENTH + armFactorZ * EIGHTH;
-        leftArm.roll   = -(HALF - SIXTEENTH) - armFactorZ * EIGHTH;
+        if (!preserveRightHJ) rightArm.roll =  HALF - SIXTEENTH + armFactorZ * EIGHTH;
+        if (!preserveLeftHJ)  leftArm.roll  = -(HALF - SIXTEENTH) - armFactorZ * EIGHTH;
 
         // 다리 Z: Factor(angle, -Quarter, Quarter)
         float legFactorZ = smFactor(angle, -QUARTER, QUARTER);
         rightLeg.roll =  SIXTYFOURTH * legFactorZ;
         leftLeg.roll  = -SIXTYFOURTH * legFactorZ;
+
+        // 🔴 fix #186 (2026-05-28): fix #182 패러다임 복원 — preCancelParentX (setupTransforms R_x((QUARTER - angle)) cancel).
+        if (swingHJ > 0F) {
+            float thetaCancelHJ = QUARTER - angle;
+            if (preserveRightHJ) {
+                preCancelParentXPivot(rightArm, thetaCancelHJ);
+                preCancelParentXRotation(rightArm, thetaCancelHJ);
+            }
+            if (preserveLeftHJ) {
+                preCancelParentXPivot(leftArm, thetaCancelHJ);
+                preCancelParentXRotation(leftArm, thetaCancelHJ);
+            }
+        }
     }
 
     /**
@@ -1585,14 +1773,15 @@ public abstract class MixinPlayerEntityModelClient {
         head.pitch = 0f;
         head.roll = 0f;
 
-        // preferred arm 만 vanilla swing 보존. swing > 0 시에만 활성.
+        // 🔴 fix #186 (2026-05-28): fix #183 revert — fix #177 패러다임 복원.
+        //   메모리: falling 은 setupTransforms 부모 R_x 회전 없음 → preCancelParentX 불필요.
+        //   preferred arm 만 vanilla swing 보존. swing > 0 시에만 활성.
         float swing = player.handSwingProgress;
         Arm preferredArm = player.getMainArm();
         boolean preserveRight = swing > 0F && preferredArm == Arm.RIGHT;
         boolean preserveLeft  = swing > 0F && preferredArm == Arm.LEFT;
 
         // 팔 (XZY 순서) — 원본 L535-542.
-        // rotationOrder = XZY → GL call Y, Z, X → setAnglesXZY 헬퍼.
         float rYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
         float lYaw  = MathHelper.cos(distance + QUARTER) * EIGHTH;
         float rRoll = MathHelper.cos(distance) * EIGHTH + QUARTER;
