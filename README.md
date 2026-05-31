@@ -12,7 +12,7 @@ Fabric 1.21.1 port of the classic [SmartMoving](https://www.curseforge.com/minec
 - **Climbing** — 블록 / 사다리 / 덩굴 / 울타리 / 철창 자체등반 + 천장 등반
 - **Crawling** — 1칸 공간 진입, 머리 회전, 크롤 클라이밍, 슬라이드 ↔ 크롤 전환
 - **Sliding** — Sneak 자체 슬라이딩, 비행 착지 슬라이딩, 전환 카메라 안정화
-- **Head Jump** — 점프 + Sneak 발사형 점프, 여우무빙 (= 자체 슬라이딩 + 헤드점프 연결)
+- **Head Jump** — 점프 + Sneak 발사형 점프, 여우무빙
 - **Swimming** — Swim / Dive 상태 + 좌클릭 swing 애니메이션
 - **Wall Jump** — 공중 벽 점프 + 식 순서 / 회전 보정
 - **Vine Climbing** — Weeping / Twisting vines 사다리 애니메이션
