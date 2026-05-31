@@ -1,8 +1,10 @@
 # SmartMoving
 
-마인크래프트 캐릭터 무빙을 풍부하게 만드는 모드입니다.
+> **English** | [한국어](README.ko.md)
 
-원본 [SmartMoving](https://www.curseforge.com/minecraft/mc-mods/smart-moving) (1.7.10 Forge) 의 Fabric 1.21.1 포팅.
+A Minecraft mod that enriches character movement.
+
+Fabric 1.21.1 port of the classic [SmartMoving](https://www.curseforge.com/minecraft/mc-mods/smart-moving) (1.7.10 Forge).
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-62B47A?style=flat-square)
 ![Fabric](https://img.shields.io/badge/Fabric-0.19.2%2B-DBB69B?style=flat-square)
@@ -11,14 +13,14 @@
 
 ## Features
 
-- **Climbing** — 블록 / 사다리 / 덩굴 / 울타리 / 철창 자체등반 + 천장 등반
-- **Crawling** — 1칸 공간 진입, 머리 회전, 크롤 클라이밍, 슬라이드 ↔ 크롤 전환
-- **Sliding** — Sneak 자체 슬라이딩, 비행 착지 슬라이딩, 전환 카메라 안정화
-- **Head Jump** — 점프 + Sneak 발사형 점프, 여우무빙
-- **Swimming** — Swim / Dive 상태 + 좌클릭 swing 애니메이션
-- **Wall Jump** — 공중 벽 점프 + 식 순서 / 회전 보정
-- **Vine Climbing** — Weeping / Twisting vines 사다리 애니메이션
-- **Multiplayer Sync** — self ↔ server ↔ remote 상태 동기화
+- **Climbing** — Block / ladder / vine / fence / iron bar self-climbing + ceiling climbing
+- **Crawling** — 1-block-tall space entry, head rotation, crawl-climbing, slide ↔ crawl transitions
+- **Sliding** — Sneak-launched sliding, post-flight landing slide, transition camera stabilization
+- **Head Jump** — Jump + sneak launched jump, fox movement
+- **Swimming** — Swim / dive states + left-click swing animation
+- **Wall Jump** — Mid-air wall jump with motion order / rotation correction
+- **Vine Climbing** — Weeping / twisting vines ladder animation
+- **Multiplayer Sync** — Full self ↔ server ↔ remote state synchronization
 
 ## Requirements
 
@@ -29,12 +31,12 @@
 
 ## Installation
 
-1. Fabric Loader 설치
-2. Fabric API 를 `mods/` 폴더에 추가
-3. SmartMoving jar 를 `mods/` 폴더에 추가
-4. 마인크래프트 실행
+1. Install Fabric Loader
+2. Add Fabric API to the `mods/` folder
+3. Add the SmartMoving jar to the `mods/` folder
+4. Launch Minecraft
 
-멀티플레이는 서버 / 클라이언트 양쪽 모두 설치 필요.
+For multiplayer, both server and client must have the mod installed.
 
 ## Build
 
@@ -44,11 +46,11 @@ cd SmartMoving
 ./gradlew build
 ```
 
-빌드 결과물은 `build/libs/` 에 생성됩니다.
+The built jar will be located in `build/libs/`.
 
 ```bash
-./gradlew runClient   # 클라이언트 실행
-./gradlew runServer   # 서버 실행
+./gradlew runClient   # Run client
+./gradlew runServer   # Run server
 ```
 
 ## Credits
@@ -61,8 +63,8 @@ cd SmartMoving
 
 ## Bug Reports
 
-[GitHub Issues](https://github.com/View-Studio/SmartMoving/issues) 에 보고해주세요. 재현 스텝 + 로그 첨부 시 빠른 처리가 가능합니다.
+Please report bugs on [GitHub Issues](https://github.com/View-Studio/SmartMoving/issues). Including reproduction steps and logs helps with faster resolution.
 
 ## License
 
-[GPL-3.0-or-later](LICENSE) — 원본 SmartMoving 의 라이선스를 따릅니다.
+[GPL-3.0-or-later](LICENSE) — inherits the original SmartMoving license.
