@@ -1,6 +1,6 @@
 # SmartMoving
 
-> [English](README.md) | **한국어**
+> [English](README.md) | [한국어](README.ko.md)
 
 마인크래프트 캐릭터 무빙을 풍부하게 만드는 모드입니다.
 

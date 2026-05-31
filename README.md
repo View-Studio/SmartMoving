@@ -1,6 +1,6 @@
 # SmartMoving
 
-> **English** | [한국어](README.ko.md)
+> [English](README.md) | [한국어](README.ko.md)
 
 A Minecraft mod that enriches character movement.
 
