@@ -63,7 +63,7 @@ cd SmartMoving
 
 ## Support ☕
 
-SmartMoving 이 도움이 되셨다면, 작은 후원이 다음 프로젝트의 원동력이 됩니다.
+SmartMoving 이 도움이 되셨다면, 작은 후원이 다음 프로젝트의 원동력이 됩니다. 😊
 
 | Platform | Audience  | Link |
 |----------|-----------|------|

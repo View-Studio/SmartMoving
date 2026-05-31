@@ -63,7 +63,7 @@ The built jar will be located in `build/libs/`.
 
 ## Support ☕
 
-If SmartMoving has been useful, a small tip helps fuel the next project.
+If SmartMoving has been useful, a small tip helps fuel the next project. 😊
 
 | Platform | Audience  | Link |
 |----------|-----------|------|
