@@ -51,9 +51,11 @@ cd SmartMoving
 
 ## Credits
 
-- **1.21.1 Fabric Port** — [View-Studio](https://github.com/View-Studio)
-- **1.12.2 Port** — [doch2](https://github.com/doch2/SmartMovingReboot)
-- **Original Author** — [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) (1.7.10 Forge)
+| Version | Loader | Maintainer |
+|---------|--------|------------|
+| 1.21.1  | Fabric | [View-Studio](https://github.com/View-Studio) |
+| 1.12.2  | Forge  | [doch2](https://github.com/doch2/SmartMovingReboot) |
+| 1.7.10  | Forge  | [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) *(original)* |
 
 ## Bug Reports
 
