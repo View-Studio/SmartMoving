@@ -1,7 +1,8 @@
 # SmartMoving
 
-Fabric 1.21.1 port of the classic [SmartMoving](https://www.curseforge.com/minecraft/mc-mods/smart-moving) mod.
-마인크래프트 캐릭터 무빙을 풍부하게 — 기어오르기, 엎드리기, 슬라이딩, 헤드점프, 수영, 벽 점프.
+마인크래프트 캐릭터 무빙을 풍부하게 만드는 모드입니다.
+
+원본 [SmartMoving](https://www.curseforge.com/minecraft/mc-mods/smart-moving) (1.7.10 Forge) 의 Fabric 1.21.1 포팅.
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-62B47A?style=flat-square)
 ![Fabric](https://img.shields.io/badge/Fabric-0.19.2%2B-DBB69B?style=flat-square)
