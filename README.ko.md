@@ -61,9 +61,9 @@ cd SmartMoving
 | 1.12.2  | Forge  | [doch2](https://github.com/doch2/SmartMovingReboot) |
 | 1.7.10  | Forge  | [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) *(original)* |
 
-## Support
+## Support ☕
 
-SmartMoving 이 도움이 되었다면, 후원으로 개발 지속에 힘이 됩니다.
+SmartMoving 이 도움이 되셨다면, 작은 후원이 다음 프로젝트의 원동력이 됩니다.
 
 | Platform | Audience  | Link |
 |----------|-----------|------|

@@ -61,9 +61,9 @@ The built jar will be located in `build/libs/`.
 | 1.12.2  | Forge  | [doch2](https://github.com/doch2/SmartMovingReboot) |
 | 1.7.10  | Forge  | [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) *(original)* |
 
-## Support
+## Support ☕
 
-If SmartMoving has been useful, consider supporting continued development.
+If SmartMoving has been useful, a small tip helps fuel the next project.
 
 | Platform | Audience  | Link |
 |----------|-----------|------|
