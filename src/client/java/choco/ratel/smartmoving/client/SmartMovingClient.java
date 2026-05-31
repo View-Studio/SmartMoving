@@ -11,7 +11,11 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 public class SmartMovingClient implements ClientModInitializer {
 
@@ -42,6 +46,20 @@ public class SmartMovingClient implements ClientModInitializer {
     }
 
     private static void registerConnectionEvents() {
+        // 월드 / 서버 접속 시 채팅창에 브랜드 + 링크 메시지 전송 (self only).
+        // 1줄: ──────────────  (상단 테두리)
+        // 2줄: [SmartMoving] by View-Studio
+        // 3줄: [GitHub]  ·  [Support ☕]
+        // 4줄: ──────────────  (하단 테두리)
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
+                client.execute(() -> {
+                    if (client.player == null) return;
+                    client.player.sendMessage(buildBorderLine(), false);
+                    client.player.sendMessage(buildBrandLine(), false);
+                    client.player.sendMessage(buildLinksLine(), false);
+                    client.player.sendMessage(buildBorderLine(), false);
+                }));
+
         // 클라이언트 접속 해제 시 상태 인스턴스 정리 + Config 복원
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             if (client.player != null) {
@@ -53,6 +71,53 @@ public class SmartMovingClient implements ClientModInitializer {
             // 다음 서버 접속 시 이전 서버 설정 잔류 방지.
             SmartMovingConfig.resetServerConfig();
         });
+    }
+
+    /** 월드 접속 시 채팅에 표시할 브랜드 + 링크 메시지. */
+    private static final String GITHUB_URL = "https://github.com/View-Studio/SmartMoving";
+    private static final String SUPPORT_URL = "https://ko-fi.com/viewstudio";
+
+    /** 가로 테두리 선 (상/하) — 공백 + strikethrough 으로 끊김 없는 연속 선. */
+    private static Text buildBorderLine() {
+        return Text.literal(" ".repeat(40))
+                .styled(s -> s.withColor(Formatting.DARK_GRAY).withStrikethrough(true));
+    }
+
+    /** 1줄: 브랜드 + 작성자. */
+    private static Text buildBrandLine() {
+        MutableText tag = Text.literal("[SmartMoving]")
+                .styled(s -> s.withColor(Formatting.GOLD));
+
+        MutableText by = Text.literal(" by ")
+                .styled(s -> s.withColor(Formatting.GRAY));
+
+        MutableText author = Text.literal("View-Studio")
+                .styled(s -> s.withColor(Formatting.WHITE));
+
+        return Text.empty().append(tag).append(by).append(author);
+    }
+
+    /** 2줄: 클릭 가능한 GitHub + Support 링크. */
+    private static Text buildLinksLine() {
+        MutableText sep = Text.literal("  ·  ").styled(s -> s.withColor(Formatting.DARK_GRAY));
+
+        MutableText github = Text.literal("[GitHub]")
+                .styled(s -> s
+                        .withColor(Formatting.AQUA)
+                        .withUnderline(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, GITHUB_URL))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                                Text.literal("Open repository\n" + GITHUB_URL))));
+
+        MutableText support = Text.literal("[Support ☕]")
+                .styled(s -> s
+                        .withColor(Formatting.YELLOW)
+                        .withUnderline(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, SUPPORT_URL))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                                Text.literal("Buy me a coffee\n" + SUPPORT_URL))));
+
+        return Text.empty().append(github).append(sep).append(support);
     }
 
     private static void registerClientReceivers() {
