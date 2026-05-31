@@ -43,6 +43,12 @@ public abstract class MixinServerPlayNetworkHandler {
     @Unique
     private boolean sm_suppressPositionCheck;
 
+    /** 🔴 fix #103 — SM phase 종료 history flag. */
+    @Unique
+    private boolean _smWasInPhase = false;
+    @Unique
+    private int _smPhaseExitTick = -9999;
+
     /**
      * C-21: onPlayerMove HEAD — SM 이동 상태를 캐시.
      * 원본: NetHandlerPlayServer.processPlayer() 위치 검증 skip 패치.
@@ -61,8 +67,29 @@ public abstract class MixinServerPlayNetworkHandler {
         //   여우무빙 server side state = isHeadJumping=true (isSliding=false). 기존 식에
         //   isHeadJumping 누락 → suppress=false → vanilla requestTeleport 통과 → client
         //   rubber-band → "그자리에서 멈춤". 진단 로그로 직접 확인.
-        sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing
+        boolean curInPhase = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing
                 || sm.isSliding || sm.isHeadJumping;
+
+        // 🔴 fix #103 (2026-05-31, BUG = "HJ/슬라이딩 + 1칸 물 빠지면 뚝 끊기듯이 튀었다가 다시 돌아옴"):
+        //   진단 로그 확정 사실 — client 가 isHJ=false StatePayload 송신 → server.sm.isHeadJumping
+        //   즉시 갱신 → 같은 tick 의 다음 onPlayerMove 시 sm_suppressPositionCheck=false →
+        //   fix #101/#102 의 ModifyVariable 가 원본 distSq/postDistSq 값 반환 → vanilla "moved
+        //   wrongly" 매치 (postDistSq=0.10 > 0.0625) → requestTeleport EXECUTED → client
+        //   PlayerPositionLookS2CPacket 수신 → setPos(serverY+1.0) → +1.5m up jump "튀어오름".
+        //   = SM phase state 가 transition frame 에 빠르게 false 가 되어 fix #101/#102 못 잡음.
+        //
+        //   해결: history flag 패턴 (= fix #153 v3 / #154 v4 차용. 메모리 [feedback_multistep_state_transition_history_flag]).
+        //   SM phase 종료 tick 기록 + N tick window 동안 suppress 유지 → transition frame 의
+        //   rubber-band 차단.
+        //
+        //   window 5 tick — server broadcast lag 측정 안정값. 검증 후 조정.
+        if (_smWasInPhase && !curInPhase) {
+            _smPhaseExitTick = player.age;
+        }
+        boolean recentlyExited = (player.age - _smPhaseExitTick) >= 0
+                && (player.age - _smPhaseExitTick) <= 5;
+        sm_suppressPositionCheck = curInPhase || recentlyExited;
+        _smWasInPhase = curInPhase;
     }
 
     /**
