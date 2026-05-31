@@ -61,6 +61,14 @@ The built jar will be located in `build/libs/`.
 | 1.12.2  | Forge  | [doch2](https://github.com/doch2/SmartMovingReboot) |
 | 1.7.10  | Forge  | [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) *(original)* |
 
+## Support
+
+If SmartMoving has been useful, consider supporting continued development.
+
+| Platform | Audience  | Link |
+|----------|-----------|------|
+| Ko-fi    | Worldwide | [ko-fi.com/viewstudio](https://ko-fi.com/viewstudio) |
+
 ## Bug Reports
 
 Please report bugs on [GitHub Issues](https://github.com/View-Studio/SmartMoving/issues). Including reproduction steps and logs helps with faster resolution.

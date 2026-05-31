@@ -61,6 +61,14 @@ cd SmartMoving
 | 1.12.2  | Forge  | [doch2](https://github.com/doch2/SmartMovingReboot) |
 | 1.7.10  | Forge  | [Divisor](https://www.curseforge.com/minecraft/mc-mods/smart-moving) *(original)* |
 
+## Support
+
+SmartMoving 이 도움이 되었다면, 후원으로 개발 지속에 힘이 됩니다.
+
+| Platform | Audience  | Link |
+|----------|-----------|------|
+| Ko-fi    | Worldwide | [ko-fi.com/viewstudio](https://ko-fi.com/viewstudio) |
+
 ## Bug Reports
 
 [GitHub Issues](https://github.com/View-Studio/SmartMoving/issues) 에 보고해주세요. 재현 스텝 + 로그 첨부 시 빠른 처리가 가능합니다.
