@@ -7,6 +7,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-62B47A?style=flat-square)
 ![Fabric](https://img.shields.io/badge/Fabric-0.19.2%2B-DBB69B?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square)
+![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)
 
 ## Features
 
@@ -64,4 +65,4 @@ cd SmartMoving
 
 ## License
 
-원본 SmartMoving 의 라이선스를 따릅니다.
+[GPL-3.0-or-later](LICENSE) — 원본 SmartMoving 의 라이선스를 따릅니다.
