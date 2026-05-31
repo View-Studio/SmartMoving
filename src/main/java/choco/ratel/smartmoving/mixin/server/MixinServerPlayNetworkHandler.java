@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -56,14 +57,64 @@ public abstract class MixinServerPlayNetworkHandler {
         //   송신) 발동 → client entity.y +1m 강제 보정 → 후속 SS-SlideStop + fix #62 v2 push 누적
         //   → 박스 ground+1m 부유 → 사용자 시각 "1칸 띄어진 엎드리기".
         //   다른 SM phase 가드 (isClimbing/isCrawling/isCrawlClimbing/isCeilingClimbing) 와 동일 패턴.
+        // 🔴 fix #100 (2026-05-31, BUG-1 점프강화+여우무빙 "moved too quickly"):
+        //   여우무빙 server side state = isHeadJumping=true (isSliding=false). 기존 식에
+        //   isHeadJumping 누락 → suppress=false → vanilla requestTeleport 통과 → client
+        //   rubber-band → "그자리에서 멈춤". 진단 로그로 직접 확인.
         sm_suppressPositionCheck = sm.isClimbing || sm.isCrawling || sm.isCrawlClimbing || sm.isCeilingClimbing
-                || sm.isSliding;
+                || sm.isSliding || sm.isHeadJumping;
+    }
+
+    /**
+     * 🔴 fix #101 (2026-05-31, BUG "moved too quickly" — return 살아있는 문제):
+     * vanilla bytecode `505: ifle 609` (threshold check) 가 SM phase 중에도 매치되면
+     * warn + requestTeleport + return 가 통째로 실행. 기존 SM redirect 는 requestTeleport
+     * 만 cancel 하므로 return 은 그대로 → player.move() 미실행 → server 위치 동결 → 다음
+     * packet 도 동일 cascade.
+     *
+     * 해결: slot 25 의 첫 번째 dstore (= distanceSq, offset 313) 직후 값을 0 으로 만들면
+     * `(0 - velocityLenSq) ≤ 0` → ifle 609 → 분기 진입 자체가 차단되어 warn + teleport +
+     * return 전체 skip. 후속 player.move() 정상 실행. server 좌표 자연 갱신.
+     *
+     * 참고: 사이 sleeping check (offset 325, dload 25) 는 isSleeping=true 시점에 분기되며
+     * 어차피 return 도달 경로라 distSq=0 영향 X.
+     */
+    @ModifyVariable(method = "onPlayerMove", require = 0,
+        at = @At(value = "STORE", ordinal = 0),
+        index = 25)
+    private double sm_suppressDistanceSq(double original) {
+        return sm_suppressPositionCheck ? 0.0 : original;
+    }
+
+    /**
+     * 🔴 fix #102 (2026-05-31, BUG "moved wrongly" — server 동기화 안 됨):
+     * vanilla bytecode `817: ifle 885` (postDistSq > 0.0625 check) 매치 시 wronglyMoved=1
+     * + warn + 후속 rubber-band 분기 진입. 기존 SM redirect 는 requestTeleport 만 cancel
+     * 하지만 return 은 살아있어 `player.updatePositionAndAngles(packetX, packetY, packetZ)`
+     * 미호출 → server 가 packet pos 동기화 X. 진단 로그로 직접 확인: SM phase 중 client
+     * SM physics vs server.move() 결과가 ~0.35m 차이 (sliding+sneak motion 식 미일치) →
+     * postDistSq=0.14 > 0.0625 매번 매치.
+     *
+     * 해결: slot 25 의 두 번째 dstore (= postDistSq, offset 796) 직후 값을 0 으로 만들면
+     * `0 ≤ 0.0625` → ifle 885 → wronglyMoved=1 set 안 됨 + warn skip. 후속 `iload 33;
+     * ifeq 923` 에서 wronglyMoved=0 (default) 이므로 isPlayerNotCollidingWithBlocks 분기로.
+     * 거기서도 SM phase 중 box 차이로 false positive 가능 → 기존 requestTeleport redirect
+     * 가 안전망. updatePositionAndAngles 까지 진행되어 server 동기화 정상.
+     */
+    @ModifyVariable(method = "onPlayerMove", require = 0,
+        at = @At(value = "STORE", ordinal = 1),
+        index = 25)
+    private double sm_suppressPostDistSq(double original) {
+        return sm_suppressPositionCheck ? 0.0 : original;
     }
 
     /**
      * C-21: onPlayerMove 내 requestTeleport 호출 전부 가로채기.
      * SM 이동 중에는 "moved wrongly" / "moved too quickly" rubber-band를 차단한다.
      * require=0: 메서드 내 대상 invocation 개수가 변경되어도 크래시 없이 소프트 실패.
+     *
+     * 참고: fix #101/#102 가 두 IF 분기 자체를 차단하므로 SM phase 중 이 redirect 가
+     * 호출될 일은 거의 없음. 단 isPlayerNotCollidingWithBlocks=true edge case 의 안전망.
      */
     @Redirect(method = "onPlayerMove", require = 0,
         at = @At(value = "INVOKE",
