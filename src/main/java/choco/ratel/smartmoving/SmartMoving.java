@@ -20,6 +20,7 @@ public class SmartMoving implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        System.out.println("🚀ViewStudio SmartMoving Start🚀");
         SmartMovingConfig.load();
         SmartMovingSounds.register();
         SmartMovingNetwork.register();
