@@ -3,9 +3,15 @@
   "id": "smartmoving",
   "version": "${version}",
   "name": "SmartMoving",
-  "description": "",
-  "authors": [],
-  "contact": {},
+  "description": "A Minecraft mod that enriches character movement. Fabric 1.21.1 port of the classic SmartMoving — climbing, crawling, sliding, head jump and more.",
+  "authors": [
+    "View-Studio"
+  ],
+  "contact": {
+    "homepage": "https://github.com/View-Studio/SmartMoving",
+    "sources": "https://github.com/View-Studio/SmartMoving",
+    "issues": "https://github.com/View-Studio/SmartMoving/issues"
+  },
   "license": "GPL-3.0-or-later",
   "environment": "*",
   "entrypoints": {
