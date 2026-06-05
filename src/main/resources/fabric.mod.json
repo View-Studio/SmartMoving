@@ -13,6 +13,7 @@
     "issues": "https://github.com/View-Studio/SmartMoving/issues"
   },
   "license": "GPL-3.0-or-later",
+  "icon": "assets/smartmoving/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
