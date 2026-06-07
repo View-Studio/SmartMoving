@@ -112,12 +112,27 @@ public abstract class MixinEntity {
             SmartMovingServer sm = SmartMovingServer.get(sp);
             return sm.isSliding || sm.isHeadJumping;
         }
-        // client side - 완전 reflection (main module compile 시 client class symbol 회피).
+        // client side - reflection (main module compile 시 client class symbol 회피).
+        // 🔴 fix (2026-06-08, BUG = "개발모드 OK / 빌드(prod)에서 슬라이딩 빠른 연타 시 땅 잠김"):
+        //   기존 코드는 Class.forName("net.minecraft.client.network.AbstractClientPlayerEntity") —
+        //   named 클래스명. 문자열 리터럴은 Loom/Mixin remapper 가 건드리지 않으므로 prod
+        //   intermediary 런타임(net.minecraft.class_742)에서 ClassNotFoundException → catch →
+        //   return true (항상 box +1 offset). dev(named 런타임)는 성공 → isSliding 정확 검사.
+        //   결과: prod 에서 isSliding=false transition frame 에도 박스 +1 잔존 → 발밑 1칸 공중
+        //   → client 자유낙하 → server reconcile(COLLISION) → 땅 잠김. = dev/prod 차이의 root.
+        //   해결: Minecraft named 클래스 Class.forName 제거. get(...) 을 이름+파라미터수로 탐색.
         try {
             Class<?> stateCls = Class.forName("choco.ratel.smartmoving.client.SmartMovingClientState");
-            Class<?> playerCls = Class.forName("net.minecraft.client.network.AbstractClientPlayerEntity");
-            java.lang.reflect.Method m = stateCls.getMethod("get", playerCls);
-            Object state = m.invoke(null, player);
+            java.lang.reflect.Method getM = null;
+            for (java.lang.reflect.Method mm : stateCls.getMethods()) {
+                if (mm.getName().equals("get") && mm.getParameterCount() == 1
+                        && java.lang.reflect.Modifier.isStatic(mm.getModifiers())) {
+                    getM = mm;
+                    break;
+                }
+            }
+            if (getM == null) return true;
+            Object state = getM.invoke(null, player);
             if (state == null) return true;  // fall through to main mixin.
             return stateCls.getField("isSliding").getBoolean(state)
                     || stateCls.getField("isHeadJumping").getBoolean(state);
